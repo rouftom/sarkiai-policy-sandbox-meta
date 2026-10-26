@@ -1,0 +1,58 @@
+
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+bun.lockb
+package-lock.json
+yarn.lock
+
+# builds
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# turbo
+.turbo/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+# SOPS-encrypted env is safe to commit; the age private key is not.
+!.env.enc
+secrets/
+*.age.key
+age.key
+
+# local data payloads (corpora can be large; keep structure via .gitkeep + manifests)
+data/country/*/*
+!data/country/*/.gitkeep
+!data/country/**/manifest.json
+!data/country/**/README.md
+data/global/*/*
+!data/global/*/.gitkeep
+!data/global/**/manifest.json
+!data/global/**/dimensions.json
+!data/global/**/*.txt
+*.pdf
+*.docx
+
+# docker / os
+.docker/
+.DS_Store
+*.log
+coverage/

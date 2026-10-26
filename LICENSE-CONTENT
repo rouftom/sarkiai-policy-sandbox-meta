@@ -1,0 +1,23 @@
+Content license — Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+The knowledge-base content, document manifests, and documentation authored for
+this project are licensed under CC BY 4.0.
+
+You are free to:
+  - Share  — copy and redistribute the material in any medium or format.
+  - Adapt  — remix, transform, and build upon the material for any purpose,
+             even commercially.
+
+Under the following terms:
+  - Attribution — you must give appropriate credit, provide a link to the
+    license, and indicate if changes were made.
+
+Full legal text: https://creativecommons.org/licenses/by/4.0/legalcode
+License summary: https://creativecommons.org/licenses/by/4.0/
+
+Scope: this content license does NOT apply to the software (licensed under the
+Apache License 2.0 — see LICENSE), nor to third-party source documents (national
+laws, strategies, reports), which retain their own terms. Provenance for each
+source is recorded in the relevant data/**/manifest.json.
+
+Copyright 2026 Djotta — Made with ♥️ by Djotta (https://djotta.com)

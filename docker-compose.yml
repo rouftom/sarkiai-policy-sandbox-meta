@@ -1,0 +1,318 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SarkiAI Policy Sandbox — full stack, LOCAL-ONLY (sovereign)
+#
+#   docker compose up --build                 # everything (no cloud calls)
+#   docker compose --profile rerank up        # + local TEI reranker
+#   docker compose up qdrant ollama ingestion # knowledge-base plane only
+#
+# All models (LLM + embeddings) run locally via Ollama. No data leaves the
+# infrastructure. MongoDB holds operational data only (audit + CoT).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: sarkiai-policy-sandbox
+
+x-common-env: &common-env
+  NODE_ENV: ${NODE_ENV:-development}
+  SERVICE_API_KEY: ${SERVICE_API_KEY:-change-me-service-key}
+
+services:
+  # ── Local model server (LLM + embeddings) ───────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: sps-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    # GPU support (uncomment for NVIDIA):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks: [sps-net]
+
+  # ── Optional local reranker (TEI) ───────────────────────────────────────────
+  rerank:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    container_name: sps-rerank
+    restart: unless-stopped
+    command: ["--model-id", "${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}"]
+    volumes:
+      - tei-data:/data
+    ports:
+      - "${RERANK_PORT:-8080}:80"
+    profiles: ["rerank", "full"]
+    networks: [sps-net]
+
+  # ── Vector knowledge base ───────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: sps-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
+      QDRANT__LOG_LEVEL: ${QDRANT_LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [sps-net]
+
+  # ── Operational store (audit + CoT), no vectors ─────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: sps-mongo
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGODB_DB_NAME:-policy_sandbox}
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks: [sps-net]
+
+  # ── Object storage (assistant image attachments) ───────────────────────────
+  # MinIO: S3-compatible, local bucket. Content-addressed (sha256) objects.
+  minio:
+    image: minio/minio:latest
+    container_name: sps-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-sps-minio}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-sps-minio-secret}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [sps-net]
+
+  # Creates the attachments bucket once MinIO is up (idempotent).
+  minio-init:
+    image: minio/mc:latest
+    container_name: sps-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - >
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing local/"$$S3_BUCKET" &&
+        echo "bucket ready: $$S3_BUCKET"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-sps-minio}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-sps-minio-secret}
+      S3_BUCKET: ${S3_BUCKET:-sps-attachments}
+    restart: "no"
+    networks: [sps-net]
+
+  # ── Knowledge-base plane ───────────────────────────────────────────────────
+  # Structure-aware legal chunking + LOCAL bge-m3 embeddings + Qdrant.
+  ingestion:
+    build:
+      context: .
+      dockerfile: services/ingestion/Dockerfile
+    image: sarkiai/sps-ingestion:local
+    container_name: sps-ingestion
+    restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      PORT: "8000"
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-policy_chunks}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-1024}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-64}
+      DEFAULT_CHUNK_SIZE: ${DEFAULT_CHUNK_SIZE:-900}
+      DEFAULT_CHUNK_OVERLAP: ${DEFAULT_CHUNK_OVERLAP:-120}
+      OCR_URL: ${OCR_URL:-http://ocr:8000}
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-change-me-service-key}
+    ports:
+      - "${INGESTION_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [sps-net]
+
+  # Scanned gazette / image OCR fallback (Tesseract, local).
+  ocr:
+    build:
+      context: .
+      dockerfile: services/ocr/Dockerfile
+    image: sarkiai/sps-ocr:local
+    container_name: sps-ocr
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: "8000"
+      OCR_LANGUAGES: ${OCR_LANGUAGES:-fra+eng}
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-change-me-service-key}
+    ports:
+      - "${OCR_PORT:-8002}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks: [sps-net]
+
+  # Optional: media → transcript, LOCAL faster-whisper (no cloud).
+  transcription:
+    build:
+      context: .
+      dockerfile: services/transcription/Dockerfile
+    image: sarkiai/sps-transcription:local
+    container_name: sps-transcription
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      PORT: "8000"
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-change-me-service-key}
+    volumes:
+      - whisper-data:/models
+    ports:
+      - "${TRANSCRIPTION_PORT:-8003}:8000"
+    tmpfs:
+      - /tmp:size=1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    profiles: ["full", "media"]
+    networks: [sps-net]
+
+  # ── Application plane ──────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: sarkiai/sps-api:local
+    container_name: sps-api
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ingestion:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      <<: *common-env
+      PORT: "8000"
+      HOST: "0.0.0.0"
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-policy_chunks}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017}
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME:-policy_sandbox}
+      INGESTION_URL: ${INGESTION_URL:-http://ingestion:8000}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5:9b}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
+      RERANK_URL: ${RERANK_URL:-}
+      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}
+      OCR_URL: ${OCR_URL:-http://ocr:8000}
+      TRANSCRIPTION_URL: ${TRANSCRIPTION_URL:-http://transcription:8000}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_BUCKET: ${S3_BUCKET:-sps-attachments}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-sps-minio}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-sps-minio-secret}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [sps-net]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    image: sarkiai/sps-web:local
+    container_name: sps-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      PORT: "3000"
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [sps-net]
+
+volumes:
+  ollama-data:
+  tei-data:
+  qdrant-data:
+  mongo-data:
+  minio-data:
+  whisper-data:
+
+networks:
+  sps-net:
+    driver: bridge

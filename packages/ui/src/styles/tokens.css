@@ -1,0 +1,92 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   SarkiAI design tokens (admin charter). Base defaults = the `fada` pack so
+   there is no flash before the runtime pack CSS (injected by ThemeProvider)
+   applies. Pack-specific values live in @sps/theme.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* fada — common (charte slots + generic brand) */
+:root {
+  --charte-primary: #5039fb;
+  --charte-primary-light: #7c6bff;
+  --charte-primary-dark: #3b29d6;
+  --charte-accent: #d4af37;
+  --charte-accent-light: #e2c044;
+  --charte-ink: #0a0b2e;
+  --charte-surface: #f7f8fe;
+  --charte-danger: #ef4444;
+  --brand-dark: #0a0b2e;
+  --brand-accent: #5039fb;
+  --brand-highlight: #d4af37;
+
+  /* fada — light */
+  --background: #f7f8fe;
+  --foreground: #0a0b2e;
+  --card: #ffffff;
+  --card-foreground: #0a0b2e;
+  --popover: #ffffff;
+  --popover-foreground: #0a0b2e;
+  --primary: #5039fb;
+  --primary-foreground: #ffffff;
+  --secondary: #e8eafb;
+  --secondary-foreground: #1b1b4b;
+  --muted: #eef0fa;
+  --muted-foreground: #5b5f7a;
+  --accent: #e9eafb;
+  --accent-foreground: #312e81;
+  --border: #d9dcf0;
+  --input: #d9dcf0;
+  --ring: #5039fb;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0a0b2e;
+  --sidebar-primary: #5039fb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef0fa;
+  --sidebar-accent-foreground: #1b1b4b;
+  --sidebar-border: #d9dcf0;
+  --sidebar-ring: #5039fb;
+  --chart-1: #5039fb;
+  --chart-2: #0063eb;
+  --chart-3: #d4af37;
+  --chart-4: #104dff;
+  --chart-5: #7c6bff;
+
+  --radius: 0.625rem;
+  --assistant-panel-bg: color-mix(in oklab, var(--charte-primary) 30%, transparent);
+  --app-panel-bg: var(--charte-surface);
+}
+
+/* fada — dark */
+.dark {
+  --background: #080a24;
+  --foreground: #eaebfa;
+  --card: #10123a;
+  --card-foreground: #eaebfa;
+  --popover: #10123a;
+  --popover-foreground: #eaebfa;
+  --primary: #7c6bff;
+  --primary-foreground: #080a24;
+  --secondary: #1b1e4a;
+  --secondary-foreground: #eaebfa;
+  --muted: #1b1e4a;
+  --muted-foreground: #a7aacb;
+  --accent: #1e1b4b;
+  --accent-foreground: #c7d2fe;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #7c6bff;
+  --sidebar: #0b0d2e;
+  --sidebar-foreground: #eaebfa;
+  --sidebar-primary: #7c6bff;
+  --sidebar-primary-foreground: #080a24;
+  --sidebar-accent: #1b1e4a;
+  --sidebar-accent-foreground: #eaebfa;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #7c6bff;
+  --chart-1: #7c6bff;
+  --chart-2: #4d8dff;
+  --chart-3: #d4af37;
+  --chart-4: #104dff;
+  --chart-5: #a79bff;
+  --assistant-panel-bg: color-mix(in oklab, var(--charte-primary-dark) 16%, transparent);
+  --app-panel-bg: color-mix(in oklab, var(--charte-ink) 88%, #000);
+}

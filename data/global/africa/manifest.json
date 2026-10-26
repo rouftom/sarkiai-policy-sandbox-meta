@@ -1,0 +1,129 @@
+{
+  "country": "global",
+  "jurisdiction": "regional",
+  "namespace": "africa",
+  "generated": "2026-10-03",
+  "note": "Corpus régional et national africain (documents publics) utilisé comme référence d'écart par le moteur readiness. Les PDF sont volumineux et exclus de git (voir scripts/fetch-corpus.sh) ; le manifeste, lui, est versionné. Source : recueils de stratégies nationales publiés.",
+  "documents": [
+    {
+      "id": "au-continental-ai-strategy-2024",
+      "title": "African Union Continental AI Strategy (2024)",
+      "authority": "Union Africaine",
+      "docType": "strategy",
+      "jurisdiction": "regional",
+      "pillar": ["ai_policies", "strategy_alignment", "contextualization", "digital_infrastructure"],
+      "status": "verified",
+      "priority": "critical",
+      "file": "African_Union_Continental_AI_Strategy_2024.pdf",
+      "sourceUrl": "https://au.int/"
+    },
+    {
+      "id": "africa-declaration-ai-kigali-2025",
+      "title": "Global AI Summit on Africa — Declaration (Kigali, 2025)",
+      "authority": "Union Africaine / Rwanda",
+      "docType": "policy",
+      "jurisdiction": "regional",
+      "pillar": ["ai_policies", "strategy_alignment", "ai_inclusion"],
+      "status": "verified",
+      "priority": "high",
+      "file": "Africa_Declaration_AI_Kigali_2025.pdf",
+      "sourceUrl": ""
+    },
+    {
+      "id": "smart-africa-ai-blueprint-2021",
+      "title": "Smart Africa — AI for Africa Blueprint (2021)",
+      "authority": "Smart Africa",
+      "docType": "strategy",
+      "jurisdiction": "regional",
+      "pillar": ["contextualization", "digital_infrastructure", "data_marketplace"],
+      "status": "verified",
+      "priority": "high",
+      "file": "Smart_Africa_AI_Blueprint_2021.pdf",
+      "sourceUrl": "https://smartafrica.org/"
+    },
+    {
+      "id": "windhoek-statement-2022",
+      "title": "Windhoek Statement on AI in Southern Africa (2022)",
+      "authority": "SADC / partenaires",
+      "docType": "policy",
+      "jurisdiction": "regional",
+      "pillar": ["ai_policies", "human_impact", "ai_inclusion"],
+      "status": "verified",
+      "priority": "medium",
+      "file": "Windhoek_Statement_AI_Southern_Africa_2022.pdf",
+      "sourceUrl": ""
+    },
+    {
+      "id": "rwanda-national-ai-policy-2023",
+      "title": "Rwanda National AI Policy (2023)",
+      "authority": "Gouvernement du Rwanda",
+      "docType": "policy",
+      "jurisdiction": "national",
+      "pillar": ["ai_policies", "strategy_alignment", "granular_priorities"],
+      "status": "verified",
+      "priority": "high",
+      "file": "Rwanda_National_AI_Policy_2023.pdf",
+      "sourceUrl": ""
+    },
+    {
+      "id": "nigeria-nITDA-ai-roadmap-2025",
+      "title": "Nigeria NITDA AI Transformation Roadmap (2025)",
+      "authority": "NITDA (Nigeria)",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": ["strategy_alignment", "ai_integration", "digital_infrastructure"],
+      "status": "verified",
+      "priority": "high",
+      "file": "Nigeria_NITDA_AI_Transformation_Roadmap_2025.pdf",
+      "sourceUrl": ""
+    },
+    {
+      "id": "kenya-national-ai-strategy-2025-2030",
+      "title": "Kenya National AI Strategy 2025-2030",
+      "authority": "Gouvernement du Kenya",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": ["strategy_alignment", "ai_integration", "data_marketplace", "ai_inclusion"],
+      "status": "verified",
+      "priority": "high",
+      "file": "Kenya_AI_Strategy_2025-2030.pdf",
+      "sourceUrl": ""
+    },
+    {
+      "id": "kenya-national-ai-strategy-implementation-2025-2030",
+      "title": "Kenya National AI Strategy 2025-2030 — Implementation Roadmap",
+      "authority": "Gouvernement du Kenya",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": ["strategy_alignment", "granular_priorities", "ai_integration"],
+      "status": "verified",
+      "priority": "medium",
+      "file": "Kenya_AI_Strategy_Implementation_Roadmap_2025-2030.pdf",
+      "sourceUrl": ""
+    },
+    {
+      "id": "zambia-national-ai-strategy-2024-2026",
+      "title": "Zambia National AI Strategy 2024-2026",
+      "authority": "Gouvernement de Zambie",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": ["strategy_alignment", "granular_priorities", "digital_infrastructure"],
+      "status": "verified",
+      "priority": "medium",
+      "file": "Zambia_AI_Strategy_2024_2026.pdf",
+      "sourceUrl": ""
+    },
+    {
+      "id": "egypt-national-ai-strategy-2025-2030",
+      "title": "Egypt National AI Strategy 2025-2030 (2nd edition)",
+      "authority": "Gouvernement d'Égypte",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": ["ai_policies", "ai_integration", "ai_inclusion", "digital_infrastructure"],
+      "status": "verified",
+      "priority": "medium",
+      "file": "Egypt_AI_Strategy_2025_2030.pdf",
+      "sourceUrl": ""
+    }
+  ]
+}

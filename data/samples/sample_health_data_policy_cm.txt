@@ -1,0 +1,43 @@
+NOTE — SAMPLE / ILLUSTRATIVE TEXT ONLY.
+This is a fictional, non-authoritative placeholder used to exercise the ingestion
+pipeline. Replace it with the official Cameroonian legal and policy texts before
+any real assessment. Do not treat any provision below as law.
+
+TITRE I
+DISPOSITIONS GENERALES
+
+ARTICLE 1
+La presente politique nationale de sante numerique vise a encadrer le traitement
+des donnees de sante a caractere personnel dans les etablissements publics et
+prives.
+
+ARTICLE 2
+Les donnees de sante sont traitees de maniere licite, loyale et transparente.
+Le responsable du traitement doit etre identifiable et dument mandate.
+
+ARTICLE 3
+Tout incident de securite affectant des donnees de sante doit etre notifie a
+l'autorite competente dans un delai raisonnable apres sa detection.
+
+CHAPITRE II
+COORDINATION INSTITUTIONNELLE
+
+ARTICLE 4
+Le ministere charge de la sante assure la continuite des soins. L'autorite de
+protection des donnees est competente pour apprecier la licite des traitements.
+
+ARTICLE 5
+En cas de menace cyber, l'agence nationale de cybersecurite coordonne la reponse
+a incident, en liaison avec les autorites sectorielles.
+
+SECTION 3
+ECARTS ET OBLIGATIONS INTERNATIONALES
+
+ARTICLE 6
+Les responsabilites respectives des institutions en matiere de notification ne
+sont pas clairement reparties lorsqu'un incident touche simultanement plusieurs
+secteurs.
+
+ARTICLE 7
+Les references aux bonnes pratiques internationales en matiere de gouvernance
+des donnees de sante restent generales et non contraignantes.

@@ -1,0 +1,72 @@
+{
+  "country": "global",
+  "jurisdiction": "international",
+  "generated": "2026-10-03",
+  "note": "Corpus de bonnes pratiques mondiales utilisé comme référence d'écart par le moteur readiness. Les entrées to_confirm doivent être vérifiées avant ingestion.",
+  "documents": [
+    {
+      "id": "who-ai-health-ethics",
+      "title": "WHO — Ethics and governance of artificial intelligence for health",
+      "authority": "World Health Organization",
+      "docType": "guidance",
+      "jurisdiction": "international",
+      "pillar": [
+        "human_interface",
+        "ai_policies",
+        "ai_inclusion",
+        "cross_domain",
+        "ai_integration"
+      ],
+      "status": "verified",
+      "priority": "critical",
+      "sourceUrl": "https://www.who.int/publications/i/item/9789240029200"
+    },
+    {
+      "id": "unesco-ai-ethics",
+      "title": "UNESCO Recommendation on the Ethics of Artificial Intelligence (2021)",
+      "authority": "UNESCO",
+      "docType": "guidance",
+      "jurisdiction": "international",
+      "pillar": [
+        "generated_content",
+        "human_interface",
+        "ai_policies",
+        "ai_inclusion"
+      ],
+      "status": "verified",
+      "priority": "high",
+      "sourceUrl": "https://unesdoc.unesco.org/ark:/48223/pf0000381137"
+    },
+    {
+      "id": "au-malabo-convention",
+      "title": "African Union Convention on Cyber Security and Personal Data Protection (Malabo, 2014)",
+      "authority": "African Union",
+      "docType": "treaty",
+      "jurisdiction": "regional",
+      "pillar": [
+        "data_marketplace",
+        "generated_content",
+        "human_interface",
+        "ai_policies"
+      ],
+      "status": "verified",
+      "priority": "high",
+      "sourceUrl": "https://au.int/en/treaties"
+    },
+    {
+      "id": "oecd-ai-principles",
+      "title": "OECD Recommendation of the Council on Artificial Intelligence",
+      "authority": "OECD",
+      "docType": "guidance",
+      "jurisdiction": "international",
+      "pillar": [
+        "ai_policies",
+        "strategy_alignment",
+        "generated_content"
+      ],
+      "status": "verified",
+      "priority": "medium",
+      "sourceUrl": "https://legalinstruments.oecd.org/en/instruments/OECD-LEGAL-0449"
+    }
+  ]
+}

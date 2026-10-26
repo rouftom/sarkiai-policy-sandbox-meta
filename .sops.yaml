@@ -1,0 +1,17 @@
+# SOPS + age configuration (https://getsops.io, https://github.com/FiloSottile/age)
+#
+# 1. Generate a key:      ./scripts/gen-age-key.sh
+# 2. Put its PUBLIC key   (age1...) in the `age:` fields below.
+# 3. Encrypt env files:   make secrets-encrypt
+#
+# Only ENCRYPTED files (*.enc) are committed. The private key never leaves the
+# machine and is git-ignored.
+creation_rules:
+  # Any `*.env.enc` file is encrypted with age.
+  - path_regex: .*\.env\.enc$
+    age: >-
+      age1REPLACE_WITH_YOUR_PUBLIC_KEY
+  # Encrypted YAML (e.g. sandbox secrets) under deploy/.
+  - path_regex: deploy/.*\.enc\.ya?ml$
+    age: >-
+      age1REPLACE_WITH_YOUR_PUBLIC_KEY

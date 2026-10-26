@@ -1,0 +1,18 @@
+GLOBAL BEST-PRACTICE REFERENCE (illustrative synthesis for the sandbox).
+
+[Data protection & health] The WHO guidance on ethics and governance of AI for
+health recommends: (1) a named accountable data controller for every health-AI
+system; (2) mandatory breach notification with a defined maximum delay;
+(3) human oversight of automated decisions affecting care.
+
+[Incident coordination] Published AI-readiness guidance suggests a
+single designated lead authority for cross-sector incidents, with documented
+escalation paths and joint situation reports.
+
+[Standards & auditability] Global practice favours machine-readable audit trails
+with source attribution and reproducible reasoning for any automated
+policy-relevant decision.
+
+[Infrastructure] Recommendations include redundancy of network and energy for
+critical health services and a national data-protection impact assessment before
+deploying generative AI on patient data.
