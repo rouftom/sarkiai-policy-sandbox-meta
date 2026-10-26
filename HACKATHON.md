@@ -37,7 +37,7 @@ Full diff: [`pre-hackathon-baseline...meta-hackathon`](../../compare/pre-hackath
 | N7 | Impact analysis: new legislation re-evaluates open incidents | Muse Spark | ☐ | |
 | N8 | Crisis exercise mode with timed injects and an after-action report | Muse Spark / open weights | ☐ | |
 | N9 | Public-communication drafts in Fulfulde or Hausa (native review required) | Muse Spark | ☐ | |
-| N10 | Demo UI: incident timeline, clickable citations, bilingual EN/FR, audit-chain check | — | ☐ | |
+| N10 | Demo UI: incident timeline (who saw what), clickable citations, bilingual EN/FR, provider badge, audit-chain check | — | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
 
 ## How to run
 

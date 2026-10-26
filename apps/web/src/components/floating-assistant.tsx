@@ -145,12 +145,12 @@ export function FloatingAssistant({
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15">
                 <Bot className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
               </div>
-              <span className="text-[10px] font-black tracking-widest text-muted-foreground">POLICY ASSISTANT</span>
+              <span className="text-[10px] font-black tracking-widest text-muted-foreground">{t('assistant.title')}</span>
               {activeAgent && (
                 <span className="text-[10px] tracking-widest text-muted-foreground/70">· {activeAgent.name}</span>
               )}
             </div>
-            <Button variant="ghost" size="icon" aria-label="Réduire" onClick={() => setMinimized(true)}>
+            <Button variant="ghost" size="icon" aria-label={t('assistant.minimize')} onClick={() => setMinimized(true)}>
               <X className="h-4 w-4" />
             </Button>
           </header>
@@ -213,23 +213,45 @@ export function FloatingAssistant({
                 )}
                 {message.citations && message.citations.length > 0 && (
                   <ul className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[11px]">
-                    {message.citations.slice(0, 4).map((citation, i) => (
-                      <li key={i} className="text-muted-foreground">
-                        {citation.filename}
-                        {citation.articleNumber ? ` · ARTICLE ${citation.articleNumber}` : ''}
-                        {citation.headingPath ? ` · ${citation.headingPath}` : ''}
-                      </li>
-                    ))}
+                    {message.citations.slice(0, 4).map((citation, i) => {
+                      const label = [
+                        citation.filename,
+                        citation.articleNumber ? `ARTICLE ${citation.articleNumber}` : '',
+                        citation.headingPath ?? '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                      return (
+                        <li key={i} className="text-muted-foreground">
+                          {/* Clickable provenance: the official text opens in a new tab. */}
+                          {citation.sourceUrl ? (
+                            <a
+                              href={citation.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-primary hover:underline"
+                            >
+                              {label}
+                            </a>
+                          ) : (
+                            <span className="font-semibold">{label}</span>
+                          )}
+                          {citation.quote && (
+                            <p className="mt-0.5 line-clamp-2 italic opacity-80">“{citation.quote}”</p>
+                          )}
+                        </li>
+                      )
+                    })}
                   </ul>
                 )}
               </div>
             ))}
 
-            {busy && <div className="text-xs text-muted-foreground">Recherche de la disposition applicable…</div>}
+            {busy && <div className="text-xs text-muted-foreground">{t('assistant.searching')}</div>}
           </div>
 
           <p className="shrink-0 border-t border-border px-3 py-1.5 text-center text-[10px] text-muted-foreground">
-            Made with <span aria-label="love">♥️</span> by{' '}
+            {t('app.madeBy')} <span aria-label="love">♥️</span> by{' '}
             <a href="https://djotta.com" target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">
               Djotta
             </a>
@@ -250,7 +272,7 @@ export function FloatingAssistant({
                       type="button"
                       onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
                       className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-white"
-                      aria-label="Retirer l'image"
+                      aria-label={t('assistant.removeImage')}
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -263,7 +285,7 @@ export function FloatingAssistant({
                 value={institutionId}
                 onChange={(e) => setInstitutionId(e.target.value)}
                 className="h-8 rounded-xl border border-border bg-transparent px-2 text-[11px]"
-                aria-label="Agent"
+                aria-label={t('assistant.agent')}
               >
                 {institutions.map((inst) => (
                   <option key={inst.id} value={inst.id}>
@@ -274,19 +296,19 @@ export function FloatingAssistant({
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Posez une question (texte + image)…"
+                placeholder={t('assistant.placeholder')}
                 className="h-8 flex-1 rounded-xl border border-border bg-transparent px-3 text-sm"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Joindre une image"
+                aria-label={t('assistant.attach')}
                 onClick={() => fileRef.current?.click()}
               >
                 <ImagePlus className="h-4 w-4" />
               </Button>
-              <Button type="submit" size="icon" aria-label="Envoyer" disabled={busy || !input.trim()}>
+              <Button type="submit" size="icon" aria-label={t('assistant.send')} disabled={busy || !input.trim()}>
                 <Send className="h-4 w-4" />
               </Button>
             </div>
@@ -303,7 +325,7 @@ export function FloatingAssistant({
                 setOpen(true)
                 setMinimized(false)
               }}
-              aria-label="Ouvrir l'assistant politique"
+              aria-label={t('assistant.open')}
               className="h-12 w-16 rounded-t-[5rem] rounded-b-none"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
@@ -317,19 +339,19 @@ export function FloatingAssistant({
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Interroger un agent institutionnel…"
+                placeholder={t('assistant.placeholderCompact')}
                 className="h-8 flex-1 bg-transparent px-3 text-sm"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Joindre une image"
+                aria-label={t('assistant.attach')}
                 onClick={() => fileRef.current?.click()}
               >
                 <ImagePlus className="h-4 w-4" />
               </Button>
-              <Button type="submit" size="icon" aria-label="Envoyer" disabled={busy || !input.trim()}>
+              <Button type="submit" size="icon" aria-label={t('assistant.send')} disabled={busy || !input.trim()}>
                 <Send className="h-4 w-4" />
               </Button>
             </form>

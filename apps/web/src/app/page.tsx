@@ -94,8 +94,8 @@ export default function HomePage() {
           onChange={(e) => setCountry(e.target.value)}
           className="h-8 rounded-xl border border-border bg-transparent px-2 text-[11px]"
         >
-          <option value="cm">Cameroun (CM)</option>
-          <option value="ae">United Arab Emirates (AE)</option>
+          <option value="cm">{t('country.cm')}</option>
+          <option value="ae">{t('country.ae')}</option>
         </select>
         <select
           aria-label={t('app.domain')}
@@ -105,25 +105,29 @@ export default function HomePage() {
         >
           {DOMAINS.map((d) => (
             <option key={d} value={d}>
-              {d}
+              {t(`domain.${d}` as 'domain.health')}
             </option>
           ))}
         </select>
       </section>
 
-      <p className="mb-6 max-w-3xl text-sm text-muted-foreground">{profile.description}</p>
+      <p className="mb-6 max-w-3xl text-sm text-muted-foreground">
+        {t(`lens.${lens}.description` as 'lens.hybrid.description')}
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <CardHeader>
             <Activity className="h-4 w-4 text-primary" />
-            <CardTitle>WORKFLOW STAGES</CardTitle>
+            <CardTitle>{t('workflow.stages')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             {Object.entries(profile.stages).map(([stage, enabled]) => (
               <div key={stage} className="flex items-center justify-between">
                 <span className="text-muted-foreground">{stage}</span>
-                <span className={enabled ? 'text-primary' : 'text-muted-foreground/50'}>{enabled ? 'on' : 'off'}</span>
+                <span className={enabled ? 'text-primary' : 'text-muted-foreground/50'}>
+                  {enabled ? t('workflow.on') : t('workflow.off')}
+                </span>
               </div>
             ))}
           </CardContent>
@@ -132,9 +136,14 @@ export default function HomePage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <FileCheck2 className="h-4 w-4 text-primary" />
-            <CardTitle>AI READINESS — SCORING 0–5 (13 DIMENSIONS)</CardTitle>
+            <CardTitle>{t('readiness.title')}</CardTitle>
             <Button onClick={runReadiness} disabled={busy} size="md" className="ml-auto">
-              {busy ? 'Analyse…' : `Évaluer ${country.toUpperCase()} · ${domain}`}
+              {busy
+                ? t('readiness.running')
+                : t('readiness.run', {
+                    country: country.toUpperCase(),
+                    domain: t(`domain.${domain}` as 'domain.health'),
+                  })}
             </Button>
           </CardHeader>
           <CardContent>
@@ -143,10 +152,10 @@ export default function HomePage() {
                 <p className="text-sm">{report.summary}</p>
                 <div className="flex gap-4 text-xs">
                   <span>
-                    Composite pondéré : <strong>{report.scenario?.composite ?? '—'}/5</strong>
+                    {t('readiness.composite')}: <strong>{report.scenario?.composite ?? '—'}/5</strong>
                   </span>
                   <span>
-                    Moyenne : <strong>{report.scenario?.overall ?? '—'}/5</strong>
+                    {t('readiness.average')}: <strong>{report.scenario?.overall ?? '—'}/5</strong>
                   </span>
                 </div>
 
@@ -163,11 +172,11 @@ export default function HomePage() {
 
                 <div className="rounded-xl border border-border p-2">
                   <p className="mb-2 flex items-center gap-1 text-[10px] font-black tracking-widest text-muted-foreground">
-                    <Waypoints className="h-3.5 w-3.5" /> WHAT-IF CAUSAL
+                    <Waypoints className="h-3.5 w-3.5" /> {t('readiness.whatIf')}
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <select
-                      aria-label="Dimension"
+                      aria-label={t('readiness.dimension')}
                       value={wChange.dimension}
                       onChange={(e) => setWChange((s) => ({ ...s, dimension: e.target.value }))}
                       className="h-7 rounded-xl border border-border bg-transparent px-2 text-[11px]"
@@ -184,10 +193,10 @@ export default function HomePage() {
                       value={wChange.delta}
                       onChange={(e) => setWChange((s) => ({ ...s, delta: Number(e.target.value) }))}
                       className="h-7 w-20 rounded-xl border border-border bg-transparent px-2 text-[11px]"
-                      aria-label="Delta"
+                      aria-label={t('readiness.delta')}
                     />
                     <Button onClick={simulate} disabled={busy} size="sm">
-                      Simuler
+                      {t('readiness.simulate')}
                     </Button>
                   </div>
 
@@ -210,10 +219,7 @@ export default function HomePage() {
               </div>
             )}
             {!report && !busy && (
-              <p className="text-sm text-muted-foreground">
-                Lance une évaluation pour scorer les 13 dimensions (0–5) et projeter un changement de politique via le
-                graphe causal.
-              </p>
+              <p className="text-sm text-muted-foreground">{t('readiness.empty')}</p>
             )}
           </CardContent>
         </Card>
@@ -233,7 +239,7 @@ export default function HomePage() {
 
       <footer className="container mt-10 border-t border-border py-6 text-center text-xs text-muted-foreground">
         <p>
-          Made with <span aria-label="love">♥️</span> by{' '}
+          {t('app.madeBy')} <span aria-label="love">♥️</span> by{' '}
           <a
             href="https://djotta.com"
             target="_blank"

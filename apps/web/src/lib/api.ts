@@ -64,7 +64,14 @@ export interface AssessmentDto {
   role: string
   mandate: string
   findings: string[]
-  citations: Array<{ filename: string; articleNumber?: string; headingPath?: string }>
+  citations: Array<{
+    filename: string
+    articleNumber?: string
+    headingPath?: string
+    quote?: string
+    sourceUrl?: string
+    country?: string
+  }>
   confidence: number
   /** Citation-validator verdict (N2). */
   validation?: { ok: boolean; attempts: number; rejected: string[]; used: unknown[] }
@@ -88,11 +95,23 @@ export interface JointReportDto {
   assessments: AssessmentDto[]
 }
 
+/** One incident fact, released per chunk, visible to a subset of the agents. */
+export interface ScenarioEventDto {
+  id: string
+  sequence: number
+  releaseChunk: number
+  title: string
+  payload: string
+  visibleTo: string[]
+  createdAt: string
+}
+
 export interface RunResultDto {
   runId: string
   country: string
   domain: string
   ticks: JointReportDto[]
+  events: ScenarioEventDto[]
   dossier: { citationCount: number; conflictCount: number; traces: unknown[] }
 }
 
@@ -118,6 +137,7 @@ export interface TickResultDto {
   totalTicks: number
   done: boolean
   tick: number | null
+  events: ScenarioEventDto[]
   report: JointReportDto | null
 }
 

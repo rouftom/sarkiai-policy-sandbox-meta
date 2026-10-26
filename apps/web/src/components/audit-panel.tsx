@@ -4,8 +4,10 @@ import * as React from 'react'
 import { ShieldCheck, ShieldAlert, ListTree } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, cn } from '@sps/ui'
 import { api, type CoTTraceDto } from '@/lib/api'
+import { useI18n } from '@/lib/i18n'
 
 export function AuditPanel({ runId }: { runId: string }) {
+  const { t } = useI18n()
   const [trace, setTrace] = React.useState<CoTTraceDto[]>([])
   const [integrity, setIntegrity] = React.useState<{ valid: boolean; brokenAt?: string } | null>(null)
   const [loading, setLoading] = React.useState(true)
@@ -42,7 +44,7 @@ export function AuditPanel({ runId }: { runId: string }) {
     <Card>
       <CardHeader>
         <ListTree className="h-4 w-4 text-primary" />
-        <CardTitle>CHAIN-OF-THOUGHT & AUDIT — {runId}</CardTitle>
+        <CardTitle>{t('audit.title')} — {runId}</CardTitle>
         {integrity && (
           <span
             className={cn(
@@ -51,15 +53,13 @@ export function AuditPanel({ runId }: { runId: string }) {
             )}
           >
             {integrity.valid ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
-            {integrity.valid ? 'AUDIT CHAIN INTEGRITY OK' : `CHAIN BROKEN @ ${integrity.brokenAt}`}
+            {integrity.valid ? t('audit.integrityOk') : t('audit.chainBroken', { at: integrity.brokenAt ?? '' })}
           </span>
         )}
       </CardHeader>
       <CardContent>
-        {loading && <p className="text-xs text-muted-foreground">Chargement des traces…</p>}
-        {!loading && trace.length === 0 && (
-          <p className="text-xs text-muted-foreground">Aucune trace persistée pour ce run.</p>
-        )}
+        {loading && <p className="text-xs text-muted-foreground">{t('audit.loading')}</p>}
+        {!loading && trace.length === 0 && <p className="text-xs text-muted-foreground">{t('audit.empty')}</p>}
 
         <div className="space-y-2">
           {byAgent.map(([agentId, steps]) => (

@@ -91,8 +91,11 @@ sarkiai-policy-sandbox/
 
 ## Quick start
 
-> **Sovereign / local-only**: all models run locally via Ollama. No API keys,
-> no cloud calls. First run pulls ~9 GB (qwen3.5:9b) + ~2 GB (bge-m3).
+> **Pick a provider mode** with `SANDBOX_MODE` in `.env`: `local` (default —
+> Ollama, no key, nothing leaves the machine), `sovereign` (Muse Glimmer on
+> Ollama, or a hosted open-weight endpoint) or `cloud` (Meta Model API, requires
+> `MODEL_API_KEY`). The badge in the console shows which one is answering.
+> First local run pulls ~9 GB (qwen3.5:9b) + ~2 GB (bge-m3).
 
 ### Everything at once
 
@@ -104,7 +107,7 @@ make models                # pull qwen3.5:9b + bge-m3 into Ollama
 
 Then:
 
-- Web console → http://localhost:3000
+- Web console (bilingual EN/FR, English by default) → http://localhost:3000
 - API + OpenAPI → http://localhost:8000/docs
 - Ingestion service → http://localhost:8001/docs
 - OCR service → http://localhost:8002/docs
@@ -112,6 +115,16 @@ Then:
 - Ollama (local models) → http://localhost:11434
 - MinIO console (attachments) → http://localhost:9001
 - MongoDB (audit + CoT) → `mongodb://localhost:27017`
+
+### Switching provider
+
+```bash
+SANDBOX_MODE=cloud docker compose up -d api web      # Meta Model API
+SANDBOX_MODE=sovereign docker compose up -d api web  # Muse Glimmer on Ollama
+```
+
+The switch is recorded in the audit chain as a `provider.switched` event, and
+each chain-of-thought step names the mode and model that produced it.
 
 Optional local reranker (TEI, no cloud):
 

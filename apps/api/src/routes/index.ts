@@ -227,6 +227,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       totalTicks: session.ticks.length,
       done: result.done,
       tick: result.tick,
+      // The facts released in this chunk, as the incident timeline shows them.
+      events: result.tick === null ? [] : session.events.filter((e) => e.releaseChunk === result.tick),
       report: result.report,
     }
   })
@@ -264,7 +266,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       await releaseNext(session)
     }
     const dossier = await dossierFor(session.runId, session.reports)
-    return { runId: session.runId, country: session.country, domain: session.domain, ticks: session.reports, dossier }
+    return {
+      runId: session.runId,
+      country: session.country,
+      domain: session.domain,
+      ticks: session.reports,
+      events: session.events,
+      dossier,
+    }
   })
 
   // ── Readiness assessment ──────────────────────────────────────────────────
