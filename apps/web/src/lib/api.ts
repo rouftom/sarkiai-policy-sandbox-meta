@@ -119,7 +119,23 @@ export interface TickResultDto {
   report: JointReportDto | null
 }
 
+export interface ProviderDto {
+  mode: 'cloud' | 'sovereign' | 'local'
+  label: string
+  servedBy: string
+  baseURL: string
+  models: { reasoning: string; vision: string; segmentation?: string; transcription?: string; embedding: string }
+  residency: 'cloud' | 'on-premise'
+  openWeights: boolean
+  budgetUsd: number
+  ready: boolean
+  reason?: string
+}
+
 export const api = {
+  /** Active inference provider (secret-free). */
+  provider: () => request<ProviderDto>('/v1/provider'),
+
   ask: (body: {
     institutionId: string
     question: string

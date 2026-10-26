@@ -8,13 +8,17 @@ import { LensSelector } from '@/components/lens-selector'
 import { ScenarioConsole } from '@/components/scenario-console'
 import { AuditPanel } from '@/components/audit-panel'
 import { FloatingAssistant } from '@/components/floating-assistant'
+import { LocaleSwitcher } from '@/components/locale-switcher'
+import { ProviderBadge } from '@/components/provider-badge'
 import { useTheme } from '@/components/theme-provider'
+import { useI18n } from '@/lib/i18n'
 import { api, type ReadinessReportDto, type WhatIfResultDto } from '@/lib/api'
 
 const DOMAINS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
 
 export default function HomePage() {
   const { mode, toggleMode, packId, packs, setPack } = useTheme()
+  const { locale, t } = useI18n()
   const [lens, setLens] = React.useState<WorkflowLens>('hybrid')
   const [country, setCountry] = React.useState('cm')
   const [domain, setDomain] = React.useState<Domain>('health')
@@ -59,22 +63,24 @@ export default function HomePage() {
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-gradient-brand text-2xl font-black tracking-tight">SarkiAI Policy Sandbox</h1>
-          <p className="text-xs text-muted-foreground">Un moteur policy-grounded · deux lenses · local & souverain</p>
+          <p className="text-xs text-muted-foreground">{t('app.tagline')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ProviderBadge />
           <select
-            aria-label="Theme pack"
+            aria-label={t('app.theme')}
             value={packId}
             onChange={(e) => setPack(e.target.value)}
             className="h-8 rounded-xl border border-border bg-transparent px-2 text-[11px]"
           >
             {packs.map((pack) => (
               <option key={pack.id} value={pack.id}>
-                {pack.name.fr}
+                {pack.name[locale]}
               </option>
             ))}
           </select>
-          <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={toggleMode}>
+          <LocaleSwitcher />
+          <Button variant="ghost" size="icon" aria-label={t('app.toggleTheme')} onClick={toggleMode}>
             {mode === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
         </div>
@@ -83,7 +89,7 @@ export default function HomePage() {
       <section className="mb-6 flex flex-wrap items-center gap-3">
         <LensSelector value={lens} onChange={setLens} />
         <select
-          aria-label="Country"
+          aria-label={t('app.country')}
           value={country}
           onChange={(e) => setCountry(e.target.value)}
           className="h-8 rounded-xl border border-border bg-transparent px-2 text-[11px]"
@@ -92,7 +98,7 @@ export default function HomePage() {
           <option value="ae">United Arab Emirates (AE)</option>
         </select>
         <select
-          aria-label="Domain"
+          aria-label={t('app.domain')}
           value={domain}
           onChange={(e) => setDomain(e.target.value as Domain)}
           className="h-8 rounded-xl border border-border bg-transparent px-2 text-[11px]"

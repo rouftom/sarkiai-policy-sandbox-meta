@@ -1,4 +1,4 @@
-/** Runtime configuration for the API application layer — LOCAL ONLY. */
+/** Runtime configuration for the API application layer. */
 
 function env(name: string, fallback = ''): string {
   return process.env[name] ?? fallback

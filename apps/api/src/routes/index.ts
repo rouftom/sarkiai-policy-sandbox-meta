@@ -8,7 +8,7 @@ import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
 import { institutionsForDomain } from '@sps/shared'
 import type { DocType, Domain, InstitutionSpec, JointSituationReport, ScenarioEvent, WorkflowLens } from '@sps/shared'
-import { createEngine, createScenario } from '../engine.js'
+import { createEngine, createScenario, recordProviderSwitch } from '../engine.js'
 import { healthDataBreach } from '../scenarios.js'
 import { config } from '../config.js'
 
@@ -33,7 +33,17 @@ interface ScenarioSession {
 const scenarioSessions = new Map<string, ScenarioSession>()
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/health', async () => ({ status: 'ok', service: 'sps-api' }))
+  // Announce the active provider in the audit chain (no-op when unchanged).
+  void recordProviderSwitch(engine.provider, engine.audit)
+
+  app.get('/health', async () => ({
+    status: 'ok',
+    service: 'sps-api',
+    provider: { mode: engine.provider.mode, model: engine.provider.models.reasoning },
+  }))
+
+  // ── Active provider (secret-free: what answers, and where) ────────────────
+  app.get('/v1/provider', async () => engine.provider)
 
   // ── Knowledge base ────────────────────────────────────────────────────────
   app.post('/v1/kb/ingest', async (request, reply) => {

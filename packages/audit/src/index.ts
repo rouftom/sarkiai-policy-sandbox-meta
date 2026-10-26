@@ -87,6 +87,13 @@ export class AuditService {
     return docs.map((doc) => doc as unknown as CoTTrace)
   }
 
+  /** Most recent record carrying a given action, or `null` if never logged. */
+  async lastAction(action: string): Promise<AuditRecord | null> {
+    const { audit } = await this.db()
+    const doc = await audit.find({ action }).sort({ ts: -1 }).limit(1).next()
+    return (doc as unknown as AuditRecord | null) ?? null
+  }
+
   async getAuditForRun(runId: string): Promise<AuditRecord[]> {
     const { audit } = await this.db()
     const docs = await audit.find({ runId }).sort({ ts: 1 }).toArray()

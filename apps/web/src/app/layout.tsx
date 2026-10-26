@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
+import { I18nProvider } from '@/lib/i18n'
 import {
   DEFAULT_THEME_PACK_ID,
   MODE_STORAGE_KEY,
@@ -12,7 +13,7 @@ import {
 export const metadata: Metadata = {
   title: 'SarkiAI Policy Sandbox',
   description:
-    'Policy-grounded multi-agent engine: error-scenario simulation and AI-readiness assessment. Local & sovereign.',
+    'Policy-grounded multi-agent engine: error-scenario simulation and AI-readiness assessment. Runs on Meta models, or on open weights on-premise.',
 }
 
 export const viewport: Viewport = {
@@ -31,13 +32,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   })
 
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Pre-paint: apply theme pack + mode before first paint (no flash). */}
         <script dangerouslySetInnerHTML={{ __html: bootstrap }} />
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <I18nProvider>{children}</I18nProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

@@ -12,12 +12,14 @@ import type {
   Citation,
   Domain,
   InstitutionSpec,
+  ProviderDescriptor,
   WorkflowLens,
 } from '@sps/shared'
 import type { PolicyRetriever } from '@sps/retrieval'
 import { citationFromChunk, hasGroundedCitation } from '@sps/citations'
 import type { AuditService } from '@sps/audit'
 import { attachmentGuardrail, buildSystemPrompt, citationDirective } from './prompt'
+import { describeProvider } from './provider'
 
 export interface Attachment {
   mime: string
@@ -50,10 +52,17 @@ export interface OrchestratorDeps {
   model: LanguageModel
   retriever: PolicyRetriever
   audit?: AuditService
+  /** Active provider, recorded in every trace step (never contains a secret). */
+  provider?: ProviderDescriptor
 }
 
 export class PolicyOrchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
+
+  /** `mode · model` of whatever answered — persisted with each trace step. */
+  private modelLabel(): string {
+    return this.deps.provider ? describeProvider(this.deps.provider) : 'configured'
+  }
 
   async runAgent(input: AgentRunInput): Promise<AgentAssessment> {
     const { institution, question, country, domain, lens } = input
@@ -81,7 +90,7 @@ export class PolicyOrchestrator {
           output: citations.map((c) => c.filename),
         },
       ],
-      model: 'n/a',
+      model: this.modelLabel(),
     })
 
     // 3. Generate the grounded answer (multimodal when attachments are present).
@@ -119,7 +128,7 @@ export class PolicyOrchestrator {
       step: 1,
       thought: reasoningText || text,
       toolCalls: [{ name: 'generate', input: { question }, output: { grounded } }],
-      model: 'configured',
+      model: this.modelLabel(),
     })
     await this.deps.audit?.logAction({
       actor: institution.id,

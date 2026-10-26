@@ -258,3 +258,45 @@ export interface RetrievalQuery {
   namespace?: string
   topK?: number
 }
+
+/**
+ * Where inference happens and whose weights answer.
+ *
+ * A provider mode is a configuration decision, not a code path: the same
+ * engine, the same prompts and the same audit trail run on all three.
+ */
+export type ProviderMode = 'cloud' | 'sovereign' | 'local'
+
+/** Models backing one provider mode (each field is a model identifier). */
+export interface ProviderModels {
+  /** Reasoning / generation (text, and images for the vision model). */
+  reasoning: string
+  /** Vision model used to transcribe what a segmentation pass isolated. */
+  vision: string
+  /** Image segmentation (scanned gazettes) — cloud mode only. */
+  segmentation?: string
+  /** Speech-to-text (WhatsApp voice notes) — cloud mode only. */
+  transcription?: string
+  /** Embeddings — always on-premise, whatever the mode. */
+  embedding: string
+}
+
+/** Public, secret-free description of the active provider. */
+export interface ProviderDescriptor {
+  mode: ProviderMode
+  /** Human label, e.g. "Meta Model API". */
+  label: string
+  /** Upstream vendor serving the weights. */
+  servedBy: string
+  baseURL: string
+  models: ProviderModels
+  /** `on-premise` means no prompt, document or answer leaves the institution. */
+  residency: 'cloud' | 'on-premise'
+  openWeights: boolean
+  /** Hard ceiling per scenario run, in USD. `0` when nothing is billed. */
+  budgetUsd: number
+  /** False when the mode is selected but not configured (e.g. missing key). */
+  ready: boolean
+  /** Why the mode is unusable, when `ready` is false. */
+  reason?: string
+}
