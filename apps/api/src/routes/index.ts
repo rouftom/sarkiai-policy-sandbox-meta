@@ -10,6 +10,7 @@ import {
   toKbChunks,
   type GazettePage,
 } from '@sps/gazette'
+import { analyzeImpact } from '@sps/impact'
 import { IngestionClient } from '@sps/kb'
 import { whatIf } from '@sps/readiness'
 import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
@@ -509,6 +510,68 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         ...(body.data.sessionId ? { sessionId: body.data.sessionId } : {}),
       })
       return { ...transcript, facts: toVoiceFacts(transcript) }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(422).send({ error: (error as Error).message })
+    }
+  })
+
+  // ── N7: legislative impact on open incidents ──────────────────────────────
+  // A new provision does not open a new case: it re-opens the ones already
+  // persisted. Candidate runs are selected deterministically (same article and
+  // instrument) and the model only ranks and explains them.
+  app.post('/v1/impact/analyze', async (request, reply) => {
+    const body = z
+      .object({
+        provision: z.object({
+          title: z.string().min(1).max(300),
+          text: z.string().min(1).max(20_000),
+          articleNumber: z.string().max(80).optional(),
+          docType: z.string().max(40).optional(),
+          sourceUrl: z.string().url().optional(),
+          effectiveDate: z.string().max(40).optional(),
+        }),
+        runIds: z.array(z.string().min(1)).min(1).max(20),
+      })
+      .safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    const cases = []
+    for (const runId of body.data.runIds) {
+      const reports = await engine.reports.getReports(runId).catch(() => [])
+      if (reports.length === 0) continue
+      const session = scenarioSessions.get(runId)
+      cases.push({
+        runId,
+        country: reports[0]!.country,
+        domain: reports[0]!.domain,
+        reports: reports.length,
+        citations: reports.flatMap((report) => report.citations),
+        facts: session ? session.history.map((event) => `${event.title}: ${event.payload}`) : [],
+      })
+    }
+    if (cases.length === 0) {
+      return reply.status(404).send({ error: 'No persisted reports for those run ids.' })
+    }
+
+    try {
+      const analysis = await analyzeImpact({
+        model: engine.model,
+        modelLabel: engine.provider.models.reasoning,
+        provision: body.data.provision,
+        cases,
+      })
+      try {
+        await engine.audit.logAction({
+          actor: 'system',
+          action: 'impact.analyzed',
+          target: `provision:${body.data.provision.title}:${body.data.provision.articleNumber ?? '-'}`,
+          lens: 'hybrid',
+        })
+      } catch {
+        // The analysis is still returned when the audit store is unreachable.
+      }
+      return analysis
     } catch (error) {
       request.log.error(error)
       return reply.status(422).send({ error: (error as Error).message })

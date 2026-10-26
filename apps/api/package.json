@@ -17,6 +17,7 @@
     "@sps/audit": "workspace:*",
     "@sps/citations": "workspace:*",
     "@sps/gazette": "workspace:*",
+    "@sps/impact": "workspace:*",
     "@sps/kb": "workspace:*",
     "@sps/readiness": "workspace:*",
     "@sps/report": "workspace:*",

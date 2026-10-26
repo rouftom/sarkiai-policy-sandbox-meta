@@ -34,7 +34,7 @@ Full diff: [`pre-hackathon-baseline...meta-hackathon`](../../compare/pre-hackath
 | N4 | WhatsApp channel: joint reports, deadline alerts, human-approval buttons | — | ☐ | |
 | N5 | Sovereign mode: the same engine on open weights, one command to build the local Muse Glimmer (`deploy/ollama/Modelfile.glimmer`, `make glimmer`) | Muse Glimmer 30B (Ollama), Muse Spark Open (hosted) | done | `make glimmer` |
 | N6 | Voice notes turned into timed, speaker-attributed facts (`@sps/voice`, `/v1/voice/transcribe`); cloud uses Muse Voice Transcribe, sovereign/local use on-premise faster-whisper | Muse Voice Transcribe | done | `bun test packages/voice` |
-| N7 | Impact analysis: new legislation re-evaluates open incidents | Muse Spark | ☐ | |
+| N7 | Impact analysis: a new provision re-opens the persisted incidents it changes (`@sps/impact`, `/v1/impact/analyze`) | Muse Spark | done | `bun test packages/impact` |
 | N8 | Crisis exercise mode with timed injects and an after-action report | Muse Spark / open weights | ☐ | |
 | N9 | Public-communication drafts in Fulfulde or Hausa (native review required) | Muse Spark | ☐ | |
 | N10 | Demo UI: incident timeline (who saw what), clickable citations, bilingual EN/FR, provider badge, audit-chain check | — | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |

@@ -72,6 +72,7 @@ sarkiai-policy-sandbox/
 │  ├─ citations/      # article/section source attribution
 │  ├─ gazette/        # scanned gazette: layout, SAM 3.1 artefacts, per-zone transcription
 │  ├─ voice/          # voice notes: Muse Voice Transcribe / faster-whisper → timed facts
+│  ├─ impact/         # new provision → which open incidents change, and how
 │  ├─ agents/         # roles, mandates, orchestrator (AI SDK ToolLoopAgent)
 │  ├─ scenarios/      # progressive event engine (chunked release)
 │  ├─ readiness/      # gap engine + AI readiness dimensions
@@ -192,6 +193,15 @@ Cloud mode uses **Muse Voice Transcribe**; `sovereign` and `local` call the
 on-premise `faster-whisper` service, so a recording never leaves the network.
 The WAV header is checked before upload: a stereo or 44.1 kHz file is rejected
 with the exact conversion to run, not transcribed badly.
+
+### Legislative impact (N7)
+
+`POST /v1/impact/analyze` takes a new provision and a list of open run ids. Runs
+are filtered deterministically first (same article, same instrument), then the
+model ranks the candidates and says what to re-run — a finding that names an
+unknown run is dropped, so the analysis cannot invent a case. Deadline changes
+and unaffected runs are returned alongside the findings, and the pass is recorded
+as `impact.analyzed` in the audit chain.
 
 Optional local reranker (TEI, no cloud):
 

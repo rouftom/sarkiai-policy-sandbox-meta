@@ -266,6 +266,32 @@ export interface VoiceTranscriptDto {
   model: string
 }
 
+/** Legislative impact on open incidents (N7). */
+export interface ImpactFindingDto {
+  runId: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  reason: string
+  affectedArticles: string[]
+  action: string
+}
+
+export interface ImpactAnalysisDto {
+  provision: {
+    title: string
+    text: string
+    articleNumber?: string
+    docType?: string
+    sourceUrl?: string
+    effectiveDate?: string
+  }
+  summary: string
+  findings: ImpactFindingDto[]
+  deadlineChanges: string[]
+  unaffectedRunIds: string[]
+  model: string
+  generatedAt: string
+}
+
 export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
@@ -328,6 +354,19 @@ export const api = {
     keywords?: string[]
     sessionId?: string
   }) => request<VoiceTranscriptDto>('/v1/voice/transcribe', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** Which open runs a newly published provision changes (N7). */
+  analyzeImpact: (body: {
+    provision: {
+      title: string
+      text: string
+      articleNumber?: string
+      docType?: string
+      sourceUrl?: string
+      effectiveDate?: string
+    }
+    runIds: string[]
+  }) => request<ImpactAnalysisDto>('/v1/impact/analyze', { method: 'POST', body: JSON.stringify(body) }),
 
   dossierUrl: (runId: string, format: 'json' | 'markdown' = 'markdown') =>
     `${API_URL}/v1/audit/dossier/${runId}?format=${format}`,

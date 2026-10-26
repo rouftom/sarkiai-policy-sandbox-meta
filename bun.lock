@@ -28,6 +28,7 @@
         "@sps/audit": "workspace:*",
         "@sps/citations": "workspace:*",
         "@sps/gazette": "workspace:*",
+        "@sps/impact": "workspace:*",
         "@sps/kb": "workspace:*",
         "@sps/readiness": "workspace:*",
         "@sps/report": "workspace:*",
@@ -116,6 +117,17 @@
       },
       "devDependencies": {
         "@types/pngjs": "^6.0.5",
+        "typescript": "^5.6.0",
+      },
+    },
+    "packages/impact": {
+      "name": "@sps/impact",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sps/shared": "workspace:*",
+        "ai": "^6.0.0",
+      },
+      "devDependencies": {
         "typescript": "^5.6.0",
       },
     },
@@ -407,6 +419,8 @@
     "@sps/citations": ["@sps/citations@workspace:packages/citations"],
 
     "@sps/gazette": ["@sps/gazette@workspace:packages/gazette"],
+
+    "@sps/impact": ["@sps/impact@workspace:packages/impact"],
 
     "@sps/kb": ["@sps/kb@workspace:packages/kb"],
 
