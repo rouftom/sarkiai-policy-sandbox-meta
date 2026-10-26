@@ -12,6 +12,7 @@ import {
 } from '@sps/gazette'
 import { IngestionClient } from '@sps/kb'
 import { whatIf } from '@sps/readiness'
+import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
 import { institutionsForDomain } from '@sps/shared'
@@ -459,6 +460,58 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       request.log.error(error)
       return reply.status(502).send({ error: `Ingestion service unavailable: ${(error as Error).message}` })
+    }
+  })
+
+  // ── N6: voice notes as timed facts ────────────────────────────────────────
+  // Cloud calls Muse Voice Transcribe; sovereign/local call the on-premise
+  // faster-whisper service. Both come back as the same transcript + turns, and
+  // `facts` puts each turn on the incident timeline with its offset.
+  app.post('/v1/voice/transcribe', { bodyLimit: 44 * 1024 * 1024 }, async (request, reply) => {
+    const body = z
+      .object({
+        audioBase64: z.string().min(1),
+        filename: z.string().min(1).max(200).default('note.wav'),
+        mode: z.enum(['PUSH_TO_TALK', 'ENDPOINTING', 'DIARIZATION']).default('ENDPOINTING'),
+        languageBias: z.array(z.string().min(2).max(40)).max(4).optional(),
+        keywords: z.array(z.string().min(1).max(60)).max(32).optional(),
+        sessionId: z.string().min(1).max(80).optional(),
+      })
+      .safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    const audio = Buffer.from(body.data.audioBase64.replace(/^data:[^,]+,/, ''), 'base64')
+    if (audio.byteLength === 0) return reply.status(400).send({ error: 'Empty audio.' })
+    if (audio.byteLength > 32 * 1024 * 1024) {
+      return reply.status(413).send({ error: 'Audio too large (max 32 MB per recording).' })
+    }
+
+    const client =
+      engine.provider.mode === 'cloud' && engine.provider.models.transcription
+        ? new MetaAsrClient({
+            baseUrl: engine.provider.baseURL,
+            apiKey: providerApiKey(engine.provider),
+            model: engine.provider.models.transcription,
+          })
+        : new LocalAsrClient({
+            baseUrl: config.transcription.url,
+            apiKey: config.serviceApiKey,
+            model: 'faster-whisper',
+          })
+
+    try {
+      const transcript = await client.transcribe({
+        audio,
+        filename: body.data.filename,
+        mode: body.data.mode as VoiceMode,
+        ...(body.data.languageBias ? { languageBias: body.data.languageBias } : {}),
+        ...(body.data.keywords ? { keywords: body.data.keywords } : {}),
+        ...(body.data.sessionId ? { sessionId: body.data.sessionId } : {}),
+      })
+      return { ...transcript, facts: toVoiceFacts(transcript) }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(422).send({ error: (error as Error).message })
     }
   })
 

@@ -26,6 +26,11 @@ export const config = {
     apiKey: env('SERVICE_API_KEY'),
   },
 
+  // Local faster-whisper service, used when the provider is not `cloud`.
+  transcription: {
+    url: env('TRANSCRIPTION_URL', 'http://localhost:8003'),
+  },
+
   // Local LLM (Ollama, OpenAI-compatible). qwen3.5:9b is multimodal (text+image).
   ollama: {
     baseUrl: env('OLLAMA_BASE_URL', 'http://localhost:11434'),

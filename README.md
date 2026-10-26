@@ -71,6 +71,7 @@ sarkiai-policy-sandbox/
 │  ├─ retrieval/      # hybrid RAG (Qdrant dense + sparse BM25, RRF + rerank)
 │  ├─ citations/      # article/section source attribution
 │  ├─ gazette/        # scanned gazette: layout, SAM 3.1 artefacts, per-zone transcription
+│  ├─ voice/          # voice notes: Muse Voice Transcribe / faster-whisper → timed facts
 │  ├─ agents/         # roles, mandates, orchestrator (AI SDK ToolLoopAgent)
 │  ├─ scenarios/      # progressive event engine (chunked release)
 │  ├─ readiness/      # gap engine + AI readiness dimensions
@@ -181,6 +182,16 @@ price, prints zones, artefacts, tokens and cost):
 bun run check:gazette                                    # the sample page
 bun run check:gazette path/to/scanned-page.png           # your own scan
 ```
+
+### Voice notes (N6)
+
+`POST /v1/voice/transcribe` takes a base64 RIFF/WAVE file (mono, 16-bit PCM,
+16 kHz or 24 kHz — convert WhatsApp OGG/Opus first) and returns the transcript,
+timed turns and `facts` (`T+00:12`, speaker label when diarization is on).
+Cloud mode uses **Muse Voice Transcribe**; `sovereign` and `local` call the
+on-premise `faster-whisper` service, so a recording never leaves the network.
+The WAV header is checked before upload: a stereo or 44.1 kHz file is rejected
+with the exact conversion to run, not transcribed badly.
 
 Optional local reranker (TEI, no cloud):
 

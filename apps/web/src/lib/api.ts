@@ -239,6 +239,33 @@ export interface GazetteIngestDto {
   usedOcr: boolean
 }
 
+/** Voice notes (N6): one transcript, timed turns and timeline facts. */
+export interface VoiceTurnDto {
+  turnId: number
+  startMs: number
+  endMs: number
+  text: string
+  speaker?: string
+}
+
+export interface VoiceFactDto {
+  id: string
+  atMs: number
+  at: string
+  speaker?: string
+  text: string
+}
+
+export interface VoiceTranscriptDto {
+  sessionId: string
+  transcript: string
+  durationMs: number
+  turns: VoiceTurnDto[]
+  facts: VoiceFactDto[]
+  engine: 'muse-voice-transcribe' | 'faster-whisper'
+  model: string
+}
+
 export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
@@ -291,6 +318,16 @@ export const api = {
     namespace?: string
     version?: string
   }) => request<GazetteIngestDto>('/v1/gazette/ingest', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** Transcribe a voice note (Muse Voice Transcribe in cloud, faster-whisper otherwise). */
+  transcribeVoice: (body: {
+    audioBase64: string
+    filename?: string
+    mode?: 'PUSH_TO_TALK' | 'ENDPOINTING' | 'DIARIZATION'
+    languageBias?: string[]
+    keywords?: string[]
+    sessionId?: string
+  }) => request<VoiceTranscriptDto>('/v1/voice/transcribe', { method: 'POST', body: JSON.stringify(body) }),
 
   dossierUrl: (runId: string, format: 'json' | 'markdown' = 'markdown') =>
     `${API_URL}/v1/audit/dossier/${runId}?format=${format}`,

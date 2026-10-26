@@ -24,6 +24,7 @@
     "@sps/scenarios": "workspace:*",
     "@sps/shared": "workspace:*",
     "@sps/storage": "workspace:*",
+    "@sps/voice": "workspace:*",
     "ai": "^6.0.0",
     "fastify": "^5.1.0",
     "zod": "^3.23.8"

@@ -35,6 +35,7 @@
         "@sps/scenarios": "workspace:*",
         "@sps/shared": "workspace:*",
         "@sps/storage": "workspace:*",
+        "@sps/voice": "workspace:*",
         "ai": "^6.0.0",
         "fastify": "^5.1.0",
         "zod": "^3.23.8",
@@ -215,6 +216,16 @@
       },
       "peerDependencies": {
         "react": "^19.0.0",
+      },
+    },
+    "packages/voice": {
+      "name": "@sps/voice",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sps/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "^5.6.0",
       },
     },
   },
@@ -414,6 +425,8 @@
     "@sps/theme": ["@sps/theme@workspace:packages/theme"],
 
     "@sps/ui": ["@sps/ui@workspace:packages/ui"],
+
+    "@sps/voice": ["@sps/voice@workspace:packages/voice"],
 
     "@sps/web": ["@sps/web@workspace:apps/web"],
 
