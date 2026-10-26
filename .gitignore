@@ -56,3 +56,6 @@ data/global/*/*
 .DS_Store
 *.log
 coverage/
+
+# generated gazette fixture intermediates
+.gazette-build/

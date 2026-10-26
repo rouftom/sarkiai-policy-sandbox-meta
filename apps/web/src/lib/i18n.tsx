@@ -119,6 +119,36 @@ const en = {
   'assistant.send': 'Send',
   'assistant.removeImage': 'Remove the image',
   'assistant.searching': 'Looking up the applicable provision…',
+
+  'gazette.title': 'SCANNED GAZETTE',
+  'gazette.subtitle': 'N3 · layout + SAM 3.1',
+  'gazette.hint':
+    'A scanned page has no text layer. The pipeline finds the columns, transcribes each zone with the vision model and locates stamps, signatures and tables with SAM 3.1 — then shows you where every line came from.',
+  'gazette.choose': 'Choose a page',
+  'gazette.sample': 'Use the sample page',
+  'gazette.analyze': 'Segment & transcribe',
+  'gazette.analyzing': 'Segmenting and transcribing the page…',
+  'gazette.addToCorpus': 'Add to corpus',
+  'gazette.ingesting': 'Ingesting…',
+  'gazette.ingested': 'Page {page}: {zones} zones → {chunks} chunks inserted in the corpus.',
+  'gazette.page': 'Page',
+  'gazette.columns': 'Columns',
+  'gazette.zones': 'Zones',
+  'gazette.artifacts': 'Artefacts',
+  'gazette.cost': 'Cost',
+  'gazette.duration': 'Duration',
+  'gazette.artifact.table': 'table',
+  'gazette.artifact.stamp': 'stamp',
+  'gazette.artifact.signature': 'signature',
+  'gazette.skipped': 'artefact',
+  'gazette.noText': 'no text',
+  'gazette.column': 'col.',
+  'gazette.characters': 'chars',
+  'gazette.warnings': 'Warnings',
+  'gazette.noTextOnPage': 'No readable text on this page — nothing will be added to the corpus.',
+  'gazette.corpusHint':
+    'Text zones and tables are added as one page document; stamps and signatures stay in the overlay and are never retrieved as law.',
+  'gazette.empty': 'Load the sample page or a PNG/JPEG scan to see the segmentation overlay.',
 }
 
 const fr: Record<keyof typeof en, string> = {
@@ -224,6 +254,36 @@ const fr: Record<keyof typeof en, string> = {
   'assistant.send': 'Envoyer',
   'assistant.removeImage': 'Retirer l’image',
   'assistant.searching': 'Recherche de la disposition applicable…',
+
+  'gazette.title': 'JOURNAL OFFICIEL NUMÉRISÉ',
+  'gazette.subtitle': 'N3 · mise en page + SAM 3.1',
+  'gazette.hint':
+    'Une page numérisée n’a pas de couche texte. Le pipeline détecte les colonnes, transcrit chaque zone avec le modèle vision et localise tampons, signatures et tableaux avec SAM 3.1 — puis vous montre d’où vient chaque ligne.',
+  'gazette.choose': 'Choisir une page',
+  'gazette.sample': 'Utiliser la page d’exemple',
+  'gazette.analyze': 'Segmenter et transcrire',
+  'gazette.analyzing': 'Segmentation et transcription de la page…',
+  'gazette.addToCorpus': 'Ajouter au corpus',
+  'gazette.ingesting': 'Ingestion…',
+  'gazette.ingested': 'Page {page} : {zones} zones → {chunks} chunks insérés dans le corpus.',
+  'gazette.page': 'Page',
+  'gazette.columns': 'Colonnes',
+  'gazette.zones': 'Zones',
+  'gazette.artifacts': 'Artefacts',
+  'gazette.cost': 'Coût',
+  'gazette.duration': 'Durée',
+  'gazette.artifact.table': 'tableau',
+  'gazette.artifact.stamp': 'tampon',
+  'gazette.artifact.signature': 'signature',
+  'gazette.skipped': 'artefact',
+  'gazette.noText': 'sans texte',
+  'gazette.column': 'col.',
+  'gazette.characters': 'car.',
+  'gazette.warnings': 'Avertissements',
+  'gazette.noTextOnPage': 'Aucun texte lisible sur cette page — rien ne sera ajouté au corpus.',
+  'gazette.corpusHint':
+    'Les zones de texte et les tableaux forment un document de page ; les tampons et signatures restent dans l’overlay et ne sont jamais retrouvés comme du droit.',
+  'gazette.empty': 'Chargez la page d’exemple ou un scan PNG/JPEG pour voir l’overlay de segmentation.',
 }
 
 const DICTIONARIES: Record<Locale, Record<keyof typeof en, string>> = { en, fr }

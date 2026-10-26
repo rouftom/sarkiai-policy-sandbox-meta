@@ -30,7 +30,7 @@ Full diff: [`pre-hackathon-baseline...meta-hackathon`](../../compare/pre-hackath
 |---|---------|-----------|--------|---------|
 | N1 | Provider layer (`cloud` / `sovereign` / `local`), provider badge, `provider.switched` audit event, model recorded per reasoning step | Muse Spark (Meta Model API) | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
 | N2 | Citation validator: a quote absent from the corpus is rejected and the agent retries | Muse Spark | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
-| N3 | Scanned gazette ingestion: column segmentation, per-zone transcription, clickable provenance | SAM 3.1 + Muse Spark | ☐ | |
+| N3 | Scanned gazette ingestion: column segmentation, per-zone transcription, SAM artefact overlay, provenance carried into the KB (`@sps/gazette`, `/v1/gazette/*`, console panel) | SAM 3.1 + Muse Spark | done | `bun run check:gazette` |
 | N4 | WhatsApp channel: joint reports, deadline alerts, human-approval buttons | — | ☐ | |
 | N5 | Sovereign mode: the same engine on open weights | Muse Glimmer (Ollama), Muse Spark Open (hosted) | ☐ | |
 | N6 | WhatsApp voice notes turned into timestamped facts | Muse Voice Transcribe | ☐ | |

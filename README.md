@@ -70,6 +70,7 @@ sarkiai-policy-sandbox/
 │  ├─ kb/             # ingestion client + knowledge-base domain logic
 │  ├─ retrieval/      # hybrid RAG (Qdrant dense + sparse BM25, RRF + rerank)
 │  ├─ citations/      # article/section source attribution
+│  ├─ gazette/        # scanned gazette: layout, SAM 3.1 artefacts, per-zone transcription
 │  ├─ agents/         # roles, mandates, orchestrator (AI SDK ToolLoopAgent)
 │  ├─ scenarios/      # progressive event engine (chunked release)
 │  ├─ readiness/      # gap engine + AI readiness dimensions
@@ -133,6 +134,29 @@ on failure):
 bun run check:provider            # SANDBOX_MODE
 bun run check:provider cloud      # Meta Model API
 bun run check:provider sovereign  # Muse Glimmer on Ollama
+```
+
+### Scanned gazettes (N3)
+
+Official journals are often published as scans with no text layer. The console's
+**Scanned gazette** panel (or `POST /v1/gazette/analyze`) does four things:
+
+1. binarises the page (Otsu) and finds the columns from ink projection profiles;
+2. cuts each column into paragraphs / headings / tables in reading order;
+3. transcribes one crop per zone with the vision model, and lets **SAM 3.1**
+   locate stamps, signatures and tables (cloud mode only — in `sovereign` and
+   `local` the geometric overlay still works);
+4. tags every zone with page, column, bounding box, page sha256 and a deep link,
+   then `POST /v1/gazette/ingest` writes the page into the jurisdiction-scoped
+   knowledge base. Stamps and signatures stay in the overlay and are never
+   retrieved as law.
+
+Check the pipeline end to end on the synthetic demo page (a few cents at list
+price, prints zones, artefacts, tokens and cost):
+
+```bash
+bun run check:gazette                                    # the sample page
+bun run check:gazette path/to/scanned-page.png           # your own scan
 ```
 
 Optional local reranker (TEI, no cloud):

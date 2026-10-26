@@ -154,6 +154,91 @@ export interface ProviderDto {
   reason?: string
 }
 
+/** Scanned-gazette ingestion (N3). Mirrors `@sps/gazette`'s page result. */
+export interface GazetteBoxDto {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface GazetteProvenanceDto {
+  documentId: string
+  filename: string
+  page: number
+  regionId: string
+  column: number
+  columns: number
+  bbox: GazetteBoxDto
+  pageWidth: number
+  pageHeight: number
+  imageSha256: string
+  sourceUrl?: string
+  href: string
+  geometry: string
+  transcriptionModel: string
+}
+
+export interface GazetteRegionDto {
+  id: string
+  kind: 'text' | 'table'
+  column: number
+  bbox: GazetteBoxDto
+  text: string
+  articleNumber?: string
+  heading: boolean
+  characters: number
+  blank: boolean
+  finishReason?: string
+  durationMs: number
+  skipped?: boolean
+  artifacts: string[]
+  provenance: GazetteProvenanceDto
+  error?: string
+}
+
+export interface GazetteArtifactDto {
+  id: string
+  label: 'stamp' | 'signature' | 'table'
+  bbox: GazetteBoxDto
+  confidence?: number
+  source: string
+}
+
+export interface GazettePageDto {
+  documentId: string
+  filename: string
+  page: number
+  image: { width: number; height: number; mime: string; sha256: string }
+  layout: { threshold: number; inkRatio: number; columns: GazetteBoxDto[]; regions: GazetteBoxDto[] }
+  regions: GazetteRegionDto[]
+  artifacts: GazetteArtifactDto[]
+  usage: {
+    inputTokens: number
+    outputTokens: number
+    transcriptionCalls: number
+    segmentationCalls: number
+    costUsd: number
+  }
+  warnings: string[]
+  model: string
+  provider: { mode: string; servedBy: string; residency: string; openWeights: boolean; models: Record<string, string | undefined> }
+  startedAt: string
+  durationMs: number
+}
+
+export interface GazetteIngestDto {
+  documentId: string
+  page: number
+  zones: number
+  sourceUrl?: string
+  success: boolean
+  chunksProcessed: number
+  chunksInserted: number
+  chunksSkipped: number
+  usedOcr: boolean
+}
+
 export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
@@ -185,6 +270,27 @@ export const api = {
   auditChain: () => request<{ valid: boolean; brokenAt?: string }>('/v1/audit/chain'),
 
   auditTrace: (runId: string) => request<{ runId: string; trace: CoTTraceDto[] }>(`/v1/audit/trace/${runId}`),
+
+  /** Segment + transcribe one scanned gazette page (N3). */
+  analyzeGazette: (body: {
+    filename: string
+    imageBase64: string
+    mime?: 'image/png' | 'image/jpeg'
+    page?: number
+    sourceUrl?: string
+    maxZones?: number
+    concurrency?: number
+  }) => request<GazettePageDto>('/v1/gazette/analyze', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** Push a transcribed page into the jurisdiction-scoped knowledge base. */
+  ingestGazette: (body: {
+    page: GazettePageDto
+    country: string
+    jurisdiction?: 'national' | 'regional' | 'international'
+    docType?: string
+    namespace?: string
+    version?: string
+  }) => request<GazetteIngestDto>('/v1/gazette/ingest', { method: 'POST', body: JSON.stringify(body) }),
 
   dossierUrl: (runId: string, format: 'json' | 'markdown' = 'markdown') =>
     `${API_URL}/v1/audit/dossier/${runId}?format=${format}`,

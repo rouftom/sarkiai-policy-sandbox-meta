@@ -1,7 +1,15 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
+import { providerApiKey } from '@sps/agents'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import {
+  analyzeGazettePage,
+  META_GAZETTE_PRICING,
+  SamClient,
+  toKbChunks,
+  type GazettePage,
+} from '@sps/gazette'
 import { IngestionClient } from '@sps/kb'
 import { whatIf } from '@sps/readiness'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
@@ -31,6 +39,29 @@ interface ScenarioSession {
 }
 
 const scenarioSessions = new Map<string, ScenarioSession>()
+
+/** A page larger than this is a mistake or an attack, not a gazette scan. */
+const GAZETTE_MAX_BYTES = 12 * 1024 * 1024
+
+/**
+ * SAM 3.1 is a Meta Model API model: it exists in `cloud` mode only. In
+ * `sovereign` and `local` the pipeline still segments by projection profile and
+ * transcribes zone by zone — the artefact overlay is simply absent.
+ */
+function gazetteSam(): SamClient | undefined {
+  if (engine.provider.mode !== 'cloud' || !engine.provider.models.segmentation) return undefined
+  return new SamClient({
+    baseUrl: engine.provider.baseURL,
+    apiKey: providerApiKey(engine.provider),
+    model: engine.provider.models.segmentation,
+  })
+}
+
+/** List prices are only meaningful when the work actually bills Meta. */
+function gazettePricing() {
+  return engine.provider.mode === 'cloud' ? META_GAZETTE_PRICING : undefined
+}
+
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Announce the active provider in the audit chain (no-op when unchanged).
@@ -317,6 +348,118 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       scores: baseline,
       changes: body.data.changes as Parameters<typeof whatIf>[0]['changes'],
     })
+  })
+
+  // ── N3: scanned gazette ingestion ─────────────────────────────────────────
+  // A gazette has no text layer. The page is segmented geometrically, every zone
+  // is transcribed by the vision model, and visual artefacts (stamp, signature,
+  // table) are located by SAM 3.1. The response carries page/column/bbox
+  // provenance for every line, so the console can show what was read where.
+  app.post('/v1/gazette/analyze', { bodyLimit: 20 * 1024 * 1024 }, async (request, reply) => {
+    const body = z
+      .object({
+        filename: z.string().min(1).max(200),
+        imageBase64: z.string().min(1),
+        mime: z.enum(['image/png', 'image/jpeg']).optional(),
+        page: z.number().int().min(1).max(10_000).default(1),
+        sourceUrl: z.string().url().optional(),
+        maxZones: z.number().int().min(1).max(48).default(24),
+        concurrency: z.number().int().min(1).max(8).default(4),
+      })
+      .safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    const bytes = Buffer.from(body.data.imageBase64.replace(/^data:[^,]+,/, ''), 'base64')
+    if (bytes.byteLength === 0) return reply.status(400).send({ error: 'Empty image.' })
+    if (bytes.byteLength > GAZETTE_MAX_BYTES) {
+      return reply.status(413).send({ error: 'Page too large (max 12 MB per page).' })
+    }
+
+    try {
+      const page = await analyzeGazettePage({
+        bytes,
+        ...(body.data.mime ? { mime: body.data.mime } : {}),
+        filename: body.data.filename,
+        page: body.data.page,
+        ...(body.data.sourceUrl ? { sourceUrl: body.data.sourceUrl } : {}),
+        model: engine.model,
+        modelLabel: engine.provider.models.vision,
+        provider: engine.provider,
+        sam: gazetteSam(),
+        maxZones: body.data.maxZones,
+        concurrency: body.data.concurrency,
+        pricing: gazettePricing(),
+      })
+
+      // The page image is content-addressed and kept with the analysis, so a
+      // citation opened months later still resolves to the exact scan.
+      try {
+        await engine.storage.putContentAddressed(Buffer.from(bytes), page.image.mime)
+      } catch {
+        // Object storage is optional; provenance keeps the sha256 regardless.
+      }
+
+      return page
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(422).send({ error: (error as Error).message })
+    }
+  })
+
+  // Push a transcribed page into the knowledge base. One document per page keeps
+  // the ingestion service's structural chunker in charge; every zone heading and
+  // the page-level source URL survive in the chunk text.
+  app.post('/v1/gazette/ingest', async (request, reply) => {
+    const body = z
+      .object({
+        page: z.custom<GazettePage>((value) => {
+          const candidate = value as Partial<GazettePage> | null
+          return Boolean(candidate && typeof candidate.documentId === 'string' && Array.isArray(candidate.regions))
+        }, 'Expected a page returned by /v1/gazette/analyze.'),
+        country: z.string().length(2).or(z.literal('global')),
+        jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
+        docType: z.string().default('regulation'),
+        namespace: z.string().optional(),
+        version: z.string().optional(),
+      })
+      .safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    const chunks = toKbChunks(body.data.page, {
+      country: body.data.country,
+      jurisdiction: body.data.jurisdiction,
+      docType: body.data.docType as DocType,
+      ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
+      ...(body.data.version ? { version: body.data.version } : {}),
+    })
+    if (chunks.length === 0) {
+      return reply.status(422).send({ error: 'No readable text on this page; nothing to ingest.' })
+    }
+
+    const text = chunks.map((chunk) => `## ${chunk.headingPath}\n\n${chunk.text}`).join('\n\n')
+    const sourceUrl = chunks[0]!.sourceUrl
+    try {
+      const result = await ingestion.ingestText({
+        text,
+        filename: body.data.page.filename,
+        country: body.data.country,
+        jurisdiction: body.data.jurisdiction,
+        docType: body.data.docType as DocType,
+        ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
+        ...(body.data.version ? { version: body.data.version } : {}),
+        ...(sourceUrl ? { sourceUrl } : {}),
+      })
+      return {
+        documentId: body.data.page.documentId,
+        page: body.data.page.page,
+        zones: chunks.length,
+        sourceUrl,
+        ...result,
+      }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: `Ingestion service unavailable: ${(error as Error).message}` })
+    }
   })
 
   // ── Audit ─────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import { LensSelector } from '@/components/lens-selector'
 import { ScenarioConsole } from '@/components/scenario-console'
 import { AuditPanel } from '@/components/audit-panel'
 import { FloatingAssistant } from '@/components/floating-assistant'
+import { GazettePanel } from '@/components/gazette-panel'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { ProviderBadge } from '@/components/provider-badge'
 import { useTheme } from '@/components/theme-provider'
@@ -223,6 +224,10 @@ export default function HomePage() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-4">
+        <GazettePanel country={country} />
       </div>
 
       {profile.stages.scenario && (
