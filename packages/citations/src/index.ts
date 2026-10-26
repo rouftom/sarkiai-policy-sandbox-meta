@@ -89,9 +89,45 @@ export function extractQuotes(answer: string, minLength = 24): string[] {
   return [...new Set(quotes)]
 }
 
-/** Corpus text to compare quotes against. */
-function corpusOf(citations: Citation[]): string {
-  return normalise(citations.map((c) => c.quote).join(' '))
+/**
+ * Citation labels a model likes to put *inside* the quotes it prints, e.g.
+ * `loi_2024_025.pdf · ARTICLE 12 : “…”`. They are provenance, not quoted text,
+ * so they are stripped before comparing with the corpus.
+ */
+const CITATION_LABEL =
+  /[^\s·]{2,}\.(?:pdf|txt|md|docx?|rtf|html?)(?:\s*·\s*[^:”"«»]{0,80})?\s*[:\-–—]?/gi
+
+export function stripCitationLabels(quote: string): string {
+  return quote.replace(CITATION_LABEL, ' ')
+}
+
+/**
+ * Text the answers are checked against.
+ *
+ * `Citation.quote` is a *display* excerpt (truncated for the UI): comparing a
+ * long quote with it would reject valid verbatim text. Callers pass the full
+ * chunk text when they have it; the excerpt is the fallback.
+ */
+function corpusOf(citations: Citation[], corpus?: string): string {
+  return normalise(corpus ?? citations.map((c) => c.quote).join(' '))
+}
+
+/** Shortest clause that still counts as evidence of a quote. */
+const MIN_CLAUSE = 20
+
+/**
+ * A quote is verbatim when the corpus contains it, or — for composite quotes
+ * that join several passages — when every substantive clause does.
+ */
+function isVerbatim(quote: string, corpus: string): boolean {
+  const cleaned = normalise(stripCitationLabels(quote))
+  if (!cleaned) return true
+  if (corpus.includes(cleaned)) return true
+  const clauses = cleaned
+    .split(/[.;:!?]+/)
+    .map((clause) => clause.trim())
+    .filter((clause) => clause.length >= MIN_CLAUSE)
+  return clauses.length > 0 && clauses.every((clause) => corpus.includes(clause))
 }
 
 /**
@@ -103,7 +139,7 @@ function corpusOf(citations: Citation[]): string {
 export function validateCitations(
   answer: string,
   citations: Citation[],
-  options: { attempts?: number } = {},
+  options: { attempts?: number; corpus?: string } = {},
 ): CitationValidation {
   const normalisedAnswer = normalise(answer)
   const used = citations.filter((c) => {
@@ -112,8 +148,8 @@ export function validateCitations(
     return heading ? normalisedAnswer.includes(normalise(heading)) : false
   })
 
-  const corpus = corpusOf(citations)
-  const rejected = extractQuotes(answer).filter((quote) => !corpus.includes(normalise(quote)))
+  const corpus = corpusOf(citations, options.corpus)
+  const rejected = extractQuotes(answer).filter((quote) => !isVerbatim(quote, corpus))
 
   return { ok: used.length > 0 && rejected.length === 0, used, rejected, attempts: options.attempts ?? 1 }
 }

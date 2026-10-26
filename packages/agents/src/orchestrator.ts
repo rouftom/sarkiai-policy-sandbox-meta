@@ -48,6 +48,8 @@ export interface AgentRunInput {
    * answer, one corrective retry). Fabricated quotes are never shipped.
    */
   maxAttempts?: number
+  /** Overrides `OrchestratorDeps.maxOutputTokens` for this run. */
+  maxOutputTokens?: number
   /** Optional user-supplied images (untrusted context). */
   attachments?: Attachment[]
   /** Storage/audit metadata for the attachments (hashes, keys). */
@@ -60,6 +62,12 @@ export interface OrchestratorDeps {
   audit?: AuditService
   /** Active provider, recorded in every trace step (never contains a secret). */
   provider?: ProviderDescriptor
+  /**
+   * Output ceiling per generation. Reasoning models spend output tokens before
+   * answering (muse-spark-1.3: 600–1500), so a tight cap returns an empty answer.
+   * The ceiling is not billed — only produced tokens are.
+   */
+  maxOutputTokens?: number
 }
 
 export class PolicyOrchestrator {
@@ -128,7 +136,9 @@ export class PolicyOrchestrator {
     let attempt = 0
     let text = ''
     let reasoningText = ''
-    let validation: CitationValidation = validateCitations('', citations, { attempts: 0 })
+    // Validate against the full chunk text, not the truncated display excerpt.
+    const corpus = chunks.map((chunk) => chunk.text).join('\n')
+    let validation: CitationValidation = validateCitations('', citations, { attempts: 0, corpus })
 
     while (attempt < maxAttempts) {
       attempt += 1
@@ -137,12 +147,13 @@ export class PolicyOrchestrator {
       const { text: answer, reasoning } = await generateText({
         model: this.deps.model,
         system,
+        maxOutputTokens: input.maxOutputTokens ?? this.deps.maxOutputTokens ?? 4096,
         ...(hasAttachments ? { messages: [{ role: 'user' as const, content: userContent(prompt) }] } : { prompt }),
       })
 
       text = answer
       reasoningText = (reasoning ?? []).map((part) => part.text).join('\n')
-      validation = validateCitations(answer, citations, { attempts: attempt })
+      validation = validateCitations(answer, citations, { attempts: attempt, corpus })
 
       if (validation.ok) break
 

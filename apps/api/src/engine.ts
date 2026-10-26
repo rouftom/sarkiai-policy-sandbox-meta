@@ -30,7 +30,13 @@ export function createEngine() {
 
   const audit = new AuditService({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
   const reports = new ReportStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
-  const orchestrator = new PolicyOrchestrator({ model, retriever, audit, provider })
+  const orchestrator = new PolicyOrchestrator({
+    model,
+    retriever,
+    audit,
+    provider,
+    maxOutputTokens: Number(process.env.AGENT_MAX_OUTPUT_TOKENS ?? 4096) || 4096,
+  })
   const coordinator = new MultiAgentCoordinator({ model, orchestrator, audit })
   const readiness = new ReadinessEngine({ model, retriever })
   const storage = new ObjectStore({

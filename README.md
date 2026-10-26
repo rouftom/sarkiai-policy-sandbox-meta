@@ -126,6 +126,15 @@ SANDBOX_MODE=sovereign docker compose up -d api web  # Muse Glimmer on Ollama
 The switch is recorded in the audit chain as a `provider.switched` event, and
 each chain-of-thought step names the mode and model that produced it.
 
+Check a mode before a demo (one short answer, no secret printed, exits non-zero
+on failure):
+
+```bash
+bun run check:provider            # SANDBOX_MODE
+bun run check:provider cloud      # Meta Model API
+bun run check:provider sovereign  # Muse Glimmer on Ollama
+```
+
 Optional local reranker (TEI, no cloud):
 
 ```bash

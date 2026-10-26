@@ -7,6 +7,7 @@ import {
   formatCitation,
   formatCitationList,
   hasGroundedCitation,
+  stripCitationLabels,
   validateCitations,
 } from './index'
 
@@ -94,5 +95,59 @@ describe('citation validator', () => {
 
   test('citationRetryDirective quotes the rejected passages back', () => {
     expect(citationRetryDirective(['invented text'])).toContain('invented text')
+  })
+})
+
+describe('citation validator — real model output', () => {
+  const provision = citationFromChunk(chunk)
+
+  test('a citation label printed inside the quotes is not a fabrication', () => {
+    // Observed from muse-spark-1.3: the provenance line is wrapped with the quote.
+    const answer =
+      '> loi_2024_protection_donnees.pdf · ARTICLE 12 : “Tout traitement de données à caractère personnel doit être licite et transparent pour la personne concernée.”'
+    const result = validateCitations(answer, [provision])
+    expect(result.rejected).toEqual([])
+    expect(result.ok).toBe(true)
+  })
+
+  test('an ellipsis inside a real quote does not invalidate it', () => {
+    const full = {
+      ...provision,
+      quote:
+        'Tout traitement de données à caractère personnel doit être licite et transparent. Le responsable du traitement notifie toute violation à l’autorité.',
+    }
+    const answer =
+      'ARTICLE 12 — “Tout traitement de données à caractère personnel doit être licite et transparent… Le responsable du traitement notifie toute violation à l’autorité.”'
+    expect(validateCitations(answer, [full]).ok).toBe(true)
+  })
+
+  test('a quote that alters the wording is still rejected', () => {
+    const answer =
+      'ARTICLE 12 — “Tout traitement de données doit être licite, loyal et transparent”'
+    expect(validateCitations(answer, [provision]).ok).toBe(false)
+  })
+
+  test('stripCitationLabels keeps the quoted text intact', () => {
+    expect(stripCitationLabels('decret_2025.pdf · ARTICLE 7 : “Les établissements publics notifient”')).toContain(
+      'Les établissements publics notifient',
+    )
+  })
+})
+
+describe('citation validator — truncated display excerpts', () => {
+  test('a quote beyond the 240-char excerpt is valid against the full text', () => {
+    const longText =
+      'Tout traitement de données à caractère personnel doit être licite, loyal et transparent. ' +
+      'Le responsable du traitement doit notifier à l’autorité de protection des données toute violation ' +
+      'de données dans un délai de soixante-douze heures après en avoir pris connaissance, et documenter l’incident.'
+    const displayed = citationFromChunk({ ...chunk, text: longText })
+    expect(displayed.quote.endsWith('…')).toBe(true)
+
+    const answer =
+      'ARTICLE 12 — “Le responsable du traitement doit notifier à l’autorité de protection des données toute violation de données dans un délai de soixante-douze heures après en avoir pris connaissance”'
+    // Compared with the excerpt alone, the tail is missing…
+    expect(validateCitations(answer, [displayed]).ok).toBe(false)
+    // …with the full provision text, it is verbatim.
+    expect(validateCitations(answer, [displayed], { corpus: longText }).ok).toBe(true)
   })
 })
