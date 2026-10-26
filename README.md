@@ -127,6 +127,29 @@ SANDBOX_MODE=sovereign docker compose up -d api web  # Muse Glimmer on Ollama
 The switch is recorded in the audit chain as a `provider.switched` event, and
 each chain-of-thought step names the mode and model that produced it.
 
+#### Sovereign mode, step by step
+
+Sovereign mode runs the same engine on **Muse Glimmer 30B** (dense, multimodal,
+Apache-2.0) with no prompt, provision or answer leaving the institution.
+
+```bash
+ollama --version          # must be >= 0.32.7
+make glimmer              # pulls muse-glimmer, builds the tuned sps-glimmer tag
+```
+
+Then in `.env`:
+
+```bash
+SANDBOX_MODE=sovereign
+MUSE_GLIMMER_MODEL=sps-glimmer
+bun run check:provider sovereign
+```
+
+`deploy/ollama/Modelfile.glimmer` only sets the model card's sampling
+(1.0 / 0.95 / 64) and a 32K context — no system prompt, because the engine
+already sends its own mandate and citation rules. On Apple silicon use
+`muse-glimmer:30b-mlx` as the base tag.
+
 Check a mode before a demo (one short answer, no secret printed, exits non-zero
 on failure):
 

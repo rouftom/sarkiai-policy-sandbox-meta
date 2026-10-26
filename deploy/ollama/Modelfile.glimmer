@@ -1,0 +1,31 @@
+# Muse Glimmer 30B — sovereign mode for SarkiAI Policy Sandbox.
+#
+#   make glimmer
+#
+# Requires Ollama 0.32.7 or later (`ollama --version`). The base tag comes from
+# Ollama's library: `muse-glimmer` (30B dense, multimodal, Apache-2.0), or
+# `muse-glimmer:30b-mlx` on Apple silicon.
+#
+# Nothing here sends data anywhere: the weights, the runtime and the prompts all
+# stay on the institution's machine.
+
+FROM muse-glimmer
+
+# The model card recommends 1.0 / 0.95 / 64 for generation. Changing these
+# degrades the chain of thought before it degrades the answer.
+PARAMETER temperature 1.0
+PARAMETER top_p 0.95
+PARAMETER top_k 64
+
+# Ollama defaults to a 2048-token context, which truncates both the retrieved
+# provisions and the model's reasoning. A pillar report needs ~32K; raise this
+# only when the GPU has the memory (Q4_K_M text model ~17 GB).
+PARAMETER num_ctx 32768
+
+# Reasoning is billed as output but is local here, so leave room for it: a
+# truncated trace produces an empty final answer.
+PARAMETER num_predict 4096
+
+# No SYSTEM block on purpose: the engine sends its own institutional system
+# prompt (mandate, citation rules, jurisdiction), and a second one would
+# compete with it. Keep the model's chat template untouched for the same reason.

@@ -6,7 +6,7 @@ COMPOSE_DEV  := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
 .DEFAULT_GOAL := help
 .PHONY: help up up-kb up-app up-qdrant up-ollama up-mongo up-minio ingestion ocr transcription api web \
-        dev dev-kb dev-app logs ps down clean rebuild seed models sandbox-config secrets-edit secrets-encrypt
+        dev dev-kb dev-app logs ps down clean rebuild seed models glimmer sandbox-config secrets-edit secrets-encrypt
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -33,6 +33,18 @@ models: ## Pull the local models (qwen3.5:9b + bge-m3)
 	$(COMPOSE) exec -T ollama ollama pull $${OLLAMA_MODEL:-qwen3.5:9b}
 	$(COMPOSE) exec -T ollama ollama pull $${EMBEDDING_MODEL:-bge-m3}
 	@echo "Local models ready."
+
+glimmer: ## Pull Muse Glimmer 30B and build the sovereign model (Ollama >= 0.32.7)
+	$(COMPOSE) up -d ollama
+	@echo "Waiting for Ollama..."
+	@until $(COMPOSE) exec -T ollama ollama list >/dev/null 2>&1; do sleep 2; done
+	$(COMPOSE) exec -T ollama ollama pull $${MUSE_GLIMMER_MODEL:-muse-glimmer}
+	$(COMPOSE) cp deploy/ollama/Modelfile.glimmer ollama:/tmp/Modelfile.glimmer
+	$(COMPOSE) exec -T ollama ollama create sps-glimmer -f /tmp/Modelfile.glimmer
+	@echo "Sovereign model ready."
+	@echo "  SANDBOX_MODE=sovereign"
+	@echo "  MUSE_GLIMMER_MODEL=sps-glimmer"
+	@echo "  bun run check:provider sovereign"
 
 up-mongo: ## Launch only MongoDB (audit + CoT, no vectors)
 	$(COMPOSE) up -d mongo
