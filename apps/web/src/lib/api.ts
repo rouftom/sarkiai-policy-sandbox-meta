@@ -66,6 +66,8 @@ export interface AssessmentDto {
   findings: string[]
   citations: Array<{ filename: string; articleNumber?: string; headingPath?: string }>
   confidence: number
+  /** Citation-validator verdict (N2). */
+  validation?: { ok: boolean; attempts: number; rejected: string[]; used: unknown[] }
 }
 
 export interface MandateConflictDto {

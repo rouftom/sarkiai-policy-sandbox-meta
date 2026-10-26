@@ -197,6 +197,8 @@ export interface AgentAssessment {
   gaps: Gap[]
   confidence: number
   cotTraceId: string
+  /** Citation-validator verdict (N2); absent when validation was skipped. */
+  validation?: CitationValidation
 }
 
 /** A scenario event is released progressively, never all at once. */
@@ -299,4 +301,22 @@ export interface ProviderDescriptor {
   ready: boolean
   /** Why the mode is unusable, when `ready` is false. */
   reason?: string
+}
+
+/**
+ * Outcome of the citation validator (N2).
+ *
+ * A policy answer is only admissible when every quoted provision actually
+ * appears in the retrieved corpus. Fabricated quotes are rejected and the agent
+ * is asked to answer again — the engine never ships an unsourced claim.
+ */
+export interface CitationValidation {
+  /** True when the answer cites at least one provision and quotes nothing invented. */
+  ok: boolean
+  /** Citations the answer actually refers to (article or heading present). */
+  used: Citation[]
+  /** Quoted passages that do not appear in the retrieved corpus. */
+  rejected: string[]
+  /** Generation attempts, including rejected ones. */
+  attempts: number
 }

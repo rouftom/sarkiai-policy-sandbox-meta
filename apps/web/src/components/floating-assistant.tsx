@@ -1,16 +1,18 @@
 'use client'
 
 import * as React from 'react'
-import { Bot, ImagePlus, Scale, Send, Shield, X } from 'lucide-react'
+import { BadgeCheck, Bot, ImagePlus, Scale, Send, Shield, ShieldAlert, X } from 'lucide-react'
 import { Button, cn } from '@sps/ui'
 import { institutionsForDomain, type Domain, type WorkflowLens } from '@sps/shared'
 import { api, type AssessmentDto } from '@/lib/api'
+import { useI18n } from '@/lib/i18n'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   citations?: AssessmentDto['citations']
+  validation?: AssessmentDto['validation']
   agentId?: string
 }
 
@@ -34,6 +36,7 @@ export function FloatingAssistant({
   country: string
   domain: Domain
 }) {
+  const { t } = useI18n()
   const [open, setOpen] = React.useState(false)
   const [minimized, setMinimized] = React.useState(true)
   const [input, setInput] = React.useState('')
@@ -99,6 +102,7 @@ export function FloatingAssistant({
           agentId: result.agentId,
           content: result.findings.join('\n\n'),
           citations: result.citations,
+          validation: result.validation,
         },
       ])
     } catch (error) {
@@ -188,6 +192,25 @@ export function FloatingAssistant({
                 )}
               >
                 <p className="whitespace-pre-wrap">{message.content}</p>
+                {message.validation && (
+                  <p
+                    className={cn(
+                      'mt-1.5 flex items-center gap-1 text-[10px]',
+                      message.validation.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                    )}
+                  >
+                    {message.validation.ok ? (
+                      <BadgeCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <ShieldAlert className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    )}
+                    {message.validation.ok
+                      ? message.validation.attempts > 1
+                        ? t('citation.verifiedAfterRetry', { attempts: message.validation.attempts })
+                        : t('citation.verified')
+                      : t('citation.rejected', { count: message.validation.rejected.length })}
+                  </p>
+                )}
                 {message.citations && message.citations.length > 0 && (
                   <ul className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[11px]">
                     {message.citations.slice(0, 4).map((citation, i) => (

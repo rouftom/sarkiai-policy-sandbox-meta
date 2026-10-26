@@ -36,6 +36,10 @@ const en = {
   'provider.openWeights': 'Open weights',
   'provider.budget': 'Run budget',
   'provider.switchHint': 'Set SANDBOX_MODE=cloud | sovereign | local and restart the API.',
+
+  'citation.verified': 'Every quoted provision was found in the corpus',
+  'citation.verifiedAfterRetry': 'Answer rejected once, then verified ({attempts} attempts)',
+  'citation.rejected': '{count} quote(s) could not be found in the corpus — reported as a gap',
 }
 
 const fr: Record<keyof typeof en, string> = {
@@ -57,6 +61,10 @@ const fr: Record<keyof typeof en, string> = {
   'provider.openWeights': 'Poids ouverts',
   'provider.budget': 'Budget par exécution',
   'provider.switchHint': 'Régler SANDBOX_MODE=cloud | sovereign | local puis redémarrer l’API.',
+
+  'citation.verified': 'Chaque disposition citée a été retrouvée dans le corpus',
+  'citation.verifiedAfterRetry': 'Réponse rejetée une fois, puis vérifiée ({attempts} tentatives)',
+  'citation.rejected': '{count} citation(s) introuvable(s) dans le corpus — signalée(s) comme lacune',
 }
 
 const DICTIONARIES: Record<Locale, Record<keyof typeof en, string>> = { en, fr }

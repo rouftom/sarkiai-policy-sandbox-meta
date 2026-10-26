@@ -29,7 +29,7 @@ Full diff: [`pre-hackathon-baseline...meta-hackathon`](../../compare/pre-hackath
 | # | Feature | Meta model | Status | Commits |
 |---|---------|-----------|--------|---------|
 | N1 | Provider layer (`cloud` / `sovereign` / `local`), provider badge, `provider.switched` audit event, model recorded per reasoning step | Muse Spark (Meta Model API) | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
-| N2 | Citation validator: a quote absent from the corpus is rejected and the agent retries | Muse Spark | ☐ | |
+| N2 | Citation validator: a quote absent from the corpus is rejected and the agent retries | Muse Spark | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
 | N3 | Scanned gazette ingestion: column segmentation, per-zone transcription, clickable provenance | SAM 3.1 + Muse Spark | ☐ | |
 | N4 | WhatsApp channel: joint reports, deadline alerts, human-approval buttons | — | ☐ | |
 | N5 | Sovereign mode: the same engine on open weights | Muse Glimmer (Ollama), Muse Spark Open (hosted) | ☐ | |
