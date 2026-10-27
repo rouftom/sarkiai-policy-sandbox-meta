@@ -562,7 +562,6 @@ export class AtlasIngestor {
     const rows = await (await this.chunks())
       .aggregate([
         { $match: filter },
-        { $sort: { chunkIndex: 1 } },
         {
           $group: {
             _id: '$filename',
@@ -580,7 +579,7 @@ export class AtlasIngestor {
         },
         { $sort: { lastIngestedAt: -1 } },
         { $limit: limit },
-      ])
+      ], { allowDiskUse: true })
       .toArray()
 
     return rows.map((row) => ({
