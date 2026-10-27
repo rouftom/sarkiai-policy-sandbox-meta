@@ -1,6 +1,6 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { providerApiKey } from '@sps/agents'
+import { providerApiKey, describeProvider } from '@sps/agents'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import {
@@ -10,6 +10,8 @@ import {
   toKbChunks,
   type GazettePage,
 } from '@sps/gazette'
+import { CommunicationPolicyError, COMMUNICATION_LANGUAGES, draftCommunication } from '@sps/communications'
+import { evaluateExercise, writeAfterAction, type ExerciseDefinition } from '@sps/exercise'
 import { analyzeImpact } from '@sps/impact'
 import { IngestionClient } from '@sps/kb'
 import { whatIf } from '@sps/readiness'
@@ -28,6 +30,7 @@ import type { DocType, Domain, InstitutionSpec, JointSituationReport, ScenarioEv
 import { createEngine, createScenario, recordProviderSwitch } from '../engine.js'
 import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { healthDataBreach } from '../scenarios.js'
+import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
 
 const engine = createEngine()
@@ -788,6 +791,125 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return { recorded: true, decision, decidedAt }
+  })
+
+  // ── N8: table-top crisis exercise ─────────────────────────────────────────
+  // Injects are released at fixed minutes; the after-action report is computed
+  // from the action log first, then narrated by the model. The model never
+  // decides whether an inject was addressed.
+  app.get('/v1/exercise/sample', async (request) => {
+    const query = z.object({ country: z.string().min(2).max(2).default('cm') }).parse(request.query ?? {})
+    return healthBreachExercise(query.country)
+  })
+
+  const exerciseInjectSchema = z.object({
+    id: z.string().min(1).max(80),
+    atMinute: z.number().int().min(0).max(1_440),
+    title: z.string().min(1).max(200),
+    detail: z.string().min(1).max(4_000),
+    visibleTo: z.array(z.string().min(1).max(80)).min(1).max(20),
+    expectedAction: z.string().min(1).max(500),
+    responseWindowMinutes: z.number().int().min(1).max(240).optional(),
+    severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  })
+
+  const exerciseSchema = z.object({
+    id: z.string().min(1).max(120),
+    title: z.string().min(1).max(200),
+    country: z.string().min(2).max(2),
+    domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
+    scenarioRunId: z.string().min(1).max(120).optional(),
+    durationMinutes: z.number().int().min(5).max(480),
+    injects: z.array(exerciseInjectSchema).min(1).max(40),
+  })
+
+  const exerciseLogSchema = z.object({
+    id: z.string().min(1).max(80).optional(),
+    atMinute: z.number().int().min(0).max(1_440),
+    actor: z.string().min(1).max(120),
+    kind: z.enum(['action', 'decision', 'escalation', 'note']),
+    text: z.string().min(1).max(2_000),
+    injectId: z.string().min(1).max(80).optional(),
+  })
+
+  const exerciseBodySchema = z.object({
+    definition: exerciseSchema,
+    actions: z.array(exerciseLogSchema).max(500).default([]),
+    evaluatedAtMinute: z.number().int().min(0).max(1_440),
+  })
+
+  app.post('/v1/exercise/evaluate', async (request, reply) => {
+    const parsed = exerciseBodySchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    return evaluateExercise(
+      parsed.data.definition as ExerciseDefinition,
+      parsed.data.actions,
+      parsed.data.evaluatedAtMinute,
+    )
+  })
+
+  app.post('/v1/exercise/after-action', async (request, reply) => {
+    const parsed = exerciseBodySchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+
+    const definition = parsed.data.definition as ExerciseDefinition
+    try {
+      const report = await writeAfterAction({
+        model: engine.model,
+        modelLabel: describeProvider(engine.provider),
+        definition,
+        log: parsed.data.actions,
+        evaluatedAtMinute: parsed.data.evaluatedAtMinute,
+      })
+      try {
+        await engine.audit.logAction({
+          actor: 'facilitator',
+          action: 'exercise.after_action',
+          target: `exercise:${definition.id}`,
+          lens: 'simulation',
+          runId: definition.scenarioRunId ?? definition.id,
+        })
+      } catch {
+        // The report is still returned; an unreachable audit store must not erase it.
+      }
+      return report
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  // ── N9: public-communication drafts (Fulfulde / Hausa) ────────────────────
+  // The API drafts and gates; it never publishes. Every response is marked
+  // `pending_native_review`, and political or medical content is rejected.
+  app.get('/v1/communications/languages', async () => Object.values(COMMUNICATION_LANGUAGES))
+
+  app.post('/v1/communications/draft', async (request, reply) => {
+    const parsed = z
+      .object({
+        language: z.enum(['ff', 'ha']),
+        sourceLanguage: z.enum(['en', 'fr']).default('en'),
+        audience: z.string().min(1).max(300),
+        jurisdiction: z.string().min(1).max(120),
+        incidentSummary: z.string().min(1).max(8_000),
+        channels: z.array(z.enum(['radio', 'sms', 'social', 'press'])).max(4).optional(),
+        constraints: z.array(z.string().min(1).max(300)).max(10).optional(),
+      })
+      .safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+
+    try {
+      return await draftCommunication({
+        model: engine.model,
+        modelLabel: describeProvider(engine.provider),
+        request: parsed.data,
+      })
+    } catch (error) {
+      if (error instanceof CommunicationPolicyError) {
+        return reply.status(422).send({ error: 'communication_policy', violations: error.violations })
+      }
+      return reply.status(502).send({ error: (error as Error).message })
+    }
   })
 
   // ── Audit ─────────────────────────────────────────────────────────────────

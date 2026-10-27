@@ -31,6 +31,10 @@ It runs on **Meta models**, in three interchangeable provider modes:
   leaving the institution, retrieval stays on `bge-m3` + Qdrant.
 - **local** — any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
 
+Around the incident run, the sandbox also rehearses the team (**timed crisis
+injects with a deterministic after-action score**) and drafts public messages in
+**Fulfulde or Hausa**, always marked pending native review.
+
 - **Primary country:** Cameroon (MINPOSTEL-aligned), then multi-country (UAE → …).
 - **Primary domain:** healthcare, with cross-domain spillover (data protection, telecom, cybersecurity).
 - **Open by design:** permissive license (Apache-2.0 code, CC BY 4.0 content).
@@ -75,6 +79,8 @@ sarkiai-policy-sandbox/
 │  ├─ voice/          # voice notes: Muse Voice Transcribe / faster-whisper → timed facts
 │  ├─ whatsapp/       # direct Meta Graph API client + signed approval tokens
 │  ├─ impact/         # new policy → which open incidents change, and how
+│  ├─ exercise/       # N8: timed injects, action log, deterministic after-action score
+│  ├─ communications/ # N9: Fulfulde / Hausa drafts + policy gate (native review)
 │  ├─ agents/         # roles, mandates, orchestrator (AI SDK ToolLoopAgent)
 │  ├─ scenarios/      # progressive event engine (chunked release)
 │  ├─ readiness/      # gap engine + AI readiness dimensions
@@ -257,6 +263,31 @@ model ranks the candidates and says what to re-run — a finding that names an
 unknown run is dropped, so the analysis cannot invent a case. Deadline changes
 and unaffected runs are returned alongside the findings, and the pass is recorded
 as `impact.analyzed` in the audit chain.
+
+### Crisis exercise (N8)
+
+A scenario replays an incident; an exercise adds a clock and a team. The console's
+**Table-top crisis exercise** panel loads a drill whose injects are released at
+fixed minutes (`GET /v1/exercise/sample`). Participants log what they actually
+did — action, decision, escalation or note — and `POST /v1/exercise/evaluate`
+scores the log without calling a model: it separates addressed, late and
+unanswered injects, computes coverage and average response time, and lists the
+gaps.
+
+`POST /v1/exercise/after-action` then asks the model to draft the narrative from
+those already-computed facts. The narrative cannot change the score, so a
+well-written report cannot hide a missed inject. The event is recorded in the
+audit trail as `exercise.after_action`.
+
+### Communications: generated briefs in Fulfulde and Hausa (N9)
+
+`POST /v1/communications/draft` produces a short public-information draft in
+Fulfulde or Hausa from a supplied set of facts. The service enforces three rules:
+it refuses drafts that contain political content or offer medical advice; it
+flags phone numbers that appear in the draft but not in the supplied facts; and
+it never claims fluency. Every response carries `reviewStatus:
+'pending_native_review'` and a warning that a native speaker must approve the
+text before publication. The API returns the draft; it does not publish it.
 
 Optional local reranker (TEI, no cloud):
 

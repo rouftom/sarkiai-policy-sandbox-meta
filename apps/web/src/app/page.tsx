@@ -7,6 +7,8 @@ import { WORKFLOW_PROFILES, type Domain, type WorkflowLens } from '@sps/shared'
 import { LensSelector } from '@/components/lens-selector'
 import { ScenarioConsole } from '@/components/scenario-console'
 import { AuditPanel } from '@/components/audit-panel'
+import { CommunicationsPanel } from '@/components/communications-panel'
+import { ExercisePanel } from '@/components/exercise-panel'
 import { FloatingAssistant } from '@/components/floating-assistant'
 import { GazettePanel } from '@/components/gazette-panel'
 import { LocaleSwitcher } from '@/components/locale-switcher'
@@ -235,6 +237,14 @@ export default function HomePage() {
           <ScenarioConsole country={country} domain={domain} onRunId={setRunId} />
         </div>
       )}
+
+      <div className="mt-4">
+        <ExercisePanel country={country} domain={domain} />
+      </div>
+
+      <div className="mt-4">
+        <CommunicationsPanel country={country} />
+      </div>
 
       {runId && (
         <div className="mt-4">

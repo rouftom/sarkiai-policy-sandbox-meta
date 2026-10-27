@@ -35,8 +35,8 @@ Full diff: [`pre-hackathon-baseline...meta-hackathon`](../../compare/pre-hackath
 | N5 | Sovereign mode: the same engine on open weights, one command to build the local Muse Glimmer (`deploy/ollama/Modelfile.glimmer`, `make glimmer`) | Muse Glimmer 30B (Ollama), Muse Spark Open (hosted) | done | `make glimmer` |
 | N6 | Voice notes turned into timed, speaker-attributed facts (`@sps/voice`, `/v1/voice/transcribe`); cloud uses Muse Voice Transcribe, sovereign/local use on-premise faster-whisper | Muse Voice Transcribe | done | `bun test packages/voice` |
 | N7 | Impact analysis: a new provision re-opens the persisted incidents it changes (`@sps/impact`, `/v1/impact/analyze`) | Muse Spark | done | `bun test packages/impact` |
-| N8 | Crisis exercise mode with timed injects and an after-action report | Muse Spark / open weights | ☐ | |
-| N9 | Public-communication drafts in Fulfulde or Hausa (native review required) | Muse Spark | ☐ | |
+| N8 | **Table-top crisis exercise** — authored injects released on a clock, an action log kept by the team, and a score computed deterministically (addressed / late / missed, coverage, response time) before Muse Spark writes the after-action narrative. The narrative cannot change the score (`@sps/exercise`, `/v1/exercise/*`, console panel). | Muse Spark / Muse Glimmer | done | `bun test packages/exercise` |
+| N9 | **Public communication in Fulfulde or Hausa** — drafts from verified facts only, hard-blocked on political content and medical advice, every draft marked `pending native review`; invented phone numbers are flagged (`@sps/communications`, `/v1/communications/*`, console panel) | Muse Spark | done | `bun test packages/communications` |
 | N10 | Demo UI: incident timeline (who saw what), clickable citations, bilingual EN/FR, provider badge, audit-chain check | — | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
 
 Cloud mode also switches the retrieval backend: chunk embeddings come from

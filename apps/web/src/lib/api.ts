@@ -2,12 +2,34 @@
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
+/** HTTP failure with the status and the raw body kept apart, so panels can react. */
+export class ApiError extends Error {
+  readonly status: number
+  readonly body: string
+
+  constructor(status: number, body: string) {
+    super(`${status} ${body}`)
+    this.name = 'ApiError'
+    this.status = status
+    this.body = body
+  }
+
+  /** The JSON body when the API returned one (e.g. `{ error, violations }`). */
+  json<T = unknown>(): T | null {
+    try {
+      return JSON.parse(this.body) as T
+    } catch {
+      return null
+    }
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   })
-  if (!response.ok) throw new Error(`${response.status} ${await response.text()}`)
+  if (!response.ok) throw new ApiError(response.status, await response.text())
   return (await response.json()) as T
 }
 
@@ -320,6 +342,130 @@ export interface WhatsappNotifyDto {
   messageId?: string
 }
 
+/** N8 — table-top crisis exercise. Injects are timed; actions are logged by the team. */
+export type ExerciseSeverity = 'low' | 'medium' | 'high' | 'critical'
+export type ExerciseActionKind = 'action' | 'decision' | 'escalation' | 'note'
+
+export interface ExerciseInjectDto {
+  id: string
+  atMinute: number
+  title: string
+  detail: string
+  visibleTo: string[]
+  expectedAction: string
+  responseWindowMinutes?: number
+  severity?: ExerciseSeverity
+}
+
+export interface ExerciseDefinitionDto {
+  id: string
+  title: string
+  country: string
+  domain: string
+  scenarioRunId?: string
+  durationMinutes: number
+  injects: ExerciseInjectDto[]
+}
+
+export interface ExerciseActionDto {
+  id?: string
+  atMinute: number
+  actor: string
+  kind: ExerciseActionKind
+  text: string
+  injectId?: string
+}
+
+export interface AddressedInjectDto {
+  injectId: string
+  title: string
+  expectedAction: string
+  action: string
+  actor: string
+  atMinute: number
+  latencyMinutes: number
+  withinWindow: boolean
+}
+
+export interface MissedInjectDto {
+  injectId: string
+  title: string
+  expectedAction: string
+  releasedAtMinute: number
+  reason: 'no_action' | 'late'
+  latencyMinutes?: number
+}
+
+export interface ExerciseEvaluationDto {
+  exerciseId: string
+  title: string
+  durationMinutes: number
+  evaluatedAtMinute: number
+  releasedInjects: number
+  actionsLogged: number
+  addressed: AddressedInjectDto[]
+  missed: MissedInjectDto[]
+  decisions: ExerciseActionDto[]
+  escalations: ExerciseActionDto[]
+  /** Share of released injects answered inside their window (0–1). */
+  coverage: number
+  averageResponseMinutes: number | null
+  firstActionMinute: number | null
+  gaps: string[]
+}
+
+export interface AfterActionNarrativeDto {
+  summary: string
+  lessons: string[]
+  recommendations: string[]
+  unresolved: string[]
+}
+
+export interface AfterActionDto extends ExerciseEvaluationDto {
+  narrative: AfterActionNarrativeDto
+  model: string
+  generatedAt: string
+}
+
+export interface ExerciseBodyDto {
+  definition: ExerciseDefinitionDto
+  actions: ExerciseActionDto[]
+  evaluatedAtMinute: number
+}
+
+/** N9 — public-communication drafts in Fulfulde / Hausa, always pending native review. */
+export type CommunicationLanguageCode = 'ff' | 'ha'
+
+export interface CommunicationLanguageDto {
+  code: CommunicationLanguageCode
+  name: string
+  script: string
+  region: string
+  note: string
+}
+
+export interface CommunicationKeyTermDto {
+  term: string
+  translation: string
+}
+
+export interface CommunicationDraftDto {
+  language: CommunicationLanguageCode
+  languageName: string
+  script: string
+  reviewStatus: 'pending_native_review'
+  reviewRequired: true
+  title: string
+  summary: string
+  message: string
+  sms: string
+  keyTerms: CommunicationKeyTermDto[]
+  caveats: string[]
+  warnings: string[]
+  model: string
+  generatedAt: string
+}
+
 export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
@@ -412,6 +558,32 @@ export const api = {
     | { kind: 'deadline_alert'; to?: string; title: string; deadline: string; actionUrl?: string; dryRun?: boolean }
     | { kind: 'approval_request'; to?: string; runId: string; summary: string; dryRun?: boolean }
   ) => request<WhatsappNotifyDto>('/v1/whatsapp/notify', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** N8 — authored sample exercise (timed injects) for a country. */
+  exerciseSample: (country: string) =>
+    request<ExerciseDefinitionDto>(`/v1/exercise/sample?country=${encodeURIComponent(country)}`),
+
+  /** Score the action log deterministically (no model call). */
+  evaluateExercise: (body: ExerciseBodyDto) =>
+    request<ExerciseEvaluationDto>('/v1/exercise/evaluate', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** Same evidence, then a model-written narrative on top of it. */
+  exerciseAfterAction: (body: ExerciseBodyDto) =>
+    request<AfterActionDto>('/v1/exercise/after-action', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** N9 — supported drafting languages (Fulfulde, Hausa). */
+  communicationLanguages: () => request<CommunicationLanguageDto[]>('/v1/communications/languages'),
+
+  /** N9 — draft a public message. Political or medical content is refused with 422. */
+  draftCommunication: (body: {
+    language: CommunicationLanguageCode
+    sourceLanguage?: 'en' | 'fr'
+    audience: string
+    jurisdiction: string
+    incidentSummary: string
+    channels?: Array<'radio' | 'sms' | 'social' | 'press'>
+    constraints?: string[]
+  }) => request<CommunicationDraftDto>('/v1/communications/draft', { method: 'POST', body: JSON.stringify(body) }),
 
   dossierUrl: (runId: string, format: 'json' | 'markdown' = 'markdown') =>
     `${API_URL}/v1/audit/dossier/${runId}?format=${format}`,

@@ -27,6 +27,8 @@
         "@sps/agents": "workspace:*",
         "@sps/audit": "workspace:*",
         "@sps/citations": "workspace:*",
+        "@sps/communications": "workspace:*",
+        "@sps/exercise": "workspace:*",
         "@sps/gazette": "workspace:*",
         "@sps/impact": "workspace:*",
         "@sps/kb": "workspace:*",
@@ -103,6 +105,27 @@
       "version": "0.1.0",
       "dependencies": {
         "@sps/shared": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "^5.6.0",
+      },
+    },
+    "packages/communications": {
+      "name": "@sps/communications",
+      "version": "0.1.0",
+      "dependencies": {
+        "ai": "^6.0.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.6.0",
+      },
+    },
+    "packages/exercise": {
+      "name": "@sps/exercise",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sps/shared": "workspace:*",
+        "ai": "^6.0.0",
       },
       "devDependencies": {
         "typescript": "^5.6.0",
@@ -427,6 +450,10 @@
     "@sps/audit": ["@sps/audit@workspace:packages/audit"],
 
     "@sps/citations": ["@sps/citations@workspace:packages/citations"],
+
+    "@sps/communications": ["@sps/communications@workspace:packages/communications"],
+
+    "@sps/exercise": ["@sps/exercise@workspace:packages/exercise"],
 
     "@sps/gazette": ["@sps/gazette@workspace:packages/gazette"],
 

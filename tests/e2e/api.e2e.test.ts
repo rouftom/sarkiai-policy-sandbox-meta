@@ -45,4 +45,40 @@ describe.skipIf(!baseUrl)('API e2e', () => {
     const payload = (await response.json()) as { scores: unknown[] }
     expect(payload.scores.length).toBe(13)
   }, 300_000)
+
+  test('the sample exercise is released on a clock and scored without a model', async () => {
+    const sample = await fetch(`${baseUrl}/v1/exercise/sample?country=cm`)
+    expect(sample.ok).toBe(true)
+    const definition = (await sample.json()) as {
+      durationMinutes: number
+      injects: Array<{ id: string; atMinute: number; responseWindowMinutes?: number }>
+    }
+    expect(definition.injects.length).toBeGreaterThan(0)
+
+    const first = definition.injects[0]!
+    const evaluated = await post('/v1/exercise/evaluate', {
+      definition,
+      actions: [
+        {
+          atMinute: first.atMinute + 1,
+          actor: 'cyber_agency',
+          kind: 'action',
+          injectId: first.id,
+          text: 'Incident opened and logs preserved.',
+        },
+      ],
+      evaluatedAtMinute: first.atMinute + 5,
+    })
+    expect(evaluated.ok).toBe(true)
+    const payload = (await evaluated.json()) as { coverage: number; addressed: unknown[] }
+    expect(payload.coverage).toBeGreaterThan(0)
+    expect(payload.addressed.length).toBeGreaterThan(0)
+  })
+
+  test('the communications endpoints expose both target languages', async () => {
+    const response = await fetch(`${baseUrl}/v1/communications/languages`)
+    expect(response.ok).toBe(true)
+    const payload = (await response.json()) as Array<{ code: string }>
+    expect(payload.map((item) => item.code)).toEqual(['ff', 'ha'])
+  })
 })
