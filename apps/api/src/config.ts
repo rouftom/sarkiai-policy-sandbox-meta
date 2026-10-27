@@ -94,7 +94,7 @@ export const config = {
   // Operator auth: session signing + the bootstrap operator.
   auth: {
     sessionSecret: env('SESSION_SECRET') || env('APPROVAL_SECRET'),
-    email: env('SPS_OPERATOR_EMAIL', 'operator@sarkai.demo'),
+    email: env('SPS_OPERATOR_EMAIL', 'rouftomb@gmail.com'),
     password: env('SPS_OPERATOR_PASSWORD'),
     name: env('SPS_OPERATOR_NAME', 'Policy operator'),
   },

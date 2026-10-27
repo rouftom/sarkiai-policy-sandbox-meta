@@ -308,7 +308,7 @@ const en = {
   'login.expired': 'This sign-in expired. Start again.',
   'login.badCode': 'Invalid or expired code.',
   'login.badBackup': 'Invalid or already used recovery code.',
-  'login.demoHint': 'Demo operator: operator@sarkai.demo',
+  'login.demoHint': 'Demo operator: rouftomb@gmail.com',
   'login.copy': 'Copy',
   'login.copied': 'Copied',
 
@@ -714,7 +714,7 @@ const fr: Record<keyof typeof en, string> = {
   'login.expired': 'Cette connexion a expiré. Recommencez.',
   'login.badCode': 'Code invalide ou expiré.',
   'login.badBackup': 'Code de secours invalide ou déjà utilisé.',
-  'login.demoHint': 'Opérateur de démonstration : operator@sarkai.demo',
+  'login.demoHint': 'Opérateur de démonstration : rouftomb@gmail.com',
   'login.copy': 'Copier',
   'login.copied': 'Copié',
 

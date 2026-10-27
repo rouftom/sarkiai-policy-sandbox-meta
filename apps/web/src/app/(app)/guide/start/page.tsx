@@ -14,14 +14,14 @@ export default function GuideStartPage() {
           steps={
             locale === 'fr'
               ? [
-                  { title: 'Connexion + 2FA', body: 'Saisissez operator@sarkai.demo et le mot de passe de démonstration. À la première connexion, scannez le QR code TOTP et confirmez le code : dix codes de secours sont affichés une seule fois.' },
+                  { title: 'Connexion + 2FA', body: 'Saisissez rouftomb@gmail.com et le mot de passe de démonstration. À la première connexion, scannez le QR code TOTP et confirmez le code : dix codes de secours sont affichés une seule fois.' },
                   { title: 'Choisir un espace de travail', body: 'Pays, domaine et lentille sont partagés par toutes les pages. Le choix est mémorisé dans le navigateur et dans le profil opérateur.' },
                   { title: 'Noter la maturité', body: 'Ouvrez Maturité IA, lancez l’évaluation des 13 dimensions, puis projetez un changement de politique (what-if causal).' },
                   { title: 'Lancer un scénario de crise', body: 'Libérez les faits par lots. Chaque agence mandatée évalue à partir de ce qu’elle voit ; le coordinateur réconcilie et signale les conflits de mandat.' },
                   { title: 'Lire la chaîne d’audit', body: 'Chaque action est horodatée, hachée et chaînée. La page Journal d’audit vérifie l’intégrité de bout en bout.' },
                 ]
               : [
-                  { title: 'Sign in + 2FA', body: 'Use operator@sarkai.demo and the demo password. On the first sign-in, scan the TOTP QR code and confirm the 6-digit code: ten recovery codes are shown once.' },
+                  { title: 'Sign in + 2FA', body: 'Use rouftomb@gmail.com and the demo password. On the first sign-in, scan the TOTP QR code and confirm the 6-digit code: ten recovery codes are shown once.' },
                   { title: 'Pick a workspace', body: 'Country, domain and lens are shared by every page. The choice is remembered in the browser and in the operator profile.' },
                   { title: 'Score readiness', body: 'Open AI readiness, score the 13 dimensions, then project a policy change through the causal graph.' },
                   { title: 'Run a crisis scenario', body: 'Release facts in batches. Each mandated institution assesses what it can see; the coordinator reconciles and flags mandate conflicts.' },

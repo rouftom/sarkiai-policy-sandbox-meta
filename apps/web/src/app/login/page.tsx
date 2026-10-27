@@ -40,7 +40,7 @@ export default function LoginPage() {
   } = useAuth()
 
   const [step, setStep] = React.useState<Step>('credentials')
-  const [email, setEmail] = React.useState('operator@sarkai.demo')
+  const [email, setEmail] = React.useState('rouftomb@gmail.com')
   const [password, setPassword] = React.useState('')
   const [code, setCode] = React.useState('')
   const [factor, setFactor] = React.useState<'totp' | 'backup'>('totp')
