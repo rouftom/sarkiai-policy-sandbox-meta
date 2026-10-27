@@ -36,10 +36,17 @@ export const KB_INDEX_DEFINITIONS: AtlasIndexDefinition[] = [
     name: 'sps_text_index',
     type: 'search',
     definition: {
+      analyzers: [
+        {
+          name: 'sps_fr_folded',
+          tokenizer: { type: 'standard' },
+          tokenFilters: [{ type: 'lowercase' }, { type: 'asciiFolding' }],
+        },
+      ],
       mappings: {
         dynamic: false,
         fields: {
-          text: { type: 'string' },
+          text: { type: 'string', analyzer: 'sps_fr_folded' },
           country: { type: 'string' },
           jurisdiction: { type: 'string' },
           docType: { type: 'string' },

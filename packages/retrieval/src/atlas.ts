@@ -277,7 +277,7 @@ export class AtlasRetriever implements Retriever {
     const toItem = (entry: { id: string; chunk: KbChunk; score?: number }, rank: number): RetrievalStageItem => ({
       id: entry.id,
       rank,
-      ...(entry.score === undefined ? {} : { score: entry.score }),
+      ...(entry.score === undefined && entry.chunk.score === undefined ? {} : { score: entry.score ?? entry.chunk.score }),
       filename: entry.chunk.filename,
       text: entry.chunk.text.slice(0, 420),
       chunkIndex: entry.chunk.chunkIndex,
@@ -339,10 +339,12 @@ export class AtlasRetriever implements Retriever {
             filter,
           },
         },
+        { $addFields: { score: { $meta: 'vectorSearchScore' } } },
       ])
       .toArray()
     return docs.flatMap((doc) => {
-      const chunk = toChunk(doc)
+      const score = typeof doc.score === 'number' ? doc.score : undefined
+      const chunk = toChunk(doc, score)
       return chunk ? [{ id: chunk.id, chunk }] : []
     })
   }

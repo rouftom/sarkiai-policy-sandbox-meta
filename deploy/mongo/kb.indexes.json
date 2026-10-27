@@ -12,11 +12,26 @@
             "path": "embedding",
             "similarity": "dotProduct"
           },
-          { "type": "filter", "path": "isActive" },
-          { "type": "filter", "path": "country" },
-          { "type": "filter", "path": "jurisdiction" },
-          { "type": "filter", "path": "docType" },
-          { "type": "filter", "path": "namespace" }
+          {
+            "type": "filter",
+            "path": "isActive"
+          },
+          {
+            "type": "filter",
+            "path": "country"
+          },
+          {
+            "type": "filter",
+            "path": "jurisdiction"
+          },
+          {
+            "type": "filter",
+            "path": "docType"
+          },
+          {
+            "type": "filter",
+            "path": "namespace"
+          }
         ]
       }
     },
@@ -24,15 +39,44 @@
       "name": "sps_text_index",
       "type": "search",
       "definition": {
+        "analyzers": [
+          {
+            "name": "sps_fr_folded",
+            "tokenizer": {
+              "type": "standard"
+            },
+            "tokenFilters": [
+              {
+                "type": "lowercase"
+              },
+              {
+                "type": "asciiFolding"
+              }
+            ]
+          }
+        ],
         "mappings": {
           "dynamic": false,
           "fields": {
-            "text": { "type": "string" },
-            "country": { "type": "string" },
-            "jurisdiction": { "type": "string" },
-            "docType": { "type": "string" },
-            "namespace": { "type": "string" },
-            "isActive": { "type": "boolean" }
+            "text": {
+              "type": "string",
+              "analyzer": "sps_fr_folded"
+            },
+            "country": {
+              "type": "string"
+            },
+            "jurisdiction": {
+              "type": "string"
+            },
+            "docType": {
+              "type": "string"
+            },
+            "namespace": {
+              "type": "string"
+            },
+            "isActive": {
+              "type": "boolean"
+            }
           }
         }
       }

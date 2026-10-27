@@ -126,7 +126,7 @@ interface KbChunkDocument extends Document {
 const INGEST_DEFAULTS = {
   collectionName: 'kb_chunks',
   embedBatch: 64,
-  maxChunks: 400,
+  maxChunks: 1500,
 }
 
 function hashId(...parts: Array<string | number>): string {
