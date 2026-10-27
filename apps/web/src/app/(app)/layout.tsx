@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Bot } from 'lucide-react'
 import { Group, Panel, Separator, type PanelImperativeHandle, type PanelSize } from 'react-resizable-panels'
 import { Button, Tooltip, cn } from '@sps/ui'
+import { MODE_STORAGE_KEY } from '@sps/theme'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { AppHeader } from '@/components/layout/app-header'
 import { BrandMark } from '@/components/layout/brand-mark'
@@ -38,8 +39,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!operator) return
     const prefs = operator.preferences
     setPack(prefs.pack)
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    setMode(prefs.theme === 'system' ? (prefersDark ? 'dark' : 'light') : prefs.theme)
+    // Light/dark is the one choice an unauthenticated visitor can make (the
+    // switch on /login and /signup). If they did, keep it: otherwise signing in
+    // would silently undo the theme they just picked. The profile still wins on
+    // a browser that never expressed a preference.
+    if (!localStorage.getItem(MODE_STORAGE_KEY)) {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      setMode(prefs.theme === 'system' ? (prefersDark ? 'dark' : 'light') : prefs.theme)
+    }
     setLocale(prefs.locale as Locale)
     document.documentElement.dataset.density = prefs.density === 'compact' ? 'dense' : 'comfortable'
     setRadius(prefs.radius)
