@@ -28,17 +28,21 @@ const retriever = {
   search: async () => [chunk],
 } as unknown as Retriever
 
-/** A model that replays prepared answers, one per call. */
+/** A model that replays prepared answers, one per call, buffered or streamed. */
 function scriptedModel(answers: string[]): { model: LanguageModel; calls: () => number } {
   let calls = 0
+  const next = () => {
+    const text = answers[Math.min(calls, answers.length - 1)] ?? ''
+    calls += 1
+    return text
+  }
   const model = {
     specificationVersion: 'v3',
     provider: 'test',
     modelId: 'test-model',
     supportedUrls: {},
     doGenerate: async () => {
-      const text = answers[Math.min(calls, answers.length - 1)] ?? ''
-      calls += 1
+      const text = next()
       return {
         content: [{ type: 'text', text }],
         finishReason: 'stop',
@@ -46,8 +50,30 @@ function scriptedModel(answers: string[]): { model: LanguageModel; calls: () => 
         warnings: [],
       }
     },
+    // Same answer, three deltas: enough to prove the orchestrator forwards the
+    // stream rather than buffering it before the first event.
     doStream: async () => {
-      throw new Error('not used')
+      const text = next()
+      const third = Math.ceil(text.length / 3)
+      const pieces = [text.slice(0, third), text.slice(third, third * 2), text.slice(third * 2)]
+      return {
+        stream: new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: 'stream-start', warnings: [] })
+            controller.enqueue({ type: 'text-start', id: 't1' })
+            for (const delta of pieces) {
+              if (delta) controller.enqueue({ type: 'text-delta', id: 't1', delta })
+            }
+            controller.enqueue({ type: 'text-end', id: 't1' })
+            controller.enqueue({
+              type: 'finish',
+              finishReason: 'stop',
+              usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            })
+            controller.close()
+          },
+        }),
+      }
     },
   }
   return { model: model as unknown as LanguageModel, calls: () => calls }
@@ -105,5 +131,59 @@ describe('citation validator in the agent loop', () => {
     expect(calls()).toBe(1)
     expect(assessment.validation?.ok).toBe(false)
     expect(assessment.validation?.used).toHaveLength(0)
+  })
+})
+
+describe('streamed answers', () => {
+  const valid = `Under loi_2024_protection_donnees.pdf · ARTICLE 12, “${PROVISION}” — consent is required.`
+
+  test('forwards the deltas and the same assessment the buffered route returns', async () => {
+    const { model } = scriptedModel([valid])
+    const orchestrator = new PolicyOrchestrator({ model, retriever })
+    const stages: string[] = []
+    let streamed = ''
+
+    const assessment = await orchestrator.streamAgent(baseInput, {
+      onStage: (stage) => stages.push(stage),
+      onDelta: (text) => {
+        streamed += text
+      },
+    })
+
+    expect(stages).toEqual(['retrieving', 'generating', 'validating', 'persisting'])
+    // Deltas concatenate to exactly the answer the assessment carries.
+    expect(streamed).toBe(valid)
+    expect(streamed).toBe(assessment.findings[0]!)
+    expect(assessment.validation?.ok).toBe(true)
+  })
+
+  test('a rejected draft emits `retry` so the client can clear it', async () => {
+    const fabricated = 'Under ARTICLE 12, “le traitement des données de santé est interdit en toutes circonstances” — unlawful.'
+    const { model, calls } = scriptedModel([fabricated, valid])
+    const orchestrator = new PolicyOrchestrator({ model, retriever })
+    const stages: string[] = []
+    const drafts: string[] = []
+    let current = ''
+
+    await orchestrator.streamAgent({ ...baseInput, maxAttempts: 2 }, {
+      onStage: (stage) => {
+        stages.push(stage)
+        // Mirror the console: a retry discards what was written so far.
+        if (stage === 'retry') {
+          drafts.push(current)
+          current = ''
+        }
+      },
+      onDelta: (text) => {
+        current += text
+      },
+    })
+
+    expect(calls()).toBe(2)
+    expect(stages.filter((stage) => stage === 'generating')).toHaveLength(2)
+    expect(stages).toContain('retry')
+    expect(drafts).toHaveLength(1)
+    expect(drafts[0]).toContain('interdit en toutes circonstances')
+    expect(current).toBe(valid)
   })
 })
