@@ -2,13 +2,17 @@
 
 import * as React from 'react'
 import {
+  DEFAULT_CORNER_STYLE,
   DEFAULT_THEME_PACK_ID,
   MODE_STORAGE_KEY,
+  RADIUS_STORAGE_KEY,
   THEME_PACKS,
   THEME_PACK_STORAGE_KEY,
   buildThemePackCss,
   getThemePack,
+  resolveCornerStyle,
   resolveMode,
+  type CornerStyle,
   type ThemeMode,
   type ThemePack,
 } from '@sps/theme'
@@ -16,9 +20,11 @@ import {
 interface ThemeContextValue {
   packId: string
   mode: ThemeMode
+  radius: CornerStyle
   packs: ThemePack[]
   setPack: (id: string) => void
   setMode: (mode: ThemeMode) => void
+  setRadius: (radius: CornerStyle) => void
   toggleMode: () => void
 }
 
@@ -38,6 +44,7 @@ function applyChrome(pack: ThemePack, mode: ThemeMode) {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [packId, setPackId] = React.useState(DEFAULT_THEME_PACK_ID)
   const [mode, setModeState] = React.useState<ThemeMode>('light')
+  const [radius, setRadiusState] = React.useState<CornerStyle>(DEFAULT_CORNER_STYLE)
 
   // Inject the pack CSS once (single source of truth: @sps/theme packs).
   React.useEffect(() => {
@@ -50,8 +57,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     const storedMode = resolveMode(localStorage.getItem(MODE_STORAGE_KEY))
     const storedPack = localStorage.getItem(THEME_PACK_STORAGE_KEY) ?? DEFAULT_THEME_PACK_ID
+    const storedRadius = resolveCornerStyle(localStorage.getItem(RADIUS_STORAGE_KEY))
     setPackId(storedPack)
     setModeState(storedMode)
+    setRadiusState(storedRadius)
+    document.documentElement.dataset.radius = storedRadius
   }, [])
 
   const setPack = React.useCallback(
@@ -74,16 +84,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     [packId],
   )
 
+  const setRadius = React.useCallback((next: CornerStyle) => {
+    setRadiusState(next)
+    localStorage.setItem(RADIUS_STORAGE_KEY, next)
+    document.documentElement.dataset.radius = next
+  }, [])
+
   const value = React.useMemo<ThemeContextValue>(
     () => ({
       packId,
       mode,
+      radius,
       packs: THEME_PACKS,
       setPack,
       setMode,
+      setRadius,
       toggleMode: () => setMode(mode === 'dark' ? 'light' : 'dark'),
     }),
-    [packId, mode, setPack, setMode],
+    [packId, mode, radius, setPack, setMode, setRadius],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

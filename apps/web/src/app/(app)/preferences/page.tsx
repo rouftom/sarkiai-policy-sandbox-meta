@@ -18,7 +18,7 @@ const MODES: Array<{ value: PreferencesDto['theme']; icon: React.ComponentType<{
 export default function PreferencesPage() {
   const { t, locale, setLocale } = useI18n()
   const { operator, savePreferences } = useAuth()
-  const { packId, packs, setPack, setMode } = useTheme()
+  const { packId, packs, setPack, setMode, setRadius } = useTheme()
 
   const initial = operator?.preferences
   const [draft, setDraft] = React.useState<PreferencesDto | null>(initial ?? null)
@@ -63,11 +63,17 @@ export default function PreferencesPage() {
     setLocale(next)
   }
 
+  const chooseRadius = (next: PreferencesDto['radius']) => {
+    patch('radius', next)
+    setRadius(next)
+  }
+
   const save = async () => {
     setSaving(true)
     try {
       await savePreferences(draft)
       document.documentElement.dataset.density = draft.density === 'compact' ? 'dense' : 'comfortable'
+      setRadius(draft.radius)
       setStatus('saved')
     } catch {
       setStatus('error')
@@ -162,6 +168,18 @@ export default function PreferencesPage() {
                 >
                   <option value="comfortable">{t('prefs.comfortable')}</option>
                   <option value="compact">{t('prefs.compact')}</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="radius">{t('prefs.radius')}</Label>
+                <select
+                  id="radius"
+                  value={draft.radius}
+                  onChange={(event) => chooseRadius(event.target.value as PreferencesDto['radius'])}
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
+                >
+                  <option value="square">{t('prefs.square')}</option>
+                  <option value="rounded">{t('prefs.rounded')}</option>
                 </select>
               </div>
             </div>

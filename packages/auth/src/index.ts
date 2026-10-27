@@ -34,7 +34,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   pack: 'fada',
   locale: 'en',
   density: 'comfortable',
-  radius: 'rounded',
+  // The console's chrome is square by default; the app-bar menu switches it.
+  radius: 'square',
   notifications: { whatsapp: true, email: false, digest: true },
 }
 

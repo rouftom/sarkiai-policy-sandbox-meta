@@ -166,3 +166,19 @@
 html[data-density='dense'] {
   font-size: 0.9375rem;
 }
+
+/*
+ * Corner treatment: square is the console default, and the appearance menu
+ * writes `data-radius` on <html>. Tailwind emits the radius utilities as
+ * `calc(var(--radius) + Npx)`, so zeroing `--radius` alone would still leave
+ * 4–12px corners: the utilities have to be flattened explicitly.
+ * `rounded-full` deliberately stays round (avatars, pills, spinners).
+ */
+html[data-radius='square'] {
+  --radius: 0px;
+}
+
+html[data-radius='square']
+  :where(.rounded-sm, .rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl) {
+  border-radius: 0;
+}

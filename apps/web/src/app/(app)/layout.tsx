@@ -14,7 +14,7 @@ import { WorkspaceProvider } from '@/lib/workspace'
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { operator, loading } = useAuth()
-  const { setPack, setMode } = useTheme()
+  const { setPack, setMode, setRadius } = useTheme()
   const { setLocale } = useI18n()
 
   React.useEffect(() => {
@@ -30,8 +30,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setMode(prefs.theme === 'system' ? (prefersDark ? 'dark' : 'light') : prefs.theme)
     setLocale(prefs.locale as Locale)
     document.documentElement.dataset.density = prefs.density === 'compact' ? 'dense' : 'comfortable'
-    document.documentElement.dataset.radius = prefs.radius
-  }, [operator, setLocale, setMode, setPack])
+    setRadius(prefs.radius)
+  }, [operator, setLocale, setMode, setPack, setRadius])
 
   if (loading || !operator) {
     return (

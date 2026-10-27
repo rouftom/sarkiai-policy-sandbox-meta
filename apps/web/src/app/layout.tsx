@@ -5,8 +5,10 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { I18nProvider } from '@/lib/i18n'
 import { AuthProvider } from '@/lib/auth'
 import {
+  DEFAULT_CORNER_STYLE,
   DEFAULT_THEME_PACK_ID,
   MODE_STORAGE_KEY,
+  RADIUS_STORAGE_KEY,
   THEME_PACKS,
   THEME_PACK_STORAGE_KEY,
   buildChromeBootstrapScript,
@@ -39,6 +41,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     modeStorageKey: MODE_STORAGE_KEY,
     defaultThemeId: DEFAULT_THEME_PACK_ID,
     themes: THEME_PACKS,
+    radiusStorageKey: RADIUS_STORAGE_KEY,
+    defaultRadius: DEFAULT_CORNER_STYLE,
   })
 
   return (

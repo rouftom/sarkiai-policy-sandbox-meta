@@ -53,11 +53,14 @@ export interface ChromeBootstrapOptions {
   modeStorageKey: string
   defaultThemeId: string
   themes: ThemePack[]
+  /** Applying `<html data-radius>` before first paint avoids a corner flash. */
+  radiusStorageKey?: string
+  defaultRadius?: string
 }
 
 /** Inline pre-paint script embedded in the root layout (no flash on first paint). */
 export function buildChromeBootstrapScript(options: ChromeBootstrapOptions): string {
-  const { themeStorageKey, modeStorageKey, defaultThemeId, themes } = options
+  const { themeStorageKey, modeStorageKey, defaultThemeId, themes, radiusStorageKey, defaultRadius } = options
   const surface: Record<string, string> = Object.fromEntries(themes.map((t) => [t.id, t.preview.surface]))
   const primary: Record<string, string> = Object.fromEntries(themes.map((t) => [t.id, t.preview.primary]))
 
@@ -68,6 +71,11 @@ var mode=localStorage.getItem(${JSON.stringify(modeStorageKey)})||'system';
 var dark=mode==='dark'||(mode!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);
 var root=document.documentElement;root.setAttribute('data-theme-pack',id);
 if(dark)root.classList.add('dark');else root.classList.remove('dark');
+${
+    radiusStorageKey
+      ? `var radius=localStorage.getItem(${JSON.stringify(radiusStorageKey)})||${JSON.stringify(defaultRadius ?? 'square')};root.setAttribute('data-radius',radius==='rounded'?'rounded':'square');`
+      : ''
+  }
 var color=s[id]||s[${JSON.stringify(defaultThemeId)}];
 var m=document.head.querySelector('meta[name="theme-color"]');if(!m){m=document.createElement('meta');m.setAttribute('name','theme-color');document.head.appendChild(m);}m.setAttribute('content',color);m.removeAttribute('media');
 var pr=p[id]||p[${JSON.stringify(defaultThemeId)}];var set=function(n,v){var e=document.head.querySelector('meta[name="'+n+'"]');if(!e){e=document.createElement('meta');e.setAttribute('name',n);document.head.appendChild(e);}e.setAttribute('content',v);};set('msapplication-TileColor',pr);set('msapplication-navbutton-color',pr);set('color-scheme',dark?'dark':'light');

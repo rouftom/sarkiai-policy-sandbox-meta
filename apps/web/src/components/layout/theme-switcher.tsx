@@ -9,13 +9,13 @@ import { useI18n } from '@/lib/i18n'
 import type { PreferencesDto } from '@/lib/api'
 
 /**
- * Pack gallery plus light/dark/system mode, as in the FSM header. The choice is
- * applied locally immediately and mirrored onto the operator profile when a
- * session is open.
+ * Pack gallery, light/dark/system mode and the corner treatment, as in the FSM
+ * header. Every choice is applied locally immediately and mirrored onto the
+ * operator profile when a session is open.
  */
 export function ThemeSwitcher() {
   const { t, locale } = useI18n()
-  const { packId, mode, packs, setPack, setMode } = useTheme()
+  const { packId, mode, radius, packs, setPack, setMode, setRadius } = useTheme()
   const { operator, savePreferences } = useAuth()
   const [open, setOpen] = React.useState(false)
   const container = React.useRef<HTMLDivElement>(null)
@@ -57,10 +57,20 @@ export function ThemeSwitcher() {
     persist({ theme: next })
   }
 
+  const pickRadius = (next: PreferencesDto['radius']) => {
+    setRadius(next)
+    persist({ radius: next })
+  }
+
   const modes = [
     { value: 'light' as const, icon: Sun, label: t('theme.light') },
     { value: 'dark' as const, icon: Moon, label: t('theme.dark') },
     { value: 'system' as const, icon: Monitor, label: t('theme.system') },
+  ]
+
+  const corners = [
+    { value: 'square' as const, label: t('theme.square') },
+    { value: 'rounded' as const, label: t('theme.rounded') },
   ]
 
   return (
@@ -119,6 +129,37 @@ export function ThemeSwitcher() {
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="my-1 h-px bg-border" />
+          <p className="px-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {t('theme.corners')}
+          </p>
+          <div className="grid grid-cols-2 gap-1">
+            {corners.map(({ value, label }) => {
+              const active = radius === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => pickRadius(value)}
+                  aria-pressed={active}
+                  className={cn(
+                    'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[10px] transition-colors',
+                    active ? 'bg-brand-primary/10 text-brand-primary-dark dark:text-brand-primary-light' : 'hover:bg-secondary',
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'h-3 w-3 border border-current',
+                      value === 'square' ? 'rounded-none' : 'rounded-[4px]',
+                    )}
+                  />
                   {label}
                 </button>
               )
