@@ -8,16 +8,42 @@
  */
 
 import * as React from 'react'
-import { Check, Copy, FileCheck2, Radio, ShieldCheck } from 'lucide-react'
+import { Check, Copy, FileCheck2, Moon, Radio, ShieldCheck, Sun } from 'lucide-react'
 import { ApiError } from '@/lib/api'
-import type { MessageKey } from '@/lib/i18n'
+import { useI18n, type MessageKey } from '@/lib/i18n'
+import { useTheme } from '@/components/theme-provider'
 import { BrandMark } from '@/components/layout/brand-mark'
+
+/**
+ * Compact light/dark switch for the unauthenticated screens. It writes the same
+ * keys as the console switcher, so the choice follows the operator into the app
+ * (and the pre-paint script picks it up on the next visit).
+ */
+function AuthThemeToggle() {
+  const { mode, toggleMode } = useTheme()
+  const { t } = useI18n()
+  const dark = mode === 'dark'
+  return (
+    <button
+      type="button"
+      onClick={toggleMode}
+      aria-label={t('app.toggleTheme')}
+      title={t('app.toggleTheme')}
+      className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
+    >
+      {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+    </button>
+  )
+}
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-dvh bg-background lg:grid-cols-2">
+    <div className="grid min-h-dvh bg-background text-foreground lg:grid-cols-2">
       <BrandPanel />
-      <main className="flex min-h-dvh flex-col justify-center px-6 py-12 sm:px-10 lg:px-16">
+      <main className="relative flex min-h-dvh flex-col justify-center px-6 py-12 sm:px-10 lg:px-16">
+        <div className="absolute right-6 top-6 sm:right-10">
+          <AuthThemeToggle />
+        </div>
         <div className="mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <BrandMark className="h-9 w-9" />
@@ -86,6 +112,7 @@ export function CopyButton({ value, label }: { value: string; label: { copy: str
 }
 
 export function BrandPanel() {
+  const { t } = useI18n()
   return (
     <section className="relative hidden overflow-hidden bg-brand-ink px-12 py-14 text-white lg:flex lg:flex-col lg:justify-between">
       <div className="pointer-events-none absolute inset-0" aria-hidden>
@@ -105,18 +132,15 @@ export function BrandPanel() {
 
       <div className="relative max-w-md">
         <h2 className="font-display text-3xl font-bold leading-tight tracking-tight">
-          Policy decisions, <span className="text-gradient-gold">under human control.</span>
+          {t('auth.heroTitle')} <span className="text-gradient-accent">{t('auth.heroAccent')}</span>
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-white/70">
-          A multi-agent engine that runs error scenarios, scores AI readiness and drafts public
-          communication — with a hash-chained audit trail behind every step.
-        </p>
+        <p className="mt-3 text-sm leading-relaxed text-white/70">{t('auth.heroBody')}</p>
 
         <ul className="mt-8 space-y-4">
           {[
-            { icon: ShieldCheck, title: 'Mandated agents, shared facts', body: 'Information is released in batches so each institution reasons from its own mandate.' },
-            { icon: FileCheck2, title: 'Citation validator', body: 'Quotes are checked against the corpus before an answer reaches the operator.' },
-            { icon: Radio, title: 'WhatsApp approvals', body: 'Meta Cloud API pushes the alert; the decision stays inside this console.' },
+            { icon: ShieldCheck, title: t('auth.point1Title'), body: t('auth.point1Body') },
+            { icon: FileCheck2, title: t('auth.point2Title'), body: t('auth.point2Body') },
+            { icon: Radio, title: t('auth.point3Title'), body: t('auth.point3Body') },
           ].map(({ icon: Icon, title, body }) => (
             <li key={title} className="flex gap-3">
               <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 ring-1 ring-white/10">
@@ -131,9 +155,7 @@ export function BrandPanel() {
         </ul>
       </div>
 
-      <p className="relative text-[10px] text-white/40">
-        Meta Global AI Developer Hackathon · Startup track
-      </p>
+      <p className="relative text-[10px] text-white/40">{t('auth.hackathon')}</p>
     </section>
   )
 }

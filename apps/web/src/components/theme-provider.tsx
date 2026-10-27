@@ -8,7 +8,6 @@ import {
   RADIUS_STORAGE_KEY,
   THEME_PACKS,
   THEME_PACK_STORAGE_KEY,
-  buildThemePackCss,
   getThemePack,
   resolveCornerStyle,
   resolveMode,
@@ -47,22 +46,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = React.useState<ThemeMode>('light')
   const [radius, setRadiusState] = React.useState<CornerStyle>(DEFAULT_CORNER_STYLE)
 
-  // Inject the pack CSS once (single source of truth: @sps/theme packs).
+  /**
+   * The pack CSS is server-rendered in the root layout, so nothing is injected
+   * here any more. This effect only re-applies the stored choice to the
+   * document (React state has to match what the pre-paint script did) — without
+   * it, a client-side navigation could leave the theme attribute stale.
+   */
   React.useEffect(() => {
-    const styleId = 'sps-theme-packs'
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style')
-      style.id = styleId
-      style.textContent = buildThemePackCss(THEME_PACKS)
-      document.head.appendChild(style)
-    }
     const storedMode = resolveMode(localStorage.getItem(MODE_STORAGE_KEY))
-    const storedPack = localStorage.getItem(THEME_PACK_STORAGE_KEY) ?? DEFAULT_THEME_PACK_ID
+    const storedPack = getThemePack(localStorage.getItem(THEME_PACK_STORAGE_KEY) ?? DEFAULT_THEME_PACK_ID)
     const storedRadius = resolveCornerStyle(localStorage.getItem(RADIUS_STORAGE_KEY))
-    setPackId(storedPack)
+    setPackId(storedPack.id)
     setModeState(storedMode)
     setRadiusState(storedRadius)
+    document.documentElement.setAttribute('data-theme-pack', storedPack.id)
+    document.documentElement.classList.toggle('dark', storedMode === 'dark')
     document.documentElement.dataset.radius = storedRadius
+    applyChrome(storedPack, storedMode)
   }, [])
 
   const setPack = React.useCallback(
