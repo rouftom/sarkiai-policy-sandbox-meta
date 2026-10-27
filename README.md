@@ -1,4 +1,4 @@
-# SPS, SarkiAI Policy Sandbox
+# SarkiAI Policy Sandbox
 
 > Policy-grounded, multi-agent AI engine for the **Meta Global AI Developer Hackathon** (Startup track).
 > One engine, two lenses: **error-scenario simulation** and **AI-readiness assessment**.
@@ -152,7 +152,7 @@ Setup requires three variables, shared with the enterprise stack:
 
 ```bash
 AUTH_RESEND_KEY=re_...                       # Resend API key
-AUTH_RESEND_EMAIL_FROM=SPS <no-reply@your-domain>
+AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
 AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
 WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
 ```

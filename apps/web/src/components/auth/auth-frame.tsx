@@ -11,9 +11,24 @@
  */
 
 import * as React from 'react'
-import { Check, Copy, FileCheck2, Moon, Radio, ShieldCheck, Sun } from 'lucide-react'
+import {
+  Check,
+  Copy,
+  FileCheck2,
+  FileText,
+  Gavel,
+  Landmark,
+  Languages,
+  Moon,
+  Network,
+  Scale,
+  ScrollText,
+  Send,
+  ShieldCheck,
+  Sun,
+} from 'lucide-react'
 import { cn } from '@sps/ui'
-import { ApiError } from '@/lib/api'
+import { ApiError, NetworkError } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { useTheme } from '@/components/theme-provider'
 import { BrandMark } from '@/components/layout/brand-mark'
@@ -33,7 +48,7 @@ function AuthThemeToggle() {
       onClick={toggleMode}
       aria-label={t('app.toggleTheme')}
       title={t('app.toggleTheme')}
-      className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
+      className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
     >
       {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
     </button>
@@ -51,12 +66,7 @@ export function AuthLayout({ children, aside }: { children: React.ReactNode; asi
         <Backdrop />
         {aside ?? <BrandContent />}
       </section>
-      {/*
-        The form column is the same themed panel surface as the signed-in
-        console (`--app-panel-bg` + the pack corner radius), not a plain white
-        card: switching pack or mode changes the sign-in screen too.
-      */}
-      <main className="relative flex min-h-dvh flex-col justify-center overflow-hidden border-border/70 bg-[var(--app-panel-bg)] px-6 py-12 sm:px-10 lg:m-3 lg:ml-0 lg:min-h-[calc(100dvh-1.5rem)] lg:rounded-3xl lg:border lg:px-16">
+      <main className="relative flex min-h-dvh flex-col justify-center overflow-hidden bg-background px-6 py-12 sm:px-10 lg:px-16">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-brand-primary/[0.07] to-transparent dark:from-brand-primary-light/[0.06]"
@@ -67,7 +77,7 @@ export function AuthLayout({ children, aside }: { children: React.ReactNode; asi
         <div className="relative z-10 mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <BrandMark className="h-9 w-9" />
-            <span className="font-display text-sm font-bold tracking-tight">SPS</span>
+            <span className="font-display text-sm font-bold tracking-tight">SarkiAI Policy Sandbox</span>
           </div>
           {children}
         </div>
@@ -102,8 +112,11 @@ export function messageFor(
   fallback: string,
   t?: (key: MessageKey, vars?: Record<string, string | number>) => string,
 ): string {
+  // Never report a network failure as a wrong password.
+  if (cause instanceof NetworkError) return t ? t('login.unreachable', { url: cause.url }) : fallback
   if (!(cause instanceof ApiError)) return fallback
   const body = cause.json<{ error?: string }>()
+  if (cause.status === 503) return t ? t('login.unavailable') : fallback
   if (cause.status === 429) return t ? t('login.rateLimited') : fallback
   if (body?.error === 'challenge_invalid') return t ? t('login.expired') : fallback
   if (cause.status === 401) return t ? t('login.invalid') : fallback
@@ -181,7 +194,7 @@ export function BrandContent() {
     <>
       <div className="relative flex items-center gap-2.5">
         <BrandMark className="h-10 w-10" />
-        <span className="font-display text-base font-bold tracking-tight">SPS</span>
+        <span className="font-display text-base font-bold tracking-tight">SarkiAI Policy Sandbox</span>
       </div>
 
       <div className="relative max-w-md">
@@ -192,9 +205,9 @@ export function BrandContent() {
 
         <ul className="mt-8 space-y-4">
           {[
-            { icon: ShieldCheck, title: t('auth.point1Title'), body: t('auth.point1Body') },
+            { icon: Scale, title: t('auth.point1Title'), body: t('auth.point1Body') },
             { icon: FileCheck2, title: t('auth.point2Title'), body: t('auth.point2Body') },
-            { icon: Radio, title: t('auth.point3Title'), body: t('auth.point3Body') },
+            { icon: Send, title: t('auth.point3Title'), body: t('auth.point3Body') },
           ].map(({ icon: Icon, title, body }) => (
             <li key={title} className="flex gap-3">
               <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-primary/15 text-brand-primary dark:text-brand-primary-light">
@@ -221,7 +234,7 @@ export function DemoAccessContent() {
     <>
       <div className="relative flex items-center gap-2.5">
         <BrandMark className="h-10 w-10" />
-        <span className="font-display text-base font-bold tracking-tight">SPS</span>
+        <span className="font-display text-base font-bold tracking-tight">SarkiAI Policy Sandbox</span>
       </div>
 
       <div className="relative max-w-md space-y-6">
@@ -255,13 +268,23 @@ export function DemoAccessContent() {
   )
 }
 
+/** Policy-themed backdrop: the same quiet layout as the org screens, with governance icons. */
 function Backdrop() {
+  const icon = 'pointer-events-none absolute text-brand-primary/25 dark:text-brand-primary-light/20'
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden>
       <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-brand-primary/25 blur-3xl" />
       <div className="absolute -right-16 bottom-16 h-64 w-64 rounded-full bg-brand-accent/15 blur-3xl" />
       <div className="absolute right-16 top-24 h-40 w-40 rotate-12 rounded-[2rem] border border-brand-primary/15" />
       <div className="absolute bottom-28 left-16 h-24 w-24 -rotate-12 rounded-3xl border border-brand-primary/20" />
+      <Scale className={`${icon} left-12 top-28 h-7 w-7 -rotate-12`} />
+      <Landmark className={`${icon} right-24 top-44 h-8 w-8 rotate-12`} />
+      <Gavel className={`${icon} bottom-44 right-1/3 h-6 w-6 rotate-12`} />
+      <FileText className={`${icon} bottom-28 left-1/3 h-7 w-7 -rotate-6`} />
+      <Network className={`${icon} right-10 top-1/2 h-8 w-8 -rotate-12`} />
+      <ScrollText className={`${icon} bottom-16 right-28 h-7 w-7 rotate-6`} />
+      <ShieldCheck className={`${icon} right-1/3 top-16 h-6 w-6 rotate-12`} />
+      <Languages className={`${icon} bottom-24 left-12 h-7 w-7 -rotate-12`} />
     </div>
   )
 }

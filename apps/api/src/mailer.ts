@@ -40,7 +40,7 @@ export interface MailResult {
 }
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
-const BRAND = 'SPS'
+const BRAND = 'SarkiAI Policy Sandbox'
 const FOOTER = 'Made with ♥️ by Djotta'
 
 /* Monochrome palette shared by every message. */

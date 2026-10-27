@@ -1,165 +1,66 @@
-'use client'
+"use client"
 
-import * as React from 'react'
-import { cn } from '../lib/cn'
+import * as React from "react"
+import * as TabsPrimitive from "@radix-ui/react-tabs"
 
-interface TabsContextValue {
-  value: string
-  onValueChange: (value: string) => void
-}
+import { cn } from "../lib/cn"
 
-const TabsContext = React.createContext<TabsContextValue | null>(null)
+const Tabs = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Root
+    ref={ref}
+    data-slot="tabs"
+    className={cn("flex flex-col gap-2", className)}
+    {...props}
+  />
+))
+Tabs.displayName = TabsPrimitive.Root.displayName
 
-function useTabs() {
-  const context = React.useContext(TabsContext)
-  if (!context) throw new Error('Tabs components must be used inside <Tabs>')
-  return context
-}
+const TabsList = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.List>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.List
+    ref={ref}
+    data-slot="tabs-list"
+    className={cn(
+      "bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
+      className
+    )}
+    {...props}
+  />
+))
+TabsList.displayName = TabsPrimitive.List.displayName
 
-/**
- * Tabs without a dependency: the console only needs a controlled strip and the
- * matching panel, and the FSM surfaces are all Tailwind anyway.
- */
-export function Tabs({
-  value,
-  onValueChange,
-  className,
-  children,
-}: {
-  value: string
-  onValueChange: (value: string) => void
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <TabsContext.Provider value={{ value, onValueChange }}>
-      <div className={cn('flex min-w-0 flex-col', className)}>{children}</div>
-    </TabsContext.Provider>
-  )
-}
+const TabsTrigger = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Trigger
+    ref={ref}
+    data-slot="tabs-trigger"
+    className={cn(
+      "data-[state=active]:bg-background dark:data-[state=active]:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 text-foreground dark:text-muted-foreground inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+      className
+    )}
+    {...props}
+  />
+))
+TabsTrigger.displayName = TabsPrimitive.Trigger.displayName
 
-export function TabsList({
-  className,
-  children,
-  ariaLabel,
-}: {
-  className?: string
-  children: React.ReactNode
-  ariaLabel?: string
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className={cn(
-        'flex flex-wrap items-center gap-1 border-b border-border pb-1',
-        className,
-      )}
-    >
-      {children}
-    </div>
-  )
-}
+const TabsContent = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
+>(({ className, ...props }, ref) => (
+  <TabsPrimitive.Content
+    ref={ref}
+    data-slot="tabs-content"
+    className={cn("flex-1 outline-none", className)}
+    {...props}
+  />
+))
+TabsContent.displayName = TabsPrimitive.Content.displayName
 
-export function TabsTrigger({
-  value,
-  className,
-  children,
-  disabled = false,
-  tooltip,
-}: {
-  value: string
-  className?: string
-  children: React.ReactNode
-  disabled?: boolean
-  tooltip?: string
-}) {
-  const { value: current, onValueChange } = useTabs()
-  const active = current === value
-
-  const trigger = (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      aria-controls={`panel-${value}`}
-      id={`tab-${value}`}
-      disabled={disabled}
-      onClick={() => onValueChange(value)}
-      className={cn(
-        'group/trigger relative flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] transition-colors',
-        'disabled:cursor-not-allowed disabled:opacity-40',
-        active
-          ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:text-brand-primary-light'
-          : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-        className,
-      )}
-    >
-      {children}
-      {active && (
-        <span
-          aria-hidden="true"
-          className="absolute inset-x-2 -bottom-1 h-0.5 rounded-full bg-brand-primary dark:bg-brand-primary-light"
-        />
-      )}
-    </button>
-  )
-
-  if (!tooltip) return trigger
-  return <Tooltip label={tooltip}>{trigger}</Tooltip>
-}
-
-export function TabsContent({
-  value,
-  className,
-  children,
-}: {
-  value: string
-  className?: string
-  children: React.ReactNode
-}) {
-  const { value: current } = useTabs()
-  if (current !== value) return null
-  return (
-    <div
-      role="tabpanel"
-      id={`panel-${value}`}
-      aria-labelledby={`tab-${value}`}
-      className={cn('min-w-0', className)}
-    >
-      {children}
-    </div>
-  )
-}
-
-/**
- * Hover/focus tooltip built on CSS only (no portal, no library). Wrapping the
- * trigger keeps it keyboard reachable: focus-within reveals the same bubble.
- */
-export function Tooltip({
-  label,
-  children,
-  side = 'bottom',
-  className,
-}: {
-  label: string
-  children: React.ReactNode
-  side?: 'top' | 'bottom'
-  className?: string
-}) {
-  return (
-    <span className={cn('group/tooltip relative inline-flex', className)}>
-      {children}
-      <span
-        role="tooltip"
-        className={cn(
-          'pointer-events-none absolute left-1/2 z-50 w-max max-w-56 -translate-x-1/2 rounded-lg border border-border bg-popover px-2 py-1 text-[10px] font-normal leading-relaxed text-popover-foreground shadow-lg',
-          'opacity-0 transition-opacity group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100',
-          side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2',
-        )}
-      >
-        {label}
-      </span>
-    </span>
-  )
-}
+export { Tabs, TabsList, TabsTrigger, TabsContent }

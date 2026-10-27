@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' https://esm.sh https://fonts.gstatic.com https://fonts.googleapis.com https://tic-tac-toe-mcp-app.vercel.app data: blob: 'unsafe-inline' 'unsafe-eval'; img-src * data: blob:; font-src * data:; connect-src *;">
+  <title>Tic-Tac-Toe Sandbox Proxy</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      min-height: 100vh;
+      overflow: hidden;
+      background: transparent;
+      color-scheme: light dark;
+    }
+
+    iframe {
+      width: 100% !important;
+      height: 100% !important;
+      border: none;
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: transparent;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      font-family: system-ui, sans-serif;
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="loading" id="loading">Initialisation du jeu...</div>
+  <script>
+    let initialized = false;
+    const loadingEl = document.getElementById('loading');
+
+    window.addEventListener('message', (event) => {
+      // De l'Hôte vers la Sandbox
+      if (event.source === window.parent) {
+        if (event.data && event.data.method === 'ui/notifications/sandbox-resource-ready') {
+          if (initialized) return;
+
+          const { html, sandbox, permissions } = event.data.params || {};
+          if (!html) {
+            loadingEl.textContent = 'Erreur: Contenu non reçu';
+            return;
+          }
+
+          initialized = true;
+          const iframe = document.createElement('iframe');
+          iframe.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; border:none; background:transparent;';
+          if (sandbox) iframe.setAttribute('sandbox', sandbox);
+
+          if (permissions) {
+            const allow = ['autoplay', 'fullscreen'];
+            if (permissions.clipboardWrite) allow.push('clipboard-write');
+            iframe.setAttribute('allow', allow.join('; '));
+          }
+
+          // Inject base tag for relative URL resolution
+          const baseTag = '<base href="https://tic-tac-toe-mcp-app.vercel.app/">';
+
+          // Inject basic styles for the game
+          const styleTag = `<style>
+            html,body,#root{width:100%;height:100%;margin:0;padding:0;overflow:hidden;background:transparent;}
+          </style>`;
+
+          let fixedHtml = html;
+          if (html.includes('<head>')) {
+            fixedHtml = html.replace('<head>', '<head>' + baseTag);
+          } else if (html.includes('<html>')) {
+            fixedHtml = html.replace('<html>', '<html><head>' + baseTag + '</head>');
+          } else {
+            fixedHtml = baseTag + html;
+          }
+
+          if (html.includes('</head>')) {
+            fixedHtml = html.replace('</head>', styleTag + '</head>');
+          } else {
+            fixedHtml = styleTag + html;
+          }
+
+          iframe.srcdoc = fixedHtml;
+          loadingEl.style.display = 'none';
+          document.body.appendChild(iframe);
+        } else {
+          // Relayer les messages de l'hôte vers l'iframe interne (le jeu)
+          const inner = document.querySelector('iframe');
+          if (inner && inner.contentWindow) {
+            inner.contentWindow.postMessage(event.data, '*');
+          }
+        }
+      } else {
+        // De l'Iframe (le jeu) vers la Sandbox, on relaye à l'Hôte
+        if (event.data && typeof event.data === 'object') {
+          window.parent.postMessage(event.data, '*');
+        }
+      }
+    });
+
+    // Signaler que le proxy est prêt
+    const notifyReady = () => {
+      if (initialized) return;
+      window.parent.postMessage({
+        jsonrpc: '2.0',
+        method: 'ui/notifications/sandbox-proxy-ready',
+        params: {}
+      }, '*');
+    };
+
+    notifyReady();
+    const interval = setInterval(() => {
+      if (initialized) clearInterval(interval);
+      else notifyReady();
+    }, 500);
+    setTimeout(() => clearInterval(interval), 10000);
+  </script>
+</body>
+
+</html>

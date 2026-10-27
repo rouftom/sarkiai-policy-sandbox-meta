@@ -110,7 +110,7 @@ export default function ConsolePage() {
       </Card>
 
       <Tabs value={tab} onValueChange={setTab} className="gap-3">
-        <AnimatedTabsList items={tabs} value={tab} onValueChange={setTab} ariaLabel={t('console.tabsLabel')} />
+        <AnimatedTabsList items={tabs} value={tab} onValueChange={setTab} />
 
         <TabsContent value="simulation" className="mt-3">
           {profile.stages.scenario ? (

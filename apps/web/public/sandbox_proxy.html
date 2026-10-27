@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' https://esm.sh https://fonts.gstatic.com https://fonts.googleapis.com https://xlab-3d-render-mcp-app.vercel.app https://sea-mcp-excalidraw.vercel.app data: blob: 'unsafe-inline' 'unsafe-eval'; img-src * data: blob:; font-src * data:; connect-src *;">
+  <title>MCP App Sandbox Proxy</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      min-height: 100vh;
+      overflow: hidden;
+      background: transparent !important;
+      color-scheme: light dark;
+    }
+
+    .loading {
+      color: hsl(240 5% 64.9%);
+    }
+    }
+
+    iframe {
+      width: 100% !important;
+      height: 100% !important;
+      min-height: inherit;
+      border: none;
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      /* Transparent to inherit from parent/app */
+      background: transparent;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: hsl(240 3.8% 46.1%);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="loading" id="loading"></div>
+  <script>
+    let initialized = false;
+    const loadingEl = document.getElementById('loading');
+
+    window.addEventListener('message', (event) => {
+      // From Host to Sandbox
+      if (event.source === window.parent) {
+        if (event.data && event.data.method === 'ui/notifications/sandbox-resource-ready') {
+          if (initialized) return;
+
+          const { html, sandbox, permissions } = event.data.params || {};
+          if (!html) {
+            loadingEl.textContent = 'Error: No HTML content received';
+            return;
+          }
+
+          initialized = true;
+
+          // Create iframe with absolute positioning
+          const iframe = document.createElement('iframe');
+          iframe.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; border:none; display:block; background:transparent;';
+
+          // Set sandbox attribute if provided
+          if (sandbox) {
+            iframe.setAttribute('sandbox', sandbox);
+          }
+
+          // Set permissions
+          if (permissions) {
+            const allow = [];
+            if (permissions.clipboardWrite) allow.push('clipboard-write');
+            if (permissions.keyboard) allow.push('keyboard-map');
+            allow.push('autoplay');
+            allow.push('fullscreen');
+            if (allow.length) iframe.setAttribute('allow', allow.join('; '));
+          }
+
+          // Inject base tag for relative URL resolution
+          // Widgets are single-file HTML (no relative URLs): no base tag needed.
+          const baseTag = '';
+          let fixedHtml = html;
+          if (html.includes('<head>')) {
+            fixedHtml = html.replace('<head>', '<head>' + baseTag);
+          } else if (html.includes('<html>')) {
+            fixedHtml = html.replace('<html>', '<html><head>' + baseTag + '</head>');
+          } else {
+            fixedHtml = baseTag + html;
+          }
+
+          // Also ensure the body has full height and SVGs fill their container
+          const styleTag = `<style>
+            html,body,#root{width:100%;height:100%;margin:0;padding:0;overflow:hidden;}
+            svg{
+              width:100%!important;
+              max-width:100%!important;
+              height:auto!important;
+              display:block!important;
+              object-fit:contain!important;
+            }
+            svg[viewBox]{
+              width:100%!important;
+              height:100%!important;
+              max-width:100vw!important;
+            }
+            .excalidraw,.excalidraw-container,[class*="excalidraw"]{
+              width:100%!important;
+              height:100%!important;
+              overflow:hidden!important;
+            }
+            .excalidraw__canvas{width:100%!important;height:100%!important;}
+            /* Force SVG container to scale */
+            div:has(>svg){width:100%!important;height:100%!important;overflow:hidden!important;}
+          </style>`;
+          if (fixedHtml.includes('</head>')) {
+            fixedHtml = fixedHtml.replace('</head>', styleTag + '</head>');
+          } else {
+            fixedHtml = styleTag + fixedHtml;
+          }
+
+          // Use srcdoc
+          iframe.srcdoc = fixedHtml;
+
+          // Hide loading and show iframe
+          loadingEl.style.display = 'none';
+          document.body.appendChild(iframe);
+        } else {
+          // Relay other host messages (tool-input, etc) to app
+          const inner = document.querySelector('iframe');
+          if (inner && inner.contentWindow) {
+            inner.contentWindow.postMessage(event.data, '*');
+          }
+        }
+      } else {
+        // From App (inner) or other sources, relay back to Host
+        if (event.data && typeof event.data === 'object') {
+          window.parent.postMessage(event.data, '*');
+        }
+      }
+    });
+
+    // Notify host that sandbox proxy is ready
+    const notifyReady = () => {
+      if (initialized) return;
+      window.parent.postMessage({
+        jsonrpc: '2.0',
+        method: 'ui/notifications/sandbox-proxy-ready',
+        params: {}
+      }, '*');
+    };
+
+    notifyReady();
+    const interval = setInterval(() => {
+      if (initialized) clearInterval(interval);
+      else notifyReady();
+    }, 500);
+
+    setTimeout(() => clearInterval(interval), 10000);
+  </script>
+</body>
+
+</html>

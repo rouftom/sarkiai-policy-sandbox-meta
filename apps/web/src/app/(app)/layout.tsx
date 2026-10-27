@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { Bot } from 'lucide-react'
 import { Group, Panel, Separator, type PanelImperativeHandle, type PanelSize } from 'react-resizable-panels'
-import { Button, Tooltip, cn } from '@sps/ui'
+import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, cn } from '@sps/ui'
 import { MODE_STORAGE_KEY } from '@sps/theme'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { AppHeader } from '@/components/layout/app-header'
@@ -74,7 +74,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-3">
           <BrandMark className="h-10 w-10 animate-pulse" />
           <p className="text-[10px] font-medium text-muted-foreground">
-            SPS
+            SarkiAI Policy Sandbox
           </p>
         </div>
       </div>
@@ -154,18 +154,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   >
                     {!assistantOpen && (
                       <div className="absolute bottom-3 left-2 z-50">
-                        <Tooltip label={t('assistant.open')} side="top">
-                          <Button
-                            type="button"
-                            onClick={openAssistant}
-                            size="icon"
-                            variant="ghost"
-                            aria-label={t('assistant.open')}
-                            className="h-10 w-10 rounded-full border border-slate-200 bg-white text-brand-primary shadow-xl transition-all hover:scale-110 dark:border-brand-primary-dark/30 dark:bg-brand-ink dark:text-brand-primary-light"
-                          >
-                            <Bot className="h-5 w-5" />
-                          </Button>
-                        </Tooltip>
+                        <TooltipProvider>
+
+                          <Tooltip>
+
+                            <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              onClick={openAssistant}
+                              size="icon"
+                              variant="ghost"
+                              aria-label={t('assistant.open')}
+                              className="h-10 w-10 rounded-lg border border-border bg-card text-brand-primary shadow-xl transition-all hover:scale-110 dark:border-brand-primary-dark/30 dark:bg-brand-ink dark:text-brand-primary-light"
+                            >
+                              <Bot className="h-5 w-5" />
+                            </Button>
+
+                            </TooltipTrigger>
+
+                            <TooltipContent side="top">{t('assistant.open')}</TooltipContent>
+
+                          </Tooltip>
+
+                        </TooltipProvider>
                       </div>
                     )}
                     <div className="mx-auto w-full max-w-[1400px]">{children}</div>

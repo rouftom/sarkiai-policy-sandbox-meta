@@ -254,3 +254,10 @@ describe('public sign-up', () => {
     ).rejects.toThrow(/limited/)
   })
 })
+
+describe('sign-in during a store outage', () => {
+  test('an unreachable store is reported as unavailable, never as a wrong password', async () => {
+    const auth = service({ mongodbUri: 'mongodb://127.0.0.1:1', dbName: 'sps_outage' })
+    await expect(auth.login(EMAIL, CHOSEN)).rejects.toMatchObject({ code: 'storage_unavailable' })
+  }, 30_000)
+})

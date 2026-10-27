@@ -5,7 +5,7 @@
  */
 export function BrandMark({ className = 'h-8 w-8' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 40 40" fill="none" role="img" aria-label="SPS" className={className}>
+    <svg viewBox="0 0 40 40" fill="none" role="img" aria-label="SarkiAI Policy Sandbox" className={className}>
       <defs>
         <linearGradient id="brand-shield" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
           <stop stopColor="#0866FF" />
@@ -36,8 +36,8 @@ export function BrandMark({ className = 'h-8 w-8' }: { className?: string }) {
   )
 }
 
-export function BrandWordmark({ short = 'SPS' }: { short?: string }) {
+export function BrandWordmark({ short = 'SarkiAI Policy Sandbox' }: { short?: string }) {
   return (
-    <span className="font-display text-[15px] font-bold tracking-tight text-sidebar-foreground">{short}</span>
+    <span className="min-w-0 truncate font-display text-[13px] font-bold tracking-tight text-sidebar-foreground">{short}</span>
   )
 }

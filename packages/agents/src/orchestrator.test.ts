@@ -157,6 +157,55 @@ describe('streamed answers', () => {
     expect(assessment.validation?.ok).toBe(true)
   })
 
+  test('forwards the reasoning as it is written, before the answer text', async () => {
+    const reasoning = 'The quote must be checked against article 12 before it is cited.'
+    const model = {
+      specificationVersion: 'v3',
+      provider: 'test',
+      modelId: 'test-reasoning',
+      supportedUrls: {},
+      doGenerate: async () => {
+        throw new Error('buffered path not expected')
+      },
+      doStream: async () => ({
+        stream: new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: 'stream-start', warnings: [] })
+            controller.enqueue({ type: 'reasoning-start', id: 'r1' })
+            for (const delta of [reasoning.slice(0, 20), reasoning.slice(20)]) {
+              controller.enqueue({ type: 'reasoning-delta', id: 'r1', delta })
+            }
+            controller.enqueue({ type: 'reasoning-end', id: 'r1' })
+            controller.enqueue({ type: 'text-start', id: 't1' })
+            controller.enqueue({ type: 'text-delta', id: 't1', delta: valid })
+            controller.enqueue({ type: 'text-end', id: 't1' })
+            controller.enqueue({
+              type: 'finish',
+              finishReason: 'stop',
+              usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            })
+            controller.close()
+          },
+        }),
+      }),
+    }
+    const orchestrator = new PolicyOrchestrator({ model: model as unknown as LanguageModel, retriever })
+    const events: string[] = []
+    let thought = ''
+
+    await orchestrator.streamAgent(baseInput, {
+      onDelta: () => events.push('text'),
+      onReasoning: (text) => {
+        thought += text
+        if (events[events.length - 1] !== 'reasoning') events.push('reasoning')
+      },
+    })
+
+    expect(thought).toBe(reasoning)
+    expect(events[0]).toBe('reasoning')
+    expect(events).toContain('text')
+  })
+
   test('a rejected draft emits `retry` so the client can clear it', async () => {
     const fabricated = 'Under ARTICLE 12, “le traitement des données de santé est interdit en toutes circonstances” — unlawful.'
     const { model, calls } = scriptedModel([fabricated, valid])

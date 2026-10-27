@@ -1,7 +1,8 @@
+
 'use client'
 
 import * as React from 'react'
-import { ArrowUp, ImagePlus, Plus, RotateCcw, Scale, Shield, X } from 'lucide-react'
+import { ImagePlus, ListChecks, Plus, RotateCcw, Scale, Shield, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -15,24 +16,27 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  TooltipContent,
+  TooltipProvider,
   Tooltip,
+  TooltipTrigger,
   cn,
 } from '@sps/ui'
 import { institutionsForDomain } from '@sps/shared'
 import { api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
+import type { ActionRecord, ActionStatus, AgentUiRequest } from '@/lib/agent-ui'
+import { decideAction, listActions } from '@/lib/actions-client'
+import { ActionCenter } from '@/components/ai/tools/action-center'
+import { McpAppView } from '@/components/ai/mcp/mcp-app-wrapper'
+import { AskUserPanel } from '@/components/ai/tools/ask-user-panel'
+import { RequestInputCard } from '@/components/ai/tools/request-input-card'
+import { ApprovalCard } from '@/components/ai/tools/approval-card'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { BrandMark } from '@/components/layout/brand-mark'
-import { ProcessingBar } from '@/components/processing-bar'
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  citations?: AssessmentDto['citations']
-  validation?: AssessmentDto['validation']
-  agentId?: string
-}
+import { ChatInput } from '@/components/ai/inputs/chat-input'
+import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
+import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 
 interface Attachment {
   mime: string
@@ -40,24 +44,34 @@ interface Attachment {
   url: string
 }
 
+const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting'] as const
+
 /**
- * Policy assistant in the left panel of the console. Same composer as the FSM
- * assistant: one rounded pill, a `+` icon button that holds every option (the
- * mandated institution and the Meta model as sub-menus, image attachment, new
- * conversation), and the send button on the right. No selects, no toolbars.
+ * Policy assistant in the left panel of the console. Turns are rendered by the
+ * organization chat components (composer, message, activity trail, animated
+ * answer). The stream drives them: stage events open and close trail steps with
+ * their durations, reasoning and answer deltas are written as they arrive, and
+ * the final assessment replaces the draft with its citations and validation.
  */
 export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const { t } = useI18n()
   const { country, domain, lens } = useWorkspace()
   const [input, setInput] = React.useState('')
   const [busy, setBusy] = React.useState(false)
-  /** Answer as it is written, before the final assessment replaces it. */
-  const [draft, setDraft] = React.useState('')
-  const [stage, setStage] = React.useState<string | null>(null)
-  const [messages, setMessages] = React.useState<Message[]>([])
+  const [turns, setTurns] = React.useState<ChatTurn[]>([])
   const [attachments, setAttachments] = React.useState<Attachment[]>([])
   const [menuOpen, setMenuOpen] = React.useState(false)
   const fileRef = React.useRef<HTMLInputElement>(null)
+  const [actionStatus, setActionStatus] = React.useState<Record<string, ActionStatus>>({})
+  const [actionBusy, setActionBusy] = React.useState<string | null>(null)
+  const [actionError, setActionError] = React.useState<string | null>(null)
+  const [actionsOpen, setActionsOpen] = React.useState(false)
+  const [actionRecords, setActionRecords] = React.useState<ActionRecord[]>([])
+  const [actionsLoading, setActionsLoading] = React.useState(false)
+  /** Base text and last dictation of the current voice recording (the recorder sends the whole dictation each time). */
+  const dictation = React.useRef({ base: null as string | null, last: '' })
+  const inputRef = React.useRef(input)
+  inputRef.current = input
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
@@ -96,7 +110,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
   React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, busy, draft])
+  }, [turns])
 
   const chooseModel = async (id: string) => {
     const previous = model
@@ -136,31 +150,59 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     setAttachments((previous) => [...previous, ...next].slice(0, 3))
   }
 
-  const appendAnswer = (result: AssessmentDto) => {
-    setAttachments([])
-    setMessages((previous) => [
-      ...previous,
-      {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        agentId: result.agentId,
-        content: result.findings.join('\n\n'),
-        citations: result.citations,
-        validation: result.validation,
-      },
-    ])
-  }
+  /** Patch the assistant turn being written (always the last one). */
+  const patchLast = (patch: (turn: ChatTurn) => ChatTurn) =>
+    setTurns((previous) => {
+      const copy = previous.slice()
+      const last = copy[copy.length - 1]
+      if (last) copy[copy.length - 1] = patch(last)
+      return copy
+    })
 
   const send = async (override?: string) => {
     const question = (override ?? input).trim()
     if (!question || busy || !activeInstitution) return
+    const now = Date.now()
     setInput('')
-    setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', content: question }])
+    dictation.current = { base: null, last: '' }
     setBusy(true)
-    setStage('retrieving')
-    setDraft('')
-    let streamed = ''
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64 }))
+    setTurns((previous) => [
+      ...previous,
+      { id: crypto.randomUUID(), role: 'user', content: question },
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: '',
+        agentName: activeInstitution.name,
+        steps: [],
+        startedAt: now,
+        active: true,
+      },
+    ])
+
+    // Tool calls get their own trail steps, closed by their own `end` event.
+    const toolSteps = new Map<string, { key: string; startedAt: number }>()
+
+    // Trail bookkeeping: one open step at a time, closed with its duration.
+    let openStep: { key: string; label: string; startedAt: number } | null = null
+    let counter = 0
+    const stageLabel = (stage: string, attempt?: number) => {
+      const base = STAGES.includes(stage as (typeof STAGES)[number]) ? t(`assistant.stage.${stage}` as 'assistant.stage.retrieving') : stage
+      return attempt && attempt > 1 ? `${base} · ${attempt}` : base
+    }
+    const closeOpen = (at: number) => {
+      if (!openStep) return
+      const closing = openStep
+      patchLast((turn) => ({
+        ...turn,
+        steps: (turn.steps ?? []).map((step) =>
+          step.key === closing.key ? { ...step, status: 'complete', durationMs: at - closing.startedAt } : step,
+        ),
+      }))
+      openStep = null
+    }
+
     const body = {
       institutionId: activeInstitution.id,
       question,
@@ -171,84 +213,184 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     }
     try {
       const result = await api.askStream(body, {
-        onStage: (next) => {
-          setStage(next)
-          // The citation validator rejected the draft: clear it before the
-          // corrective answer starts, so two answers never appear mixed.
-          if (next === 'retry') {
-            streamed = ''
-            setDraft('')
+        onStage: (stage, detail) => {
+          const at = Date.now()
+          closeOpen(at)
+          counter += 1
+          openStep = { key: `${stage}-${counter}`, label: stageLabel(stage, detail.attempt), startedAt: at }
+          const step: TrailStepView = { key: openStep.key, label: openStep.label, count: 1, status: 'active' }
+          patchLast((turn) => ({
+            ...turn,
+            // A retry clears the draft: two answers must never appear mixed.
+            ...(stage === 'retry' ? { content: '', reasoning: '' } : {}),
+            steps: [...(turn.steps ?? []), step],
+          }))
+        },
+        onReasoning: (text) => patchLast((turn) => ({ ...turn, reasoning: `${turn.reasoning ?? ''}${text}` })),
+        onDelta: (text) => patchLast((turn) => ({ ...turn, content: `${turn.content}${text}` })),
+        onTool: (event) => {
+          const at = Date.now()
+          if (event.phase === 'start') {
+            const key = `tool-${event.id}`
+            toolSteps.set(event.id, { key, startedAt: at })
+            const label = event.summary ? `${event.name} · ${event.summary}` : event.name
+            patchLast((turn) => ({ ...turn, steps: [...(turn.steps ?? []), { key, label, count: 1, status: 'active' }] }))
+            return
           }
+          const started = toolSteps.get(event.id)
+          if (!started) return
+          toolSteps.delete(event.id)
+          patchLast((turn) => ({
+            ...turn,
+            steps: (turn.steps ?? []).map((step) =>
+              step.key === started.key
+                ? { ...step, status: event.ok ? 'complete' : 'error', durationMs: at - started.startedAt }
+                : step,
+            ),
+          }))
         },
-        onDelta: (text) => {
-          streamed += text
-          setDraft(streamed)
-        },
+        onUi: (ui) => patchLast((turn) => ({ ...turn, cards: [...(turn.cards ?? []), ui] })),
       })
-      appendAnswer(result)
+      closeOpen(Date.now())
+      patchLast((turn) => ({
+        ...turn,
+        content: result.findings.join('\n\n'),
+        citations: result.citations,
+        validation: result.validation,
+        active: false,
+        steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'complete' } : step)),
+      }))
     } catch (error) {
-      if (streamed) {
-        setMessages((previous) => [
-          ...previous,
-          { id: crypto.randomUUID(), role: 'assistant', content: `⚠️ ${(error as Error).message}` },
-        ])
-      } else {
-        // Streaming unavailable (proxy, old browser): the buffered route always
-        // works, so the operator still gets an answer.
-        try {
-          appendAnswer(await api.ask(body))
-        } catch (fallback) {
-          setMessages((previous) => [
-            ...previous,
-            { id: crypto.randomUUID(), role: 'assistant', content: `⚠️ ${(fallback as Error).message}` },
-          ])
-        }
-      }
+      closeOpen(Date.now())
+      const message = (error as Error).message
+      patchLast((turn) => ({
+        ...turn,
+        content: turn.content ? turn.content : `⚠️ ${message}`,
+        active: false,
+        steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step)),
+      }))
     } finally {
       setBusy(false)
-      setStage(null)
-      setDraft('')
     }
   }
 
+  /** Sends the operator's answer to a question or input request as the next turn. */
+  const answerCard = (turnId: string, cardId: string, answer: string) => {
+    setTurns((previous) =>
+      previous.map((turn) =>
+        turn.id === turnId ? { ...turn, cards: (turn.cards ?? []).filter((card) => card.id !== cardId) } : turn,
+      ),
+    )
+    void send(answer)
+  }
+
+  const submitFile = async (turnId: string, card: Extract<AgentUiRequest, { kind: 'request_input' }>, file: File) => {
+    if (file.type.startsWith('image/')) {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const commaIndex = dataUrl.indexOf(',')
+      setAttachments((previous) =>
+        [...previous, { mime: file.type, dataBase64: dataUrl.slice(commaIndex + 1), url: dataUrl }].slice(0, 3),
+      )
+      answerCard(turnId, card.id, `${card.label}: ${file.name}`)
+      return
+    }
+    const text = (await file.text()).slice(0, 20_000)
+    answerCard(turnId, card.id, `${card.label} (${file.name}):\n${text}`)
+  }
+
+  const decide = async (id: string, decision: 'approve' | 'reject') => {
+    setActionBusy(id)
+    setActionError(null)
+    try {
+      const record = await decideAction(id, decision)
+      setActionStatus((previous) => ({ ...previous, [id]: record.status }))
+    } catch (error) {
+      setActionError((error as Error).message)
+    } finally {
+      setActionBusy(null)
+    }
+  }
+
+  const loadActions = async () => {
+    setActionsLoading(true)
+    try {
+      setActionRecords(await listActions())
+    } catch (error) {
+      setActionError((error as Error).message)
+    } finally {
+      setActionsLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    if (actionsOpen) void loadActions()
+  }, [actionsOpen])
+
+  const decideFromCenter = async (id: string, decision: 'approve' | 'reject') => {
+    try {
+      await decideAction(id, decision)
+    } catch (error) {
+      setActionError((error as Error).message)
+    }
+    await loadActions()
+  }
+
+  const renderCard = (turnId: string, card: AgentUiRequest) => {
+    if (card.kind === 'ask_user') {
+      return <AskUserPanel key={card.id} request={card} disabled={busy} onAnswer={(answer) => answerCard(turnId, card.id, answer)} />
+    }
+    if (card.kind === 'request_input') {
+      return (
+        <RequestInputCard
+          key={card.id}
+          request={card}
+          disabled={busy}
+          onSubmit={(value) =>
+            typeof value === 'string' ? answerCard(turnId, card.id, value) : void submitFile(turnId, card, value)
+          }
+        />
+      )
+    }
+    if (card.kind === 'mcp_app') {
+      return (
+        <McpAppView
+          key={card.id}
+          server={card.server}
+          resourceUri={card.resourceUri}
+          toolName={card.toolName}
+          toolInput={card.toolInput}
+          toolResult={card.toolResult}
+        />
+      )
+    }
+    return (
+      <ApprovalCard
+        key={card.id}
+        request={card}
+        status={actionStatus[card.id]}
+        busy={actionBusy === card.id}
+        onDecision={(decision) => void decide(card.id, decision)}
+      />
+    )
+  }
+
   const newConversation = () => {
-    setMessages([])
+    setTurns([])
     setAttachments([])
     textareaRef.current?.focus()
   }
 
   const suggestions = [t('assistant.suggest1'), t('assistant.suggest2'), t('assistant.suggest3')]
 
-  const stageLabel = (value: string | null) => {
-    switch (value) {
-      case 'generating':
-        return t('assistant.stage.generating')
-      case 'validating':
-        return t('assistant.stage.validating')
-      case 'retry':
-        return t('assistant.stage.retry')
-      case 'persisting':
-        return t('assistant.stage.persisting')
-      default:
-        return t('assistant.stage.retrieving')
-    }
-  }
-
-  const isMultiline = input.includes('\n') || input.length > 60
-
-  // The composer grows with its text up to 120px, then scrolls, like the
-  // organization and web chat inputs.
-  React.useLayoutEffect(() => {
-    const node = textareaRef.current
-    if (!node) return
-    node.style.height = 'auto'
-    node.style.height = `${Math.min(node.scrollHeight, 120)}px`
-  }, [input])
-
   const optionsMenu = (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="icon-sm" className="rounded-full" aria-label={t('assistant.options')}>
+        <Button type="button" variant="ghost" size="icon-sm" className="rounded-lg" aria-label={t('assistant.options')}>
           <Plus className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -308,9 +450,14 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
           {t('assistant.newChat')}
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setActionsOpen((open) => !open)}>
+          <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
+          {t('assistant.actions')}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
+
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -328,22 +475,25 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-foreground">{t('assistant.title')}</p>
-        <Tooltip label={t('assistant.close')}>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={t('assistant.close')} onClick={onClose}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        </Tooltip>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t('assistant.close')} onClick={onClose}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('assistant.close')}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </header>
 
       <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
-        {messages.length === 0 ? (
+        {turns.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <BrandMark className="h-12 w-12" />
             <div>
               <p className="text-[14px] font-semibold text-foreground">{t('assistant.greeting')}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {t('assistant.emptyBody')}
-              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">{t('assistant.emptyBody')}</p>
             </div>
             <div className="grid w-full gap-1.5">
               {suggestions.map((suggestion) => (
@@ -352,7 +502,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={() => void send(suggestion)}
                   disabled={busy}
-                  className="rounded-2xl border border-border bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+                  className="rounded-lg border border-border bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
                 >
                   {suggestion}
                 </button>
@@ -360,90 +510,41 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  'rounded-2xl px-3 py-2 text-[11px] leading-relaxed',
-                  message.role === 'user'
-                    ? 'ml-6 bg-brand-primary text-white'
-                    : 'border border-border bg-card text-card-foreground',
-                )}
-              >
-                {message.role === 'assistant' && message.agentId && (
-                  <p className="mb-1 text-[10px] font-medium text-muted-foreground">
-                    {institutions.find((institution) => institution.id === message.agentId)?.name ?? message.agentId}
-                  </p>
-                )}
-                <p className="whitespace-pre-wrap">{message.content}</p>
-                {message.validation && (
-                  <p
-                    className={cn(
-                      'mt-1.5 text-[10px]',
-                      message.validation.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
-                    )}
-                  >
-                    {message.validation.ok
-                      ? message.validation.attempts > 1
-                        ? t('citation.verifiedAfterRetry', { attempts: message.validation.attempts })
-                        : t('citation.verified')
-                      : t('citation.rejected', { count: message.validation.rejected.length })}
-                  </p>
-                )}
-                {message.citations && message.citations.length > 0 && (
-                  <ul className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[10px]">
-                    {message.citations.slice(0, 4).map((citation, index) => {
-                      const label = [
-                        citation.filename,
-                        citation.articleNumber ? `Article ${citation.articleNumber}` : '',
-                        citation.headingPath ?? '',
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                      return (
-                        <li key={index} className="text-muted-foreground">
-                          {citation.sourceUrl ? (
-                            <a
-                              href={citation.sourceUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-semibold text-brand-primary-dark hover:underline dark:text-brand-primary-light"
-                            >
-                              {label}
-                            </a>
-                          ) : (
-                            <span className="font-semibold">{label}</span>
-                          )}
-                          {citation.quote && <p className="mt-0.5 line-clamp-2 italic opacity-80">“{citation.quote}”</p>}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </div>
-            ))}
-            {busy && (
-              <div className="space-y-2">
-                <ProcessingBar label={stageLabel(stage)} />
-                {draft && (
-                  <div className="rounded-2xl border border-border bg-card px-3 py-2 text-[11px] leading-relaxed text-card-foreground">
-                    <p className="mb-1 text-[10px] font-medium text-muted-foreground">
-                      {activeInstitution?.name ?? t('assistant.title')}
-                    </p>
-                    <p className="whitespace-pre-wrap">
-                      {draft}
-                      <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-brand-primary align-middle" />
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          turns.map((turn, index) => (
+            <React.Fragment key={turn.id}>
+              <ChatMessage
+                turn={turn}
+                isLast={index === turns.length - 1}
+                onRegenerate={
+                  turn.role === 'assistant' && !turn.active && index === turns.length - 1
+                    ? () => {
+                        const question = turns[index - 1]?.content
+                        if (question) {
+                          setTurns((previous) => previous.slice(0, index - 1))
+                          void send(question)
+                        }
+                      }
+                    : undefined
+                }
+              />
+              {turn.cards?.map((card) => renderCard(turn.id, card))}
+            </React.Fragment>
+          ))
         )}
       </div>
 
       <div className="shrink-0 space-y-2 p-3">
+        {actionsOpen && (
+          <div className="custom-scrollbar max-h-72 overflow-y-auto rounded-lg border border-border bg-card p-2">
+            <ActionCenter
+              actions={actionRecords}
+              loading={actionsLoading}
+              onDecide={(id, decision) => void decideFromCenter(id, decision)}
+              onRefresh={() => void loadActions()}
+            />
+          </div>
+        )}
+        {actionError && <p className="px-2 text-[11px] text-destructive">{actionError}</p>}
         {attachments.length > 0 && (
           <div className="flex gap-1.5">
             {attachments.map((attachment, index) => (
@@ -453,7 +554,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   onClick={() => setAttachments((previous) => previous.filter((_, i) => i !== index))}
-                  className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-white"
+                  className="absolute -right-1 -top-1 rounded-lg bg-destructive p-0.5 text-white"
                   aria-label={t('assistant.removeImage')}
                 >
                   <X className="h-2.5 w-2.5" />
@@ -463,57 +564,32 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
+        <ChatInput
+          ref={textareaRef}
+          input={input}
+          handleInputChange={(event) => setInput(event.target.value)}
+          handleSubmit={(event) => {
+            event?.preventDefault()
             void send()
           }}
-          className="relative"
-        >
-          <div
-            className={cn(
-              'rounded-3xl border border-input bg-card p-1.5 shadow-sm transition-all focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25',
-              isMultiline ? 'flex flex-col' : 'flex items-center gap-1',
-            )}
-          >
-            {!isMultiline && optionsMenu}
+          isStreaming={busy}
+          placeholder={t('assistant.placeholder')}
+          optionsMenu={optionsMenu}
+          onTranscript={(text) => {
+            const current = dictation.current
+            // A recording that does not extend the last dictation starts a new base: the text typed so far.
+            if (current.base === null || !text.startsWith(current.last)) {
+              const typed = inputRef.current
+              current.base = typed && !typed.endsWith(' ') ? `${typed} ` : typed
+            }
+            current.last = text
+            setInput(`${current.base}${text}`)
+          }}
+        />
 
-            <div className={cn('custom-scrollbar min-w-0 flex-1 overflow-y-auto', isMultiline ? 'px-2 pt-1' : 'flex items-center self-stretch')}>
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault()
-                    void send()
-                  }
-                }}
-                rows={1}
-                placeholder={t('assistant.placeholder')}
-                aria-label={t('assistant.placeholder')}
-                className="block max-h-[120px] min-h-[28px] w-full resize-none bg-transparent px-1.5 py-1 text-[12px] leading-tight text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </div>
-
-            <div className={cn('flex shrink-0 items-center gap-1', isMultiline ? 'justify-between px-1 pb-0.5' : 'justify-end')}>
-              {isMultiline && optionsMenu}
-              <Button
-                type="submit"
-                size="icon-sm"
-                className="rounded-full"
-                aria-label={t('assistant.send')}
-                disabled={busy || !input.trim()}
-              >
-                <ArrowUp className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-
-          <p className="mt-1 px-2 text-center text-[8px] leading-relaxed text-muted-foreground/70">
-            {t('assistant.disclaimer')}
-          </p>
-        </form>
+        <p className="mt-1 px-2 text-center text-[8px] leading-relaxed text-muted-foreground/70">
+          {t('assistant.disclaimer')}
+        </p>
       </div>
     </div>
   )

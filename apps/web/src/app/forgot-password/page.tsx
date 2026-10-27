@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
     <AuthLayout>
       {sent ? (
         <>
-          <StepIntro kicker={t('reset.kicker')} title={t('reset.sentTitle')} subtitle={t('reset.sentBody')} />
+          <StepIntro title={t('reset.sentTitle')} subtitle={t('reset.sentBody')} />
           <div className="mt-6 flex items-start gap-2.5 rounded-lg border border-brand-primary/20 bg-brand-primary/5 px-3 py-3">
             <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand-primary dark:text-brand-primary-light" />
             <div className="min-w-0">
@@ -87,7 +87,7 @@ export default function ForgotPasswordPage() {
         </>
       ) : (
         <>
-          <StepIntro kicker={t('reset.kicker')} title={t('reset.forgotTitle')} subtitle={t('reset.forgotSubtitle')} />
+          <StepIntro title={t('reset.forgotTitle')} subtitle={t('reset.forgotSubtitle')} />
           <form onSubmit={submit} className="mt-8 flex flex-col gap-4" noValidate>
             <div className="space-y-1.5">
               <Label htmlFor="forgot-email">{t('login.email')}</Label>

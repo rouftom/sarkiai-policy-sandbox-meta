@@ -437,7 +437,7 @@ export class AuthService {
     if (!this.config.mongodbUri || this.mongoDown) return null
     try {
       if (!this.client) {
-        this.client = new MongoClient(this.config.mongodbUri, { serverSelectionTimeoutMS: 2500 })
+        this.client = new MongoClient(this.config.mongodbUri, { serverSelectionTimeoutMS: 8000 })
         await this.client.connect()
         // Reachability check: `connect()` can succeed lazily against Atlas.
         await this.client.db(this.config.dbName ?? 'policy_sandbox').command({ ping: 1 })
@@ -861,10 +861,27 @@ export class AuthService {
     return claims
   }
 
+  /**
+   * Sign-in must not confuse "no such account" with "the store is down": during
+   * an outage the record cannot be read, which is a 503, never a wrong password.
+   */
+  private async loadForSignIn(key: string): Promise<OperatorRecord | null> {
+    const cached = this.memory.get(key)
+    if (cached) return cached
+    if (this.config.mongodbUri && !(await this.operators())) {
+      throw new AuthError('storage_unavailable', 'The operator store is unreachable; try again in a moment.')
+    }
+    const record = await this.load(key)
+    if (!record && this.config.mongodbUri && this.mongoDown) {
+      throw new AuthError('storage_unavailable', 'The operator store is unreachable; try again in a moment.')
+    }
+    return record
+  }
+
   async login(email: string, password: string): Promise<ChallengeResult> {
     const key = normalizeEmail(email)
     this.throttle(`login:${key}`)
-    const record = await this.load(key)
+    const record = await this.loadForSignIn(key)
     if (!record || !verifyPassword(password, record.passwordHash)) {
       throw new AuthError('invalid_credentials', 'Invalid credentials.')
     }

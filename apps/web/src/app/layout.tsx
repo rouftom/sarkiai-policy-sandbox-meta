@@ -24,7 +24,7 @@ const montserrat = Montserrat({
 })
 
 export const metadata: Metadata = {
-  title: 'SPS',
+  title: 'SarkiAI Policy Sandbox',
   description:
     'Policy-grounded multi-agent engine: error-scenario simulation and AI-readiness assessment. Runs on Meta models, or on open weights on-premise.',
 }

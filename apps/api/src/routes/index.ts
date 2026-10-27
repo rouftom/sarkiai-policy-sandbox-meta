@@ -1,6 +1,7 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
 import { providerApiKey, describeProvider } from '@sps/agents'
+import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {
@@ -34,6 +35,9 @@ import { healthDataBreach } from '../scenarios.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
+import { auth as operatorAuth } from '../auth.js'
+import { McpGateway } from '../mcp.js'
+import { registerVoiceRoutes } from '../voice-routes.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
 
@@ -49,6 +53,55 @@ const whatsapp = new WhatsAppClient({
   appSecret: config.whatsapp.appSecret,
   apiBaseUrl: config.whatsapp.apiBaseUrl,
 })
+/**
+ * What an approved action does. Side effects are the only thing the agent can
+ * cause outside the console, so each one has a single explicit handler here.
+ * Without WhatsApp configured the approval is recorded, never faked as sent.
+ */
+async function executeAction(record: ActionRecord): Promise<string> {
+  const sendApproval = async (summary: string): Promise<string> => {
+    const to = config.whatsapp.recipient
+    if (!whatsapp.configured) return 'WhatsApp is not configured: the approval was recorded, nothing was sent.'
+    if (!to) throw new Error('No recipient: set WHATSAPP_RECIPIENT_WAID.')
+    if (!config.whatsapp.approvalSecret) throw new Error('APPROVAL_SECRET is not configured; cannot sign an approval link.')
+    const { token, claims } = createApprovalToken({
+      runId: record.runId,
+      userId: record.userId ?? '',
+      secret: config.whatsapp.approvalSecret,
+      ttlSeconds: 1_440 * 60,
+      subject: summary,
+    })
+    await whatsapp.sendTemplate({
+      to,
+      name: WHATSAPP_TEMPLATES.approvalRequest,
+      language: config.whatsapp.templateLanguage,
+      bodyParams: [summary, new Date(claims.exp * 1000).toISOString()],
+      buttonUrlParam: token,
+    })
+    return `WhatsApp approval request sent to the number ending ${to.slice(-4)}.`
+  }
+
+  if (record.kind === 'whatsapp_approval') return sendApproval(record.summary)
+  if (record.kind === 'request_tool') {
+    const tool = String(record.payload?.toolName ?? '')
+    if (tool === 'send_whatsapp_approval') return sendApproval(record.summary)
+    throw new Error(`Unknown tool "${tool}".`)
+  }
+  if (record.kind === 'publish_communication') {
+    await engine.audit.logAction({ actor: 'operator', action: 'communication.approved', target: record.title, lens: 'hybrid', runId: record.runId, ...(record.userId ? { userId: record.userId } : {}) })
+    return 'Approved and recorded in the audit trail. Nothing was published automatically.'
+  }
+  return 'Recorded.'
+}
+
+const mcpGateway = new McpGateway(process.env.SEA_MCP_API_KEY)
+
+const actionStore = new ActionStore({
+  mongodbUri: config.mongodb.uri,
+  dbName: config.mongodb.dbName,
+  execute: executeAction,
+})
+
 const approvals = new ApprovalStore({
   mongodbUri: config.mongodb.uri,
   dbName: config.mongodb.dbName,
@@ -128,6 +181,7 @@ function isPublicRoute(method: string, path: string): boolean {
   if (path === '/health') return true
   if (path === '/v1/whatsapp/webhook') return true
   if (path.startsWith('/v1/whatsapp/approvals/')) return true
+  if (path === '/v1/voice/realtime') return true
   if (path === '/v1/auth/setup') return true
   if (path === '/v1/auth/signup') return true
   if (path === '/v1/auth/login') return true
@@ -150,6 +204,12 @@ function operatorOf(request: FastifyRequest) {
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthRoutes(app, engine.audit)
+  // Realtime voice authenticates with `?token=` in the handler (browsers cannot set headers on a WebSocket).
+  await registerVoiceRoutes(app, {
+    auth: operatorAuth,
+    apiKey: providerApiKey(engine.provider),
+    baseURL: engine.provider.baseURL,
+  })
 
   // One guard for the whole API surface. Auth, health, the Meta webhook and
   // signed approval links are public; everything that spends Meta/Hugging Face
@@ -609,10 +669,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           attachments: body.data.attachments,
           attachmentMeta: stored.meta,
           userId: operatorOf(request).email,
+          withTools: true,
+          actions: actionStore,
+          mcp: mcpGateway,
         },
         {
           onStage: (stage, detail) => send({ type: 'stage', stage, ...(detail ?? {}) }),
           onDelta: (text) => send({ type: 'delta', text }),
+          onReasoning: (text) => send({ type: 'reasoning', text }),
+          onTool: (event) => send(event),
+          onUi: (ui) => send({ type: 'ui', ui }),
         },
       )
       send({ type: 'done', assessment })
@@ -942,6 +1008,37 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       request.log.error(error)
       return reply.status(502).send({ error: `Ingestion service unavailable: ${(error as Error).message}` })
+    }
+  })
+
+  // ── Action center: side effects proposed by the agent, decided by the operator
+  // The operator only ever sees and decides their own actions; the decision is
+  // written to the audit trail whatever its outcome.
+  app.get('/v1/actions', async (request) => {
+    return { actions: await actionStore.list(operatorOf(request).email) }
+  })
+
+  app.post('/v1/actions/:id/decision', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = z.object({ decision: z.enum(['approve', 'reject']) }).safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    const operator = operatorOf(request).email
+    try {
+      const record = await actionStore.decide(id, operator, body.data.decision)
+      await engine.audit.logAction({
+        actor: operator,
+        action: `action.${body.data.decision}`,
+        target: `${record.kind}: ${record.title}`,
+        lens: 'hybrid',
+        runId: record.runId,
+        userId: operator,
+      })
+      return record
+    } catch (error) {
+      if (error instanceof ActionError && error.code === 'not_found') return reply.status(404).send({ error: error.code, message: error.message })
+      if (error instanceof ActionError && error.code === 'already_decided') return reply.status(409).send({ error: error.code, message: error.message })
+      request.log.error(error)
+      return reply.status(500).send({ error: 'action_failed', message: (error as Error).message })
     }
   })
 

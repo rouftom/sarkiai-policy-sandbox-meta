@@ -149,7 +149,7 @@ export default function LoginPage() {
     try {
       await signIn(values.email.trim().toLowerCase(), values.password)
     } catch (cause) {
-      credentialsForm.setError('root', { message: messageFor(cause, t('login.invalid'), t) })
+      credentialsForm.setError('root', { message: messageFor(cause, t('login.failed'), t) })
     } finally {
       setBusy(false)
     }
@@ -230,7 +230,7 @@ export default function LoginPage() {
 
   function downloadCodes(codes: string[]) {
     const header = [
-      'SPS, recovery codes / codes de secours',
+      'SarkiAI Policy Sandbox, recovery codes / codes de secours',
       `Account: ${operator?.email ?? pending?.operator.email ?? ''}`,
       `Generated: ${new Date().toISOString()}`,
       'Each code is single use. Keep them offline. / Chaque code sert une seule fois.',

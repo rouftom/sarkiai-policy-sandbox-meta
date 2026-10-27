@@ -118,7 +118,7 @@ export const config = {
   // Transactional e-mail (Resend): only used to mail an operator's first password.
   mail: {
     apiKey: env('AUTH_RESEND_KEY'),
-    from: env('AUTH_RESEND_EMAIL_FROM', 'SPS <onboarding@resend.dev>'),
+    from: env('AUTH_RESEND_EMAIL_FROM', 'SarkiAI Policy Sandbox <hackathon@djotta.com>'),
     replyTo: env('AUTH_RESEND_EMAIL_REPLY_TO'),
     publicUrl: env('WEB_PUBLIC_URL', 'https://sarkiai-policy-sandbox-meta.vercel.app'),
   },

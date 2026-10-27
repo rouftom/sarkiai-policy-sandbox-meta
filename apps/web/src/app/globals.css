@@ -119,18 +119,44 @@
     scrollbar-width: thin;
     scrollbar-color: var(--muted-foreground) transparent;
   }
+
+  /* Scrolls without reserving a gutter, so edge-to-edge content (grids, heroes)
+     reaches the rounded corner instead of leaving an empty strip on the right. */
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  .dark .custom-scrollbar {
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 5px;
     height: 5px;
   }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: color-mix(in oklab, var(--muted-foreground) 40%, transparent);
-    border-radius: 20px;
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
   }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: oklch(0.556 0 0 / 40%);
+    border-radius: 20px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.2s;
+  }
+
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: var(--primary);
   }
-  .hide-scrollbar {
+    .hide-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;
   }

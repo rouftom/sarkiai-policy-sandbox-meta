@@ -26,9 +26,28 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The API could not be reached at all (wrong `NEXT_PUBLIC_API_URL`, server
+ * asleep, offline). Kept apart from `ApiError`: it is not a wrong password.
+ */
+export class NetworkError extends Error {
+  constructor(readonly url: string) {
+    super(`The API at ${url} did not answer.`)
+    this.name = 'NetworkError'
+  }
+}
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(`${API_URL}${path}`, init)
+  } catch {
+    throw new NetworkError(API_URL)
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = readToken()
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await send(path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -42,7 +61,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function requestText(path: string, init?: RequestInit): Promise<string> {
   const token = readToken()
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await send(path, {
     ...init,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -498,10 +517,17 @@ export interface ModelsDto {
 }
 
 /** Server-Sent Events emitted by `POST /v1/agents/ask/stream`. */
+import type { AgentUiRequest } from './agent-ui'
+
 export type AgentStreamEvent =
   | { type: 'open'; agentId: string; runId?: string }
   | { type: 'stage'; stage: string; attempt?: number; rejected?: number; grounded?: boolean; country?: string }
   | { type: 'delta'; text: string }
+  | { type: 'reasoning'; text: string }
+  /** A tool the agent called: `start` opens a trail step, `end` closes it. */
+  | { type: 'tool'; phase: 'start' | 'end'; id: string; name: string; summary?: string; ok?: boolean }
+  /** An interactive card: a question, an input request or a proposed side effect. */
+  | { type: 'ui'; ui: AgentUiRequest }
   | { type: 'done'; assessment: AssessmentDto }
   | { type: 'error'; message: string }
 
@@ -509,6 +535,9 @@ export interface AgentStreamHandlers {
   onOpen?: (agentId: string) => void
   onStage?: (stage: string, detail: { attempt?: number; rejected?: number; grounded?: boolean }) => void
   onDelta?: (text: string) => void
+  onReasoning?: (text: string) => void
+  onTool?: (event: Extract<AgentStreamEvent, { type: 'tool' }>) => void
+  onUi?: (ui: AgentUiRequest) => void
   signal?: AbortSignal
 }
 
@@ -556,6 +585,9 @@ async function streamAgentAnswer(
         grounded: event.grounded,
       })
     else if (event.type === 'delta') handlers.onDelta?.(event.text)
+    else if (event.type === 'reasoning') handlers.onReasoning?.(event.text)
+    else if (event.type === 'tool') handlers.onTool?.(event)
+    else if (event.type === 'ui') handlers.onUi?.(event.ui)
     else if (event.type === 'done') assessment = event.assessment
     else if (event.type === 'error') throw new Error(event.message)
   }

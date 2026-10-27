@@ -22,7 +22,21 @@ declare module 'fastify' {
 
 export async function buildServer() {
   const app = Fastify({
-    logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    logger: {
+      level: process.env.LOG_LEVEL ?? 'info',
+      // The realtime voice socket carries the session token in its query string: never log it.
+      serializers: {
+        req(request) {
+          return {
+            method: request.method,
+            url: request.url.replace(/([?&]token=)[^&]*/, '$1[redacted]'),
+            host: request.hostname,
+            remoteAddress: request.ip,
+            remotePort: request.socket?.remotePort,
+          }
+        },
+      },
+    },
     // Render terminates TLS in front of the service: without this, every
     // request shares the proxy's IP and the sign-up/sign-in throttles are global.
     trustProxy: true,
@@ -110,7 +124,7 @@ async function main(): Promise<void> {
 
   try {
     await app.listen({ host: config.host, port: config.port })
-    app.log.info(`SPS API listening on http://${config.host}:${config.port}`)
+    app.log.info(`SarkiAI Policy Sandbox API listening on http://${config.host}:${config.port}`)
   } catch (error) {
     app.log.error(error)
     process.exit(1)

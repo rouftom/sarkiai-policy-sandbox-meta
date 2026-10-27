@@ -58,7 +58,7 @@ export function OperatorMenu({
         aria-expanded={open}
         className={cn(
           'flex w-full items-center justify-between gap-2 rounded-xl bg-slate-100 px-3 py-1.5 transition-colors hover:bg-slate-200 dark:bg-brand-primary-dark/20 dark:hover:bg-brand-primary-dark/35',
-          compact && 'justify-center rounded-full p-1',
+          compact && 'justify-center rounded-lg p-1',
         )}
       >
         <span className="flex min-w-0 items-center gap-2">

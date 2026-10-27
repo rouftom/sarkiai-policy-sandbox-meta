@@ -6,7 +6,7 @@
  * is the single-agent unit it composes.
  */
 
-import { generateText, streamText, type LanguageModel, type UserContent } from 'ai'
+import { generateText, stepCountIs, streamText, type LanguageModel, type UserContent } from 'ai'
 import type {
   AgentAssessment,
   Citation,
@@ -21,6 +21,7 @@ import { citationFromChunk, citationRetryDirective, validateCitations } from '@s
 import type { AuditService } from '@sps/audit'
 import { attachmentGuardrail, buildSystemPrompt, citationDirective } from './prompt'
 import { describeProvider } from './provider'
+import { createAgentTools, summarizeToolInput, type ActionSink, type AgentToolEvent, type McpPort } from './tools'
 
 export interface Attachment {
   mime: string
@@ -56,6 +57,12 @@ export interface AgentRunInput {
   attachments?: Attachment[]
   /** Storage/audit metadata for the attachments (hashes, keys). */
   attachmentMeta?: AttachmentMeta[]
+  /** Interactive runs can call tools (search, questions, approvals). Scenarios never do. */
+  withTools?: boolean
+  /** Action store for this run's proposals (defaults to the orchestrator's). */
+  actions?: ActionSink
+  /** First-party MCP servers the agent may call (interactive runs only). */
+  mcp?: McpPort
 }
 
 /**
@@ -70,12 +77,20 @@ export interface AgentStreamHandlers {
   onStage?: (stage: AgentStage, detail?: Record<string, unknown>) => void
   /** Incremental answer text (already cleaned by the provider). */
   onDelta?: (text: string) => void
+  /** Incremental reasoning text, when the model exposes it. */
+  onReasoning?: (text: string) => void
+  /** A tool call started or finished (activity trail). */
+  onTool?: (event: Extract<AgentToolEvent, { type: 'tool' }>) => void
+  /** An interactive card the operator must answer or decide on. */
+  onUi?: (event: Extract<AgentToolEvent, { type: 'ui' }>['ui']) => void
 }
 
 export interface OrchestratorDeps {
   model: LanguageModel
   retriever: Retriever
   audit?: AuditService
+  /** Where proposed side effects are stored until the operator decides. */
+  actions?: ActionSink
   /** Active provider, recorded in every trace step (never contains a secret). */
   provider?: ProviderDescriptor
   /**
@@ -175,19 +190,53 @@ export class PolicyOrchestrator {
 
     /** One generation, buffered or streamed depending on the caller. */
     const generateOnce = async (prompt: string): Promise<{ text: string; reasoning: string }> => {
+      const useTools = Boolean(input.withTools && handlers?.onDelta)
+      const tools = useTools
+        ? createAgentTools({
+            runId,
+            ...(input.userId ? { userId: input.userId } : {}),
+            institutionId: institution.id,
+            country,
+            retriever: this.deps.retriever,
+            ...(this.deps.audit ? { audit: this.deps.audit } : {}),
+            ...((input.actions ?? this.deps.actions) ? { actions: input.actions ?? this.deps.actions } : {}),
+            ...(input.mcp ? { mcp: input.mcp } : {}),
+            emit: (event) => {
+              if (event.type === 'ui') handlers?.onUi?.(event.ui)
+              else handlers?.onTool?.(event)
+            },
+          })
+        : undefined
       const settings = {
         model: this.deps.model,
         system,
         maxOutputTokens: input.maxOutputTokens ?? this.deps.maxOutputTokens ?? 4096,
         ...(hasAttachments ? { messages: [{ role: 'user' as const, content: userContent(prompt) }] } : { prompt }),
+        ...(tools ? { tools, stopWhen: stepCountIs(5) } : {}),
       }
       if (!handlers?.onDelta) {
         const { text: answer, reasoning } = await generateText(settings)
         return { text: answer, reasoning: (reasoning ?? []).map((part) => part.text).join('\n') }
       }
       const result = streamText(settings)
-      for await (const delta of result.textStream) {
-        if (delta) handlers.onDelta(delta)
+      // One pass over the full stream: answer text and reasoning arrive as
+      // they are written, in the order the model produced them.
+      for await (const part of result.fullStream) {
+        if (part.type === 'text-delta' && part.text) handlers.onDelta(part.text)
+        else if (part.type === 'reasoning-delta' && part.text) handlers.onReasoning?.(part.text)
+        else if (part.type === 'tool-call') {
+          handlers.onTool?.({
+            type: 'tool',
+            phase: 'start',
+            id: part.toolCallId,
+            name: part.toolName,
+            summary: summarizeToolInput(part.toolName, part.input),
+          })
+        } else if (part.type === 'tool-result') {
+          handlers.onTool?.({ type: 'tool', phase: 'end', id: part.toolCallId, name: part.toolName, ok: true })
+        } else if (part.type === 'tool-error') {
+          handlers.onTool?.({ type: 'tool', phase: 'end', id: part.toolCallId, name: part.toolName, ok: false })
+        }
       }
       // The aggregated promise is authoritative (the stream can be split mid-token).
       const [answer, reasoning] = await Promise.all([result.text, result.reasoning])

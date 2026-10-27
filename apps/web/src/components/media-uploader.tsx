@@ -10,9 +10,10 @@
  */
 
 import * as React from 'react'
-import { AlertTriangle, Check, FileText, Loader, Upload, X } from 'lucide-react'
-import { Button, IndeterminateBar, cn } from '@sps/ui'
+import { AlertTriangle, Check, FileText, Loader, X } from 'lucide-react'
+import { IndeterminateBar, cn } from '@sps/ui'
 import { useI18n } from '@/lib/i18n'
+import { FileUploader } from '@/components/ui/file-uploader'
 
 export interface UploadStep {
   id: string
@@ -81,8 +82,6 @@ export function MediaUploader({
 }: MediaUploaderProps) {
   const { t } = useI18n()
   const [queue, setQueue] = React.useState<QueueItem[]>([])
-  const [dragging, setDragging] = React.useState(false)
-  const inputRef = React.useRef<HTMLInputElement>(null)
   const running = queue.some((item) => item.status === 'queued' || item.status === 'uploading')
 
   const update = (id: string, patch: Partial<QueueItem>) =>
@@ -126,42 +125,14 @@ export function MediaUploader({
     <div className={cn('space-y-3', className)}>
       {controls && <div className="flex flex-wrap items-center gap-2">{controls}</div>}
 
-      <div
-        onDragOver={(event) => {
-          event.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(event) => {
-          event.preventDefault()
-          setDragging(false)
-          addFiles(event.dataTransfer.files)
-        }}
-        className={cn(
-          'flex flex-col items-center justify-center gap-2 border border-dashed px-4 py-8 text-center transition-colors',
-          dragging ? 'border-brand-primary bg-brand-primary/5' : 'border-border bg-card',
-        )}
-      >
-        <span className="grid h-10 w-10 place-items-center rounded-full bg-brand-primary/10 text-brand-primary dark:text-brand-primary-light">
-          <Upload className="h-4 w-4" />
-        </span>
-        <p className="text-[12px] font-medium text-foreground">{t('media.drop')}</p>
-        <p className="max-w-sm text-[10px] text-muted-foreground">{t('media.hint')}</p>
-        <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-          {t('media.browse')}
-        </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={accept}
-          hidden
-          onChange={(event) => {
-            addFiles(event.target.files)
-            event.target.value = ''
-          }}
-        />
-      </div>
+      <FileUploader
+        label={t('media.drop')}
+        hint={t('media.hint')}
+        actionLabel={t('media.browse')}
+        accept={accept}
+        busy={running}
+        onFiles={addFiles}
+      />
 
       {queue.length > 0 && (
         <ul className="space-y-1.5">

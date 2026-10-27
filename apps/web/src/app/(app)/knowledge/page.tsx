@@ -151,7 +151,6 @@ export default function KnowledgePage() {
               }))}
               value={tab}
               onValueChange={setTab}
-              ariaLabel={t('knowledge.tabsLabel')}
               fullWidth
               maxWidth="max-w-md"
             />
