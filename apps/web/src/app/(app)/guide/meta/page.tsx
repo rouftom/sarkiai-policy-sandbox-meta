@@ -46,7 +46,7 @@ export default function GuideMetaPage() {
             {
               a: fr ? 'Vision' : 'Vision',
               b: fr ? 'Transcription des zones du journal officiel scanné.' : 'Zone transcription of the scanned gazette.',
-              c: 'META_VISION_MODEL',
+              c: fr ? 'Modèle de chat choisi dans le composeur' : 'Chat model picked in the composer',
             },
             {
               a: 'SAM',

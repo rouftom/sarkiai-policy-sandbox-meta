@@ -145,7 +145,7 @@ export default function GuideEnginePage() {
                 : 'Reasoning, embedding and rerank provider; shown in the badge.',
             },
             {
-              a: 'META_VISION_MODEL / META_SAM_MODEL',
+              a: 'META_SAM_MODEL',
               b: fr
                 ? 'Modèles de lecture du journal officiel scanné (zones, tampons, tableaux).'
                 : 'Models that read the scanned gazette (zones, stamps, tables).',
