@@ -26,6 +26,7 @@
         "@fastify/cors": "^10.0.1",
         "@sps/agents": "workspace:*",
         "@sps/audit": "workspace:*",
+        "@sps/auth": "workspace:*",
         "@sps/citations": "workspace:*",
         "@sps/communications": "workspace:*",
         "@sps/exercise": "workspace:*",
@@ -60,6 +61,7 @@
         "clsx": "^2.1.1",
         "lucide-react": "^0.460.0",
         "next": "^16.0.0",
+        "qrcode.react": "^4.2.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "tailwind-merge": "^2.5.4",
@@ -95,6 +97,17 @@
       "dependencies": {
         "@sps/shared": "workspace:*",
         "mongodb": "^6.10.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.6.0",
+      },
+    },
+    "packages/auth": {
+      "name": "@sps/auth",
+      "version": "0.1.0",
+      "dependencies": {
+        "@sps/shared": "workspace:*",
+        "mongodb": "^6.11.0",
       },
       "devDependencies": {
         "typescript": "^5.6.0",
@@ -449,6 +462,8 @@
 
     "@sps/audit": ["@sps/audit@workspace:packages/audit"],
 
+    "@sps/auth": ["@sps/auth@workspace:packages/auth"],
+
     "@sps/citations": ["@sps/citations@workspace:packages/citations"],
 
     "@sps/communications": ["@sps/communications@workspace:packages/communications"],
@@ -676,6 +691,8 @@
     "process-warning": ["process-warning@5.1.0", "", {}, "sha512-jQSaVHsPgtyw60e1rQ/A+/ArPEj/S8pS/vFnyGa/gYFXrKk/6RuDkoqVDQ5NI5MmS01698ltlAk0NoDBNLujRw=="],
 
     "punycode": ["punycode@2.3.1", "", {}, "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg=="],
+
+    "qrcode.react": ["qrcode.react@4.2.0", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-QpgqWi8rD9DsS9EP3z7BT+5lY5SFhsqGjpgW5DY/i3mK4M9DTBNz3ErMi8BWYEfI3L0d8GIbGmcdFAS1uIRGjA=="],
 
     "quick-format-unescaped": ["quick-format-unescaped@4.0.4", "", {}, "sha512-tYC1Q1hgyRuHgloV/YXs2w15unPVh8qfu/qCTfhTYamaw7fyhumKa2yGpdSo87vY32rIclj+4fWYQXUMs9EHvg=="],
 

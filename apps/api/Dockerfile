@@ -21,7 +21,9 @@ FROM base AS prod
 COPY apps/api ./apps/api
 WORKDIR /app/apps/api
 ENV NODE_ENV=production
-EXPOSE 8000
+# Render (and most PaaS) inject PORT=10000; keep 8000 as the image default.
+ENV PORT=8000
+EXPOSE 8000 10000
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=20s \
-  CMD bun -e "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD bun -e "fetch('http://localhost:'+(process.env.PORT??8000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["bun", "src/index.ts"]

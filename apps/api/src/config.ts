@@ -90,4 +90,12 @@ export const config = {
     approvalSecret: env('APPROVAL_SECRET'),
     webPublicUrl: env('WEB_PUBLIC_URL', 'http://localhost:3000'),
   },
+
+  // Operator auth: session signing + the bootstrap operator.
+  auth: {
+    sessionSecret: env('SESSION_SECRET') || env('APPROVAL_SECRET'),
+    email: env('SPS_OPERATOR_EMAIL', 'operator@sarkai.demo'),
+    password: env('SPS_OPERATOR_PASSWORD'),
+    name: env('SPS_OPERATOR_NAME', 'Policy operator'),
+  },
 } as const

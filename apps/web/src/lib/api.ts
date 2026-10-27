@@ -1,5 +1,7 @@
 /** Thin typed client for the API application layer. */
 
+import { readToken } from './session'
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 /** HTTP failure with the status and the raw body kept apart, so panels can react. */
@@ -25,9 +27,14 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = readToken()
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
   })
   if (!response.ok) throw new ApiError(response.status, await response.text())
   return (await response.json()) as T
@@ -592,4 +599,91 @@ export const api = {
   releaseScenario(id: string, country: string): EventSource {
     return new EventSource(`${API_URL}/v1/scenarios/${id}/release?country=${country}`)
   },
+}
+
+// ── Operator auth, preferences, audit feed ──────────────────────────────────
+
+export type OperatorRole = 'operator' | 'admin'
+
+export interface PreferencesDto {
+  theme: 'light' | 'dark' | 'system'
+  pack: string
+  locale: 'en' | 'fr'
+  density: 'comfortable' | 'compact'
+  radius: 'rounded' | 'square'
+  notifications: { whatsapp: boolean; email: boolean; digest: boolean }
+}
+
+export interface OperatorDto {
+  email: string
+  name: string
+  role: OperatorRole
+  mfaEnrolled: boolean
+  lastLoginAt?: string
+  createdAt: string
+  preferences: PreferencesDto
+}
+
+export interface SessionDto {
+  token: string
+  expiresAt: string
+  operator: OperatorDto
+  backupCodes?: string[]
+}
+
+export type LoginResultDto =
+  | { status: 'mfa_required'; challenge: string; expiresAt: string; operator: OperatorDto }
+  | { status: 'enrollment_required'; challenge: string; expiresAt: string; operator: OperatorDto }
+
+export interface EnrollmentDto {
+  secret: string
+  otpauthUrl: string
+  account: string
+}
+
+export interface AuditEventDto {
+  id: string
+  runId?: string
+  ts: string
+  actor: string
+  action: string
+  target?: string
+  lens: string
+  citations: Array<{ filename: string }>
+  hash: string
+  prevHash?: string
+}
+
+export interface AuditFeedDto {
+  events: AuditEventDto[]
+  chain: { valid: boolean; brokenAt?: string }
+}
+
+export const authApi = {
+  login: (body: { email: string; password: string }) =>
+    request<LoginResultDto>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  enroll: (challenge: string) =>
+    request<EnrollmentDto>('/v1/auth/mfa/enroll', {
+      method: 'POST',
+      body: JSON.stringify({ challenge }),
+    }),
+  confirmEnrollment: (challenge: string, code: string) =>
+    request<SessionDto>('/v1/auth/mfa/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ challenge, code }),
+    }),
+  verify: (challenge: string, code: string) =>
+    request<SessionDto>('/v1/auth/mfa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ challenge, code }),
+    }),
+  me: () => request<{ operator: OperatorDto }>('/v1/auth/me'),
+  logout: () => request<{ ok: boolean }>('/v1/auth/logout', { method: 'POST' }),
+  preferences: () => request<{ preferences: PreferencesDto }>('/v1/preferences'),
+  updatePreferences: (patch: Partial<PreferencesDto>) =>
+    request<{ preferences: PreferencesDto }>('/v1/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+  auditEvents: (limit = 50) => request<AuditFeedDto>(`/v1/audit/events?limit=${limit}`),
 }

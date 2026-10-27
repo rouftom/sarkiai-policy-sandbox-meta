@@ -15,6 +15,7 @@
     "@fastify/cors": "^10.0.1",
     "@sps/agents": "workspace:*",
     "@sps/audit": "workspace:*",
+    "@sps/auth": "workspace:*",
     "@sps/citations": "workspace:*",
     "@sps/communications": "workspace:*",
     "@sps/exercise": "workspace:*",

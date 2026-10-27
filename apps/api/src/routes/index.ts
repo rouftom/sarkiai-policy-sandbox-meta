@@ -32,6 +32,7 @@ import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { healthDataBreach } from '../scenarios.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
+import { registerAuthRoutes } from '../auth-routes.js'
 
 const engine = createEngine()
 const ingestion = new IngestionClient({ baseUrl: config.ingestion.baseUrl, apiKey: config.ingestion.apiKey })
@@ -90,6 +91,8 @@ function gazettePricing() {
 
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  await registerAuthRoutes(app, engine.audit)
+
   // Announce the active provider in the audit chain (no-op when unchanged).
   void recordProviderSwitch(engine.provider, engine.audit)
 

@@ -4,6 +4,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { registerRoutes } from './routes/index.js'
 import { prepareCloudStores } from './engine.js'
+import { auth } from './auth.js'
 import { config } from './config.js'
 
 declare module 'fastify' {
@@ -42,6 +43,13 @@ async function main(): Promise<void> {
 
   // Cloud vector store only: create kb_chunks then its Atlas indexes. A failure
   // is logged, not fatal (the console still boots and the provider is visible).
+  const operator = await auth.bootstrap()
+  if (operator.seeded) {
+    app.log.info({ email: operator.email, storage: operator.storage }, 'operator seeded from environment')
+  } else {
+    app.log.info({ email: operator.email, storage: operator.storage }, 'operator store ready')
+  }
+
   const stores = await prepareCloudStores()
   if (stores.skipped) {
     app.log.info({ retrieval: stores.backend }, 'cloud store bootstrap skipped')

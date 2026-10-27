@@ -100,6 +100,14 @@ export class AuditService {
     return docs as unknown as AuditRecord[]
   }
 
+  /** Newest-first slice of the chain, for the console's audit page. */
+  async listAudit(limit = 50): Promise<AuditRecord[]> {
+    const { audit } = await this.db()
+    const size = Math.min(Math.max(limit, 1), 500)
+    const docs = await audit.find({}).sort({ ts: -1 }).limit(size).toArray()
+    return docs as unknown as AuditRecord[]
+  }
+
   /** Verify the hash chain end-to-end; returns the first broken record, if any. */
   async verifyChain(): Promise<{ valid: boolean; brokenAt?: string }> {
     const { audit } = await this.db()

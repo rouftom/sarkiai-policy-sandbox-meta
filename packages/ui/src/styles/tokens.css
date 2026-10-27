@@ -1,92 +1,96 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   SarkiAI design tokens (admin charter). Base defaults = the `fada` pack so
-   there is no flash before the runtime pack CSS (injected by ThemeProvider)
-   applies. Pack-specific values live in @sps/theme.
+   SarkiAI design tokens (admin charter, FSM / sarkiai-enterprise). Base
+   defaults = the `fada` pack so there is no flash before the runtime pack CSS
+   (injected by ThemeProvider) applies. Pack-specific values live in @sps/theme.
    ───────────────────────────────────────────────────────────────────────── */
 
 /* fada — common (charte slots + generic brand) */
 :root {
-  --charte-primary: #5039fb;
-  --charte-primary-light: #7c6bff;
-  --charte-primary-dark: #3b29d6;
+  --charte-primary: #1b834f;
+  --charte-primary-light: #22c55e;
+  --charte-primary-dark: #0d5c3a;
   --charte-accent: #d4af37;
   --charte-accent-light: #e2c044;
-  --charte-ink: #0a0b2e;
-  --charte-surface: #f7f8fe;
+  --charte-ink: #06140e;
+  --charte-surface: #f8fafc;
   --charte-danger: #ef4444;
-  --brand-dark: #0a0b2e;
-  --brand-accent: #5039fb;
+  --brand-dark: #06140e;
+  --brand-accent: #1b834f;
   --brand-highlight: #d4af37;
 
   /* fada — light */
-  --background: #f7f8fe;
-  --foreground: #0a0b2e;
+  --background: #f8fafc;
+  --foreground: #0f172a;
   --card: #ffffff;
-  --card-foreground: #0a0b2e;
+  --card-foreground: #0f172a;
   --popover: #ffffff;
-  --popover-foreground: #0a0b2e;
-  --primary: #5039fb;
+  --popover-foreground: #0f172a;
+  --primary: #1b834f;
   --primary-foreground: #ffffff;
-  --secondary: #e8eafb;
-  --secondary-foreground: #1b1b4b;
-  --muted: #eef0fa;
-  --muted-foreground: #5b5f7a;
-  --accent: #e9eafb;
-  --accent-foreground: #312e81;
-  --border: #d9dcf0;
-  --input: #d9dcf0;
-  --ring: #5039fb;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #15803d;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #1b834f;
   --sidebar: #ffffff;
-  --sidebar-foreground: #0a0b2e;
-  --sidebar-primary: #5039fb;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #1b834f;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef0fa;
-  --sidebar-accent-foreground: #1b1b4b;
-  --sidebar-border: #d9dcf0;
-  --sidebar-ring: #5039fb;
-  --chart-1: #5039fb;
-  --chart-2: #0063eb;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #1b834f;
+  --chart-1: #1b834f;
+  --chart-2: #22c55e;
   --chart-3: #d4af37;
-  --chart-4: #104dff;
-  --chart-5: #7c6bff;
+  --chart-4: #0d5c3a;
+  --chart-5: #64748b;
 
   --radius: 0.625rem;
-  --assistant-panel-bg: color-mix(in oklab, var(--charte-primary) 30%, transparent);
+  --assistant-panel-bg: color-mix(in oklab, var(--charte-primary) 20%, transparent);
   --app-panel-bg: var(--charte-surface);
 }
 
 /* fada — dark */
 .dark {
-  --background: #080a24;
-  --foreground: #eaebfa;
-  --card: #10123a;
-  --card-foreground: #eaebfa;
-  --popover: #10123a;
-  --popover-foreground: #eaebfa;
-  --primary: #7c6bff;
-  --primary-foreground: #080a24;
-  --secondary: #1b1e4a;
-  --secondary-foreground: #eaebfa;
-  --muted: #1b1e4a;
-  --muted-foreground: #a7aacb;
-  --accent: #1e1b4b;
-  --accent-foreground: #c7d2fe;
+  --background: #06140e;
+  --foreground: #f8fafc;
+  --card: #0b1f16;
+  --card-foreground: #f8fafc;
+  --popover: #0b1f16;
+  --popover-foreground: #f8fafc;
+  --primary: #22c55e;
+  --primary-foreground: #06140e;
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #f8fafc;
+  --muted: rgba(255, 255, 255, 0.05);
+  --muted-foreground: rgba(248, 250, 252, 0.62);
+  --accent: #d4af37;
+  --accent-foreground: #06140e;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
   --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.15);
-  --ring: #7c6bff;
-  --sidebar: #0b0d2e;
-  --sidebar-foreground: #eaebfa;
-  --sidebar-primary: #7c6bff;
-  --sidebar-primary-foreground: #080a24;
-  --sidebar-accent: #1b1e4a;
-  --sidebar-accent-foreground: #eaebfa;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #7c6bff;
-  --chart-1: #7c6bff;
-  --chart-2: #4d8dff;
-  --chart-3: #d4af37;
-  --chart-4: #104dff;
-  --chart-5: #a79bff;
-  --assistant-panel-bg: color-mix(in oklab, var(--charte-primary-dark) 16%, transparent);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #22c55e;
+  --sidebar: #04100b;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #22c55e;
+  --sidebar-primary-foreground: #06140e;
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #22c55e;
+  --chart-1: #22c55e;
+  --chart-2: #d4af37;
+  --chart-3: #15803d;
+  --chart-4: #94a3b8;
+  --chart-5: #e2c044;
+  --assistant-panel-bg: color-mix(in oklab, var(--charte-primary-dark) 20%, transparent);
   --app-panel-bg: color-mix(in oklab, var(--charte-ink) 88%, #000);
 }

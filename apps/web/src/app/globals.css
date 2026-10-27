@@ -44,12 +44,15 @@
   /* Brand charte slots (driven by the active pack) */
   --color-brand-primary: var(--charte-primary);
   --color-brand-accent: var(--charte-accent);
+  --color-brand-primary-light: var(--charte-primary-light);
   --color-brand-primary-dark: var(--charte-primary-dark);
+  --color-brand-accent-light: var(--charte-accent-light);
   --color-brand-ink: var(--charte-ink);
   --color-brand-surface: var(--charte-surface);
   --color-brand-danger: var(--charte-danger);
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: var(--font-montserrat), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -134,6 +137,18 @@
     background: var(--assistant-panel-bg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+  }
+  /* Gold gradient for the wordmark accent (SarkiAI charte). */
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #f0d98a 0%, var(--charte-accent) 55%, #a8821f 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  /* Soft brand halo behind the sign-in panel. */
+  .brand-glow {
+    background:
+      radial-gradient(60% 60% at 20% 10%, color-mix(in oklab, var(--charte-primary) 28%, transparent), transparent 70%),
+      radial-gradient(50% 50% at 85% 90%, color-mix(in oklab, var(--charte-accent) 18%, transparent), transparent 70%);
   }
   .text-gradient-brand {
     background: linear-gradient(
