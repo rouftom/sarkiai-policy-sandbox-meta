@@ -2,7 +2,7 @@
 
 /**
  * Shows what is actually answering: provider mode, model, and where the
- * inference happens. This is the honest answer to "is my data leaving?" — the
+ * inference happens. This is the honest answer to "is my data leaving?", the
  * `sovereign` and `local` modes run on-premise, `cloud` calls the Meta Model API.
  */
 
@@ -65,7 +65,7 @@ export function ProviderBadge({ className }: { className?: string }) {
         t(`provider.residency.${provider.residency}` as 'provider.residency.cloud'),
         provider.openWeights ? t('provider.openWeights') : '',
         provider.budgetUsd ? `${t('provider.budget')}: $${provider.budgetUsd.toFixed(2)}` : '',
-        provider.ready ? '' : `${t('provider.notReady')} — ${provider.reason ?? ''} ${t('provider.switchHint')}`,
+        provider.ready ? '' : `${t('provider.notReady')}, ${provider.reason ?? ''} ${t('provider.switchHint')}`,
       ]
         .filter(Boolean)
         .join('\n')}

@@ -44,7 +44,7 @@ export function AuditPanel({ runId }: { runId: string }) {
     <Card>
       <CardHeader>
         <ListTree className="h-4 w-4 text-primary" />
-        <CardTitle>{t('audit.title')} — {runId}</CardTitle>
+        <CardTitle>{t('audit.title')}, {runId}</CardTitle>
         {integrity && (
           <span
             className={cn(

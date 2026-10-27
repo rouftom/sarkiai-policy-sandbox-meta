@@ -64,6 +64,8 @@ export interface OperatorRecord {
   passwordHash: string
   /** Set on a freshly invited account: the first sign-in must replace the password. */
   mustChangePassword?: boolean
+  /** Public sign-up only: the address must be confirmed before the second factor. */
+  emailVerificationPending?: boolean
   totpSecret?: string
   totpEnrolledAt?: string
   backupCodes?: string[]
@@ -92,10 +94,16 @@ export interface SessionResult {
   backupCodes?: string[]
 }
 
-export type LoginResult =
+/** A sign-in step that carries a challenge to the next form. */
+export type ChallengeResult =
   | { status: 'mfa_required'; challenge: string; expiresAt: string; operator: PublicOperator }
   | { status: 'enrollment_required'; challenge: string; expiresAt: string; operator: PublicOperator }
   | { status: 'password_change_required'; challenge: string; expiresAt: string; operator: PublicOperator }
+
+/** Sign-up done: no challenge yet, the e-mail link has to be opened first. */
+export type VerificationResult = { status: 'email_verification_required'; expiresAt: string; operator: PublicOperator }
+
+export type LoginResult = ChallengeResult | VerificationResult
 
 export type AuthErrorCode =
   | 'invalid_credentials'
@@ -108,6 +116,7 @@ export type AuthErrorCode =
   | 'already_initialized'
   | 'weak_password'
   | 'email_taken'
+  | 'email_not_verified'
   | 'signup_closed'
   | 'operator_limit'
   | 'storage_unavailable'
@@ -132,6 +141,8 @@ export interface AuthConfig {
   challengeTtlSeconds?: number
   /** Lifetime of a password-reset link (default 30 minutes). */
   resetTtlSeconds?: number
+  /** Lifetime of a sign-up confirmation link (default 24 hours). */
+  verificationTtlSeconds?: number
   /**
    * Public self-service sign-up. Only the cloud demo opens it; the console hides
    * the entry point when this is false. Defaults to false (closed).
@@ -154,6 +165,13 @@ interface ChallengeClaims {
   sub: string
   purpose: 'mfa' | 'enroll' | 'password'
   jti: string
+  exp: number
+}
+
+interface VerifyClaims {
+  v: 1
+  sub: string
+  purpose: 'verify'
   exp: number
 }
 
@@ -372,6 +390,7 @@ export class AuthService {
   private readonly sessionTtl: number
   private readonly challengeTtl: number
   private readonly resetTtl: number
+  private readonly verificationTtl: number
   private readonly memory = new Map<string, OperatorRecord>()
   private readonly attempts = new Map<string, { count: number; resetAt: number }>()
   private readonly pendingEnrollments = new Map<string, PendingEnrollment>()
@@ -391,6 +410,7 @@ export class AuthService {
     this.sessionTtl = config.sessionTtlSeconds ?? 7 * 24 * 60 * 60
     this.challengeTtl = config.challengeTtlSeconds ?? 5 * 60
     this.resetTtl = config.resetTtlSeconds ?? 30 * 60
+    this.verificationTtl = config.verificationTtlSeconds ?? 24 * 60 * 60
   }
 
   get storage(): 'mongo' | 'memory' {
@@ -594,7 +614,7 @@ export class AuthService {
     lastName: string
     email: string
     password: string
-  }): Promise<LoginResult> {
+  }): Promise<VerificationResult> {
     if (!this.config.signup) {
       throw new AuthError('signup_closed', 'Self-service sign-up is closed on this deployment.')
     }
@@ -617,6 +637,7 @@ export class AuthService {
       name: `${firstName} ${lastName}`.trim() || email.split('@')[0]!,
       role: 'operator',
       passwordHash: hashPassword(input.password),
+      emailVerificationPending: true,
       preferences: { ...DEFAULT_PREFERENCES },
       createdAt: new Date().toISOString(),
     }
@@ -627,13 +648,45 @@ export class AuthService {
       throw new AuthError('storage_unavailable', 'The operator store is unreachable; the account was not created.')
     }
 
-    const challenge = this.issueChallenge(record, 'enroll')
+    // The 2FA enrolment only starts once the address is confirmed (see login).
     return {
-      status: 'enrollment_required',
-      challenge: challenge.token,
-      expiresAt: challenge.expiresAt,
+      status: 'email_verification_required',
+      expiresAt: new Date(Date.now() + this.verificationTtl * 1000).toISOString(),
       operator: toPublic(record),
     }
+  }
+
+  /**
+   * Signed link for the confirmation e-mail. Returns `null` for unknown or
+   * already-confirmed addresses so the HTTP layer answers the same either way.
+   */
+  async createEmailVerification(email: string): Promise<{ token: string; expiresAt: string; email: string; firstName?: string } | null> {
+    const record = await this.load(email)
+    if (!record || !record.emailVerificationPending) return null
+    const exp = Math.floor(Date.now() / 1000) + this.verificationTtl
+    const claims: VerifyClaims = { v: 1, sub: record.email, purpose: 'verify', exp }
+    return {
+      token: signToken(claims, this.config.sessionSecret),
+      expiresAt: new Date(exp * 1000).toISOString(),
+      email: record.email,
+      ...(record.firstName ? { firstName: record.firstName } : {}),
+    }
+  }
+
+  /** Confirm the address from the e-mail link. Idempotent for a confirmed account. */
+  async verifyEmail(token: string): Promise<{ email: string }> {
+    const claims = readToken<VerifyClaims>(token, this.config.sessionSecret)
+    if (!claims || claims.v !== 1 || claims.purpose !== 'verify' || claims.exp * 1000 < Date.now()) {
+      throw new AuthError('challenge_invalid', 'This confirmation link has expired. Request a new one.')
+    }
+    const record = await this.load(claims.sub)
+    if (!record) throw new AuthError('not_found', 'Unknown operator.')
+    if (record.emailVerificationPending) {
+      const before: OperatorRecord = { ...record }
+      delete record.emailVerificationPending
+      await this.persistOrFail(record, before)
+    }
+    return { email: record.email }
   }
 
   /** Roll back a root creation whose invitation e-mail could not be delivered. */
@@ -752,7 +805,7 @@ export class AuthService {
    * Replace an invited password. The returned challenge continues the same
    * sign-in, so the operator cannot reach the console without enrolling 2FA.
    */
-  async changePassword(challenge: string, newPassword: string): Promise<LoginResult> {
+  async changePassword(challenge: string, newPassword: string): Promise<ChallengeResult> {
     const claims = this.readChallenge(challenge, 'password')
     assertPassword(newPassword)
     const record = await this.load(claims.sub)
@@ -808,7 +861,7 @@ export class AuthService {
     return claims
   }
 
-  async login(email: string, password: string): Promise<LoginResult> {
+  async login(email: string, password: string): Promise<ChallengeResult> {
     const key = normalizeEmail(email)
     this.throttle(`login:${key}`)
     const record = await this.load(key)
@@ -816,6 +869,11 @@ export class AuthService {
       throw new AuthError('invalid_credentials', 'Invalid credentials.')
     }
     this.clearThrottle(`login:${key}`)
+
+    // A self-service account confirms its address before any second factor.
+    if (record.emailVerificationPending) {
+      throw new AuthError('email_not_verified', 'Confirm your e-mail address first: we sent you a link.')
+    }
 
     // A freshly invited account must replace its mailed password before the
     // second factor, so the one-time password never becomes a lasting secret.

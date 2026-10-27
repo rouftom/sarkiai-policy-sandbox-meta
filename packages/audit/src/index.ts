@@ -55,6 +55,13 @@ export class AuditService {
   private client: MongoClient | null = null
   private readonly auditCol: string
   private readonly cotCol: string
+  /**
+   * Appends run one after another. A record's `prevHash` is the hash of the
+   * newest record in the collection; two concurrent appends (a scenario logs
+   * several steps in parallel) would both read the same tail and fork the
+   * chain, which the verifier then reports as broken.
+   */
+  private appendQueue: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly config: AuditConfig) {
     this.auditCol = config.auditCollection ?? 'audit_logs'
@@ -82,6 +89,20 @@ export class AuditService {
     citations?: Citation[]
     runId?: string
     /** Operator (e-mail) the record belongs to; absent on system-wide events. */
+    userId?: string
+  }): Promise<AuditRecord> {
+    const append = this.appendQueue.then(() => this.appendAction(input))
+    this.appendQueue = append.catch(() => undefined)
+    return append
+  }
+
+  private async appendAction(input: {
+    actor: string
+    action: string
+    target?: string
+    lens: WorkflowLens
+    citations?: Citation[]
+    runId?: string
     userId?: string
   }): Promise<AuditRecord> {
     const { audit } = await this.db()

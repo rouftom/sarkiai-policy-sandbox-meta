@@ -40,6 +40,11 @@
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
 
   /* Brand charte slots (driven by the active pack) */
   --color-brand-primary: var(--charte-primary);
@@ -147,13 +152,6 @@
   .dark .assistant-panel {
     background: color-mix(in oklab, var(--charte-primary) 14%, var(--background));
   }
-  /* Light accent gradient for the wordmark on the dark brand panel. It follows
-     the active pack (Meta blue by default) instead of a fixed gold. */
-  .text-gradient-accent {
-    background: linear-gradient(135deg, #ffffff 0%, var(--charte-primary-light) 55%, var(--charte-accent) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
   .text-gradient-gold {
     background: linear-gradient(135deg, #f0d98a 0%, var(--charte-accent) 55%, #a8821f 100%);
     -webkit-background-clip: text;
@@ -206,4 +204,35 @@ html[data-radius='square'] {
 html[data-radius='square']
   :where(.rounded-sm, .rounded, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl) {
   border-radius: 0;
+}
+
+/* Moving light on the StarBorder edges (@sps/ui StarBorder, console tab strip). */
+@keyframes star-movement-bottom {
+  0% {
+    transform: translate(0%, 0%);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-100%, 0%);
+    opacity: 0;
+  }
+}
+
+@keyframes star-movement-top {
+  0% {
+    transform: translate(0%, 0%);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(100%, 0%);
+    opacity: 0;
+  }
+}
+
+.animate-star-movement-bottom {
+  animation: star-movement-bottom var(--star-border-speed, 6s) linear infinite alternate;
+}
+
+.animate-star-movement-top {
+  animation: star-movement-top var(--star-border-speed, 6s) linear infinite alternate;
 }

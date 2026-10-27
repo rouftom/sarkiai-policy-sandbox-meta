@@ -12,7 +12,7 @@ import { z, ZodError } from 'zod'
 import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
-import { MailError, sendInvitation, sendPasswordReset } from './mailer.js'
+import { MailError, sendEmailVerification, sendInvitation, sendPasswordReset } from './mailer.js'
 
 function bearer(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization
@@ -76,7 +76,7 @@ function failure(reply: { status: (code: number) => { send: (body: unknown) => u
         ? 429
         : error.code === 'invalid_credentials'
           ? 401
-          : error.code === 'signup_closed'
+          : error.code === 'signup_closed' || error.code === 'email_not_verified'
             ? 403
             : error.code === 'storage_unavailable'
               ? 503
@@ -154,8 +154,66 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
       throttleSignup(request.ip)
       const body = signupInput.parse(request.body)
       const result = await auth.signup(body)
+      try {
+        await sendVerificationTo(result.operator.email)
+      } catch (error) {
+        // No confirmation e-mail, no account: the form stays usable and can be retried.
+        await auth.remove(result.operator.email)
+        throw error
+      }
       await record(result.operator.email, 'auth.signup', undefined, result.operator.email)
       return reply.status(201).send(result)
+    } catch (error) {
+      return failure(reply, error)
+    }
+  })
+
+  // ── Sign-up confirmation ──────────────────────────────────────────────────
+  // The address is confirmed from the e-mail link, before the second factor.
+  // Resending always answers 200 for an unknown or confirmed address.
+  async function sendVerificationTo(email: string): Promise<void> {
+    const link = await auth.createEmailVerification(email)
+    if (!link) return
+    await sendEmailVerification({
+      to: link.email,
+      ...(link.firstName ? { firstName: link.firstName } : {}),
+      token: link.token,
+      expiresAt: link.expiresAt,
+    })
+  }
+
+  const resendAttempts = new Map<string, { count: number; resetAt: number }>()
+  const RESEND_WINDOW_MS = 15 * 60 * 1000
+  const RESEND_MAX_ATTEMPTS = 5
+
+  app.post('/v1/auth/email/verify', async (request, reply) => {
+    try {
+      const body = z.object({ token: z.string().min(10).max(4096) }).parse(request.body)
+      const result = await auth.verifyEmail(body.token)
+      await record(result.email, 'auth.email_verified', undefined, result.email)
+      return { ok: true, email: result.email }
+    } catch (error) {
+      return failure(reply, error)
+    }
+  })
+
+  app.post('/v1/auth/email/resend', async (request, reply) => {
+    try {
+      const now = Date.now()
+      const entry = resendAttempts.get(request.ip)
+      if (!entry || entry.resetAt < now) {
+        resendAttempts.set(request.ip, { count: 1, resetAt: now + RESEND_WINDOW_MS })
+      } else if (++entry.count > RESEND_MAX_ATTEMPTS) {
+        throw new AuthError('rate_limited', 'Too many requests, try again later.')
+      }
+      const body = forgotInput.parse(request.body)
+      try {
+        await sendVerificationTo(body.email.trim().toLowerCase())
+      } catch (error) {
+        if (!(error instanceof MailError)) throw error
+        request.log.error({ error: error.code }, 'confirmation e-mail could not be sent')
+      }
+      return { ok: true }
     } catch (error) {
       return failure(reply, error)
     }

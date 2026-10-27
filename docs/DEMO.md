@@ -29,7 +29,7 @@ curl -s $API/v1/provider | jq '{mode, models, ready}'
 - [ ] Lost the password? `/forgot-password` mails a single-use 30-minute link
       (requires `AUTH_RESEND_KEY`); TOTP stays enrolled.
 - [ ] Browser: one window, zoom 110%, bookmarks bar hidden, notifications off.
-      Light theme (Meta blue) is the default.
+      Light theme (the default "Défaut" pack, blue) is the default.
 - [ ] A second device with WhatsApp open, if the approval segment is recorded
       live; otherwise use `dryRun` and show the payload.
 - [ ] API warm: hit `/health` once, 40 s before recording (free plan cold start).

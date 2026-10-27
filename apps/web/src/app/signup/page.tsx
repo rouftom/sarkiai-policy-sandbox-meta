@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { ArrowLeft, Loader, ShieldCheck, UserPlus } from 'lucide-react'
+import { ArrowLeft, Loader, UserPlus } from 'lucide-react'
 import { Button, Input, Label } from '@sps/ui'
 import { ApiError, authApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useI18n, type MessageKey } from '@/lib/i18n'
-import { AuthLayout, ErrorNote, StepIntro } from '@/components/auth/auth-frame'
+import { AuthLayout, DemoAccessContent, ErrorNote, StepIntro } from '@/components/auth/auth-frame'
 import { PasswordInput } from '@/components/auth/password-input'
 
 /** Same floor as the API (`assertPassword`). */
@@ -22,16 +22,16 @@ type Gate = 'checking' | 'open' | 'closed'
 /**
  * Public self-service sign-up, opened by the API in cloud mode only.
  *
- * The judge creates an account with their own password and is immediately
- * pushed into the mandatory TOTP enrolment: `signUp` stores the
- * `enrollment_required` challenge in the auth provider, then this page hands
- * over to `/login`, whose enrolment effect takes the operator to the QR code.
- * The notice about Meta model training is part of the form, not a footnote.
+ * The reviewer creates an account with their own password. The address is then
+ * confirmed from the e-mail link, and only after that the mandatory TOTP
+ * enrolment starts. While a sign-up is in progress this page hands over to
+ * `/login`, which shows the progression instead of a second sign-up form. The
+ * pitch and the notice about Meta model training sit in the left column.
  */
 export default function SignupPage() {
   const router = useRouter()
   const { t } = useI18n()
-  const { operator, loading, signUp } = useAuth()
+  const { operator, loading, pending, verificationEmail, signUp } = useAuth()
   // Start open: the free API instance may still be waking up when the browser
   // asks. A negative answer from the API still closes the gate.
   const [gate, setGate] = React.useState<Gate>(() =>
@@ -94,6 +94,11 @@ export default function SignupPage() {
     if (!loading && operator) router.replace('/')
   }, [loading, operator, router])
 
+  // A sign-up already in progress belongs to the progression on /login.
+  React.useEffect(() => {
+    if (pending || verificationEmail) router.replace('/login')
+  }, [pending, verificationEmail, router])
+
   const submit = form.handleSubmit(async (values) => {
     setBusy(true)
     setFailure(null)
@@ -104,8 +109,8 @@ export default function SignupPage() {
         email: values.email.trim().toLowerCase(),
         password: values.password,
       })
-      // The auth provider keeps the enrollment challenge: the sign-in page
-      // picks it up and shows the QR code straight away.
+      // The auth provider keeps the address waiting for its link: the sign-in
+      // page shows the confirmation step, then the 2FA steps.
       router.replace('/login')
     } catch (cause) {
       setFailure(signupMessage(cause, t))
@@ -115,8 +120,8 @@ export default function SignupPage() {
   })
 
   return (
-    <AuthLayout>
-      <StepIntro kicker={t('signup.kicker')} title={t('signup.title')} subtitle={t('signup.subtitle')} />
+    <AuthLayout aside={gate === 'open' ? <DemoAccessContent /> : undefined}>
+      <StepIntro title={t('signup.formTitle')} subtitle={t('signup.formSubtitle')} />
 
       {gate === 'checking' && (
         <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground">
@@ -146,28 +151,7 @@ export default function SignupPage() {
 
       {gate === 'open' && (
         <>
-          <div className="mt-6 rounded-lg border border-brand-primary/20 bg-brand-primary/5 px-3 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-primary-dark dark:text-brand-primary-light">
-              {t('signup.pitchTitle')}
-            </p>
-            <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-muted-foreground">
-              <li>{t('signup.pitch1')}</li>
-              <li>{t('signup.pitch2')}</li>
-              <li>{t('signup.pitch3')}</li>
-            </ul>
-          </div>
-
-          <div className="mt-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-3">
-            <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              {t('signup.noticeTitle')}
-            </p>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-amber-900/90 dark:text-amber-100/90">
-              {t('signup.notice')}
-            </p>
-          </div>
-
-          <form onSubmit={submit} className="mt-6 flex flex-col gap-3.5" noValidate>
+          <form onSubmit={submit} className="mt-8 flex flex-col gap-3.5" noValidate>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="first-name">{t('signup.firstName')}</Label>

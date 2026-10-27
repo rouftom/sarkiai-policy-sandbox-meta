@@ -1,18 +1,23 @@
 'use client'
 
 import * as React from 'react'
-import { AlertTriangle, Check, Loader, Play, RotateCcw, Search } from 'lucide-react'
-import { Button, Input, Select, Tabs, TabsContent, TabsList, TabsTrigger, cn } from '@sps/ui'
+import { AlertTriangle, Check, Database, Loader, Play, RotateCcw, Search } from 'lucide-react'
+import { AnimatedTabsList, Button, Input, Select, Tabs, TabsContent, cn, type TabItem } from '@sps/ui'
 import { knowledgeApi, type KbDocumentDto, type KbExplorationDto, type KbStageItemDto, type KbStatusDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { PageIntro } from '@/components/page-intro'
-import { MediaManager } from '@/components/media-manager'
+import { KbDocuments } from '@/components/kb-documents'
 
 const COUNTRY_OPTIONS = [
   { value: '', label: 'All countries' },
-  { value: 'cm', label: 'Cameroon (CM)' },
-  { value: 'ae', label: 'United Arab Emirates (AE)' },
+  { value: 'cm', label: 'CM' },
+  { value: 'ae', label: 'AE' },
   { value: 'global', label: 'Global' },
+]
+
+const KB_TABS: TabItem[] = [
+  { id: 'documents', label: 'Documents', icon: Database },
+  { id: 'retrieval', label: 'Retrieval', icon: Search },
 ]
 
 function fmt(value: number): string {
@@ -139,17 +144,19 @@ export default function KnowledgePage() {
           </div>
 
           <Tabs value={tab} onValueChange={setTab}>
-            <TabsList ariaLabel={t('knowledge.tabsLabel')}>
-              <TabsTrigger value="documents">{t('knowledge.tab.documents')}</TabsTrigger>
-              <TabsTrigger value="retrieval">{t('knowledge.tab.retrieval')}</TabsTrigger>
-            </TabsList>
+            <AnimatedTabsList
+              items={KB_TABS.map((entry) => ({
+                ...entry,
+                label: entry.id === 'documents' ? t('knowledge.tab.documents') : t('knowledge.tab.retrieval'),
+              }))}
+              value={tab}
+              onValueChange={setTab}
+              ariaLabel={t('knowledge.tabsLabel')}
+              fullWidth
+              maxWidth="max-w-md"
+            />
             <TabsContent value="documents" className="pt-4">
-              <MediaManager
-                documents={documents}
-                loading={loading}
-                onChanged={load}
-                onToggle={toggleDocument}
-              />
+              <KbDocuments documents={documents} loading={loading} onChanged={load} onToggle={toggleDocument} />
             </TabsContent>
             <TabsContent value="retrieval" className="pt-4">
               <RetrievalPanel hasCorpus={(corpus?.activeChunks ?? 0) > 0} />

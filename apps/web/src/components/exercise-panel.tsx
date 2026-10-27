@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * N8 — table-top crisis exercise.
+ * N8, table-top crisis exercise.
  *
  * The panel is a clock and a log, not a chat. Injects appear when their minute
  * comes, the team records what it actually did, and the score is computed from
@@ -366,7 +366,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
                     </span>
                     <span className="min-w-0 flex-1">
                       <strong className="font-semibold">{actorName(action.actor)}</strong>
-                      {action.injectId ? ` · ${action.injectId}` : ''} — {action.text}
+                      {action.injectId ? ` · ${action.injectId}` : ''}, {action.text}
                     </span>
                     <button
                       type="button"

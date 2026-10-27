@@ -27,7 +27,15 @@ export default function GuideStartPage() {
         { label: fr ? 'Sortie' : 'Output', value: fr ? '1er run audité' : 'First audited run' },
       ]}
     >
-      <GuideBanner tone="gold" title={fr ? 'Ce que la console fait — et ne fait pas' : 'What the console does — and does not do'}>
+      <GuideSection title={fr ? 'Le sigle SPS' : 'What SPS stands for'} icon={BookOpen}>
+        <p className="text-[12px] leading-relaxed text-muted-foreground">
+          {fr
+            ? 'SPS signifie SarkiAI Policy Sandbox : le bac à sable de politiques publiques de SarkiAI. C’est une console opérateur qui simule des crises, mesure la maturité IA et rédige les communications, avec un journal d’audit chaîné par hachage.'
+            : 'SPS stands for SarkiAI Policy Sandbox: the public-policy sandbox of SarkiAI. It is an operator console that simulates crises, scores AI readiness and drafts communications, with a hash-chained audit log.'}
+        </p>
+      </GuideSection>
+
+      <GuideBanner tone="gold" title={fr ? 'Ce que la console fait, et ne fait pas' : 'What the console does, and does not do'}>
         <p>
           {fr
             ? 'Le moteur rassemble des faits, les fait évaluer par des agences mandatées, vérifie chaque citation contre le corpus, puis journalise la décision. Il ne publie pas, n’envoie pas de message officiel et ne remplace aucun signataire : chaque sortie attend une validation humaine.'
@@ -77,15 +85,15 @@ export default function GuideStartPage() {
             {
               title: fr ? 'Créer le compte racine depuis /setup' : 'Create the root account from /setup',
               body: fr
-                ? 'La base est vide : la console ouvre l’écran de configuration (prénom, nom, e-mail). Un mot de passe provisoire de 20 caractères est envoyé à l’adresse indiquée. Si l’e-mail échoue, le compte est annulé — jamais de compte sans mot de passe reçu.'
-                : 'The store is empty: the console opens the setup screen (first name, last name, e-mail). A 20-character temporary password is mailed to that address. If the mail fails, the account is rolled back — never an account without a delivered password.',
+                ? 'La base est vide : la console ouvre l’écran de configuration (prénom, nom, e-mail). Un mot de passe provisoire de 20 caractères est envoyé à l’adresse indiquée. Si l’e-mail échoue, le compte est annulé, jamais de compte sans mot de passe reçu.'
+                : 'The store is empty: the console opens the setup screen (first name, last name, e-mail). A 20-character temporary password is mailed to that address. If the mail fails, the account is rolled back, never an account without a delivered password.',
               owner: fr ? 'Racine' : 'Root',
             },
             {
               title: fr ? 'Remplacer le mot de passe, puis activer la 2FA' : 'Replace the password, then enrol 2FA',
               body: fr
-                ? 'Le mot de passe provisoire expire après 12 minutes et doit être remplacé (12 caractères minimum, lettres et chiffres). Le QR code TOTP suit immédiatement ; dix codes de secours sont affichés une seule fois — téléchargez-les avant de continuer.'
-                : 'The temporary password expires after 12 minutes and must be replaced (12 characters minimum, letters and digits). The TOTP QR code follows immediately; ten recovery codes are shown once — download them before continuing.',
+                ? 'Le mot de passe provisoire expire après 12 minutes et doit être remplacé (12 caractères minimum, lettres et chiffres). Le QR code TOTP suit immédiatement ; dix codes de secours sont affichés une seule fois, téléchargez-les avant de continuer.'
+                : 'The temporary password expires after 12 minutes and must be replaced (12 characters minimum, letters and digits). The TOTP QR code follows immediately; ten recovery codes are shown once, download them before continuing.',
               owner: fr ? 'Racine' : 'Root',
             },
             {

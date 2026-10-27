@@ -48,8 +48,8 @@ export default function GuideEnginePage() {
             {
               a: fr ? 'Maturité' : 'Readiness',
               b: fr
-                ? '13 dimensions, note 0–5, lacunes et recommandations.'
-                : '13 dimensions, 0–5 score, gaps and recommendations.',
+                ? '13 dimensions, note de 0 à 5, lacunes et recommandations.'
+                : '13 dimensions, 0 to 5 score, gaps and recommendations.',
               c: fr ? 'Diagnostic, arbitrage budgétaire' : 'Diagnosis, budget arbitration',
             },
             {
@@ -81,8 +81,8 @@ export default function GuideEnginePage() {
       <GuideSection title={fr ? 'Validation des citations' : 'Citation validation'} icon={ShieldCheck}>
         <p>
           {fr
-            ? 'Un validateur relit chaque citation contre le corpus indexé. Une citation introuvable fait rejeter la réponse une fois, puis régénérer ; à défaut, la lacune est signalée à l’opérateur — jamais masquée.'
-            : 'A validator re-checks every quote against the indexed corpus. An unfindable quote makes the answer rejected once, then regenerated; failing that, the gap is reported to the operator — never hidden.'}
+            ? 'Un validateur relit chaque citation contre le corpus indexé. Une citation introuvable fait rejeter la réponse une fois, puis régénérer ; à défaut, la lacune est signalée à l’opérateur, jamais masquée.'
+            : 'A validator re-checks every quote against the indexed corpus. An unfindable quote makes the answer rejected once, then regenerated; failing that, the gap is reported to the operator, never hidden.'}
         </p>
         <GuideChecklist
           items={[

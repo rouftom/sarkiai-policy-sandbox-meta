@@ -136,7 +136,7 @@ export function GuideHero({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 max-w-xl">
           <p className="text-[9px] font-medium text-brand-primary-dark dark:text-brand-primary-light">
-            {kicker ?? 'SarkiAI · Operations handbook'}
+            {kicker ?? 'SPS · Operations handbook'}
           </p>
           <h2 className="mt-1 font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h2>
           <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground sm:text-xs">{subtitle}</p>

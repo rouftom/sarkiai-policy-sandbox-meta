@@ -1,4 +1,4 @@
-# SarkiAI Policy Sandbox
+# SPS, SarkiAI Policy Sandbox
 
 > Policy-grounded, multi-agent AI engine for the **Meta Global AI Developer Hackathon** (Startup track).
 > One engine, two lenses: **error-scenario simulation** and **AI-readiness assessment**.
@@ -152,7 +152,7 @@ Setup requires three variables, shared with the enterprise stack:
 
 ```bash
 AUTH_RESEND_KEY=re_...                       # Resend API key
-AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
+AUTH_RESEND_EMAIL_FROM=SPS <no-reply@your-domain>
 AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
 WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
 ```
@@ -186,11 +186,14 @@ link.
 The public demo at
 [sarkiai-policy-sandbox-meta.vercel.app](https://sarkiai-policy-sandbox-meta.vercel.app)
 opens self-service accounts so judges can walk the console with their own login:
-`/signup` shows what the sandbox does, the hackathon notice (prompts, answers and
-files **may be used by Meta to train or improve its models**), then asks for a
-name, e-mail and password. The account is created immediately and the operator
-is pushed into the mandatory TOTP enrolment — no session exists before the
-second factor. `AUTH_SIGNUP=true|false` overrides the default, which is *open in
+`/signup` shows what the sandbox does and the notice (prompts, answers and
+files **may be used by Meta to train or improve its models**) in the left
+column, then asks for a name, e-mail and password. The account is created and a
+confirmation link is mailed (valid 24 hours). Until the address is confirmed,
+sign-in stops at the confirmation step; only then does the operator reach the
+mandatory TOTP enrolment, so no session exists before the second factor. A
+sign-up in progress survives a reload: the auth pages show the progression
+(password, e-mail, two-factor, access) instead of the forms. `AUTH_SIGNUP=true|false` overrides the default, which is *open in
 cloud mode, closed otherwise*; `AUTH_MAX_OPERATORS` (default 12) caps the demo.
 The **Create an account** link on `/login` stays visible once accounts exist —
 only the API gate closes self-service, not the presence of a root operator.

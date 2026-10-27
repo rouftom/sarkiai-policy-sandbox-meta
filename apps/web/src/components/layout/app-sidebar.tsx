@@ -111,8 +111,8 @@ export function AdminSidebar() {
           'flex h-9 items-center rounded-lg text-xs transition-colors',
           collapsed ? 'justify-center px-2' : 'px-3',
           active
-            ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:bg-brand-primary-dark/40 dark:text-brand-primary-light'
-            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-brand-primary-dark/20 dark:hover:text-brand-primary-light',
+            ? 'bg-sidebar-accent font-medium text-sidebar-primary'
+            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
         )}
       >
         <Icon className={cn('h-4 w-4 shrink-0', !collapsed && 'mr-2')} />
@@ -131,8 +131,8 @@ export function AdminSidebar() {
         className={cn(
           'flex h-8 items-center gap-2 rounded-lg px-2 text-[11px] transition-colors',
           active
-            ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:bg-brand-primary-dark/40 dark:text-brand-primary-light'
-            : 'text-slate-500 hover:bg-brand-primary/5 hover:text-brand-primary dark:text-slate-400 dark:hover:bg-brand-primary-dark/25 dark:hover:text-brand-primary-light',
+            ? 'bg-sidebar-accent font-medium text-sidebar-primary'
+            : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground',
         )}
       >
         <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -143,7 +143,7 @@ export function AdminSidebar() {
 
   const groupLabel = (key: MessageKey) =>
     !collapsed && (
-      <p className="px-3 pb-1 pt-3 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+      <p className="px-3 pb-1 pt-3 text-[11px] font-medium text-sidebar-foreground/55">
         {t(key)}
       </p>
     )
@@ -152,7 +152,7 @@ export function AdminSidebar() {
     <aside
       onClick={collapsed ? toggle : undefined}
       className={cn(
-        'hidden h-screen flex-col border-r border-slate-100 bg-white transition-all duration-300 dark:border-brand-primary-dark/20 dark:bg-brand-ink md:flex',
+        'hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 md:flex',
         collapsed ? 'w-14 cursor-ew-resize' : 'w-60 md:w-56',
       )}
     >
@@ -175,7 +175,7 @@ export function AdminSidebar() {
               toggle()
             }}
             aria-label={t('nav.expand')}
-            className="group mx-auto flex h-9 w-9 items-center justify-center rounded-xl hover:bg-brand-primary/10"
+            className="group mx-auto flex h-9 w-9 items-center justify-center rounded-xl hover:bg-sidebar-accent"
           >
             <BrandMark className="h-9 w-9 group-hover:hidden" />
             <PanelLeftOpen className="hidden h-4 w-4 group-hover:block" />
@@ -186,7 +186,7 @@ export function AdminSidebar() {
             type="button"
             onClick={toggle}
             aria-label={t('nav.collapse')}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-brand-primary/10 hover:text-brand-primary dark:text-slate-400"
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             <PanelLeftClose className="h-4 w-4" />
           </button>
@@ -207,27 +207,27 @@ export function AdminSidebar() {
                   onClick={toggleGuide}
                   aria-expanded={guideOpen}
                   aria-label={t('nav.guide_toggle')}
-                  className="flex h-9 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-brand-primary/10 hover:text-brand-primary"
+                  className="flex h-9 w-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 >
                   <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !guideOpen && '-rotate-90')} />
                 </button>
               )}
             </div>
             {!collapsed && guideOpen && (
-              <div className="ml-5 grid gap-0.5 border-l border-slate-100 pl-2 dark:border-brand-primary-dark/30">
+              <div className="ml-5 grid gap-0.5 border-l border-sidebar-border pl-2">
                 {GUIDE_NAV.map(renderChild)}
               </div>
             )}
           </div>
 
-          <div className="my-1 border-t border-slate-100 dark:border-brand-primary-dark/25" />
+          <div className="my-1 border-t border-sidebar-border" />
           {groupLabel('nav.group_general')}
           {GENERAL_NAV.map(renderItem)}
 
           {groupLabel('nav.group_operations')}
           {OPERATIONS_NAV.map(renderItem)}
 
-          <div className="my-1 border-t border-slate-100 dark:border-brand-primary-dark/25" />
+          <div className="my-1 border-t border-sidebar-border" />
           {groupLabel('nav.group_settings')}
           {SETTINGS_NAV.map(renderItem)}
         </nav>

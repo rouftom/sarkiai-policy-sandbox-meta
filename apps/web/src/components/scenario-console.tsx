@@ -264,7 +264,7 @@ export function ScenarioConsole({
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-secondary/60 p-2">
             <span className="text-xs text-muted-foreground">
               {t('scenario.progress', { released, total })}
-              {nextAgenda ? ` — ${t('scenario.upNext', { title: nextAgenda.title })}` : ''}
+              {nextAgenda ? `, ${t('scenario.upNext', { title: nextAgenda.title })}` : ''}
             </span>
             <span className="text-[10px] text-muted-foreground">
               {nextAgenda ? t('scenario.seenBy', { agents: nextAgenda.visibleTo.join(', ') }) : ''}

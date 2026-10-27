@@ -134,6 +134,8 @@ function isPublicRoute(method: string, path: string): boolean {
   if (path === '/v1/auth/password') return true
   if (path === '/v1/auth/password/forgot') return true
   if (path === '/v1/auth/password/reset') return true
+  if (path === '/v1/auth/email/verify') return true
+  if (path === '/v1/auth/email/resend') return true
   if (path === '/v1/auth/mfa/enroll') return true
   if (path === '/v1/auth/mfa/confirm') return true
   if (path === '/v1/auth/mfa/verify') return true

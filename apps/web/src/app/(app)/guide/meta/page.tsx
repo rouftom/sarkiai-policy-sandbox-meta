@@ -134,8 +134,8 @@ export default function GuideMetaPage() {
       <GuideBanner tone="success" title={fr ? 'Le repli souverain reste opérationnel' : 'The sovereign fallback stays operational'}>
         <p>
           {fr
-            ? 'En mode local ou souverain, l’API n’a besoin d’aucune clé Meta : raisonnement, embedding et rerank sont servis sur l’infrastructure de l’institution. C’est ce qui rend le dispositif déployable là où les données ne peuvent pas sortir — et c’est vérifiable dans le badge fournisseur.'
-            : 'In local or sovereign mode, the API needs no Meta key: reasoning, embedding and rerank are served on the institution’s infrastructure. That is what makes the system deployable where data cannot leave — and it is verifiable in the provider badge.'}
+            ? 'En mode local ou souverain, l’API n’a besoin d’aucune clé Meta : raisonnement, embedding et rerank sont servis sur l’infrastructure de l’institution. C’est ce qui rend le dispositif déployable là où les données ne peuvent pas sortir, et c’est vérifiable dans le badge fournisseur.'
+            : 'In local or sovereign mode, the API needs no Meta key: reasoning, embedding and rerank are served on the institution’s infrastructure. That is what makes the system deployable where data cannot leave, and it is verifiable in the provider badge.'}
         </p>
       </GuideBanner>
 

@@ -28,7 +28,7 @@ export const COMMUNICATION_LANGUAGES: Record<CommunicationLanguage, LanguageProf
     code: 'ff',
     name: 'Fulfulde',
     script: 'Latin (Adamawa variants may use modified letters)',
-    region: 'Adamawa, northern Cameroon',
+    region: 'West and Central Africa',
     note: 'Prefer the vocabulary used by local radio; keep place and institution names unchanged.',
   },
   ha: {

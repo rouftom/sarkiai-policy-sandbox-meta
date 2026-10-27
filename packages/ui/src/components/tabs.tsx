@@ -52,7 +52,7 @@ export function TabsList({
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
-        'flex flex-wrap items-center gap-1 border-b border-slate-100 pb-1 dark:border-brand-primary-dark/25',
+        'flex flex-wrap items-center gap-1 border-b border-border pb-1',
         className,
       )}
     >
@@ -90,8 +90,8 @@ export function TabsTrigger({
         'group/trigger relative flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] transition-colors',
         'disabled:cursor-not-allowed disabled:opacity-40',
         active
-          ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:bg-brand-primary-dark/40 dark:text-brand-primary-light'
-          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-brand-primary-dark/20 dark:hover:text-brand-primary-light',
+          ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:text-brand-primary-light'
+          : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
         className,
       )}
     >

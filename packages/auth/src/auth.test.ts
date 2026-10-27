@@ -202,16 +202,30 @@ describe('public sign-up', () => {
     ).rejects.toThrow(/closed/)
   })
 
-  test('creates an account that must still enrol 2FA before any session', async () => {
+  test('confirms the e-mail address before the 2FA enrolment can start', async () => {
     const auth = service({ signup: true })
     const result = await auth.signup({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL, password: CHOSEN })
-    expect(result.status).toBe('enrollment_required')
+    expect(result.status).toBe('email_verification_required')
     expect(result.operator.role).toBe('operator')
     expect(result.operator.mustChangePassword).toBe(false)
     expect(result.operator.mfaEnrolled).toBe(false)
 
-    const enrollment = await auth.startEnrollment(result.challenge)
-    const session = await auth.confirmEnrollment(result.challenge, totpCode(enrollment.secret))
+    // No challenge is issued until the link from the e-mail is opened.
+    await expect(auth.login(EMAIL, CHOSEN)).rejects.toThrow(/Confirm your e-mail/)
+
+    const link = await auth.createEmailVerification(EMAIL)
+    expect(link).not.toBeNull()
+    expect((await auth.verifyEmail(link!.token)).email).toBe(EMAIL)
+    // A confirmed account keeps working: the link is idempotent.
+    await expect(auth.verifyEmail(link!.token)).resolves.toEqual({ email: EMAIL })
+    expect(await auth.createEmailVerification(EMAIL)).toBeNull()
+
+    const signedIn = await auth.login(EMAIL, CHOSEN)
+    expect(signedIn.status).toBe('enrollment_required')
+    if (signedIn.status !== 'enrollment_required') throw new Error('expected enrolment')
+
+    const enrollment = await auth.startEnrollment(signedIn.challenge)
+    const session = await auth.confirmEnrollment(signedIn.challenge, totpCode(enrollment.secret))
     expect(session.operator.email).toBe(EMAIL)
     expect(session.operator.mfaEnrolled).toBe(true)
     expect(session.backupCodes).toHaveLength(10)

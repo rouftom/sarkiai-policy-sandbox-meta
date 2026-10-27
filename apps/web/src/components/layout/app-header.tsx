@@ -105,7 +105,7 @@ export function AppHeader() {
             onClick={() => setMenuOpen(false)}
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
           />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-2xl dark:bg-brand-ink">
+          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-sidebar text-sidebar-foreground shadow-2xl">
             <div className="flex h-14 items-center justify-between border-b border-border px-3">
               <Link href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-2">
                 <BrandMark className="h-9 w-9" />
@@ -129,8 +129,8 @@ export function AppHeader() {
                   className={cn(
                     'flex h-9 items-center rounded-lg px-3 text-xs transition-colors',
                     isActive(href)
-                      ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:bg-brand-primary-dark/40 dark:text-brand-primary-light'
-                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-brand-primary-dark/20',
+                      ? 'bg-sidebar-accent font-medium text-sidebar-primary'
+                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
                   )}
                 >
                   <Icon className="mr-2 h-4 w-4" />

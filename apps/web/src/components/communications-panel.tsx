@@ -31,7 +31,7 @@ const FALLBACK_LANGUAGES: CommunicationLanguageDto[] = [
     code: 'ff',
     name: 'Fulfulde',
     script: 'Latin (Adamawa variants may use modified letters)',
-    region: 'Adamawa, northern Cameroon',
+    region: 'West and Central Africa',
     note: 'Prefer the vocabulary used by local radio.',
   },
   {
@@ -48,7 +48,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
   const [languages, setLanguages] = React.useState<CommunicationLanguageDto[]>(FALLBACK_LANGUAGES)
   const [language, setLanguage] = React.useState<CommunicationLanguageCode>('ff')
   const [audience, setAudience] = React.useState('')
-  const [jurisdiction, setJurisdiction] = React.useState(country === 'cm' ? 'Cameroon' : country.toUpperCase())
+  const [jurisdiction, setJurisdiction] = React.useState(country.toUpperCase())
   const [facts, setFacts] = React.useState('')
   const [channels, setChannels] = React.useState<Channel[]>(['radio', 'sms'])
   const [draft, setDraft] = React.useState<CommunicationDraftDto | null>(null)
@@ -72,7 +72,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
   }, [])
 
   React.useEffect(() => {
-    setJurisdiction(country === 'cm' ? 'Cameroon' : country.toUpperCase())
+    setJurisdiction(country.toUpperCase())
   }, [country])
 
   const toggleChannel = (channel: Channel) => {

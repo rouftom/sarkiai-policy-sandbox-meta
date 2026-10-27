@@ -42,7 +42,7 @@ export default function AuditPage() {
   const [unreachable, setUnreachable] = React.useState(false)
   const [query, setQuery] = React.useState('')
   const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(20)
+  const [pageSize, setPageSize] = React.useState(10)
 
   const load = React.useCallback(async () => {
     setLoading(true)

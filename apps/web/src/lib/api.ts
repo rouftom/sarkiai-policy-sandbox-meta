@@ -752,10 +752,20 @@ export interface SessionDto {
   backupCodes?: string[]
 }
 
-export type LoginResultDto =
+/** A sign-in step that carries a challenge to the next form. */
+export type ChallengeDto =
   | { status: 'mfa_required'; challenge: string; expiresAt: string; operator: OperatorDto }
   | { status: 'enrollment_required'; challenge: string; expiresAt: string; operator: OperatorDto }
   | { status: 'password_change_required'; challenge: string; expiresAt: string; operator: OperatorDto }
+
+/** Sign-up done: the confirmation link has to be opened before any challenge. */
+export interface VerificationDto {
+  status: 'email_verification_required'
+  expiresAt: string
+  operator: OperatorDto
+}
+
+export type LoginResultDto = ChallengeDto | VerificationDto
 
 export interface SetupStatusDto {
   initialized: boolean
@@ -799,9 +809,19 @@ export const authApi = {
   setup: (body: { firstName: string; lastName: string; email: string }) =>
     request<SetupResultDto>('/v1/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
   signup: (body: { firstName: string; lastName: string; email: string; password: string }) =>
-    request<LoginResultDto>('/v1/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
+    request<VerificationDto>('/v1/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
-    request<LoginResultDto>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+    request<ChallengeDto>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  verifyEmail: (token: string) =>
+    request<{ ok: boolean; email: string }>('/v1/auth/email/verify', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  resendVerification: (email: string) =>
+    request<{ ok: boolean }>('/v1/auth/email/resend', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
   forgotPassword: (email: string) =>
     request<{ ok: boolean }>('/v1/auth/password/forgot', {
       method: 'POST',
@@ -813,7 +833,7 @@ export const authApi = {
       body: JSON.stringify({ token, password }),
     }),
   changePassword: (challenge: string, password: string) =>
-    request<LoginResultDto>('/v1/auth/password', {
+    request<ChallengeDto>('/v1/auth/password', {
       method: 'POST',
       body: JSON.stringify({ challenge, password }),
     }),

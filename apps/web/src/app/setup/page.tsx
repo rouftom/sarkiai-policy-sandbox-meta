@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { ArrowRight, Loader, Mail, ShieldCheck, TriangleAlert, UserPlus } from 'lucide-react'
+import { ArrowRight, Loader, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { Button, Input, Label } from '@sps/ui'
 import { AuthLayout, ErrorNote, StepIntro } from '@/components/auth/auth-frame'
 import { ApiError, authApi } from '@/lib/api'
@@ -120,9 +120,6 @@ export default function SetupPage() {
   if (delivered) {
     return (
       <AuthLayout>
-        <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
-          <Mail className="h-5 w-5" />
-        </div>
         <StepIntro kicker={t('setup.kicker')} title={t('setup.sentTitle')} subtitle={t('setup.sentBody')} />
         <div className="mt-5 rounded-xl border border-border bg-secondary/40 px-3 py-2.5">
           <p className="text-[10px] font-medium text-muted-foreground">
@@ -154,9 +151,6 @@ export default function SetupPage() {
 
   return (
     <AuthLayout>
-      <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
-        <UserPlus className="h-5 w-5" />
-      </div>
       <StepIntro kicker={t('setup.kicker')} title={t('setup.title')} subtitle={t('setup.subtitle')} />
 
       <form onSubmit={submit} className="mt-8 flex flex-col gap-4" noValidate>

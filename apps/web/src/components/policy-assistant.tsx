@@ -234,6 +234,84 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const isMultiline = input.includes('\n') || input.length > 60
+
+  // The composer grows with its text up to 120px, then scrolls, like the
+  // organization and web chat inputs.
+  React.useLayoutEffect(() => {
+    const node = textareaRef.current
+    if (!node) return
+    node.style.height = 'auto'
+    node.style.height = `${Math.min(node.scrollHeight, 120)}px`
+  }, [input])
+
+  const optionsMenu = (
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" size="icon-sm" className="rounded-full" aria-label={t('assistant.options')}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="w-56">
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <Scale className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate">{t('assistant.institution')}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>{t('assistant.institution')}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={institutionId} onValueChange={setInstitutionId}>
+              {institutions.map((institution) => {
+                const Icon = institution.role === 'legal_advisor' ? Scale : Shield
+                return (
+                  <DropdownMenuRadioItem key={institution.id} value={institution.id}>
+                    <Icon className={cn('h-3.5 w-3.5 shrink-0', institution.color)} />
+                    <span className="truncate">{institution.name}</span>
+                  </DropdownMenuRadioItem>
+                )
+              })}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="min-w-0 flex-1 truncate">{t('assistant.model')}</span>
+            <span className="max-w-[6rem] truncate font-mono text-[10px] text-muted-foreground">{model || '—'}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>{t('assistant.modelMeta')}</DropdownMenuLabel>
+            {modelState === 'loading' && <DropdownMenuItem disabled>{t('assistant.modelLoading')}</DropdownMenuItem>}
+            {modelState === 'error' && <DropdownMenuItem disabled>{t('assistant.modelUnavailable')}</DropdownMenuItem>}
+            {modelState === 'ready' && models.length === 0 && (
+              <DropdownMenuItem disabled>{t('assistant.modelNone')}</DropdownMenuItem>
+            )}
+            {modelState === 'ready' && (
+              <DropdownMenuRadioGroup value={model} onValueChange={(value) => void chooseModel(value)}>
+                {models.map((entry) => (
+                  <DropdownMenuRadioItem key={entry.id} value={entry.id} className="font-mono text-[11px]">
+                    {entry.id}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            )}
+            {modelError && <p className="px-2.5 py-1 text-[10px] text-destructive">{modelError}</p>}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => fileRef.current?.click()}>
+          <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
+          {t('assistant.attach')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={newConversation}>
+          <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+          {t('assistant.newChat')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <input
@@ -390,104 +468,52 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             event.preventDefault()
             void send()
           }}
-          className="flex items-end gap-1 rounded-3xl border border-input bg-card p-1.5 shadow-sm focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25"
+          className="relative"
         >
-          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-sm" className="rounded-full" aria-label={t('assistant.options')}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top" className="w-56">
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <Scale className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate">{t('assistant.institution')}</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuLabel>{t('assistant.institution')}</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup value={institutionId} onValueChange={setInstitutionId}>
-                    {institutions.map((institution) => {
-                      const Icon = institution.role === 'legal_advisor' ? Scale : Shield
-                      return (
-                        <DropdownMenuRadioItem key={institution.id} value={institution.id}>
-                          <Icon className={cn('h-3.5 w-3.5 shrink-0', institution.color)} />
-                          <span className="truncate">{institution.name}</span>
-                        </DropdownMenuRadioItem>
-                      )
-                    })}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <span className="min-w-0 flex-1 truncate">{t('assistant.model')}</span>
-                  <span className="max-w-[6rem] truncate font-mono text-[10px] text-muted-foreground">{model || '—'}</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuLabel>{t('assistant.modelMeta')}</DropdownMenuLabel>
-                  {modelState === 'loading' && <DropdownMenuItem disabled>{t('assistant.modelLoading')}</DropdownMenuItem>}
-                  {modelState === 'error' && <DropdownMenuItem disabled>{t('assistant.modelUnavailable')}</DropdownMenuItem>}
-                  {modelState === 'ready' && models.length === 0 && (
-                    <DropdownMenuItem disabled>{t('assistant.modelNone')}</DropdownMenuItem>
-                  )}
-                  {modelState === 'ready' && (
-                    <DropdownMenuRadioGroup value={model} onValueChange={(value) => void chooseModel(value)}>
-                      {models.map((entry) => (
-                        <DropdownMenuRadioItem key={entry.id} value={entry.id} className="font-mono text-[11px]">
-                          {entry.id}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  )}
-                  {modelError && <p className="px-2.5 py-1 text-[10px] text-destructive">{modelError}</p>}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => fileRef.current?.click()}>
-                <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
-                {t('assistant.attach')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={newConversation}>
-                <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
-                {t('assistant.newChat')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                void send()
-              }
-            }}
-            rows={1}
-            placeholder={t('assistant.placeholder')}
-            aria-label={t('assistant.placeholder')}
-            className="custom-scrollbar max-h-28 min-h-[28px] flex-1 resize-none bg-transparent px-1.5 py-1 text-[12px] text-foreground outline-none placeholder:text-muted-foreground"
-          />
-
-          <Button
-            type="submit"
-            size="icon-sm"
-            className="rounded-full"
-            aria-label={t('assistant.send')}
-            disabled={busy || !input.trim()}
+          <div
+            className={cn(
+              'rounded-3xl border border-input bg-card p-1.5 shadow-sm transition-all focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25',
+              isMultiline ? 'flex flex-col' : 'flex items-center gap-1',
+            )}
           >
-            <ArrowUp className="h-3.5 w-3.5" />
-          </Button>
-        </form>
+            {!isMultiline && optionsMenu}
 
-        <p className="text-center text-[10px] text-muted-foreground">
-          {t('assistant.footer', { agent: activeInstitution?.name ?? '—' })}
-          {model ? ` · ${model}` : ''}
-        </p>
+            <div className={cn('custom-scrollbar min-w-0 flex-1 overflow-y-auto', isMultiline ? 'px-2 pt-1' : 'flex items-center self-stretch')}>
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    void send()
+                  }
+                }}
+                rows={1}
+                placeholder={t('assistant.placeholder')}
+                aria-label={t('assistant.placeholder')}
+                className="block max-h-[120px] min-h-[28px] w-full resize-none bg-transparent px-1.5 py-1 text-[12px] leading-tight text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+
+            <div className={cn('flex shrink-0 items-center gap-1', isMultiline ? 'justify-between px-1 pb-0.5' : 'justify-end')}>
+              {isMultiline && optionsMenu}
+              <Button
+                type="submit"
+                size="icon-sm"
+                className="rounded-full"
+                aria-label={t('assistant.send')}
+                disabled={busy || !input.trim()}
+              >
+                <ArrowUp className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <p className="mt-1 px-2 text-center text-[8px] leading-relaxed text-muted-foreground/70">
+            {t('assistant.disclaimer')}
+          </p>
+        </form>
       </div>
     </div>
   )

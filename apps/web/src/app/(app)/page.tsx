@@ -21,7 +21,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle } from '@sps/ui'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
-import { api, authApi, type AuditEventDto, type ProviderDto } from '@/lib/api'
+import { api, authApi, knowledgeApi, type AuditEventDto, type ProviderDto } from '@/lib/api'
 
 function relativeTime(value: string, locale: string): string {
   const delta = Date.now() - Date.parse(value)
@@ -39,6 +39,7 @@ export default function OverviewPage() {
   const { operator } = useAuth()
   const { country, domain } = useWorkspace()
   const [provider, setProvider] = React.useState<ProviderDto | null>(null)
+  const [corpus, setCorpus] = React.useState<{ documents: number; chunks: number } | null>(null)
   const [events, setEvents] = React.useState<AuditEventDto[]>([])
   const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string } | null>(null)
   const [auditState, setAuditState] = React.useState<'loading' | 'ready' | 'unavailable'>('loading')
@@ -49,6 +50,12 @@ export default function OverviewPage() {
       .provider()
       .then((value) => {
         if (!cancelled) setProvider(value)
+      })
+      .catch(() => {})
+    void knowledgeApi
+      .status()
+      .then((status) => {
+        if (!cancelled) setCorpus({ documents: status.totals.documents, chunks: status.totals.activeChunks })
       })
       .catch(() => {})
     void authApi
@@ -87,9 +94,6 @@ export default function OverviewPage() {
     <>
       <section className="flex flex-wrap items-end justify-between gap-4 pb-5 pt-2">
         <div>
-          <p className="text-[10px] font-medium text-brand-primary dark:text-brand-primary-light">
-            SarkiAI · Meta hackathon
-          </p>
           <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             {t('overview.title')}
           </h2>
@@ -105,13 +109,13 @@ export default function OverviewPage() {
         <Card>
           <CardContent className="space-y-1 py-4">
             <p className="text-[9px] font-medium text-muted-foreground">
-              {t('overview.kpi.provider')}
+              {t('overview.kpi.corpus')}
             </p>
             <p className="truncate font-display text-base font-bold text-foreground">
-              {provider?.label ?? '—'}
+              {corpus ? corpus.documents.toLocaleString('en-US') : '—'} {t('knowledge.documents').toLowerCase()}
             </p>
             <p className="truncate text-[10px] text-muted-foreground">
-              {provider ? `${provider.servedBy} · ${provider.models.reasoning}` : '…'}
+              {corpus ? `${corpus.chunks.toLocaleString('en-US')} ${t('knowledge.chunks').toLowerCase()}` : '…'}
             </p>
           </CardContent>
         </Card>

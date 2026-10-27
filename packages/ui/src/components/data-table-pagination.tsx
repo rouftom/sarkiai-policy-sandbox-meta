@@ -42,9 +42,9 @@ export function DataTablePagination({
   const pageLabel = labels?.page?.(currentPage, safeTotalPages) ?? `Page ${currentPage} of ${safeTotalPages}`
 
   return (
-    <div className="mt-auto flex shrink-0 flex-col items-center justify-between gap-3 border-t border-slate-100 bg-transparent px-4 py-3 sm:flex-row sm:gap-0 dark:border-brand-primary-dark/25">
+    <div className="mt-auto flex shrink-0 flex-col items-center justify-between gap-3 border-t border-border bg-transparent px-4 py-3 sm:flex-row sm:gap-0">
       <div className="flex w-full items-center justify-between gap-2 sm:w-auto">
-        <span className="hidden whitespace-nowrap text-[10px] font-normal text-slate-500 md:block">
+        <span className="hidden whitespace-nowrap text-[10px] font-normal text-muted-foreground md:block">
           {rowsLabel}
         </span>
         <Select
@@ -56,10 +56,10 @@ export function DataTablePagination({
         />
       </div>
 
-      <span className="text-[10px] font-normal text-slate-500">{range}</span>
+      <span className="text-[10px] font-normal text-muted-foreground">{range}</span>
 
       <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
-        <span className="text-[10px] font-normal text-slate-500">{pageLabel}</span>
+        <span className="text-[10px] font-normal text-muted-foreground">{pageLabel}</span>
         <div className="flex items-center gap-1">
           <Button
             type="button"

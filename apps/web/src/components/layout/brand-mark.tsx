@@ -1,11 +1,11 @@
 /**
- * Sarka mark: a shield carrying a leaf, drawn in the Meta blue palette
+ * SPS mark: a shield carrying a leaf, drawn in the Meta blue palette
  * (#0866FF → #0043B8, #4E93FF leaf, #63C8FF veins). Inline SVG so the logo
  * stays crisp and needs no asset pipeline.
  */
 export function BrandMark({ className = 'h-8 w-8' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 40 40" fill="none" role="img" aria-label="Sarkia" className={className}>
+    <svg viewBox="0 0 40 40" fill="none" role="img" aria-label="SPS" className={className}>
       <defs>
         <linearGradient id="brand-shield" x1="6" y1="4" x2="34" y2="36" gradientUnits="userSpaceOnUse">
           <stop stopColor="#0866FF" />
@@ -38,13 +38,6 @@ export function BrandMark({ className = 'h-8 w-8' }: { className?: string }) {
 
 export function BrandWordmark({ short = 'SPS' }: { short?: string }) {
   return (
-    <span className="flex items-baseline gap-1.5">
-      <span className="font-display text-[15px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
-        {short}
-      </span>
-      <span className="text-[9px] font-medium text-brand-primary dark:text-brand-primary-light">
-        SarkiAI
-      </span>
-    </span>
+    <span className="font-display text-[15px] font-bold tracking-tight text-sidebar-foreground">{short}</span>
   )
 }

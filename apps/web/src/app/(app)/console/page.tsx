@@ -3,9 +3,8 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, Gauge, Languages, Network, Newspaper, ScrollText, ShieldCheck, Siren, SlidersHorizontal } from 'lucide-react'
-import { Card, CardContent, Tabs, TabsContent, Select } from '@sps/ui'
+import { AnimatedTabsList, Card, CardContent, Tabs, TabsContent, Select, type TabItem } from '@sps/ui'
 import { WORKFLOW_PROFILES, type Domain } from '@sps/shared'
-import { AdminTabs, type AdminTab } from '@/components/admin-tabs'
 import { AuditPanel } from '@/components/audit-panel'
 import { CommunicationsPanel } from '@/components/communications-panel'
 import { ExercisePanel } from '@/components/exercise-panel'
@@ -32,33 +31,33 @@ export default function ConsolePage() {
   const [tab, setTab] = React.useState('simulation')
   const profile = WORKFLOW_PROFILES[lens]
 
-  const tabs: AdminTab[] = [
+  const tabs: TabItem[] = [
     {
-      value: 'simulation',
+      id: 'simulation',
       label: t('console.tab.simulation'),
       icon: SlidersHorizontal,
       tooltip: t('console.tab.simulationHint', { lens: t(`lens.${lens}.label` as 'lens.hybrid.label') }),
     },
     {
-      value: 'readiness',
+      id: 'readiness',
       label: t('console.tab.readiness'),
       icon: Gauge,
       tooltip: t('console.tab.readinessHint'),
     },
     {
-      value: 'gazette',
+      id: 'gazette',
       label: t('console.tab.gazette'),
       icon: Newspaper,
       tooltip: t('console.tab.gazetteHint'),
     },
     {
-      value: 'exercise',
+      id: 'exercise',
       label: t('console.tab.exercise'),
       icon: Siren,
       tooltip: t('console.tab.exerciseHint'),
     },
     {
-      value: 'communications',
+      id: 'communications',
       label: t('console.tab.communications'),
       icon: Languages,
       tooltip: t('console.tab.communicationsHint'),
@@ -69,9 +68,6 @@ export default function ConsolePage() {
     <>
       <section className="flex flex-wrap items-end justify-between gap-4 pb-5 pt-2">
         <div className="min-w-0">
-          <p className="text-[10px] font-medium text-brand-primary dark:text-brand-primary-light">
-            SarkiAI · Meta hackathon
-          </p>
           <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             {t('app.name')}
           </h2>
@@ -114,7 +110,7 @@ export default function ConsolePage() {
       </Card>
 
       <Tabs value={tab} onValueChange={setTab} className="gap-3">
-        <AdminTabs tabs={tabs} ariaLabel={t('console.tabsLabel')} />
+        <AnimatedTabsList items={tabs} value={tab} onValueChange={setTab} ariaLabel={t('console.tabsLabel')} />
 
         <TabsContent value="simulation" className="mt-3">
           {profile.stages.scenario ? (
@@ -167,20 +163,6 @@ export default function ConsolePage() {
         </CardContent>
       </Card>
 
-      <footer className="mt-10 border-t border-border py-6 text-center text-[11px] text-muted-foreground">
-        <p>
-          {t('app.madeBy')} <span aria-label="love">♥️</span> by{' '}
-          <a
-            href="https://sarki.ai"
-            target="_blank"
-            rel="noreferrer"
-            className="font-semibold text-brand-primary hover:underline dark:text-brand-primary-light"
-          >
-            SarkiAI
-          </a>{' '}
-          · Djotta
-        </p>
-      </footer>
     </>
   )
 }

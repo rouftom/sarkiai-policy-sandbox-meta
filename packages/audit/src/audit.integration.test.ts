@@ -23,6 +23,23 @@ describe.skipIf(!mongoUri)('AuditService (integration: MongoDB)', () => {
     }
   })
 
+  test('concurrent appends stay on one chain (no fork on the tail)', async () => {
+    const audit = new AuditService({ mongodbUri: mongoUri!, dbName: `sps_test_race_${Date.now()}` })
+    try {
+      // A scenario logs its steps in parallel: every append reads the same tail
+      // unless appends are serialised. Before the queue, this forked the chain.
+      await Promise.all(
+        Array.from({ length: 12 }, (_, index) =>
+          audit.logAction({ actor: `agent-${index}`, action: 'assessment', lens: 'hybrid', runId: 'race-run' }),
+        ),
+      )
+      expect((await audit.verifyChain()).valid).toBe(true)
+      expect(await audit.getAuditForRun('race-run')).toHaveLength(12)
+    } finally {
+      await audit.close()
+    }
+  })
+
   test('scopes reads to one operator without breaking the chain', async () => {
     const audit = new AuditService({ mongodbUri: mongoUri!, dbName: `sps_test_scope_${Date.now()}` })
     try {

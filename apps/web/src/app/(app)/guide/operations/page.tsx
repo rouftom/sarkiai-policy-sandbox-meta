@@ -29,8 +29,8 @@ export default function GuideOperationsPage() {
       <GuideBanner tone="warning" title={fr ? 'Un écart non consigné est un incident non géré' : 'An unrecorded gap is an unmanaged incident'}>
         <p>
           {fr
-            ? 'Chaque exception — citation refusée, conflit de mandat, modèle indisponible, message WhatsApp rejeté — entre dans le registre des écarts avec un responsable et une échéance. Le registre est relu en revue hebdomadaire, pas à la fin du projet.'
-            : 'Every exception — rejected citation, mandate conflict, unavailable model, refused WhatsApp message — enters the gap register with an owner and a due date. The register is reviewed weekly, not at the end of the project.'}
+            ? 'Chaque exception, citation refusée, conflit de mandat, modèle indisponible, message WhatsApp rejeté, entre dans le registre des écarts avec un responsable et une échéance. Le registre est relu en revue hebdomadaire, pas à la fin du projet.'
+            : 'Every exception, rejected citation, mandate conflict, unavailable model, refused WhatsApp message, enters the gap register with an owner and a due date. The register is reviewed weekly, not at the end of the project.'}
         </p>
       </GuideBanner>
 
@@ -103,8 +103,8 @@ export default function GuideOperationsPage() {
             {
               a: fr ? 'Langues nationales' : 'National languages',
               b: fr
-                ? 'Brouillons fulfuldé / haoussa marqués « relecture native requise » — jamais publiés automatiquement.'
-                : 'Fulfulde / Hausa drafts flagged “native review required” — never auto-published.',
+                ? 'Brouillons fulfuldé / haoussa marqués « relecture native requise », jamais publiés automatiquement.'
+                : 'Fulfulde / Hausa drafts flagged “native review required”, never auto-published.',
               c: fr ? 'Ouvert' : 'Open',
             },
             {

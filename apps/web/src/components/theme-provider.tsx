@@ -45,6 +45,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [packId, setPackId] = React.useState(DEFAULT_THEME_PACK_ID)
   const [mode, setModeState] = React.useState<ThemeMode>('light')
   const [radius, setRadiusState] = React.useState<CornerStyle>(DEFAULT_CORNER_STYLE)
+  // The setters read the current pack and mode from refs, so they keep one
+  // identity for the whole session. Callbacks that change identity on every
+  // mode switch re-ran the operator-profile effect and silently reverted the
+  // corner style and pack the operator had just picked.
+  const packRef = React.useRef(packId)
+  const modeRef = React.useRef<ThemeMode>(mode)
 
   /**
    * The pack CSS is server-rendered in the root layout, so nothing is injected
@@ -56,6 +62,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const storedMode = resolveMode(localStorage.getItem(MODE_STORAGE_KEY))
     const storedPack = getThemePack(localStorage.getItem(THEME_PACK_STORAGE_KEY) ?? DEFAULT_THEME_PACK_ID)
     const storedRadius = resolveCornerStyle(localStorage.getItem(RADIUS_STORAGE_KEY))
+    packRef.current = storedPack.id
+    modeRef.current = storedMode
     setPackId(storedPack.id)
     setModeState(storedMode)
     setRadiusState(storedRadius)
@@ -65,25 +73,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyChrome(storedPack, storedMode)
   }, [])
 
-  const setPack = React.useCallback(
-    (id: string) => {
-      setPackId(id)
-      localStorage.setItem(THEME_PACK_STORAGE_KEY, id)
-      document.documentElement.setAttribute('data-theme-pack', getThemePack(id).id)
-      applyChrome(getThemePack(id), mode)
-    },
-    [mode],
-  )
+  const setPack = React.useCallback((id: string) => {
+    const pack = getThemePack(id)
+    packRef.current = pack.id
+    setPackId(pack.id)
+    localStorage.setItem(THEME_PACK_STORAGE_KEY, pack.id)
+    document.documentElement.setAttribute('data-theme-pack', pack.id)
+    applyChrome(pack, modeRef.current)
+  }, [])
 
-  const setMode = React.useCallback(
-    (next: ThemeMode) => {
-      setModeState(next)
-      localStorage.setItem(MODE_STORAGE_KEY, next)
-      document.documentElement.classList.toggle('dark', next === 'dark')
-      applyChrome(getThemePack(packId), next)
-    },
-    [packId],
-  )
+  const setMode = React.useCallback((next: ThemeMode) => {
+    modeRef.current = next
+    setModeState(next)
+    localStorage.setItem(MODE_STORAGE_KEY, next)
+    document.documentElement.classList.toggle('dark', next === 'dark')
+    applyChrome(getThemePack(packRef.current), next)
+  }, [])
 
   const setRadius = React.useCallback((next: CornerStyle) => {
     const value: CornerStyle = next === 'rounded' ? 'rounded' : DEFAULT_CORNER_STYLE

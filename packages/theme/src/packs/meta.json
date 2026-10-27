@@ -1,9 +1,9 @@
 {
   "id": "meta",
-  "name": { "fr": "Meta Blue", "en": "Meta Blue" },
+  "name": { "fr": "Défaut", "en": "Default" },
   "description": {
-    "fr": "Bleu Meta par défaut : interface claire, accents #0866FF, encre #06122B.",
-    "en": "Default Meta blue: light console, #0866FF accents, #06122B ink."
+    "fr": "Thème par défaut : bleu, interface claire, accents #0866FF, encre #06122B.",
+    "en": "Default theme: blue, light console, #0866FF accents, #06122B ink."
   },
   "isDefault": true,
   "preview": {

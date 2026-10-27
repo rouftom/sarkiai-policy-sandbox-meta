@@ -1,14 +1,18 @@
 'use client'
 
 /**
- * Shared chrome for the two unauthenticated screens (`/login`, `/setup`):
- * the brand panel, the narrow form column, the step heading and the error note.
- * Keeping them in one place means the first-run screen and the sign-in screen
- * cannot drift apart.
+ * Shared chrome for the unauthenticated screens (`/login`, `/setup`, `/signup`,
+ * the reset pages): the brand panel on the left, the narrow form column on the
+ * right, the step heading and the error note. Keeping them in one place means
+ * the screens cannot drift apart.
+ *
+ * The brand panel follows the active pack and mode through theme tokens, like
+ * the organization and web sign-in screens. It never carries its own palette.
  */
 
 import * as React from 'react'
 import { Check, Copy, FileCheck2, Moon, Radio, ShieldCheck, Sun } from 'lucide-react'
+import { cn } from '@sps/ui'
 import { ApiError } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { useTheme } from '@/components/theme-provider'
@@ -36,10 +40,17 @@ function AuthThemeToggle() {
   )
 }
 
-export function AuthLayout({ children }: { children: React.ReactNode }) {
+/**
+ * Left column. Defaults to the product pitch; a screen can hand over its own
+ * content (the sign-up page puts the demo-account block there).
+ */
+export function AuthLayout({ children, aside }: { children: React.ReactNode; aside?: React.ReactNode }) {
   return (
     <div className="grid min-h-dvh bg-background text-foreground lg:grid-cols-2">
-      <BrandPanel />
+      <section className="relative hidden overflow-hidden bg-brand-primary/10 px-12 py-14 text-foreground dark:bg-brand-primary-dark/20 lg:flex lg:flex-col lg:justify-between">
+        <Backdrop />
+        {aside ?? <BrandContent />}
+      </section>
       {/*
         The form column is the same themed panel surface as the signed-in
         console (`--app-panel-bg` + the pack corner radius), not a plain white
@@ -56,7 +67,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         <div className="relative z-10 mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <BrandMark className="h-9 w-9" />
-            <span className="font-display text-sm font-bold tracking-tight">SarkiAI Policy Sandbox</span>
+            <span className="font-display text-sm font-bold tracking-tight">SPS</span>
           </div>
           {children}
         </div>
@@ -65,12 +76,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function StepIntro({ kicker, title, subtitle }: { kicker: string; title: string; subtitle: string }) {
+export function StepIntro({ kicker, title, subtitle }: { kicker?: string; title: string; subtitle: string }) {
   return (
     <div>
-      <p className="text-[10px] font-medium text-brand-primary dark:text-brand-primary-light">
-        {kicker}
-      </p>
+      {kicker && <p className="text-[10px] font-medium text-brand-primary dark:text-brand-primary-light">{kicker}</p>}
       <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-foreground">{title}</h1>
       <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{subtitle}</p>
     </div>
@@ -120,30 +129,66 @@ export function CopyButton({ value, label }: { value: string; label: { copy: str
   )
 }
 
-export function BrandPanel() {
+export type ProgressStage = 'password' | 'email' | 'mfa' | 'access'
+
+const PROGRESS_ORDER: ProgressStage[] = ['password', 'email', 'mfa', 'access']
+
+/**
+ * Stepper shown in place of the sign-in form while an account is part way
+ * through its sign-up or first sign-in: password, confirmation e-mail, second
+ * factor, then access.
+ */
+export function AuthProgress({ current }: { current: ProgressStage }) {
+  const { t } = useI18n()
+  const index = PROGRESS_ORDER.indexOf(current)
+  const labels: Record<ProgressStage, MessageKey> = {
+    password: 'progress.password',
+    email: 'progress.email',
+    mfa: 'progress.mfa',
+    access: 'progress.access',
+  }
+  return (
+    <ol aria-label={t('progress.label')} className="mb-6 grid grid-cols-4 gap-2">
+      {PROGRESS_ORDER.map((stage, position) => {
+        const state = position < index ? 'done' : position === index ? 'current' : 'todo'
+        return (
+          <li key={stage} className="flex flex-col gap-1.5" aria-current={state === 'current' ? 'step' : undefined}>
+            <span
+              className={cn(
+                'h-1 rounded-full',
+                state === 'todo' ? 'bg-border' : 'bg-brand-primary dark:bg-brand-primary-light',
+              )}
+            />
+            <span
+              className={cn(
+                'text-[10px] font-medium',
+                state === 'current' ? 'text-foreground' : state === 'done' ? 'text-brand-primary-dark dark:text-brand-primary-light' : 'text-muted-foreground',
+              )}
+            >
+              {t(labels[stage])}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/** Default left column: what the console is. */
+export function BrandContent() {
   const { t } = useI18n()
   return (
-    <section className="relative hidden overflow-hidden bg-brand-ink px-12 py-14 text-white lg:flex lg:flex-col lg:justify-between">
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-brand-primary/30 blur-3xl" />
-        <div className="absolute -right-16 bottom-16 h-64 w-64 rounded-full bg-brand-accent/15 blur-3xl" />
-        <div className="absolute right-16 top-24 h-40 w-40 rotate-12 rounded-[2rem] border border-white/10" />
-        <div className="absolute bottom-28 left-16 h-24 w-24 -rotate-12 rounded-3xl border border-brand-accent/25" />
-      </div>
-
+    <>
       <div className="relative flex items-center gap-2.5">
         <BrandMark className="h-10 w-10" />
-        <span className="flex items-baseline gap-2">
-          <span className="font-display text-base font-bold tracking-tight">SPS</span>
-          <span className="text-[10px] font-medium text-brand-primary-light">SarkiAI</span>
-        </span>
+        <span className="font-display text-base font-bold tracking-tight">SPS</span>
       </div>
 
       <div className="relative max-w-md">
         <h2 className="font-display text-3xl font-bold leading-tight tracking-tight">
-          {t('auth.heroTitle')} <span className="text-gradient-accent">{t('auth.heroAccent')}</span>
+          {t('auth.heroTitle')} {t('auth.heroAccent')}
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-white/70">{t('auth.heroBody')}</p>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t('auth.heroBody')}</p>
 
         <ul className="mt-8 space-y-4">
           {[
@@ -152,19 +197,71 @@ export function BrandPanel() {
             { icon: Radio, title: t('auth.point3Title'), body: t('auth.point3Body') },
           ].map(({ icon: Icon, title, body }) => (
             <li key={title} className="flex gap-3">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 ring-1 ring-white/10">
-                <Icon className="h-4 w-4 text-brand-primary-light" />
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-primary/15 text-brand-primary dark:text-brand-primary-light">
+                <Icon className="h-4 w-4" />
               </span>
               <span>
                 <span className="block text-xs font-semibold">{title}</span>
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-white/60">{body}</span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">{body}</span>
               </span>
             </li>
           ))}
         </ul>
       </div>
 
-      <p className="relative text-[10px] text-white/40">{t('auth.hackathon')}</p>
-    </section>
+      <p className="relative text-[10px] text-muted-foreground">{t('auth.madeBy')}</p>
+    </>
+  )
+}
+
+/** Sign-up left column: the demo account block and its disclaimers. */
+export function DemoAccessContent() {
+  const { t } = useI18n()
+  return (
+    <>
+      <div className="relative flex items-center gap-2.5">
+        <BrandMark className="h-10 w-10" />
+        <span className="font-display text-base font-bold tracking-tight">SPS</span>
+      </div>
+
+      <div className="relative max-w-md space-y-6">
+        <div>
+          <h2 className="font-display text-3xl font-bold leading-tight tracking-tight">{t('signup.title')}</h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t('signup.subtitle')}</p>
+        </div>
+
+        <div className="rounded-lg border border-brand-primary/20 bg-background/60 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-primary-dark dark:text-brand-primary-light">
+            {t('signup.pitchTitle')}
+          </p>
+          <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            <li>{t('signup.pitch1')}</li>
+            <li>{t('signup.pitch2')}</li>
+            <li>{t('signup.pitch3')}</li>
+          </ul>
+        </div>
+
+        <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-3">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {t('signup.noticeTitle')}
+          </p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-amber-900/90 dark:text-amber-100/90">{t('signup.notice')}</p>
+        </div>
+      </div>
+
+      <p className="relative text-[10px] text-muted-foreground">{t('auth.madeBy')}</p>
+    </>
+  )
+}
+
+function Backdrop() {
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden>
+      <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-brand-primary/25 blur-3xl" />
+      <div className="absolute -right-16 bottom-16 h-64 w-64 rounded-full bg-brand-accent/15 blur-3xl" />
+      <div className="absolute right-16 top-24 h-40 w-40 rotate-12 rounded-[2rem] border border-brand-primary/15" />
+      <div className="absolute bottom-28 left-16 h-24 w-24 -rotate-12 rounded-3xl border border-brand-primary/20" />
+    </div>
   )
 }

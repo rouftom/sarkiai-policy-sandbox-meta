@@ -34,9 +34,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!loading && !operator) router.replace('/login')
   }, [loading, operator, router])
 
-  // Apply the operator profile once, then let the header controls own the choice.
+  // Apply the operator profile once per session, then let the header controls
+  // own the choice. Keyed on the e-mail: `operator` changes identity on every
+  // saved preference, and re-applying the profile then would undo a switch the
+  // operator has just made.
+  const profileApplied = React.useRef<string | null>(null)
   React.useEffect(() => {
-    if (!operator) return
+    if (!operator || profileApplied.current === operator.email) return
+    profileApplied.current = operator.email
     const prefs = operator.preferences
     setPack(prefs.pack)
     // Light/dark is the one choice an unauthenticated visitor can make (the
@@ -69,7 +74,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-3">
           <BrandMark className="h-10 w-10 animate-pulse" />
           <p className="text-[10px] font-medium text-muted-foreground">
-            SarkiAI Policy Sandbox
+            SPS
           </p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { ApprovalView } from '@/components/approval-view'
 
 export const metadata = {
-  title: 'Approval — SarkiAI Policy Sandbox',
+  title: 'Approval, SPS',
   robots: { index: false, follow: false },
 }
 

@@ -17,11 +17,12 @@ import { useRouter } from 'next/navigation'
 import {
   ApiError,
   authApi,
+  type ChallengeDto,
   type EnrollmentDto,
-  type LoginResultDto,
   type OperatorDto,
   type PreferencesDto,
   type SessionDto,
+  type VerificationDto,
 } from './api'
 import { clearSession, readSession, readToken, writeSession } from './session'
 
@@ -29,13 +30,16 @@ interface AuthContextValue {
   operator: OperatorDto | null
   loading: boolean
   /** Steps of the sign-in flow, kept here so the login page survives a rerender. */
-  pending: LoginResultDto | null
+  pending: ChallengeDto | null
+  /** Address waiting for its confirmation link (sign-up, or a sign-in before confirmation). */
+  verificationEmail: string | null
   enrollment: EnrollmentDto | null
   backupCodes: string[] | null
-  signIn: (email: string, password: string) => Promise<LoginResultDto>
-  /** Public sign-up (cloud demo): creates the account and starts TOTP enrolment. */
-  signUp: (input: { firstName: string; lastName: string; email: string; password: string }) => Promise<LoginResultDto>
-  changePassword: (password: string) => Promise<LoginResultDto>
+  /** Resolves to `null` when the address still has to be confirmed. */
+  signIn: (email: string, password: string) => Promise<ChallengeDto | null>
+  /** Public sign-up (cloud demo): creates the account, then waits for the confirmation link. */
+  signUp: (input: { firstName: string; lastName: string; email: string; password: string }) => Promise<VerificationDto>
+  changePassword: (password: string) => Promise<ChallengeDto>
   startEnrollment: () => Promise<EnrollmentDto>
   confirmEnrollment: (code: string) => Promise<void>
   verifyCode: (code: string) => Promise<void>
@@ -48,6 +52,9 @@ interface AuthContextValue {
 
 const AuthContext = React.createContext<AuthContextValue | null>(null)
 
+/** Address still waiting for its link. Kept per tab so a reload stays on the progression. */
+const VERIFICATION_KEY = 'sps.verification'
+
 function sessionFrom(dto: SessionDto): void {
   writeSession({ token: dto.token, expiresAt: dto.expiresAt, email: dto.operator.email })
 }
@@ -57,6 +64,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [operator, setOperator] = React.useState<OperatorDto | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [pending, setPending] = React.useState<AuthContextValue['pending']>(null)
+  const [verificationEmail, setVerificationEmailState] = React.useState<string | null>(null)
+
+  const setVerificationEmail = React.useCallback((email: string | null) => {
+    setVerificationEmailState(email)
+    if (email) window.sessionStorage.setItem(VERIFICATION_KEY, email)
+    else window.sessionStorage.removeItem(VERIFICATION_KEY)
+  }, [])
+
+  React.useEffect(() => {
+    const stored = window.sessionStorage.getItem(VERIFICATION_KEY)
+    if (stored) setVerificationEmailState(stored)
+  }, [])
   const [enrollment, setEnrollment] = React.useState<EnrollmentDto | null>(null)
   const [backupCodes, setBackupCodes] = React.useState<string[] | null>(null)
 
@@ -97,23 +116,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearTimeout(timer)
   }, [operator, router])
 
-  const signIn = React.useCallback(async (email: string, password: string) => {
-    const result = await authApi.login({ email, password })
-    setPending(result)
-    setEnrollment(null)
-    setBackupCodes(null)
-    return result
-  }, [])
+  const signIn = React.useCallback(
+    async (email: string, password: string) => {
+      try {
+        const result = await authApi.login({ email, password })
+        setVerificationEmail(null)
+        setPending(result)
+        setEnrollment(null)
+        setBackupCodes(null)
+        return result
+      } catch (cause) {
+        // The password was right, the address was never confirmed: show the
+        // confirmation step instead of an error, and keep the address.
+        if (cause instanceof ApiError && cause.status === 403 && cause.json<{ error?: string }>()?.error === 'email_not_verified') {
+          setPending(null)
+          setVerificationEmail(email)
+          return null
+        }
+        throw cause
+      }
+    },
+    [setVerificationEmail],
+  )
 
   const signUp = React.useCallback(
     async (input: { firstName: string; lastName: string; email: string; password: string }) => {
       const result = await authApi.signup(input)
-      setPending(result)
+      setPending(null)
+      setVerificationEmail(input.email)
       setEnrollment(null)
       setBackupCodes(null)
       return result
     },
-    [],
+    [setVerificationEmail],
   )
 
   const startEnrollment = React.useCallback(async () => {
@@ -134,13 +169,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [pending],
   )
 
-  const acceptSession = React.useCallback((session: SessionDto) => {
-    sessionFrom(session)
-    setOperator(session.operator)
-    setPending(null)
-    setEnrollment(null)
-    setBackupCodes(session.backupCodes ?? null)
-  }, [])
+  const acceptSession = React.useCallback(
+    (session: SessionDto) => {
+      sessionFrom(session)
+      setOperator(session.operator)
+      setPending(null)
+      setVerificationEmail(null)
+      setEnrollment(null)
+      setBackupCodes(session.backupCodes ?? null)
+    },
+    [setVerificationEmail],
+  )
 
   const confirmEnrollment = React.useCallback(
     async (code: string) => {
@@ -160,9 +199,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetFlow = React.useCallback(() => {
     setPending(null)
+    setVerificationEmail(null)
     setEnrollment(null)
     setBackupCodes(null)
-  }, [])
+  }, [setVerificationEmail])
 
   const dismissBackupCodes = React.useCallback(() => setBackupCodes(null), [])
 
@@ -175,6 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearSession()
     setOperator(null)
     setPending(null)
+    setVerificationEmail(null)
     setEnrollment(null)
     setBackupCodes(null)
     router.replace('/login')
@@ -194,6 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       operator,
       loading,
       pending,
+      verificationEmail,
       enrollment,
       backupCodes,
       signIn,
@@ -212,6 +254,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       operator,
       loading,
       pending,
+      verificationEmail,
       enrollment,
       backupCodes,
       signIn,

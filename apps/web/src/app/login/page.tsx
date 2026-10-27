@@ -10,14 +10,14 @@ import { z } from 'zod'
 import { ArrowRight, Check, Copy, Download, KeyRound, Loader, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { Button, Input, Label } from '@sps/ui'
 import { BrandMark } from '@/components/layout/brand-mark'
-import { AuthLayout, ErrorNote, StepIntro, messageFor } from '@/components/auth/auth-frame'
+import { AuthLayout, AuthProgress, ErrorNote, StepIntro, messageFor, type ProgressStage } from '@/components/auth/auth-frame'
 import { OtpField, formatBackupCode } from '@/components/auth/otp-field'
 import { PasswordInput } from '@/components/auth/password-input'
 import { authApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 
-type Step = 'credentials' | 'password' | 'enroll' | 'mfa' | 'recovery'
+type Step = 'credentials' | 'verify' | 'password' | 'enroll' | 'mfa' | 'recovery'
 
 /** Same floor as the API (`assertPassword`). */
 const MIN_PASSWORD = 12
@@ -37,6 +37,7 @@ export default function LoginPage() {
     operator,
     loading,
     pending,
+    verificationEmail,
     enrollment,
     backupCodes,
     signIn,
@@ -57,6 +58,7 @@ export default function LoginPage() {
   const [signupOpen, setSignupOpen] = React.useState(
     () => process.env.NEXT_PUBLIC_SIGNUP !== 'false',
   )
+  const [resent, setResent] = React.useState(false)
   const enrollmentStarted = React.useRef(false)
   const setupChecked = React.useRef(false)
 
@@ -118,6 +120,11 @@ export default function LoginPage() {
          */
       })
   }, [router])
+
+  // The address has to be confirmed before any challenge: show that step.
+  React.useEffect(() => {
+    if (verificationEmail) setStep('verify')
+  }, [verificationEmail])
 
   // Password step returned `enrollment_required`: fetch the otpauth URI once.
   React.useEffect(() => {
@@ -192,6 +199,28 @@ export default function LoginPage() {
     enrollmentStarted.current = false
   }
 
+  /** Back to the sign-in form with the confirmed address already filled in. */
+  function continueAfterVerification() {
+    const email = verificationEmail
+    resetFlow()
+    setResent(false)
+    setStep('credentials')
+    if (email) credentialsForm.setValue('email', email)
+  }
+
+  async function resendLink() {
+    if (!verificationEmail) return
+    setBusy(true)
+    try {
+      await authApi.resendVerification(verificationEmail)
+      setResent(true)
+    } catch {
+      setResent(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function copy(value: string, id: string) {
     void navigator.clipboard?.writeText(value).then(() => {
       setCopied(id)
@@ -201,7 +230,7 @@ export default function LoginPage() {
 
   function downloadCodes(codes: string[]) {
     const header = [
-      'SarkiAI Policy Sandbox — recovery codes / codes de secours',
+      'SPS, recovery codes / codes de secours',
       `Account: ${operator?.email ?? pending?.operator.email ?? ''}`,
       `Generated: ${new Date().toISOString()}`,
       'Each code is single use. Keep them offline. / Chaque code sert une seule fois.',
@@ -211,7 +240,7 @@ export default function LoginPage() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'sarkiai-policy-sandbox-recovery-codes.txt'
+    link.download = 'sps-recovery-codes.txt'
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -226,6 +255,17 @@ export default function LoginPage() {
     )
   }
 
+  const progress: ProgressStage | null =
+    step === 'verify'
+      ? 'email'
+      : step === 'password'
+        ? 'password'
+        : step === 'enroll' || step === 'mfa'
+          ? 'mfa'
+          : step === 'recovery'
+            ? 'access'
+            : null
+
   const rootError =
     credentialsForm.formState.errors.root?.message ??
     passwordForm.formState.errors.root?.message ??
@@ -233,9 +273,32 @@ export default function LoginPage() {
 
   return (
     <AuthLayout>
+      {progress && <AuthProgress current={progress} />}
+
+      {step === 'verify' && verificationEmail && (
+        <>
+          <StepIntro title={t('verify.title')} subtitle={t('verify.subtitle', { email: verificationEmail })} />
+          <div className="mt-8 flex flex-col gap-3">
+            {resent && (
+              <p className="rounded-lg border border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
+                {t('verify.resent')}
+              </p>
+            )}
+            <Button variant="outline" size="lg" className="w-full" onClick={() => void resendLink()} disabled={busy}>
+              {busy ? <Loader className="h-4 w-4 animate-spin" /> : null}
+              {t('verify.resend')}
+            </Button>
+            <Button size="lg" className="w-full" onClick={continueAfterVerification}>
+              <ArrowRight className="h-4 w-4" />
+              {t('verify.continue')}
+            </Button>
+          </div>
+        </>
+      )}
+
       {step === 'credentials' && (
         <>
-          <StepIntro kicker={t('login.kicker')} title={t('login.title')} subtitle={t('login.subtitle')} />
+          <StepIntro title={t('login.title')} subtitle={t('login.subtitle')} />
           <form onSubmit={submitCredentials} className="mt-8 flex flex-col gap-4" noValidate>
             <div className="space-y-1.5">
               <Label htmlFor="email">{t('login.email')}</Label>
@@ -299,7 +362,6 @@ export default function LoginPage() {
       {step === 'password' && (
         <>
           <StepIntro
-            kicker={t('login.kicker')}
             title={t('login.newPasswordTitle')}
             subtitle={t('login.newPasswordSubtitle')}
           />
@@ -348,7 +410,7 @@ export default function LoginPage() {
 
       {step === 'enroll' && (
         <>
-          <StepIntro kicker={t('login.kicker')} title={t('login.enrollTitle')} subtitle={t('login.enrollSubtitle')} />
+          <StepIntro title={t('login.enrollTitle')} subtitle={t('login.enrollSubtitle')} />
           {!enrollment ? (
             <div className="mt-10 flex items-center gap-2 text-xs text-muted-foreground">
               <Loader className="h-4 w-4 animate-spin" />
@@ -410,7 +472,6 @@ export default function LoginPage() {
       {step === 'mfa' && (
         <>
           <StepIntro
-            kicker={t('login.kicker')}
             title={factor === 'totp' ? t('login.mfaTitle') : t('login.backupTitle')}
             subtitle={factor === 'totp' ? t('login.mfaSubtitle') : t('login.backupSubtitle')}
           />
@@ -474,7 +535,7 @@ export default function LoginPage() {
 
       {step === 'recovery' && backupCodes && (
         <>
-          <StepIntro kicker={t('login.kicker')} title={t('login.recoveryTitle')} subtitle={t('login.recoverySubtitle')} />
+          <StepIntro title={t('login.recoveryTitle')} subtitle={t('login.recoverySubtitle')} />
           <div className="mt-6 grid grid-cols-2 gap-2">
             {backupCodes.map((recovery) => (
               <code
