@@ -38,12 +38,15 @@ Full diff: [`pre-hackathon-baseline...meta-hackathon`](../../compare/pre-hackath
 | N8 | **Table-top crisis exercise** — authored injects released on a clock, an action log kept by the team, and a score computed deterministically (addressed / late / missed, coverage, response time) before Muse Spark writes the after-action narrative. The narrative cannot change the score (`@sps/exercise`, `/v1/exercise/*`, console panel). | Muse Spark / Muse Glimmer | done | `bun test packages/exercise` |
 | N9 | **Public communication in Fulfulde or Hausa** — drafts from verified facts only, hard-blocked on political content and medical advice, every draft marked `pending native review`; invented phone numbers are flagged (`@sps/communications`, `/v1/communications/*`, console panel) | Muse Spark | done | `bun test packages/communications` |
 | N10 | Demo UI: incident timeline (who saw what), clickable citations, bilingual EN/FR, provider badge, audit-chain check | — | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
+| N11 | **Operable knowledge base** (`/knowledge`): corpus counts and retirement, in-process Atlas ingestion with a six-step journal (chunk → embed → upsert → index → verify), index state and repair, and a retrieval playground that exposes dense/BM25/RRF/rerank scores and provenance | Voyage `voyage-4` + `rerank-2` | done | `bun test packages/kb packages/retrieval` |
 
 Cloud mode also switches the retrieval backend: chunk embeddings come from
 **Voyage `voyage-4`** and search runs on **MongoDB Atlas** (`$vectorSearch` +
 `$search` BM25, RRF, `rerank-2`). Local and sovereign modes keep `bge-m3` +
-Qdrant, so no corpus leaves the machine. Atlas indexes are declared in
-`deploy/mongo/kb.indexes.json` and created only in cloud mode.
+Qdrant, so no corpus leaves the machine. Atlas index definitions live in
+`packages/retrieval/src/atlas-index-definitions.ts` (the JSON under `deploy/mongo/`
+is the CLI artifact, kept in sync by a test) and are created idempotently at
+startup, in cloud mode only.
 
 ## Deployment
 

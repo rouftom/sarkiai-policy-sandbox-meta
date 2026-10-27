@@ -129,6 +129,9 @@ Then:
 - MinIO console (attachments) → http://localhost:9001
 - MongoDB (audit + CoT) → `mongodb://localhost:27017`
 
+Recording the submission video? [`docs/DEMO.md`](docs/DEMO.md) is the 3-minute
+runbook, pre-flight checks included.
+
 ### Operator accounts (first run)
 
 There is no seeded operator and no password in the source tree or in an
@@ -211,22 +214,69 @@ Local and sovereign modes keep the existing hybrid retrieval: `bge-m3` dense +
 BM25 sparse in Qdrant, fused with RRF. Cloud mode uses the same `KbChunk`
 contract on **MongoDB Atlas**:
 
-1. ingestion embeds with **Voyage `voyage-4`** (1024 dims, dotProduct);
-2. `$vectorSearch` and `$search` (BM25) run over `kb_chunks`;
+1. ingestion chunks the document (headings, articles, sentence overlap), then
+   embeds **Voyage `voyage-4`** (1024 dims, dotProduct);
+2. `$vectorSearch` and `$search` (BM25, accent-folded analyser) run over
+   `kb_chunks`;
 3. the two lists are fused with RRF, then re-scored with **Voyage `rerank-2`**.
 
 `RETRIEVAL_BACKEND=auto` follows the provider mode (cloud → Atlas, otherwise
-Qdrant). The Atlas indexes live in [`deploy/mongo/kb.indexes.json`](deploy/mongo/kb.indexes.json)
-and are created **only in cloud mode**, at API startup: the collection is created
-first, then `sps_vector_index` and `sps_text_index` are created or updated
-idempotently. To do it by hand:
+Qdrant). The index definitions live in code
+([`packages/retrieval/src/atlas-index-definitions.ts`](packages/retrieval/src/atlas-index-definitions.ts)),
+because the API image only ships `packages/` and `apps/api/` — a definition file
+under `deploy/` would be missing in the container. They are created **only in
+cloud mode**, at API startup: the collection first, then `sps_vector_index` and
+`sps_text_index`, idempotently. [`deploy/mongo/kb.indexes.json`](deploy/mongo/kb.indexes.json)
+stays as the artifact for the CLI, and a test fails if the two drift. To create
+or repair them by hand (or from the console):
 
 ```bash
 MONGODB_URI=... MONGODB_DB_NAME=policy_sandbox bun run kb:indexes
+curl -X POST "$SPS_API_URL/v1/kb/indexes" -H 'Content-Type: application/json' -d '{}'
 ```
 
 On the local Mongo used by Compose there is no Atlas Search; the script reports
 `supported: false` and exits 0, and the engine stays on Qdrant.
+
+#### The Knowledge base screen (`/knowledge`)
+
+RAG is not a claim in this console, it is a screen. `/knowledge` shows the live
+corpus and every step that produced it:
+
+- **Corpus** — documents with chunk counts, characters, country, type and last
+  ingestion; a document can be retired (chunks kept for audit, removed from
+  retrieval) or restored.
+- **Vectorise** — paste text or load `.txt` / `.md` / `.csv`, set country,
+  jurisdiction, type, chunk size and overlap, then watch the six-step journal
+  (accept → chunk → embed → upsert → index → verify) with per-step timings.
+  Re-running the same document is a no-op: chunks are keyed by content hash.
+- **Retrieval** — a playground that returns each stage separately (dense hits
+  with `vectorSearchScore`, BM25 hits with their score, the RRF fusion, the
+  reranked list and the final context), plus the Atlas filter, the timings and
+  the model names.
+- **Atlas indexes** — `READY` / `BUILDING` / missing, with a create-or-repair
+  button that calls the same idempotent bootstrap as startup.
+
+The API surface behind it:
+
+| Route | Purpose |
+|---|---|
+| `GET /v1/kb/status` | totals, facets, index state, vector health, recent runs |
+| `GET /v1/kb/documents` | per-document aggregates (`includeRetired` optional) |
+| `POST /v1/kb/documents/active` | retire / restore one document |
+| `POST /v1/kb/indexes` | create or repair the Atlas indexes |
+| `POST /v1/kb/ingest/text` | chunk → embed → upsert → ensure indexes |
+| `POST /v1/kb/search` | the playground: every stage, with scores |
+
+Seed a corpus from the manifest (PDF text is extracted with `pdftotext`; scans
+without a text layer are skipped and go through the Gazette screen):
+
+```bash
+SPS_API_URL=https://sps-api.example bun run kb:seed
+bun run kb:seed -- --only snd30,psnsn --dry-run
+```
+
+Background and limits: [`docs/KNOWLEDGE-BASE.md`](docs/KNOWLEDGE-BASE.md).
 
 ### WhatsApp channel and approvals (N4)
 

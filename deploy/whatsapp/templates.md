@@ -19,13 +19,14 @@ the same template if the focal points read French). Body variables are positiona
 ### Current status (27 Oct 2026)
 
 Created through `POST /{WABA}/message_templates` (`v26.0`), category `UTILITY`,
-language `en`:
+language `en`. All three were **APPROVED** by Meta on 27 October 2026 (read back
+with `GET /{WABA}/message_templates?fields=name,status`):
 
 | Template | ID | Status |
 |---|---|---|
-| `meta_hackathon_joint_report` | `1389658312947485` | PENDING |
-| `meta_hackathon_deadline_alert` | `1106780912229163` | PENDING |
-| `meta_hackathon_approval_request` | `1682829429905161` | PENDING |
+| `meta_hackathon_joint_report` | `1389658312947485` | APPROVED |
+| `meta_hackathon_deadline_alert` | `1106780912229163` | APPROVED |
+| `meta_hackathon_approval_request` | `1682829429905161` | APPROVED |
 
 `WEB_PUBLIC_URL` is `https://sarkiai-policy-sandbox-meta.vercel.app`, so the
 approval button base is
