@@ -63,16 +63,16 @@
               "analyzer": "sps_fr_folded"
             },
             "country": {
-              "type": "string"
+              "type": "token"
             },
             "jurisdiction": {
-              "type": "string"
+              "type": "token"
             },
             "docType": {
-              "type": "string"
+              "type": "token"
             },
             "namespace": {
-              "type": "string"
+              "type": "token"
             },
             "isActive": {
               "type": "boolean"
