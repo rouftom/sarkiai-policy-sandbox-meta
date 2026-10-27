@@ -218,6 +218,29 @@ export function eligibleChatModels(payload: unknown): ProviderModelInfo[] {
   return out.sort((a, b) => a.id.localeCompare(b.id))
 }
 
+/**
+ * Default when no model was saved: the newest `muse-spark-<version>` the key can
+ * use (contributor and preview variants are never preferred), otherwise the
+ * first chat model in the list.
+ */
+export function defaultChatModel(models: ProviderModelInfo[]): ProviderModelInfo | undefined {
+  const ranked = models
+    .map((model) => ({ model, match: /^muse-spark-(\d+(?:\.\d+)*)$/.exec(model.id) }))
+    .filter((entry): entry is { model: ProviderModelInfo; match: RegExpExecArray } => entry.match !== null)
+    .sort((a, b) => compareVersions(b.match[1]!, a.match[1]!))
+  return ranked[0]?.model ?? models[0]
+}
+
+function compareVersions(a: string, b: string): number {
+  const left = a.split('.').map(Number)
+  const right = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
 /** Ask the provider which models this key may use. The key stays on the server. */
 export async function listProviderModels(
   descriptor: ProviderDescriptor,

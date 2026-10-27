@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { PROVIDER_MODES, createModel, describeProvider, eligibleChatModels, providerModeFromEnv, resolveProvider } from './index'
+import { PROVIDER_MODES, createModel, describeProvider, defaultChatModel, eligibleChatModels, providerModeFromEnv, resolveProvider } from './index'
 
 /** A clean, empty environment: nothing is configured unless stated. */
 const base: Record<string, string | undefined> = {}
@@ -56,6 +56,21 @@ describe('provider layer', () => {
     })
     expect(descriptor.models.reasoning).toBe('')
     expect(descriptor.budgetUsd).toBe(1.5)
+  })
+
+  test('the default chat model is the newest muse-spark, never a contributor build', () => {
+    const models = eligibleChatModels({
+      data: [
+        { id: 'muse-spark-1.1' },
+        { id: 'muse-spark-1.3-contributor' },
+        { id: 'muse-spark-1.3' },
+        { id: 'muse-spark-1.2' },
+        { id: 'muse-wonder-1.0' },
+      ],
+    })
+    expect(defaultChatModel(models)?.id).toBe('muse-spark-1.3')
+    expect(defaultChatModel([{ id: 'other-model' }])?.id).toBe('other-model')
+    expect(defaultChatModel([])).toBeUndefined()
   })
 
   test('the Meta model list keeps chat models and drops embedding, speech and segmentation', () => {

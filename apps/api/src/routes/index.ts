@@ -34,6 +34,7 @@ import { healthDataBreach } from '../scenarios.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
+import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
 
 const engine = createEngine()
@@ -103,7 +104,7 @@ async function selectBootModel(app: FastifyInstance): Promise<void> {
   const saved = await auth.activeModel().catch(() => null)
   try {
     const models = await engine.listModels()
-    const pick = models.find((m) => m.id === saved) ?? models[0]
+    const pick = models.find((m) => m.id === saved) ?? defaultChatModel(models)
     if (!pick) {
       app.log.error('Meta model list is empty: no chat model selected')
       return
