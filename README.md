@@ -208,6 +208,12 @@ bun run demo:reset -- --yes       # operators, password_resets, audit_logs,
 It needs `MONGODB_URI` and never prints it. `kb_chunks`, the Atlas indexes and
 all configuration are left untouched; the console then shows `/setup` again.
 
+Hosts without a shell (Render free instances refuse SSH, one-off jobs,
+pre-deploy commands and start-command overrides) run the same wipe from the
+service itself: commit `apps/api/scripts/reset-on-boot.flag`, let the deploy
+come live, then delete the flag and deploy again. The API logs
+`demo reset executed at boot` with the total deleted.
+
 ### Switching provider
 
 ```bash

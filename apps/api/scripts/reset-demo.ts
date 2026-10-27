@@ -17,20 +17,14 @@
  * indexes, and every configuration value. Re-seed the corpus only when you mean
  * to (`bun run kb:seed`).
  *
+ * Hosts without shell access (Render free) use the boot hook instead: commit
+ * `apps/api/scripts/reset-on-boot.flag`, deploy, then delete the flag.
+ *
  * The connection string is never printed, never echoed in an error and never
  * written to disk.
  */
 
-import { MongoClient } from 'mongodb'
-
-const COLLECTIONS = [
-  'operators',
-  'password_resets',
-  'audit_logs',
-  'cot_traces',
-  'joint_reports',
-  'whatsapp_approvals',
-] as const
+import { DEMO_RESET_COLLECTIONS, resetDemoState } from '../src/demo-reset.js'
 
 const args = new Set(process.argv.slice(2))
 const dryRun = args.has('--dry-run')
@@ -49,29 +43,13 @@ if (!uri) {
 const dbName = process.env.MONGODB_DB_NAME ?? 'policy_sandbox'
 
 console.log(`Demo reset — database "${dbName}"`)
-console.log(`  collections: ${COLLECTIONS.join(', ')}`)
+console.log(`  collections: ${DEMO_RESET_COLLECTIONS.join(', ')}`)
 console.log('  kept: kb_chunks (corpus + vectors), Atlas indexes, configuration')
 console.log('')
 
-const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10_000 })
-
 try {
-  await client.connect()
-  const db = client.db(dbName)
-  const existing = new Set(
-    (await db.listCollections({}, { nameOnly: true }).toArray()).map((entry) => entry.name),
-  )
-
-  const counts: Array<{ name: string; count: number; present: boolean }> = []
-  for (const name of COLLECTIONS) {
-    if (!existing.has(name)) {
-      counts.push({ name, count: 0, present: false })
-      continue
-    }
-    counts.push({ name, count: await db.collection(name).countDocuments(), present: true })
-  }
-
-  for (const entry of counts) {
+  const preview = await resetDemoState({ uri, dbName, dryRun: true })
+  for (const entry of preview.counts) {
     const state = entry.present ? `${entry.count} document(s)` : 'collection absent'
     console.log(`  ${entry.name.padEnd(20)} ${state}`)
   }
@@ -88,16 +66,14 @@ try {
     process.exit(2)
   }
 
+  const result = await resetDemoState({ uri, dbName })
   console.log('')
-  let deleted = 0
-  for (const name of COLLECTIONS) {
-    if (!existing.has(name)) continue
-    const result = await db.collection(name).deleteMany({})
-    deleted += result.deletedCount
-    console.log(`  cleared ${name.padEnd(20)} ${result.deletedCount} document(s)`)
+  for (const entry of result.counts) {
+    if (!entry.present) continue
+    console.log(`  cleared ${entry.name.padEnd(20)} ${entry.count} document(s)`)
   }
 
-  console.log(`\nDone — ${deleted} document(s) deleted. The corpus was left untouched.`)
+  console.log(`\nDone — ${result.deleted} document(s) deleted. The corpus was left untouched.`)
   console.log('Next: open the console, create the root operator from /setup, then enrol TOTP.')
 } catch (error) {
   // Deliberately no connection string, no stack trace with credentials.
@@ -105,6 +81,4 @@ try {
   console.error(`\nReset failed: ${message}`)
   console.error('Check that this machine can reach the cluster and that MONGODB_URI is current.')
   process.exitCode = 1
-} finally {
-  await client.close().catch(() => {})
 }

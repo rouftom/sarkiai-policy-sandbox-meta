@@ -1,11 +1,14 @@
 /** Fastify bootstrap. */
 
+import { existsSync } from 'node:fs'
 import Fastify from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import { registerRoutes } from './routes/index.js'
 import { prepareCloudStores } from './engine.js'
 import { auth } from './auth.js'
 import { config } from './config.js'
+import { resetDemoState } from './demo-reset.js'
 import type { PublicOperator } from '@sps/auth'
 
 declare module 'fastify' {
@@ -46,8 +49,43 @@ export async function buildServer() {
   return app
 }
 
+/**
+ * Maintenance hatch for hosts without a shell.
+ *
+ * Render free instances refuse SSH, one-off jobs, pre-deploy commands and
+ * start-command overrides, so the only process that can reach `MONGODB_URI` is
+ * the web service itself. Committing `apps/api/scripts/reset-on-boot.flag`
+ * makes the next deploy wipe the demo state before the console answers;
+ * deleting the flag and deploying again disarms it.
+ */
+async function maybeResetOnBoot(app: FastifyInstance): Promise<void> {
+  const flag = new URL('../scripts/reset-on-boot.flag', import.meta.url)
+  if (!existsSync(flag)) return
+
+  try {
+    const result = await resetDemoState({
+      uri: config.mongodb.uri,
+      dbName: config.mongodb.dbName,
+      serverSelectionTimeoutMs: 15_000,
+    })
+    app.log.warn(
+      { database: result.database, deleted: result.deleted, collections: result.counts.map((entry) => entry.name) },
+      'demo reset executed at boot (reset-on-boot.flag present)',
+    )
+  } catch (error) {
+    // The console still boots: a failed wipe must never take the demo down.
+    app.log.error(
+      { message: error instanceof Error ? error.message : 'unknown error' },
+      'demo reset at boot failed',
+    )
+  }
+}
+
 async function main(): Promise<void> {
   const app = await buildServer()
+
+  // Before `auth.isEmpty()`: the console must see the store freshly emptied.
+  await maybeResetOnBoot(app)
 
   // Cloud vector store only: create kb_chunks then its Atlas indexes. A failure
   // is logged, not fatal (the console still boots and the provider is visible).

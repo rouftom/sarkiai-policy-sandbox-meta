@@ -123,3 +123,7 @@ To return the demo to a clean slate without touching the corpus:
 bun run demo:reset -- --dry-run
 bun run demo:reset -- --yes
 ```
+
+From a machine that cannot reach the cluster (or a Render free instance, where
+SSH and one-off jobs are refused), commit `apps/api/scripts/reset-on-boot.flag`,
+wait for the deploy to go live, then delete the flag and deploy again.
