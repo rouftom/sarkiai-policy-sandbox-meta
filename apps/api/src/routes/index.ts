@@ -13,17 +13,38 @@ import {
 import { analyzeImpact } from '@sps/impact'
 import { IngestionClient } from '@sps/kb'
 import { whatIf } from '@sps/readiness'
+import {
+  WhatsAppClient,
+  WHATSAPP_TEMPLATES,
+  approvalUrl,
+  createApprovalToken,
+  verifyApprovalToken,
+} from '@sps/whatsapp'
 import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
 import { institutionsForDomain } from '@sps/shared'
 import type { DocType, Domain, InstitutionSpec, JointSituationReport, ScenarioEvent, WorkflowLens } from '@sps/shared'
 import { createEngine, createScenario, recordProviderSwitch } from '../engine.js'
+import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { healthDataBreach } from '../scenarios.js'
 import { config } from '../config.js'
 
 const engine = createEngine()
 const ingestion = new IngestionClient({ baseUrl: config.ingestion.baseUrl, apiKey: config.ingestion.apiKey })
+
+const whatsapp = new WhatsAppClient({
+  version: config.whatsapp.version,
+  phoneNumberId: config.whatsapp.phoneNumberId,
+  accessToken: config.whatsapp.accessToken,
+  verifyToken: config.whatsapp.verifyToken,
+  appSecret: config.whatsapp.appSecret,
+  apiBaseUrl: config.whatsapp.apiBaseUrl,
+})
+const approvals = new ApprovalStore({
+  mongodbUri: config.mongodb.uri,
+  dbName: config.mongodb.dbName,
+})
 
 const lensSchema = z.enum(['simulation', 'readiness', 'hybrid'])
 
@@ -576,6 +597,197 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       request.log.error(error)
       return reply.status(422).send({ error: (error as Error).message })
     }
+  })
+
+  // ── N4: WhatsApp channel ──────────────────────────────────────────────────
+  // Business-initiated messages are approved templates only (names prefixed
+  // `meta_hackathon_`); the approval decision itself happens in the web app, so
+  // no quick-reply button is needed and no notification gateway is involved.
+  app.get('/v1/whatsapp/webhook', async (request, reply) => {
+    const result = whatsapp.verifyChallenge(request.query as Record<string, unknown>)
+    if (!result.ok) return reply.status(403).send({ error: 'invalid_verify_token' })
+    return reply.type('text/plain').send(result.challenge)
+  })
+
+  app.post('/v1/whatsapp/webhook', async (request, reply) => {
+    const signature = request.headers['x-hub-signature-256']
+    const raw = request.rawBody ?? Buffer.from(JSON.stringify(request.body ?? {}))
+    if (config.whatsapp.appSecret && !whatsapp.verifySignature(raw, typeof signature === 'string' ? signature : undefined)) {
+      return reply.status(401).send({ error: 'invalid_signature' })
+    }
+
+    const parsed = whatsapp.parseWebhook(request.body)
+    if (parsed.statuses.length > 0 || parsed.messages.length > 0) {
+      request.log.info(
+        { statuses: parsed.statuses.length, messages: parsed.messages.length },
+        'whatsapp webhook',
+      )
+    }
+    // Inbound free text is acknowledged, never treated as an approval: the
+    // decision requires the authenticated approval page.
+    return { received: true }
+  })
+
+  const notifySchema = z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('joint_report'),
+      to: z.string().min(8).max(20).optional(),
+      runId: z.string().min(1).max(120),
+      tick: z.number().int().min(0),
+      summary: z.string().min(1).max(900),
+      dryRun: z.boolean().default(false),
+    }),
+    z.object({
+      kind: z.literal('deadline_alert'),
+      to: z.string().min(8).max(20).optional(),
+      title: z.string().min(1).max(200),
+      deadline: z.string().min(1).max(120),
+      actionUrl: z.string().url().optional(),
+      dryRun: z.boolean().default(false),
+    }),
+    z.object({
+      kind: z.literal('approval_request'),
+      to: z.string().min(8).max(20).optional(),
+      runId: z.string().min(1).max(120),
+      summary: z.string().min(1).max(600),
+      expiresInMinutes: z.number().int().min(5).max(10_080).default(1_440),
+      dryRun: z.boolean().default(false),
+    }),
+  ])
+
+  app.post('/v1/whatsapp/notify', async (request, reply) => {
+    const parsed = notifySchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+
+    const body = parsed.data
+    const to = body.to ?? config.whatsapp.recipient
+    if (!to) return reply.status(400).send({ error: 'No recipient: set WHATSAPP_RECIPIENT_WAID or pass `to`.' })
+
+    let template: string
+    let bodyParams: string[]
+    let buttonUrlParam: string | undefined
+    let link: string | undefined
+
+    if (body.kind === 'joint_report') {
+      template = WHATSAPP_TEMPLATES.jointReport
+      bodyParams = [body.runId, String(body.tick), body.summary]
+    } else if (body.kind === 'deadline_alert') {
+      template = WHATSAPP_TEMPLATES.deadlineAlert
+      bodyParams = [body.title, body.deadline, body.actionUrl ?? 'Open the console']
+    } else {
+      if (!config.whatsapp.approvalSecret) {
+        return reply.status(503).send({ error: 'APPROVAL_SECRET is not configured; cannot sign an approval link.' })
+      }
+      const { token, claims } = createApprovalToken({
+        runId: body.runId,
+        secret: config.whatsapp.approvalSecret,
+        ttlSeconds: body.expiresInMinutes * 60,
+        subject: body.summary,
+      })
+      template = WHATSAPP_TEMPLATES.approvalRequest
+      bodyParams = [body.summary, new Date(claims.exp * 1000).toISOString()]
+      buttonUrlParam = token
+      link = approvalUrl(config.whatsapp.webPublicUrl, token)
+    }
+
+    if (body.dryRun || !whatsapp.configured) {
+      return {
+        sent: false,
+        reason: whatsapp.configured ? 'dry_run' : 'not_configured',
+        to,
+        template,
+        language: config.whatsapp.templateLanguage,
+        bodyParams,
+        ...(link ? { approvalUrl: link } : {}),
+      }
+    }
+
+    try {
+      const sent = await whatsapp.sendTemplate({
+        to,
+        name: template,
+        language: config.whatsapp.templateLanguage,
+        bodyParams,
+        ...(buttonUrlParam ? { buttonUrlParam } : {}),
+      })
+      return { sent: true, messageId: sent.messageId, template, ...(link ? { approvalUrl: link } : {}) }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  app.get('/v1/whatsapp/approvals/:token', async (request, reply) => {
+    const { token } = z.object({ token: z.string().min(1).max(4096) }).parse(request.params)
+    const verdict = verifyApprovalToken(token, config.whatsapp.approvalSecret)
+    if (!verdict.ok) {
+      return reply.status(verdict.reason === 'expired' ? 410 : 400).send({ error: verdict.reason })
+    }
+
+    const record = await approvals.get(verdict.claims.jti)
+    const reports = await engine.reports.getReports(verdict.claims.runId).catch(() => [])
+    return {
+      runId: verdict.claims.runId,
+      subject: verdict.claims.subject ?? null,
+      expiresAt: new Date(verdict.claims.exp * 1000).toISOString(),
+      decision: record?.decision ?? null,
+      decidedAt: record?.decidedAt ?? null,
+      note: record?.note ?? null,
+      reports: reports.map((report) => ({
+        tick: report.tick,
+        summary: report.summary,
+        conflicts: report.conflicts.length,
+        citations: report.citations.length,
+      })),
+    }
+  })
+
+  app.post('/v1/whatsapp/approvals/:token', async (request, reply) => {
+    const { token } = z.object({ token: z.string().min(1).max(4096) }).parse(request.params)
+    const body = z
+      .object({
+        decision: z.enum(['approved', 'rejected']),
+        note: z.string().max(1000).optional(),
+      })
+      .safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    const verdict = verifyApprovalToken(token, config.whatsapp.approvalSecret)
+    if (!verdict.ok) {
+      return reply.status(verdict.reason === 'expired' ? 410 : 400).send({ error: verdict.reason })
+    }
+
+    const decision = body.data.decision as ApprovalDecision
+    const decidedAt = new Date().toISOString()
+    const result = await approvals.decide({
+      jti: verdict.claims.jti,
+      runId: verdict.claims.runId,
+      decision,
+      ...(body.data.note ? { note: body.data.note } : {}),
+      decidedAt,
+      channel: 'whatsapp',
+    })
+    if (!result.ok) {
+      return reply.status(409).send({
+        error: 'already_decided',
+        decision: result.existing.decision,
+        decidedAt: result.existing.decidedAt,
+      })
+    }
+
+    try {
+      await engine.audit.logAction({
+        actor: 'whatsapp',
+        action: 'whatsapp.approval',
+        target: `run:${verdict.claims.runId}:${decision}`,
+        lens: 'hybrid',
+        runId: verdict.claims.runId,
+      })
+    } catch {
+      // The decision is recorded; an unreachable audit store must not replay it.
+    }
+
+    return { recorded: true, decision, decidedAt }
   })
 
   // ── Audit ─────────────────────────────────────────────────────────────────

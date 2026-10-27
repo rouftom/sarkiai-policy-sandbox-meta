@@ -8,14 +8,15 @@ import fitz  # PyMuPDF
 import httpx
 from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 
-from rag_ingestion.config import settings
+from rag_ingestion.config import settings, resolved_embedding_backend, resolved_vector_backend
 from rag_ingestion.api.schemas import (
     HealthResponse,
     IngestResultResponse,
     TextIngestRequest,
 )
 from rag_ingestion.services.chunker import StructureAwareChunker
-from rag_ingestion.services.embeddings import EmbeddingService
+from rag_ingestion.services.embeddings import EmbeddingService, VoyageEmbeddingService
+from rag_ingestion.services.mongo_store import MongoPolicyStore
 from rag_ingestion.services.qdrant_store import QdrantPolicyStore
 
 router = APIRouter()
@@ -79,10 +80,10 @@ def _ingest_text(
 
     chunks = [candidate.to_dict(i) for i, candidate in enumerate(candidates)]
 
-    embedder = EmbeddingService()
+    embedder = VoyageEmbeddingService() if resolved_embedding_backend() == "voyage" else EmbeddingService()
     embeddings = embedder.embed_documents([c["text"] for c in chunks])
 
-    store = QdrantPolicyStore()
+    store = MongoPolicyStore() if resolved_vector_backend() == "atlas" else QdrantPolicyStore()
     store.ensure_collection()
     result = store.upsert_chunks(
         chunks,
@@ -113,11 +114,17 @@ def _ingest_text(
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
+    embedding_model = (
+        settings.voyage_embedding_model
+        if resolved_embedding_backend() == "voyage"
+        else settings.embedding_model
+    )
     return HealthResponse(
         status="ok",
         service="sps-ingestion",
-        embeddingModel=settings.embedding_model,
+        embeddingModel=embedding_model,
         mongoCollection=settings.mongodb_collection,
+        vectorBackend=resolved_vector_backend(),
         ocrEnabled=bool(settings.ocr_url),
     )
 

@@ -20,6 +20,7 @@
     "test:e2e": "bun test tests/e2e",
     "check:provider": "bun scripts/check-provider.ts",
     "check:gazette": "bun scripts/check-gazette.ts",
+    "kb:indexes": "bun scripts/ensure-mongo-indexes.ts",
     "clean": "turbo run clean && rm -rf node_modules .turbo"
   },
   "devDependencies": {

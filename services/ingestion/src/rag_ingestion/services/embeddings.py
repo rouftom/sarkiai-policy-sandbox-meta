@@ -47,3 +47,60 @@ class EmbeddingService:
         if not vectors:
             raise RuntimeError("Local embedder returned no vector for the query.")
         return vectors[0]
+
+
+class VoyageEmbeddingService:
+    """Cloud embeddings through Voyage AI (default `voyage-4`, 1024-dim).
+
+    Meta has no embedding model, so cloud mode uses Voyage. The service fails
+    fast when the key is missing or the provider returns a different number of
+    vectors: writing zero vectors would silently poison Atlas.
+    """
+
+    def __init__(self, api_key: str = None, base_url: str = None, model: str = None):
+        self.api_key = api_key or settings.voyage_api_key
+        self.base_url = (base_url or settings.voyage_api_url).rstrip("/")
+        self.model = model or settings.voyage_embedding_model
+
+    def _embed(self, texts: List[str], input_type: str) -> List[List[float]]:
+        if not texts:
+            return []
+        if not self.api_key:
+            raise RuntimeError("VOYAGE_API_KEY is not configured; cannot generate embeddings.")
+
+        vectors: List[List[float]] = []
+        batch_size = settings.voyage_embedding_batch_size
+        for start in range(0, len(texts), batch_size):
+            window = texts[start : start + batch_size]
+            response = httpx.post(
+                f"{self.base_url}/embeddings",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "input": window,
+                    "model": self.model,
+                    "input_type": input_type,
+                    "truncation": True,
+                },
+                timeout=120.0,
+            )
+            response.raise_for_status()
+            rows = response.json().get("data") or []
+            if len(rows) != len(window):
+                raise RuntimeError(
+                    f"Voyage returned {len(rows)} vectors for {len(window)} inputs."
+                )
+            for row in sorted(rows, key=lambda item: item.get("index", 0)):
+                embedding = row.get("embedding") or []
+                if not embedding:
+                    raise RuntimeError("Voyage returned an empty vector.")
+                vectors.append(embedding)
+        return vectors
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self._embed(texts, "document")
+
+    def embed_query(self, text: str) -> List[float]:
+        vectors = self._embed([text], "query")
+        if not vectors:
+            raise RuntimeError("Voyage returned no embedding for the query.")
+        return vectors[0]

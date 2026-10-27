@@ -10,6 +10,7 @@ class HealthResponse(BaseModel):
     service: str
     embeddingModel: str
     mongoCollection: str
+    vectorBackend: str = "qdrant"
     ocrEnabled: bool
 
 

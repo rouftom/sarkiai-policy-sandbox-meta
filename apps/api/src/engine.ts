@@ -1,9 +1,18 @@
 /** Composes the shared packages into the two lenses + the hybrid profile. */
 
+import { fileURLToPath } from 'node:url'
 import { createModel, resolveProvider } from '@sps/agents'
 import { PolicyOrchestrator } from '@sps/agents'
 import { MultiAgentCoordinator } from '@sps/agents'
-import { PolicyRetriever } from '@sps/retrieval'
+import {
+  AtlasRetriever,
+  PolicyRetriever,
+  ensureAtlasIndexes,
+  loadIndexDefinitions,
+  resolveRetrievalBackend,
+  type Retriever,
+  type RetrievalBackend,
+} from '@sps/retrieval'
 import { ReadinessEngine } from '@sps/readiness'
 import { AuditService } from '@sps/audit'
 import { ReportStore } from '@sps/report'
@@ -17,16 +26,32 @@ export function createEngine() {
   // and the readiness lens share the same model handle.
   const provider = resolveProvider(process.env)
   const model = createModel({ provider })
+  const retrievalBackend = resolveRetrievalBackend(provider.mode, config.retrieval.backend)
 
-  const retriever = new PolicyRetriever({
-    qdrantUrl: config.qdrant.url,
-    qdrantApiKey: config.qdrant.apiKey || undefined,
-    collectionName: config.qdrant.collection,
-    embeddingsBaseUrl: config.embeddings.baseUrl,
-    embeddingModel: config.embeddings.model,
-    rerankUrl: config.rerank.url || undefined,
-    rerankModel: config.rerank.model,
-  })
+  const retriever: Retriever =
+    retrievalBackend === 'atlas'
+      ? new AtlasRetriever({
+          mongodbUri: config.mongodb.uri,
+          dbName: config.mongodb.dbName,
+          collectionName: config.retrieval.atlas.collection,
+          vectorIndex: config.retrieval.atlas.vectorIndex,
+          textIndex: config.retrieval.atlas.textIndex,
+          voyage: {
+            apiKey: config.retrieval.voyage.apiKey,
+            baseUrl: config.retrieval.voyage.baseUrl,
+            embeddingModel: config.retrieval.voyage.embeddingModel,
+            rerankModel: config.retrieval.voyage.rerankModel,
+          },
+        })
+      : new PolicyRetriever({
+          qdrantUrl: config.qdrant.url,
+          qdrantApiKey: config.qdrant.apiKey || undefined,
+          collectionName: config.qdrant.collection,
+          embeddingsBaseUrl: config.embeddings.baseUrl,
+          embeddingModel: config.embeddings.model,
+          rerankUrl: config.rerank.url || undefined,
+          rerankModel: config.rerank.model,
+        })
 
   const audit = new AuditService({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
   const reports = new ReportStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
@@ -46,7 +71,50 @@ export function createEngine() {
     secretKey: config.s3.secretKey,
   })
 
-  return { model, provider, retriever, audit, reports, orchestrator, coordinator, readiness, storage }
+  return { model, provider, retriever, retrievalBackend, audit, reports, orchestrator, coordinator, readiness, storage }
+}
+
+export interface CloudStorePreparation {
+  backend: RetrievalBackend
+  skipped: boolean
+  supported?: boolean
+  collectionCreated?: boolean
+  created?: string[]
+  updated?: string[]
+  unchanged?: string[]
+  error?: string
+}
+
+/**
+ * Prepare the cloud vector store at startup — and only in cloud mode.
+ *
+ * Local Mongo has no Atlas Search, so `sovereign` and `local` never try. The
+ * collection is created first (a fresh cluster otherwise returns
+ * NamespaceNotFound); index creation is idempotent. A failure is reported, not
+ * fatal: `/v1/provider` and the rest of the console still boot, and the next
+ * request surfaces the retrieval error explicitly.
+ */
+export async function prepareCloudStores(): Promise<CloudStorePreparation> {
+  const provider = resolveProvider(process.env)
+  const backend = resolveRetrievalBackend(provider.mode, config.retrieval.backend)
+
+  if (provider.mode !== 'cloud' || backend !== 'atlas' || !config.retrieval.atlas.autoIndexes) {
+    return { backend, skipped: true }
+  }
+
+  try {
+    const file = fileURLToPath(new URL('../../../deploy/mongo/kb.indexes.json', import.meta.url))
+    const artifact = loadIndexDefinitions(file)
+    const result = await ensureAtlasIndexes({
+      uri: config.mongodb.uri,
+      dbName: config.mongodb.dbName,
+      collection: config.retrieval.atlas.collection ?? artifact.collection,
+      indexes: artifact.indexes,
+    })
+    return { backend, skipped: false, ...result }
+  } catch (error) {
+    return { backend, skipped: false, error: (error as Error).message }
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { INSTITUTIONS, type InstitutionSpec, type KbChunk } from '@sps/shared'
-import type { PolicyRetriever } from '@sps/retrieval'
+import type { Retriever } from '@sps/retrieval'
 import type { LanguageModel } from 'ai'
 import { PolicyOrchestrator } from './orchestrator'
 
@@ -26,7 +26,7 @@ const institution: InstitutionSpec =
 
 const retriever = {
   search: async () => [chunk],
-} as unknown as PolicyRetriever
+} as unknown as Retriever
 
 /** A model that replays prepared answers, one per call. */
 function scriptedModel(answers: string[]): { model: LanguageModel; calls: () => number } {

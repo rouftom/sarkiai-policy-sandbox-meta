@@ -149,6 +149,28 @@ const en = {
   'gazette.corpusHint':
     'Text zones and tables are added as one page document; stamps and signatures stay in the overlay and are never retrieved as law.',
   'gazette.empty': 'Load the sample page or a PNG/JPEG scan to see the segmentation overlay.',
+
+  'approval.title': 'HUMAN APPROVAL',
+  'approval.loading': 'Verifying the approval link…',
+  'approval.invalid': 'This approval link is invalid or has expired.',
+  'approval.run': 'Run',
+  'approval.expires': 'Expires',
+  'approval.pending': 'Awaiting a decision',
+  'approval.approved': 'Approved',
+  'approval.rejected': 'Rejected',
+  'approval.decidedAt': 'Decided',
+  'approval.summary': 'WHAT IS BEING APPROVED',
+  'approval.reports': 'Joint reports',
+  'approval.conflicts': 'conflicts',
+  'approval.citations': 'citations',
+  'approval.note': 'Note (optional)',
+  'approval.notePlaceholder': 'Why this decision?',
+  'approval.approve': 'Approve',
+  'approval.reject': 'Reject',
+  'approval.submitting': 'Recording…',
+  'approval.already': 'This link was already used. The recorded decision is shown above.',
+  'approval.error': 'The decision could not be recorded.',
+  'approval.dryRun': 'WhatsApp is not configured — the link is shown here for the demo.',
 }
 
 const fr: Record<keyof typeof en, string> = {
@@ -284,6 +306,28 @@ const fr: Record<keyof typeof en, string> = {
   'gazette.corpusHint':
     'Les zones de texte et les tableaux forment un document de page ; les tampons et signatures restent dans l’overlay et ne sont jamais retrouvés comme du droit.',
   'gazette.empty': 'Chargez la page d’exemple ou un scan PNG/JPEG pour voir l’overlay de segmentation.',
+
+  'approval.title': 'APPROBATION HUMAINE',
+  'approval.loading': 'Vérification du lien d’approbation…',
+  'approval.invalid': 'Ce lien d’approbation est invalide ou a expiré.',
+  'approval.run': 'Exécution',
+  'approval.expires': 'Expire',
+  'approval.pending': 'En attente d’une décision',
+  'approval.approved': 'Approuvé',
+  'approval.rejected': 'Rejeté',
+  'approval.decidedAt': 'Décidé',
+  'approval.summary': 'CE QUI EST SOUMIS À APPROBATION',
+  'approval.reports': 'Rapports conjoints',
+  'approval.conflicts': 'conflits',
+  'approval.citations': 'citations',
+  'approval.note': 'Note (facultative)',
+  'approval.notePlaceholder': 'Pourquoi cette décision ?',
+  'approval.approve': 'Approuver',
+  'approval.reject': 'Rejeter',
+  'approval.submitting': 'Enregistrement…',
+  'approval.already': 'Ce lien a déjà été utilisé. La décision enregistrée est affichée ci-dessus.',
+  'approval.error': 'La décision n’a pas pu être enregistrée.',
+  'approval.dryRun': 'WhatsApp n’est pas configuré — le lien est affiché ici pour la démo.',
 }
 
 const DICTIONARIES: Record<Locale, Record<keyof typeof en, string>> = { en, fr }

@@ -20,7 +20,7 @@ import {
   type ReadinessScenario,
   type WhatIfResult,
 } from '@sps/shared'
-import type { PolicyRetriever } from '@sps/retrieval'
+import type { Retriever } from '@sps/retrieval'
 import { citationFromChunk } from '@sps/citations'
 import type { KbChunk } from '@sps/shared'
 import { applyPropagation } from './causal'
@@ -78,7 +78,7 @@ function dimensionMeta(dimension: ReadinessDimension) {
 
 export class ReadinessEngine {
   constructor(
-    private readonly deps: { model: LanguageModel; retriever: PolicyRetriever },
+    private readonly deps: { model: LanguageModel; retriever: Retriever },
   ) {}
 
   async assess(input: ReadinessInput): Promise<ReadinessReport> {

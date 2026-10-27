@@ -1,17 +1,21 @@
 /**
- * Hybrid retrieval over the country-scoped knowledge base — LOCAL ONLY.
+ * Retrieval backends.
  *
- * Pipeline (retrieval + model stage):
- *   1. embed the query locally (Ollama, `bge-m3`)
- *   2. prefetch dense (bge-m3) + sparse (BM25) with the jurisdiction filter
- *   3. Qdrant native fusion (RRF) of both ranked lists
- *   4. optional LOCAL rerank via a TEI `/rerank` endpoint (BAAI/bge-reranker-v2-m3)
+ * Local / sovereign  → Qdrant (bge-m3 dense + BM25 sparse, RRF, optional TEI).
+ * Cloud              → MongoDB Atlas + Voyage (`voyage-4` + `rerank-2`).
  *
- * In `local` mode no cloud call is made: embeddings and rerank stay on-premise.
+ * Both share the same `KbChunk` payload and jurisdiction taxonomy. In `local`
+ * and `sovereign` no cloud call is made: embeddings and rerank stay on-premise.
  */
 
 import { QdrantClient } from '@qdrant/js-client-rest'
 import type { KbChunk, RetrievalQuery, Taxonomy } from '@sps/shared'
+import type { Retriever } from './types'
+
+export * from './types'
+export * from './voyage'
+export * from './atlas'
+export * from './atlas-indexes'
 
 export interface RetrievalConfig {
   qdrantUrl: string
@@ -106,7 +110,7 @@ function toChunk(point: QdrantPoint): KbChunk {
   }
 }
 
-export class PolicyRetriever {
+export class PolicyRetriever implements Retriever {
   private client: QdrantClient
   private readonly cfg: Required<Pick<RetrievalConfig, 'collectionName' | 'denseVectorName' | 'sparseVectorName' | 'sparseModel' | 'embeddingModel' | 'rerankModel'>> &
     RetrievalConfig

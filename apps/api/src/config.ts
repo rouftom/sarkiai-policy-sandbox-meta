@@ -15,6 +15,25 @@ export const config = {
     collection: env('QDRANT_COLLECTION', 'policy_chunks'),
   },
 
+  // Cloud retrieval: Voyage embeddings + MongoDB Atlas Vector/Search.
+  // `auto` follows the provider mode (cloud => atlas, sovereign/local => qdrant).
+  retrieval: {
+    backend: env('RETRIEVAL_BACKEND', 'auto'),
+    voyage: {
+      apiKey: env('VOYAGE_API_KEY'),
+      baseUrl: env('VOYAGE_API_URL', 'https://api.voyageai.com/v1'),
+      embeddingModel: env('VOYAGE_EMBEDDING_MODEL', 'voyage-4'),
+      rerankModel: env('VOYAGE_RERANK_MODEL', 'rerank-2'),
+      dimensions: Number(env('EMBEDDING_DIMENSION', '1024')) || 1024,
+    },
+    atlas: {
+      collection: env('MONGODB_RAG_COLLECTION', 'kb_chunks'),
+      vectorIndex: env('MONGODB_VECTOR_INDEX', 'sps_vector_index'),
+      textIndex: env('MONGODB_TEXT_INDEX', 'sps_text_index'),
+      autoIndexes: env('MONGODB_AUTO_INDEXES', 'true') !== 'false',
+    },
+  },
+
   // Operational store only (audit log + chain-of-thought); no vectors.
   mongodb: {
     uri: env('MONGODB_URI', 'mongodb://localhost:27017'),
@@ -55,5 +74,20 @@ export const config = {
     bucket: env('S3_BUCKET', 'sps-attachments'),
     accessKey: env('S3_ACCESS_KEY', 'sps-minio'),
     secretKey: env('S3_SECRET_KEY', 'sps-minio-secret'),
+  },
+
+  // WhatsApp Cloud API, called directly from the API (no external gateway).
+  // Cloud API is the only channel; approval decisions stay inside the web app.
+  whatsapp: {
+    version: env('WHATSAPP_VERSION', 'v26.0'),
+    phoneNumberId: env('WHATSAPP_PHONE_NUMBER_ID'),
+    accessToken: env('WHATSAPP_ACCESS_TOKEN'),
+    verifyToken: env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'),
+    appSecret: env('WHATSAPP_APP_SECRET'),
+    recipient: env('WHATSAPP_RECIPIENT_WAID'),
+    templateLanguage: env('WHATSAPP_TEMPLATE_LANGUAGE', 'en'),
+    apiBaseUrl: env('WHATSAPP_API_URL', 'https://graph.facebook.com'),
+    approvalSecret: env('APPROVAL_SECRET'),
+    webPublicUrl: env('WEB_PUBLIC_URL', 'http://localhost:3000'),
   },
 } as const

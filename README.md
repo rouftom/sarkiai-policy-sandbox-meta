@@ -25,9 +25,10 @@ flags conflicts between mandates. Every step lands in a **hash-chained audit log
 It runs on **Meta models**, in three interchangeable provider modes:
 
 - **cloud** — Meta Model API: `muse-spark-1.3` for reasoning, `sam-3.1` for scanned-gazette
-  segmentation, `muse-voice-transcribe-1.0` for WhatsApp voice notes.
+  segmentation, `muse-voice-transcribe-1.0` for WhatsApp voice notes. Retrieval runs on
+  **Voyage** embeddings + **MongoDB Atlas** Vector Search (Meta publishes no embedding model).
 - **sovereign** — **Muse Glimmer** (30B, Apache-2.0) served locally by Ollama: same engine, no data
-  leaving the institution.
+  leaving the institution, retrieval stays on `bge-m3` + Qdrant.
 - **local** — any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
 
 - **Primary country:** Cameroon (MINPOSTEL-aligned), then multi-country (UAE → …).
@@ -68,11 +69,12 @@ sarkiai-policy-sandbox/
 ├─ packages/          # TypeScript workspace packages (@sps/*)
 │  ├─ shared/         # types, workflow profiles, config, jurisdiction model
 │  ├─ kb/             # ingestion client + knowledge-base domain logic
-│  ├─ retrieval/      # hybrid RAG (Qdrant dense + sparse BM25, RRF + rerank)
+│  ├─ retrieval/      # RAG: Qdrant (bge-m3 + BM25, RRF) or Atlas + Voyage (cloud)
 │  ├─ citations/      # article/section source attribution
 │  ├─ gazette/        # scanned gazette: layout, SAM 3.1 artefacts, per-zone transcription
 │  ├─ voice/          # voice notes: Muse Voice Transcribe / faster-whisper → timed facts
-│  ├─ impact/         # new provision → which open incidents change, and how
+│  ├─ whatsapp/       # direct Meta Graph API client + signed approval tokens
+│  ├─ impact/         # new policy → which open incidents change, and how
 │  ├─ agents/         # roles, mandates, orchestrator (AI SDK ToolLoopAgent)
 │  ├─ scenarios/      # progressive event engine (chunked release)
 │  ├─ readiness/      # gap engine + AI readiness dimensions
@@ -88,7 +90,9 @@ sarkiai-policy-sandbox/
 ├─ data/              # corpora: country/cm, country/ae, global/standards (git-ignored payloads)
 ├─ deploy/
 │  ├─ sandbox/        # locked-down sandbox deployment
-│  └─ mongo/init/     # local operational store seed (audit + CoT)
+│  ├─ mongo/          # Atlas Search indexes (kb.indexes.json) + local seed
+│  ├─ ollama/         # Muse Glimmer Modelfile
+│  └─ whatsapp/       # meta_hackathon_* template contract
 └─ docs/              # strategic note, mapping, architecture, data model, roadmap
 ```
 
@@ -126,6 +130,10 @@ SANDBOX_MODE=cloud docker compose up -d api web      # Meta Model API
 SANDBOX_MODE=sovereign docker compose up -d api web  # Muse Glimmer on Ollama
 ```
 
+Cloud mode also needs `MODEL_API_KEY`, `VOYAGE_API_KEY` and a `mongodb+srv`
+`MONGODB_URI`; the API creates the Atlas indexes at startup (see below). Local
+and sovereign modes ignore those variables.
+
 The switch is recorded in the audit chain as a `provider.switched` event, and
 each chain-of-thought step names the mode and model that produced it.
 
@@ -160,6 +168,53 @@ bun run check:provider            # SANDBOX_MODE
 bun run check:provider cloud      # Meta Model API
 bun run check:provider sovereign  # Muse Glimmer on Ollama
 ```
+
+### Cloud retrieval (Voyage + MongoDB Atlas)
+
+Local and sovereign modes keep the existing hybrid retrieval: `bge-m3` dense +
+BM25 sparse in Qdrant, fused with RRF. Cloud mode uses the same `KbChunk`
+contract on **MongoDB Atlas**:
+
+1. ingestion embeds with **Voyage `voyage-4`** (1024 dims, dotProduct);
+2. `$vectorSearch` and `$search` (BM25) run over `kb_chunks`;
+3. the two lists are fused with RRF, then re-scored with **Voyage `rerank-2`**.
+
+`RETRIEVAL_BACKEND=auto` follows the provider mode (cloud → Atlas, otherwise
+Qdrant). The Atlas indexes live in [`deploy/mongo/kb.indexes.json`](deploy/mongo/kb.indexes.json)
+and are created **only in cloud mode**, at API startup: the collection is created
+first, then `sps_vector_index` and `sps_text_index` are created or updated
+idempotently. To do it by hand:
+
+```bash
+MONGODB_URI=... MONGODB_DB_NAME=policy_sandbox bun run kb:indexes
+```
+
+On the local Mongo used by Compose there is no Atlas Search; the script reports
+`supported: false` and exits 0, and the engine stays on Qdrant.
+
+### WhatsApp channel and approvals (N4)
+
+The API talks to the **WhatsApp Cloud API directly** (`packages/whatsapp`,
+~100 lines of `fetch`); no notification worker sits in between. Business-initiated
+messages use approved utility templates prefixed `meta_hackathon_`:
+
+| Template | Used for |
+|---|---|
+| `meta_hackathon_joint_report` | a joint situation report at a scenario tick |
+| `meta_hackathon_deadline_alert` | an approaching legal deadline |
+| `meta_hackathon_approval_request` | a decision that needs a human |
+
+The approval message carries a **signed, expiring link** to the web app
+(`/approve/:token`); there is no quick-reply. The operator reads the run, writes
+an optional note, approves or rejects, and the decision is stored once in
+`whatsapp_approvals` (`_id` = token `jti`) and appended to the audit chain as
+`whatsapp.approval`. The webhook verifies `X-Hub-Signature-256` against the exact
+raw body; inbound free text is acknowledged, never treated as an approval.
+
+Template wording, categories and button configuration:
+[`deploy/whatsapp/templates.md`](deploy/whatsapp/templates.md). Without a live
+number, `POST /v1/whatsapp/notify` with `dryRun: true` returns the exact payload
+and the signed link, which is what the demo uses.
 
 ### Scanned gazettes (N3)
 

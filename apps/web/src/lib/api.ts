@@ -267,8 +267,7 @@ export interface VoiceTranscriptDto {
 }
 
 /** Legislative impact on open incidents (N7). */
-export interface ImpactFindingDto {
-  runId: string
+export interface ImpactFindingDto {  runId: string
   severity: 'low' | 'medium' | 'high' | 'critical'
   reason: string
   affectedArticles: string[]
@@ -290,6 +289,35 @@ export interface ImpactAnalysisDto {
   unaffectedRunIds: string[]
   model: string
   generatedAt: string
+}
+
+/** WhatsApp approval link (N4): the decision is taken in this app, not in WhatsApp. */
+export interface ApprovalReportDto {
+  tick: number
+  summary: string
+  conflicts: number
+  citations: number
+}
+
+export interface ApprovalDto {
+  runId: string
+  subject: string | null
+  expiresAt: string
+  decision: 'approved' | 'rejected' | null
+  decidedAt: string | null
+  note: string | null
+  reports: ApprovalReportDto[]
+}
+
+export interface WhatsappNotifyDto {
+  sent: boolean
+  reason?: 'dry_run' | 'not_configured'
+  to?: string
+  template?: string
+  language?: string
+  bodyParams?: string[]
+  approvalUrl?: string
+  messageId?: string
 }
 
 export const api = {
@@ -367,6 +395,23 @@ export const api = {
     }
     runIds: string[]
   }) => request<ImpactAnalysisDto>('/v1/impact/analyze', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** Human-approval page (N4). The signed token comes from a WhatsApp link. */
+  approval: (token: string) =>
+    request<ApprovalDto>(`/v1/whatsapp/approvals/${encodeURIComponent(token)}`),
+
+  decideApproval: (token: string, decision: 'approved' | 'rejected', note?: string) =>
+    request<{ recorded: boolean; decision: string; decidedAt: string }>(
+      `/v1/whatsapp/approvals/${encodeURIComponent(token)}`,
+      { method: 'POST', body: JSON.stringify({ decision, ...(note ? { note } : {}) }) },
+    ),
+
+  /** Send an approved template (or build the approval link in dry-run mode). */
+  notifyWhatsApp: (body:
+    | { kind: 'joint_report'; to?: string; runId: string; tick: number; summary: string; dryRun?: boolean }
+    | { kind: 'deadline_alert'; to?: string; title: string; deadline: string; actionUrl?: string; dryRun?: boolean }
+    | { kind: 'approval_request'; to?: string; runId: string; summary: string; dryRun?: boolean }
+  ) => request<WhatsappNotifyDto>('/v1/whatsapp/notify', { method: 'POST', body: JSON.stringify(body) }),
 
   dossierUrl: (runId: string, format: 'json' | 'markdown' = 'markdown') =>
     `${API_URL}/v1/audit/dossier/${runId}?format=${format}`,

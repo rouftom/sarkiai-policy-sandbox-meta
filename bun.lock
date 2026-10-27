@@ -37,8 +37,10 @@
         "@sps/shared": "workspace:*",
         "@sps/storage": "workspace:*",
         "@sps/voice": "workspace:*",
+        "@sps/whatsapp": "workspace:*",
         "ai": "^6.0.0",
         "fastify": "^5.1.0",
+        "mongodb": "^6.10.0",
         "zod": "^3.23.8",
       },
       "devDependencies": {
@@ -172,6 +174,7 @@
       "dependencies": {
         "@qdrant/js-client-rest": "^1.12.0",
         "@sps/shared": "workspace:*",
+        "mongodb": "^6.10.0",
       },
       "devDependencies": {
         "typescript": "^5.6.0",
@@ -236,6 +239,13 @@
       "dependencies": {
         "@sps/shared": "workspace:*",
       },
+      "devDependencies": {
+        "typescript": "^5.6.0",
+      },
+    },
+    "packages/whatsapp": {
+      "name": "@sps/whatsapp",
+      "version": "0.1.0",
       "devDependencies": {
         "typescript": "^5.6.0",
       },
@@ -443,6 +453,8 @@
     "@sps/voice": ["@sps/voice@workspace:packages/voice"],
 
     "@sps/web": ["@sps/web@workspace:apps/web"],
+
+    "@sps/whatsapp": ["@sps/whatsapp@workspace:packages/whatsapp"],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 

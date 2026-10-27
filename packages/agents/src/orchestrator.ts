@@ -16,7 +16,7 @@ import type {
   ProviderDescriptor,
   WorkflowLens,
 } from '@sps/shared'
-import type { PolicyRetriever } from '@sps/retrieval'
+import type { Retriever } from '@sps/retrieval'
 import { citationFromChunk, citationRetryDirective, validateCitations } from '@sps/citations'
 import type { AuditService } from '@sps/audit'
 import { attachmentGuardrail, buildSystemPrompt, citationDirective } from './prompt'
@@ -58,7 +58,7 @@ export interface AgentRunInput {
 
 export interface OrchestratorDeps {
   model: LanguageModel
-  retriever: PolicyRetriever
+  retriever: Retriever
   audit?: AuditService
   /** Active provider, recorded in every trace step (never contains a secret). */
   provider?: ProviderDescriptor
