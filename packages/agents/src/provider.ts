@@ -165,10 +165,15 @@ export function providerApiKey(descriptor: ProviderDescriptor, source: Env = pro
 
 /** Build the chat model for a descriptor (lazy: no network call happens here). */
 export function createProviderModel(descriptor: ProviderDescriptor, source: Env = process.env): LanguageModel {
+  // Optional egress relay: some container networks cannot reach the Meta API
+  // directly, so `META_BASE_URL` points at our own relay and the shared secret
+  // travels in a header. The key itself never leaves the server.
+  const relayKey = env(source, 'MODEL_RELAY_KEY')
   const provider = createOpenAICompatible({
     name: descriptor.servedBy.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'provider',
     baseURL: descriptor.baseURL,
     apiKey: providerApiKey(descriptor, source),
+    ...(relayKey ? { headers: { 'x-sps-relay-key': relayKey } } : {}),
   })
   return provider.chatModel(descriptor.models.reasoning)
 }
