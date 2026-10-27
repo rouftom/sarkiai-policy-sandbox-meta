@@ -117,6 +117,29 @@ function chunkSection(section: Section, maxChars: number, overlapChars: number):
   return chunks
 }
 
+/** Sections shorter than this, without an article number, join the previous section. */
+const MIN_SECTION_CHARS = 400
+
+/**
+ * Upper-case lines are often running headers or sub-titles, not structure. Without
+ * this merge, every such line starts a section and the chunks become tiny (a
+ * 1.6 M-character compilation came out as 3,700 chunks of ~400 characters). Articles
+ * keep their own section so the citation provenance stays exact.
+ */
+function mergeSmallSections(sections: Section[], maxChars: number): Section[] {
+  const out: Section[] = []
+  for (const section of sections) {
+    const previous = out[out.length - 1]
+    const body = section.body.trim()
+    if (previous && !section.articleNumber && body.length < MIN_SECTION_CHARS && previous.body.length + body.length < maxChars) {
+      previous.body = `${previous.body}\n${body}`
+      continue
+    }
+    out.push({ ...section, body })
+  }
+  return out
+}
+
 /**
  * Turn one document into chunks. Headings open a new section and are kept in
  * `headingPath`; article/section numbers are extracted when recognisable.
@@ -176,6 +199,6 @@ export function chunkDocument(raw: string, options: ChunkOptions = {}): Document
   }
   pushSection(sections, current)
 
-  const chunks = sections.flatMap((section) => chunkSection(section, maxChars, overlapChars))
+  const chunks = mergeSmallSections(sections, maxChars).flatMap((section) => chunkSection(section, maxChars, overlapChars))
   return chunks.map((chunk, chunkIndex) => ({ ...chunk, chunkIndex }))
 }

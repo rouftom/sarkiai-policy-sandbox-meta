@@ -92,6 +92,21 @@ async function extractPdf(file: string): Promise<string> {
   return raw.replace(/\f/g, '\n').replace(/\u00a0/g, ' ')
 }
 
+/** Cut a very long text at line breaks into parts of about `limit` characters. */
+function splitForUpload(text: string, limit = 400_000): string[] {
+  if (text.length <= limit * 1.25) return [text]
+  const parts: string[] = []
+  let rest = text
+  while (rest.length > limit * 1.25) {
+    let cut = rest.lastIndexOf('\n', limit)
+    if (cut < limit * 0.5) cut = limit
+    parts.push(rest.slice(0, cut))
+    rest = rest.slice(cut)
+  }
+  parts.push(rest)
+  return parts
+}
+
 async function post(body: Record<string, unknown>): Promise<{ status: number; payload: IngestResponse }> {
   const response = await fetch(`${api}/v1/kb/ingest/text`, {
     method: 'POST',
@@ -113,32 +128,35 @@ async function ingestDocument(document: ManifestDocument & { file: string }): Pr
     return
   }
 
-  const body = {
-    text,
-    filename: kbFilename(document.file),
-    country,
-    jurisdiction: document.jurisdiction === 'regional' ? 'regional' : 'national',
-    docType: document.docType,
-    namespace: `${country}-corpus`,
-    version: '2026',
-    ...(document.sourceUrl ? { sourceUrl: document.sourceUrl } : {}),
-    maxChars: 1500,
-    overlapChars: 180,
-  }
+  const parts = splitForUpload(text)
+  for (const [index, part] of parts.entries()) {
+    const filename = parts.length === 1 ? kbFilename(document.file) : kbFilename(document.file).replace(/\.txt$/, `_${index + 1}of${parts.length}.txt`)
+    const body = {
+      text: part,
+      filename,
+      country,
+      jurisdiction: document.jurisdiction === 'regional' ? 'regional' : 'national',
+      docType: document.docType,
+      namespace: `${country}-corpus`,
+      version: '2026',
+      ...(document.sourceUrl ? { sourceUrl: document.sourceUrl } : {}),
+      // Long compilations use larger chunks: the per-document chunk ceiling and the
+      // request duration both stay bounded.
+      ...(text.length > 800_000 ? { maxChars: 3000, overlapChars: 150 } : { maxChars: 1500, overlapChars: 180 }),
+    }
 
-  if (dryRun) {
-    console.log(`  ${document.file}: ${characters.toLocaleString('en-US')} chars → ${kbFilename(document.file)} (dry run)`)
-    return
-  }
+    if (dryRun) {
+      console.log(`  ${filename}: ${part.trim().length.toLocaleString('en-US')} chars (dry run)`)
+      continue
+    }
 
-  const started = Date.now()
-  const { status, payload } = await post(body)
-  const detail = payload.ok
-    ? `${payload.chunks ?? 0} chunks (${payload.inserted ?? 0} new, ${payload.unchanged ?? 0} unchanged)`
-    : (payload.error ?? 'failed')
-  console.log(
-    `  ${document.file}: HTTP ${status} · ${detail} · ${Date.now() - started} ms`,
-  )
+    const started = Date.now()
+    const { status, payload } = await post(body)
+    const detail = payload.ok
+      ? `${payload.chunks ?? 0} chunks (${payload.inserted ?? 0} new, ${payload.unchanged ?? 0} unchanged)`
+      : (payload.error ?? 'failed')
+    console.log(`  ${filename}: HTTP ${status} · ${detail} · ${Date.now() - started} ms`)
+  }
 }
 
 async function ingestSamples(): Promise<void> {

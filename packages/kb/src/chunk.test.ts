@@ -40,4 +40,20 @@ describe('chunkDocument', () => {
     const second = chunkDocument(LAW, { maxChars: 700, overlapChars: 100 })
     expect(second).toEqual(first)
   })
+
+  test('running headers do not turn into one tiny chunk each', () => {
+    const body = Array.from(
+      { length: 40 },
+      (_, index) => `RAPPORT ANNUEL SECTION ${index}\nLe texte de cette page décrit le dispositif applicable et ses modalités de mise en œuvre.`,
+    ).join('\n')
+    const chunks = chunkDocument(body, { maxChars: 1500, overlapChars: 0 })
+    expect(chunks.length).toBeLessThan(10)
+  })
+
+  test('articles keep their own section, so their numbers survive the merge', () => {
+    const text = `${'Texte introductif. '.repeat(30)}\n\nARTICLE 4\nLe responsable du traitement informe la personne concernée.\n\nARTICLE 5\nLes données sont conservées pendant une durée limitée.`
+    const numbers = chunkDocument(text, { maxChars: 1500, overlapChars: 0 }).map((chunk) => chunk.articleNumber)
+    expect(numbers).toContain('4')
+    expect(numbers).toContain('5')
+  })
 })
