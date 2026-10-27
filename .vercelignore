@@ -1,0 +1,11 @@
+# Never upload local secrets with a CLI deployment.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local build output and tooling caches
+**/.next
+**/.turbo
+**/node_modules
+**/dist
