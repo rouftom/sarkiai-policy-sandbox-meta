@@ -6,7 +6,7 @@
  * is the single-agent unit it composes.
  */
 
-import { generateText, type LanguageModel, type UserContent } from 'ai'
+import { generateText, streamText, type LanguageModel, type UserContent } from 'ai'
 import type {
   AgentAssessment,
   Citation,
@@ -56,6 +56,20 @@ export interface AgentRunInput {
   attachmentMeta?: AttachmentMeta[]
 }
 
+/**
+ * Stages the console can display while an agent works. `retry` means the
+ * citation validator rejected the first answer and the model is answering
+ * again: the client clears the visible draft before the next deltas arrive.
+ */
+export type AgentStage = 'retrieving' | 'generating' | 'validating' | 'retry' | 'persisting'
+
+export interface AgentStreamHandlers {
+  /** Coarse progress for the processing bar. */
+  onStage?: (stage: AgentStage, detail?: Record<string, unknown>) => void
+  /** Incremental answer text (already cleaned by the provider). */
+  onDelta?: (text: string) => void
+}
+
 export interface OrchestratorDeps {
   model: LanguageModel
   retriever: Retriever
@@ -78,11 +92,27 @@ export class PolicyOrchestrator {
     return this.deps.provider ? describeProvider(this.deps.provider) : 'configured'
   }
 
+  /** One-shot answer (unchanged contract for the scenario coordinator). */
   async runAgent(input: AgentRunInput): Promise<AgentAssessment> {
+    return this.run(input)
+  }
+
+  /**
+   * Same pipeline as `runAgent`, but the answer reaches the client as it is
+   * generated. Retrieval, citation validation and audit are identical: only
+   * generation switches from `generateText` to `streamText`, so a streamed
+   * answer can never be less grounded than a buffered one.
+   */
+  async streamAgent(input: AgentRunInput, handlers: AgentStreamHandlers = {}): Promise<AgentAssessment> {
+    return this.run(input, handlers)
+  }
+
+  private async run(input: AgentRunInput, handlers?: AgentStreamHandlers): Promise<AgentAssessment> {
     const { institution, question, country, domain, lens } = input
     const runId = input.runId ?? `run-${Date.now()}`
 
     // 1. Retrieve country provisions (collection → retrieval stage).
+    handlers?.onStage?.('retrieving', { country, topK: input.topK ?? 8 })
     const chunks = await this.deps.retriever.search({
       text: question,
       country,
@@ -140,19 +170,37 @@ export class PolicyOrchestrator {
     const corpus = chunks.map((chunk) => chunk.text).join('\n')
     let validation: CitationValidation = validateCitations('', citations, { attempts: 0, corpus })
 
-    while (attempt < maxAttempts) {
-      attempt += 1
-      const prompt = attempt === 1 ? question : `${question}\n\n${citationRetryDirective(validation.rejected)}`
-
-      const { text: answer, reasoning } = await generateText({
+    /** One generation, buffered or streamed depending on the caller. */
+    const generateOnce = async (prompt: string): Promise<{ text: string; reasoning: string }> => {
+      const settings = {
         model: this.deps.model,
         system,
         maxOutputTokens: input.maxOutputTokens ?? this.deps.maxOutputTokens ?? 4096,
         ...(hasAttachments ? { messages: [{ role: 'user' as const, content: userContent(prompt) }] } : { prompt }),
-      })
+      }
+      if (!handlers?.onDelta) {
+        const { text: answer, reasoning } = await generateText(settings)
+        return { text: answer, reasoning: (reasoning ?? []).map((part) => part.text).join('\n') }
+      }
+      const result = streamText(settings)
+      for await (const delta of result.textStream) {
+        if (delta) handlers.onDelta(delta)
+      }
+      // The aggregated promise is authoritative (the stream can be split mid-token).
+      const [answer, reasoning] = await Promise.all([result.text, result.reasoning])
+      return { text: answer, reasoning: (reasoning ?? []).map((part) => part.text).join('\n') }
+    }
+
+    while (attempt < maxAttempts) {
+      attempt += 1
+      const prompt = attempt === 1 ? question : `${question}\n\n${citationRetryDirective(validation.rejected)}`
+
+      handlers?.onStage?.('generating', { attempt })
+      const { text: answer, reasoning } = await generateOnce(prompt)
 
       text = answer
-      reasoningText = (reasoning ?? []).map((part) => part.text).join('\n')
+      reasoningText = reasoning
+      handlers?.onStage?.('validating', { attempt })
       validation = validateCitations(answer, citations, { attempts: attempt, corpus })
 
       if (validation.ok) break
@@ -177,6 +225,8 @@ export class PolicyOrchestrator {
         model: this.modelLabel(),
       })
       if (!lastAttempt) {
+        // The client clears the rejected draft before the corrective answer.
+        handlers?.onStage?.('retry', { attempt, rejected: validation.rejected.length })
         await this.deps.audit?.logAction({
           actor: institution.id,
           action: 'citation.rejected',
@@ -191,6 +241,7 @@ export class PolicyOrchestrator {
     const grounded = validation.ok
 
     // 5. Persist chain-of-thought + audit for the answer that is returned.
+    handlers?.onStage?.('persisting', { grounded })
     await this.deps.audit?.traceStep({
       runId,
       agentId: institution.id,

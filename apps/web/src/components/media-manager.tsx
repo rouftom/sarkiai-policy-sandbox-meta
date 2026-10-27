@@ -2,7 +2,20 @@
 
 import * as React from 'react'
 import { AlertTriangle, Check, FileText, Loader, RotateCcw, Upload, X } from 'lucide-react'
-import { Badge, Button, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from '@sps/ui'
+import {
+  Badge,
+  Button,
+  IndeterminateBar,
+  Input,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  cn,
+} from '@sps/ui'
 import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 
@@ -281,6 +294,7 @@ function QueueRow({ item, onRemove }: { item: QueueItem; onRemove: () => void })
           </button>
         )}
       </div>
+      {item.status === 'uploading' && <IndeterminateBar className="mt-2" label={t('media.indexing')} />}
       {steps.length > 0 && (
         <details className="mt-2">
           <summary className="cursor-pointer text-[10px] text-muted-foreground">{t('media.journal')}</summary>

@@ -24,7 +24,8 @@ curl -s $API/v1/provider | jq '{mode, models, ready}'
       is `BUILDING`, wait; if missing, press **Create / repair indexes** on
       `/knowledge`.
 - [ ] Signed in **before** recording: password + TOTP are not part of the story.
-      Keep the recovery codes out of frame.
+      Keep the recovery codes out of frame. If you need a fresh account,
+      `/signup` (cloud mode) creates one and walks straight into TOTP enrolment.
 - [ ] Browser: one window, zoom 110%, bookmarks bar hidden, notifications off.
       Light theme (Meta blue) is the default.
 - [ ] A second device with WhatsApp open, if the approval segment is recorded
@@ -51,8 +52,9 @@ counter. Do not tour the menu.
 
 1. Pick the country/domain in the workspace bar (Cameroon · health).
 2. Start the scenario, then release the next tick.
-3. Let the mandated agents answer, then the coordinator. Open one institution
-   card and then the **joint report**.
+3. Let the mandated agents answer (the assistant streams its draft behind a
+   processing bar, then swaps in the validated answer), then the coordinator.
+   Open one institution card and then the **joint report**.
 4. Click a citation: it opens the chunk, with filename, article and heading path.
 5. Say the differentiator: *an agent whose quote is absent from the corpus is
    rejected and retried* (`@sps/citations`), and the run is hash-chained.
@@ -63,7 +65,7 @@ Keep this segment to one tick. Resist scrolling the whole report.
 
 `/knowledge`.
 
-1. **Corpus**: 8 documents, ~2,166 active chunks, 1024-dimension vectors, both
+1. **Corpus**: 25 documents, ~4,900 active chunks, 1024-dimension vectors, both
    Atlas indexes `READY`. One line: *this is the corpus the previous answer cited.*
 2. **Retrieval**: ask `protection des donnees personnelles sante`, country
    Cameroon. Then switch the stage chips:

@@ -12,6 +12,7 @@ import {
 } from '@/lib/api'
 import { IncidentTimeline, type TimelineItem } from '@/components/incident-timeline'
 import { useI18n } from '@/lib/i18n'
+import { ProcessingBar } from '@/components/processing-bar'
 
 const SEVERITY: Record<string, string> = {
   low: 'text-muted-foreground',
@@ -238,6 +239,8 @@ export function ScenarioConsole({
       </CardHeader>
       <CardContent>
         {error && <p className="text-sm text-destructive">{error}</p>}
+
+        {busy && <ProcessingBar label={t('scenario.running')} />}
 
         {!runId && !busy && <p className="text-sm text-muted-foreground">{t('scenario.intro')}</p>}
 

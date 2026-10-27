@@ -23,6 +23,7 @@ import {
   type ExerciseEvaluationDto,
 } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { ProcessingBar } from '@/components/processing-bar'
 
 const KINDS: ExerciseActionKind[] = ['action', 'decision', 'escalation', 'note']
 
@@ -174,6 +175,18 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
             </span>
           )}
         </div>
+
+        {(loading || evaluating || generating) && (
+          <ProcessingBar
+            label={
+              loading
+                ? t('exercise.load')
+                : evaluating
+                  ? t('exercise.evaluating')
+                  : t('exercise.generating')
+            }
+          />
+        )}
 
         {error && (
           <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-2 text-xs text-rose-500">

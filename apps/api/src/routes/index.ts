@@ -437,44 +437,50 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // ── Single mandated agent (text, optionally multimodal) ───────────────────
+  const askBody = z.object({
+    institutionId: z.string(),
+    question: z.string().min(1),
+    country: z.string().length(2),
+    domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
+    lens: lensSchema.default('hybrid'),
+    runId: z.string().optional(),
+    // Untrusted user images (context only, never citable).
+    attachments: z
+      .array(z.object({ mime: z.string(), dataBase64: z.string() }))
+      .max(3)
+      .optional(),
+  })
+
+  /** Persist attachments (content-addressed, best-effort: works without MinIO). */
+  async function storeAttachments(attachments: Array<{ mime: string; dataBase64: string }> | undefined) {
+    const meta: Array<{ sha256: string; mime: string; size: number; key: string }> = []
+    for (const attachment of attachments ?? []) {
+      if (!attachment.mime.startsWith('image/')) {
+        return { ok: false as const, status: 415, message: `Unsupported attachment type: ${attachment.mime}` }
+      }
+      const data = Buffer.from(attachment.dataBase64, 'base64')
+      if (data.byteLength > 5 * 1024 * 1024) {
+        return { ok: false as const, status: 413, message: 'Attachment too large (max 5 MB).' }
+      }
+      try {
+        const stored = await engine.storage.putContentAddressed(data, attachment.mime)
+        meta.push({ sha256: stored.sha256, mime: stored.mime, size: stored.size, key: stored.key })
+      } catch {
+        meta.push({ sha256: sha256Hex(data), mime: attachment.mime, size: data.byteLength, key: '' })
+      }
+    }
+    return { ok: true as const, meta }
+  }
+
   app.post('/v1/agents/ask', async (request, reply) => {
-    const body = z
-      .object({
-        institutionId: z.string(),
-        question: z.string().min(1),
-        country: z.string().length(2),
-        domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
-        lens: lensSchema.default('hybrid'),
-        runId: z.string().optional(),
-        // Untrusted user images (context only, never citable).
-        attachments: z
-          .array(z.object({ mime: z.string(), dataBase64: z.string() }))
-          .max(3)
-          .optional(),
-      })
-      .safeParse(request.body)
+    const body = askBody.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: `Unknown institution "${body.data.institutionId}"` })
 
-    // Persist attachments (content-addressed, best-effort: works without MinIO).
-    const attachmentMeta = []
-    for (const attachment of body.data.attachments ?? []) {
-      if (!attachment.mime.startsWith('image/')) {
-        return reply.status(415).send({ error: `Unsupported attachment type: ${attachment.mime}` })
-      }
-      const data = Buffer.from(attachment.dataBase64, 'base64')
-      if (data.byteLength > 5 * 1024 * 1024) {
-        return reply.status(413).send({ error: 'Attachment too large (max 5 MB).' })
-      }
-      try {
-        const stored = await engine.storage.putContentAddressed(data, attachment.mime)
-        attachmentMeta.push({ sha256: stored.sha256, mime: stored.mime, size: stored.size, key: stored.key })
-      } catch {
-        attachmentMeta.push({ sha256: sha256Hex(data), mime: attachment.mime, size: data.byteLength, key: '' })
-      }
-    }
+    const stored = await storeAttachments(body.data.attachments)
+    if (!stored.ok) return reply.status(stored.status).send({ error: stored.message })
 
     return engine.orchestrator.runAgent({
       institution,
@@ -484,8 +490,83 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       lens: body.data.lens as WorkflowLens,
       runId: body.data.runId,
       attachments: body.data.attachments,
-      attachmentMeta,
+      attachmentMeta: stored.meta,
     })
+  })
+
+  /**
+   * Streaming twin of `/v1/agents/ask` (Server-Sent Events).
+   *
+   * Retrieval, validation and audit are the same code path; the browser gets
+   * `stage` events for the processing bar, `delta` events for the answer as it
+   * is written, and a final `done` event carrying the very same assessment
+   * object the buffered route returns (citations and validation included).
+   */
+  app.post('/v1/agents/ask/stream', async (request, reply) => {
+    const body = askBody.safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
+    if (!institution) return reply.status(404).send({ error: `Unknown institution "${body.data.institutionId}"` })
+
+    const stored = await storeAttachments(body.data.attachments)
+    if (!stored.ok) return reply.status(stored.status).send({ error: stored.message })
+
+    reply.hijack()
+    const raw = reply.raw
+    const origin = request.headers.origin
+    raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      // Render / any reverse proxy: do not buffer the stream.
+      'X-Accel-Buffering': 'no',
+      // A hijacked response bypasses @fastify/cors, and the console is served
+      // from Vercel: the browser needs the CORS header on the stream itself.
+      'Access-Control-Allow-Origin': origin ?? '*',
+      Vary: 'Origin',
+    })
+    raw.flushHeaders?.()
+
+    const send = (payload: unknown) => {
+      if (raw.writableEnded || raw.destroyed) return
+      try {
+        raw.write(`data: ${JSON.stringify(payload)}\n\n`)
+      } catch {
+        /* client went away — the run still completes for the audit trail */
+      }
+    }
+
+    // A comment frame every 15 s keeps the proxy from closing an idle stream.
+    const heartbeat = setInterval(() => {
+      if (!raw.writableEnded && !raw.destroyed) raw.write(': ping\n\n')
+    }, 15_000)
+
+    try {
+      send({ type: 'open', agentId: institution.id, runId: body.data.runId })
+      const assessment = await engine.orchestrator.streamAgent(
+        {
+          institution,
+          question: body.data.question,
+          country: body.data.country,
+          domain: body.data.domain as Domain,
+          lens: body.data.lens as WorkflowLens,
+          runId: body.data.runId,
+          attachments: body.data.attachments,
+          attachmentMeta: stored.meta,
+        },
+        {
+          onStage: (stage, detail) => send({ type: 'stage', stage, ...(detail ?? {}) }),
+          onDelta: (text) => send({ type: 'delta', text }),
+        },
+      )
+      send({ type: 'done', assessment })
+    } catch (error) {
+      send({ type: 'error', message: (error as Error).message })
+    } finally {
+      clearInterval(heartbeat)
+      if (!raw.writableEnded) raw.end()
+    }
   })
 
   // ── Scenarios: progressive release + multi-agent reconciliation ───────────

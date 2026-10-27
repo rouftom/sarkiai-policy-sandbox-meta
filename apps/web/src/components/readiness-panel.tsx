@@ -7,6 +7,7 @@ import { WORKFLOW_PROFILES } from '@sps/shared'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { api, type ReadinessReportDto, type WhatIfResultDto } from '@/lib/api'
+import { ProcessingBar } from '@/components/processing-bar'
 
 /** AI-readiness scoring + what-if, shared by the console and its dedicated page. */
 export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) {
@@ -90,6 +91,7 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
           </Button>
         </CardHeader>
         <CardContent>
+          {busy && <ProcessingBar label={t('readiness.running')} className="mb-3" />}
           {report && (
             <div className="space-y-3">
               <p className="text-xs leading-relaxed text-foreground/90">{report.summary}</p>

@@ -13,10 +13,11 @@
  */
 
 import * as React from 'react'
-import { FileScan, Loader2, Plus } from 'lucide-react'
+import { FileScan, Plus } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@sps/ui'
 import { api, type GazetteBoxDto, type GazetteIngestDto, type GazettePageDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { ProcessingBar } from '@/components/processing-bar'
 
 const SAMPLE_URL = '/samples/gazette-p1.png'
 
@@ -178,12 +179,7 @@ export function GazettePanel({ country }: { country: string }) {
           )}
         </div>
 
-        {busy && (
-          <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {t('gazette.analyzing')}
-          </p>
-        )}
+        {busy && <ProcessingBar label={t('gazette.analyzing')} />}
 
         {error && <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-2 text-xs text-rose-500">{error}</p>}
 

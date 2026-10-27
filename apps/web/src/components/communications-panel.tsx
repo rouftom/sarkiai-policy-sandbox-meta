@@ -20,6 +20,7 @@ import {
   type CommunicationLanguageDto,
 } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { ProcessingBar } from '@/components/processing-bar'
 
 const CHANNELS = ['radio', 'sms', 'social', 'press'] as const
 type Channel = (typeof CHANNELS)[number]
@@ -191,6 +192,8 @@ export function CommunicationsPanel({ country }: { country: string }) {
             {busy ? t('comm.drafting') : t('comm.draft')}
           </Button>
         </div>
+
+        {busy && <ProcessingBar label={t('comm.drafting')} />}
 
         {error && (
           <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-2 text-xs text-rose-500">

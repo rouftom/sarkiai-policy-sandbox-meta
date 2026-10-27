@@ -23,6 +23,7 @@ import { api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { BrandMark } from '@/components/layout/brand-mark'
+import { ProcessingBar } from '@/components/processing-bar'
 
 interface Message {
   id: string
@@ -50,6 +51,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const { country, domain, lens } = useWorkspace()
   const [input, setInput] = React.useState('')
   const [busy, setBusy] = React.useState(false)
+  /** Answer as it is written, before the final assessment replaces it. */
+  const [draft, setDraft] = React.useState('')
+  const [stage, setStage] = React.useState<string | null>(null)
   const [messages, setMessages] = React.useState<Message[]>([])
   const [attachments, setAttachments] = React.useState<Attachment[]>([])
   const [menuOpen, setMenuOpen] = React.useState(false)
@@ -92,7 +96,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
   React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, busy])
+  }, [messages, busy, draft])
 
   const chooseModel = async (id: string) => {
     const previous = model
@@ -132,41 +136,78 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     setAttachments((previous) => [...previous, ...next].slice(0, 3))
   }
 
+  const appendAnswer = (result: AssessmentDto) => {
+    setAttachments([])
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        agentId: result.agentId,
+        content: result.findings.join('\n\n'),
+        citations: result.citations,
+        validation: result.validation,
+      },
+    ])
+  }
+
   const send = async (override?: string) => {
     const question = (override ?? input).trim()
     if (!question || busy || !activeInstitution) return
     setInput('')
     setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', content: question }])
     setBusy(true)
+    setStage('retrieving')
+    setDraft('')
+    let streamed = ''
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64 }))
+    const body = {
+      institutionId: activeInstitution.id,
+      question,
+      country,
+      domain,
+      lens,
+      attachments: payload.length ? payload : undefined,
+    }
     try {
-      const result = await api.ask({
-        institutionId: activeInstitution.id,
-        question,
-        country,
-        domain,
-        lens,
-        attachments: payload.length ? payload : undefined,
-      })
-      setAttachments([])
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          agentId: result.agentId,
-          content: result.findings.join('\n\n'),
-          citations: result.citations,
-          validation: result.validation,
+      const result = await api.askStream(body, {
+        onStage: (next) => {
+          setStage(next)
+          // The citation validator rejected the draft: clear it before the
+          // corrective answer starts, so two answers never appear mixed.
+          if (next === 'retry') {
+            streamed = ''
+            setDraft('')
+          }
         },
-      ])
+        onDelta: (text) => {
+          streamed += text
+          setDraft(streamed)
+        },
+      })
+      appendAnswer(result)
     } catch (error) {
-      setMessages((previous) => [
-        ...previous,
-        { id: crypto.randomUUID(), role: 'assistant', content: `⚠️ ${(error as Error).message}` },
-      ])
+      if (streamed) {
+        setMessages((previous) => [
+          ...previous,
+          { id: crypto.randomUUID(), role: 'assistant', content: `⚠️ ${(error as Error).message}` },
+        ])
+      } else {
+        // Streaming unavailable (proxy, old browser): the buffered route always
+        // works, so the operator still gets an answer.
+        try {
+          appendAnswer(await api.ask(body))
+        } catch (fallback) {
+          setMessages((previous) => [
+            ...previous,
+            { id: crypto.randomUUID(), role: 'assistant', content: `⚠️ ${(fallback as Error).message}` },
+          ])
+        }
+      }
     } finally {
       setBusy(false)
+      setStage(null)
+      setDraft('')
     }
   }
 
@@ -177,6 +218,21 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }
 
   const suggestions = [t('assistant.suggest1'), t('assistant.suggest2'), t('assistant.suggest3')]
+
+  const stageLabel = (value: string | null) => {
+    switch (value) {
+      case 'generating':
+        return t('assistant.stage.generating')
+      case 'validating':
+        return t('assistant.stage.validating')
+      case 'retry':
+        return t('assistant.stage.retry')
+      case 'persisting':
+        return t('assistant.stage.persisting')
+      default:
+        return t('assistant.stage.retrieving')
+    }
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -289,7 +345,22 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             ))}
-            {busy && <p className="px-1 text-[10px] text-muted-foreground">{t('assistant.searching')}</p>}
+            {busy && (
+              <div className="space-y-2">
+                <ProcessingBar label={stageLabel(stage)} />
+                {draft && (
+                  <div className="rounded-2xl border border-border bg-card px-3 py-2 text-[11px] leading-relaxed text-card-foreground">
+                    <p className="mb-1 text-[10px] font-medium text-muted-foreground">
+                      {activeInstitution?.name ?? t('assistant.title')}
+                    </p>
+                    <p className="whitespace-pre-wrap">
+                      {draft}
+                      <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-brand-primary align-middle" />
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
