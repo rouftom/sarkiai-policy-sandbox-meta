@@ -15,7 +15,7 @@ export default function GuideMetaPage() {
             {
               a: fr ? 'Raisonnement' : 'Reasoning',
               b: fr ? 'Évaluation, coordination, what-if, rédaction.' : 'Assessment, coordination, what-if, drafting.',
-              c: 'muse-spark-1.3',
+              c: 'muse-spark-1.3-contributor',
             },
             {
               a: fr ? 'Vision' : 'Vision',

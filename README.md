@@ -337,6 +337,23 @@ environment variables and the cold-start strategy live in
 [`deploy/render/README.md`](deploy/render/README.md); the blueprint is
 [`deploy/render/render.yaml`](deploy/render/render.yaml).
 
+#### Model-call relay
+
+Container egress is refused by the Meta Model API: every model call from the
+Render network returns `404 model_not_found`, on every model id, while the same
+key works from Vercel. The API therefore points `META_BASE_URL` at the web app:
+
+```
+META_BASE_URL=https://sarkiai-policy-sandbox-meta.vercel.app/api/meta
+MODEL_RELAY_KEY=<shared secret, same value as META_RELAY_KEY on Vercel>
+```
+
+`apps/web/src/app/api/meta/[...path]` forwards the call to `api.meta.ai` with
+the team key held in Vercel (`META_RELAY_MODEL_KEY`) and streams the answer
+back. The route refuses any call without the `x-sps-relay-key` header and only
+allows the `/v1` chat, responses, messages, models and embeddings paths. The
+relay is transport only: no prompt, answer or key is logged.
+
 WhatsApp needs three approved utility templates before any business-initiated
 message is delivered: [`deploy/whatsapp/templates.md`](deploy/whatsapp/templates.md)
 lists their exact bodies, ids and review status.
