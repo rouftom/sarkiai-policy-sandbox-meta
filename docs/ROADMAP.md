@@ -33,9 +33,9 @@ Everything below existed before the hackathon (tag `pre-hackathon-baseline`).
 - `[x]` **Multimodal assistant**: local vision model (`qwen3.5:9b`), image attachments stored in MinIO (content-addressed), untrusted-context guardrails, audit hash. `POST /v1/agents/ask` + `attachments[]`.
 
 ### Sprint 1 — the Cameroon health corpus
-- `[ ]` Collect real CM corpus (health law, data-protection law, national AI/digital strategy, cyber strategy) → `data/country/cm/`.
+- `[x]` Collect real CM corpus (health law, data-protection law, national AI/digital strategy, cyber strategy) → `data/country/cm/`.
 - `[ ]` Collect global best-practice corpus (WHO) → `data/global/standards/`.
-- `[ ]` Ingest + validate retrieval quality per dimension.
+- `[x]` Ingest + validate retrieval quality per dimension (8 documents, 2,166 chunks, 1024d; see `docs/KNOWLEDGE-BASE.md`).
 - `[ ]` Replace `data/samples/*` placeholders.
 
 ### Sprint 2 — scenario authoring & coordination
@@ -50,9 +50,10 @@ Everything below existed before the hackathon (tag `pre-hackathon-baseline`).
 - `[x]` Readiness 0–5 scoring + causal what-if in the web console.
 
 ### Sprint 4 — demo & submission
-- `[ ]` Record the 3-minute demo video (three use cases).
-- `[ ]` Finalize `HACKATHON.md` (built-during-the-hackathon ledger) and the README.
-- `[ ]` Publish the repository and submit.
+- `[ ]` Record the 3-minute demo video (runbook in `docs/DEMO.md`).
+- `[x]` Finalize `HACKATHON.md` (built-during-the-hackathon ledger) and the README.
+- `[x]` Publish the repository and the public demo (`sarkiai-policy-sandbox-meta.vercel.app`).
+- `[ ]` Submit (repo + video) before 4 Nov 2026, 21:00 ET.
 
 ### Sprint 5 — multi-country & fine-tuning (post-shortlist)
 - `[ ]` Add UAE (`data/country/ae/`) for the cross-national narrative.
