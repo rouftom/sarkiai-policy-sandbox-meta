@@ -231,6 +231,8 @@ export interface ScenarioRun {
 export interface AuditRecord {
   id: string
   runId?: string
+  /** Operator (e-mail) whose work produced this record. */
+  userId?: string
   ts: string
   actor: string
   action: string
@@ -244,6 +246,8 @@ export interface AuditRecord {
 export interface CoTTrace {
   id: string
   runId: string
+  /** Operator (e-mail) whose run produced this trace step. */
+  userId?: string
   agentId: string
   step: number
   thought: string

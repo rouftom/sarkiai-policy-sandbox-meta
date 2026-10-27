@@ -111,6 +111,26 @@ export function ScenarioConsole({
   const [total, setTotal] = React.useState(0)
   const [done, setDone] = React.useState(false)
 
+  const downloadDossier = async (format: 'json' | 'markdown') => {
+    if (!runId) return
+    try {
+      const body = await api.dossier(runId, format)
+      const blob = new Blob([body], {
+        type: format === 'markdown' ? 'text/markdown;charset=utf-8' : 'application/json;charset=utf-8',
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `dossier-${runId}.${format === 'markdown' ? 'md' : 'json'}`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (cause) {
+      setError((cause as Error).message)
+    }
+  }
+
   const reset = () => {
     setRunId(null)
     setAgenda([])
@@ -217,16 +237,12 @@ export function ScenarioConsole({
         <div className="ml-auto flex items-center gap-2">
           {runId && done && (
             <>
-              <a href={api.dossierUrl(runId, 'markdown')} target="_blank" rel="noreferrer">
-                <Button variant="outline" size="md">
-                  <Download className="h-3.5 w-3.5" /> {t('scenario.dossier')}
-                </Button>
-              </a>
-              <a href={api.dossierUrl(runId, 'json')} target="_blank" rel="noreferrer">
-                <Button variant="ghost" size="md">
-                  JSON
-                </Button>
-              </a>
+              <Button variant="outline" size="md" onClick={() => void downloadDossier('markdown')}>
+                <Download className="h-3.5 w-3.5" /> {t('scenario.dossier')}
+              </Button>
+              <Button variant="ghost" size="md" onClick={() => void downloadDossier('json')}>
+                JSON
+              </Button>
             </>
           )}
           <Button variant="outline" onClick={startFacilitated} disabled={busy} size="md">

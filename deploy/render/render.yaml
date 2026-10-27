@@ -94,3 +94,11 @@ services:
         sync: false
       - key: WEB_PUBLIC_URL
         value: https://sarkiai-policy-sandbox-meta.vercel.app
+
+      # ── operator accounts ──────────────────────────────────────────────────
+      # Public self-service sign-up for hackathon judges. The API also opens it
+      # automatically in cloud mode; the explicit value survives a config drift.
+      - key: AUTH_SIGNUP
+        value: "true"
+      - key: AUTH_MAX_OPERATORS
+        value: "12"

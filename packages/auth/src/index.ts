@@ -130,6 +130,8 @@ export interface AuthConfig {
   sessionSecret: string
   sessionTtlSeconds?: number
   challengeTtlSeconds?: number
+  /** Lifetime of a password-reset link (default 30 minutes). */
+  resetTtlSeconds?: number
   /**
    * Public self-service sign-up. Only the cloud demo opens it; the console hides
    * the entry point when this is false. Defaults to false (closed).
@@ -159,6 +161,30 @@ interface PendingEnrollment {
   email: string
   secret: string
   expiresAt: number
+}
+
+interface ResetClaims {
+  v: 1
+  sub: string
+  purpose: 'reset'
+  jti: string
+  exp: number
+}
+
+/** One pending reset link; the `_id` is the token's `jti`. */
+interface ResetDocument {
+  _id: string
+  email: string
+  exp: number
+  createdAt: string
+  usedAt?: string
+}
+
+export interface PasswordResetLink {
+  token: string
+  expiresAt: string
+  email: string
+  firstName?: string
 }
 
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
@@ -345,6 +371,7 @@ export class AuthService {
   private readonly issuer: string
   private readonly sessionTtl: number
   private readonly challengeTtl: number
+  private readonly resetTtl: number
   private readonly memory = new Map<string, OperatorRecord>()
   private readonly attempts = new Map<string, { count: number; resetAt: number }>()
   private readonly pendingEnrollments = new Map<string, PendingEnrollment>()
@@ -363,6 +390,7 @@ export class AuthService {
     this.issuer = config.issuer ?? 'SarkiAI Policy Sandbox'
     this.sessionTtl = config.sessionTtlSeconds ?? 7 * 24 * 60 * 60
     this.challengeTtl = config.challengeTtlSeconds ?? 5 * 60
+    this.resetTtl = config.resetTtlSeconds ?? 30 * 60
   }
 
   get storage(): 'mongo' | 'memory' {
@@ -396,6 +424,22 @@ export class AuthService {
       }
       this.mongoFailedAt = 0
       return this.client.db(this.config.dbName ?? 'policy_sandbox').collection('operators')
+    } catch {
+      this.markMongoFailure()
+      return null
+    }
+  }
+
+  /**
+   * Password-reset tokens live in their own collection, keyed by the token's
+   * `jti`: the signed token proves the address, the document makes it single
+   * use and lets a completed reset invalidate every other pending link.
+   */
+  private async resetTokens(): Promise<Collection<ResetDocument> | null> {
+    const operators = await this.operators()
+    if (!operators) return null
+    try {
+      return this.client!.db(this.config.dbName ?? 'policy_sandbox').collection<ResetDocument>('password_resets')
     } catch {
       this.markMongoFailure()
       return null
@@ -603,6 +647,105 @@ export class AuthService {
     } catch {
       this.markMongoFailure()
     }
+  }
+
+  /**
+   * Create a single-use password-reset link. Returns `null` when the address is
+   * unknown so the HTTP layer can answer identically (no account enumeration).
+   */
+  async createPasswordReset(email: string): Promise<PasswordResetLink | null> {
+    const record = await this.load(email)
+    if (!record) return null
+
+    const resets = await this.resetTokens()
+    if (!resets) {
+      throw new AuthError(
+        'storage_unavailable',
+        'The operator store is unreachable, so a reset link cannot be issued.',
+      )
+    }
+
+    const now = Math.floor(Date.now() / 1000)
+    const exp = now + this.resetTtl
+    const jti = randomBytes(12).toString('base64url')
+    const claims: ResetClaims = { v: 1, sub: record.email, purpose: 'reset', jti, exp }
+
+    try {
+      // Best-effort housekeeping: expired links are useless anyway.
+      await resets.deleteMany({ exp: { $lt: now } })
+      await resets.insertOne({
+        _id: jti,
+        email: record.email,
+        exp,
+        createdAt: new Date(now * 1000).toISOString(),
+      })
+    } catch {
+      this.markMongoFailure()
+      throw new AuthError('storage_unavailable', 'The operator store is unreachable; try again in a moment.')
+    }
+
+    return {
+      token: signToken(claims, this.config.sessionSecret),
+      expiresAt: new Date(exp * 1000).toISOString(),
+      email: record.email,
+      ...(record.firstName ? { firstName: record.firstName } : {}),
+    }
+  }
+
+  private readResetToken(token: string): ResetClaims {
+    const claims = readToken<ResetClaims>(token, this.config.sessionSecret)
+    if (!claims || claims.v !== 1 || claims.purpose !== 'reset' || typeof claims.jti !== 'string') {
+      throw new AuthError('challenge_invalid', 'This reset link is invalid. Request a new one.')
+    }
+    if (claims.exp * 1000 < Date.now()) {
+      throw new AuthError('challenge_invalid', 'This reset link has expired. Request a new one.')
+    }
+    return claims
+  }
+
+  /** Consume a reset link and set the new password. MFA stays enrolled. */
+  async resetPassword(token: string, newPassword: string): Promise<PublicOperator> {
+    const claims = this.readResetToken(token)
+    assertPassword(newPassword)
+
+    const resets = await this.resetTokens()
+    if (!resets) {
+      throw new AuthError('storage_unavailable', 'The operator store is unreachable; try again in a moment.')
+    }
+
+    // Claim the token atomically before touching the account: two parallel
+    // submissions must not both reset the password.
+    let claimed: { matchedCount?: number; modifiedCount?: number } | null = null
+    try {
+      claimed = await resets.updateOne(
+        { _id: claims.jti, email: claims.sub, usedAt: { $exists: false } },
+        { $set: { usedAt: new Date().toISOString() } },
+      )
+    } catch {
+      this.markMongoFailure()
+      throw new AuthError('storage_unavailable', 'The operator store is unreachable; try again in a moment.')
+    }
+    const modified = claimed?.modifiedCount ?? claimed?.matchedCount ?? 0
+    if (!modified) {
+      throw new AuthError('challenge_invalid', 'This reset link was already used or expired. Request a new one.')
+    }
+
+    const record = await this.load(claims.sub)
+    if (!record) throw new AuthError('not_found', 'Unknown operator.')
+
+    const before: OperatorRecord = { ...record }
+    record.passwordHash = hashPassword(newPassword)
+    delete record.mustChangePassword
+    await this.persistOrFail(record, before)
+
+    // Any other pending link for this account dies with the password change.
+    try {
+      await resets.deleteMany({ email: claims.sub })
+    } catch {
+      /* the used token is already unusable */
+    }
+    this.clearThrottle(`login:${normalizeEmail(record.email)}`)
+    return toPublic(record)
   }
 
   /**

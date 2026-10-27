@@ -374,6 +374,45 @@ const en = {
     'These codes are shown only once and will not be displayed again. Download or copy them before continuing.',
   'login.noAccount': 'No account yet?',
   'login.createAccount': 'Create an account',
+  'login.forgotPassword': 'Forgot password?',
+
+  'reset.kicker': 'Account access',
+  'reset.forgotTitle': 'Reset your password',
+  'reset.forgotSubtitle':
+    'Enter the e-mail address of your operator account. If it exists, we send a single-use link valid for 30 minutes.',
+  'reset.send': 'Send the reset link',
+  'reset.sending': 'Sending…',
+  'reset.forgotFailed': 'Could not send the link. Try again.',
+  'reset.mailFailed': 'The e-mail provider is unavailable right now. Try again in a moment.',
+  'reset.unavailable': 'The operator store is unreachable. Try again in a moment.',
+  'reset.sentTitle': 'Check your inbox',
+  'reset.sentBody':
+    'If an account exists for this address, a reset link is on its way. It works once and expires after 30 minutes.',
+  'reset.sentTo': 'Sent to',
+  'reset.sentHint':
+    'Nothing after a few minutes? Check the spam folder, then request a new link. Two-factor authentication stays active.',
+  'reset.tryAnother': 'Use another address',
+  'reset.backToLogin': 'Back to sign-in',
+  'reset.checking': 'Checking the link…',
+  'reset.missingTitle': 'No reset link',
+  'reset.missingBody': 'This page needs the signed link from the e-mail. Open the link again, or request a new one.',
+  'reset.missingHint':
+    'A reset link is single use and expires after 30 minutes. Requesting a new one cancels the previous links.',
+  'reset.requestNew': 'Request a new link',
+  'reset.title': 'Choose a new password',
+  'reset.subtitle':
+    'Set the new password for your account. Your authenticator stays enrolled: the next sign-in still asks for a code.',
+  'reset.newPassword': 'New password',
+  'reset.confirm': 'Confirm the password',
+  'reset.submit': 'Save the new password',
+  'reset.submitting': 'Saving…',
+  'reset.invalidToken': 'This reset link is invalid, already used or expired. Request a new one.',
+  'reset.failed': 'Could not reset the password. Try again.',
+  'reset.successTitle': 'Password updated',
+  'reset.successBody': 'Your new password is active. Sign in with it, then confirm your 6-digit code.',
+  'reset.successHint':
+    'Every other pending reset link for this account is now invalid. Recovery codes are unchanged.',
+  'reset.goToLogin': 'Go to sign-in',
 
   'signup.kicker': 'Meta hackathon · demo access',
   'signup.title': 'Create your demo account',
@@ -1065,6 +1104,46 @@ const fr: Record<keyof typeof en, string> = {
     'Ces codes ne sont affichés qu’une seule fois et ne seront plus jamais visibles. Téléchargez-les ou copiez-les avant de continuer.',
   'login.noAccount': 'Pas encore de compte ?',
   'login.createAccount': 'Créer un compte',
+  'login.forgotPassword': 'Mot de passe oublié ?',
+
+  'reset.kicker': 'Accès au compte',
+  'reset.forgotTitle': 'Réinitialiser le mot de passe',
+  'reset.forgotSubtitle':
+    'Indiquez l’adresse e-mail de votre compte opérateur. Si elle existe, nous envoyons un lien à usage unique valable 30 minutes.',
+  'reset.send': 'Envoyer le lien',
+  'reset.sending': 'Envoi…',
+  'reset.forgotFailed': 'Impossible d’envoyer le lien. Réessayez.',
+  'reset.mailFailed': 'Le service d’e-mail est momentanément indisponible. Réessayez dans un instant.',
+  'reset.unavailable': 'Le stockage des opérateurs est injoignable. Réessayez dans un instant.',
+  'reset.sentTitle': 'Vérifiez votre boîte de réception',
+  'reset.sentBody':
+    'Si un compte existe pour cette adresse, un lien de réinitialisation est en route. Il sert une seule fois et expire après 30 minutes.',
+  'reset.sentTo': 'Envoyé à',
+  'reset.sentHint':
+    'Toujours rien après quelques minutes ? Vérifiez les indésirables, puis demandez un nouveau lien. La double authentification reste active.',
+  'reset.tryAnother': 'Utiliser une autre adresse',
+  'reset.backToLogin': 'Retour à la connexion',
+  'reset.checking': 'Vérification du lien…',
+  'reset.missingTitle': 'Aucun lien de réinitialisation',
+  'reset.missingBody':
+    'Cette page a besoin du lien signé contenu dans l’e-mail. Rouvrez le lien, ou demandez-en un nouveau.',
+  'reset.missingHint':
+    'Un lien de réinitialisation sert une seule fois et expire après 30 minutes. Demander un nouveau lien annule les précédents.',
+  'reset.requestNew': 'Demander un nouveau lien',
+  'reset.title': 'Choisissez un nouveau mot de passe',
+  'reset.subtitle':
+    'Définissez le nouveau mot de passe de votre compte. Votre authentificateur reste enrôlé : la prochaine connexion demandera toujours un code.',
+  'reset.newPassword': 'Nouveau mot de passe',
+  'reset.confirm': 'Confirmer le mot de passe',
+  'reset.submit': 'Enregistrer le nouveau mot de passe',
+  'reset.submitting': 'Enregistrement…',
+  'reset.invalidToken': 'Ce lien est invalide, déjà utilisé ou expiré. Demandez-en un nouveau.',
+  'reset.failed': 'Impossible de réinitialiser le mot de passe. Réessayez.',
+  'reset.successTitle': 'Mot de passe mis à jour',
+  'reset.successBody': 'Votre nouveau mot de passe est actif. Connectez-vous, puis confirmez votre code à 6 chiffres.',
+  'reset.successHint':
+    'Tout autre lien de réinitialisation en attente pour ce compte est désormais invalide. Les codes de secours restent inchangés.',
+  'reset.goToLogin': 'Aller à la connexion',
 
   'signup.kicker': 'Hackathon Meta · accès démo',
   'signup.title': 'Créez votre compte de démonstration',

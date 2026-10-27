@@ -1,7 +1,7 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
 import { providerApiKey, describeProvider } from '@sps/agents'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {
   analyzeGazettePage,
@@ -59,6 +59,7 @@ const lensSchema = z.enum(['simulation', 'readiness', 'hybrid'])
 /** In-memory facilitator session for tick-by-tick scenario release. */
 interface ScenarioSession {
   runId: string
+  userId: string
   country: string
   domain: Domain
   institutions: InstitutionSpec[]
@@ -117,8 +118,52 @@ async function selectBootModel(app: FastifyInstance): Promise<void> {
   }
 }
 
+/**
+ * Routes that must stay reachable without a console session: health, the whole
+ * sign-in/sign-up/reset handshake, the Meta webhook and the signed approval
+ * links. Everything else requires `Authorization: Bearer <session>`.
+ */
+function isPublicRoute(method: string, path: string): boolean {
+  if (method === 'OPTIONS') return true
+  if (path === '/health') return true
+  if (path === '/v1/whatsapp/webhook') return true
+  if (path.startsWith('/v1/whatsapp/approvals/')) return true
+  if (path === '/v1/auth/setup') return true
+  if (path === '/v1/auth/signup') return true
+  if (path === '/v1/auth/login') return true
+  if (path === '/v1/auth/password') return true
+  if (path === '/v1/auth/password/forgot') return true
+  if (path === '/v1/auth/password/reset') return true
+  if (path === '/v1/auth/mfa/enroll') return true
+  if (path === '/v1/auth/mfa/confirm') return true
+  if (path === '/v1/auth/mfa/verify') return true
+  return false
+}
+
+/** The Bearer guard ran for this route, so the operator is present. */
+function operatorOf(request: FastifyRequest) {
+  if (!request.operator) throw new Error('Operator missing after the auth guard.')
+  return request.operator
+}
+
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthRoutes(app, engine.audit)
+
+  // One guard for the whole API surface. Auth, health, the Meta webhook and
+  // signed approval links are public; everything that spends Meta/Hugging Face
+  // credits or reads operator data requires a valid session.
+  app.addHook('onRequest', async (request, reply) => {
+    const path = request.url.split('?')[0] ?? request.url
+    if (isPublicRoute(request.method, path)) return
+    const operator = currentOperator(request)
+    if (!operator) {
+      return reply.status(401).send({
+        error: 'unauthorized',
+        message: 'Sign in to use this endpoint.',
+      })
+    }
+    request.operator = operator
+  })
 
   // Announce the active provider in the audit chain (no-op when unchanged).
   void recordProviderSwitch(engine.provider, engine.audit)
@@ -164,7 +209,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     engine.useModel(body.data.model)
     await auth.updatePreferences(operator.email, { model: body.data.model })
     await engine.audit
-      .logAction({ actor: operator.email, action: 'model.selected', target: body.data.model, lens: 'hybrid' })
+      .logAction({
+        actor: operator.email,
+        userId: operator.email,
+        action: 'model.selected',
+        target: body.data.model,
+        lens: 'hybrid',
+      })
       .catch(() => undefined)
     return { selected: body.data.model }
   })
@@ -491,6 +542,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       runId: body.data.runId,
       attachments: body.data.attachments,
       attachmentMeta: stored.meta,
+      userId: operatorOf(request).email,
     })
   })
 
@@ -554,6 +606,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           runId: body.data.runId,
           attachments: body.data.attachments,
           attachmentMeta: stored.meta,
+          userId: operatorOf(request).email,
         },
         {
           onStage: (stage, detail) => send({ type: 'stage', stage, ...(detail ?? {}) }),
@@ -571,10 +624,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Scenarios: progressive release + multi-agent reconciliation ───────────
 
-  function buildSession(country: string, domain: Domain): ScenarioSession {
+  function buildSession(country: string, domain: Domain, userId: string): ScenarioSession {
     const run = createScenario(healthDataBreach(country), 'simulation').toRun()
     return {
       runId: run.id,
+      userId,
       country,
       domain,
       institutions: institutionsForDomain(domain),
@@ -595,6 +649,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const assessments = await engine.coordinator.runTick({
       runId: session.runId,
+      userId: session.userId,
       tick,
       country: session.country,
       domain: session.domain,
@@ -605,6 +660,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     })
     const report = await engine.coordinator.reconcile({
       runId: session.runId,
+      userId: session.userId,
       tick,
       country: session.country,
       domain: session.domain,
@@ -612,15 +668,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     })
     session.reports.push(report)
     session.released += 1
-    await engine.reports.saveReports(session.runId, session.reports)
+    await engine.reports.saveReports(session.runId, session.reports, session.userId)
     return { done: session.released >= session.ticks.length, tick, report }
   }
 
-  async function dossierFor(runId: string, reports: JointSituationReport[]) {
+  async function dossierFor(runId: string, reports: JointSituationReport[], userId: string) {
     return buildRunDossier({
       runId,
-      audit: await engine.audit.getAuditForRun(runId),
-      traces: await engine.audit.getTrace(runId),
+      audit: await engine.audit.getAuditForRun(runId, userId),
+      traces: await engine.audit.getTrace(runId, userId),
       reports,
       integrity: await engine.audit.verifyChain(),
     })
@@ -649,7 +705,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       .safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
-    const session = buildSession(body.data.country, body.data.domain as Domain)
+    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email)
     scenarioSessions.set(session.runId, session)
     return {
       runId: session.runId,
@@ -670,7 +726,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/scenarios/:runId/next', async (request, reply) => {
     const { runId } = z.object({ runId: z.string() }).parse(request.params)
     const session = scenarioSessions.get(runId)
-    if (!session) return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+    if (!session || session.userId !== operatorOf(request).email) {
+      return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+    }
 
     const result = await releaseNext(session)
     return {
@@ -689,7 +747,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/scenarios/:runId', async (request, reply) => {
     const { runId } = z.object({ runId: z.string() }).parse(request.params)
     const session = scenarioSessions.get(runId)
-    if (!session) return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+    if (!session || session.userId !== operatorOf(request).email) {
+      return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+    }
     return {
       runId,
       country: session.country,
@@ -712,12 +772,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       .safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
-    const session = buildSession(body.data.country, body.data.domain as Domain)
+    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email)
     scenarioSessions.set(session.runId, session)
     while (session.released < session.ticks.length) {
       await releaseNext(session)
     }
-    const dossier = await dossierFor(session.runId, session.reports)
+    const dossier = await dossierFor(session.runId, session.reports, session.userId)
     return {
       runId: session.runId,
       country: session.country,
@@ -955,11 +1015,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       .safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
+    const operator = operatorOf(request)
     const cases = []
     for (const runId of body.data.runIds) {
-      const reports = await engine.reports.getReports(runId).catch(() => [])
+      const reports = await engine.reports.getReports(runId, operator.email).catch(() => [])
       if (reports.length === 0) continue
       const session = scenarioSessions.get(runId)
+      if (session && session.userId !== operator.email) continue
       cases.push({
         runId,
         country: reports[0]!.country,
@@ -983,6 +1045,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       try {
         await engine.audit.logAction({
           actor: 'system',
+          userId: operatorOf(request).email,
           action: 'impact.analyzed',
           target: `provision:${body.data.provision.title}:${body.data.provision.articleNumber ?? '-'}`,
           lens: 'hybrid',
@@ -1078,6 +1141,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       }
       const { token, claims } = createApprovalToken({
         runId: body.runId,
+        userId: operatorOf(request).email,
         secret: config.whatsapp.approvalSecret,
         ttlSeconds: body.expiresInMinutes * 60,
         subject: body.summary,
@@ -1123,7 +1187,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const record = await approvals.get(verdict.claims.jti)
-    const reports = await engine.reports.getReports(verdict.claims.runId).catch(() => [])
+    const reports = await engine.reports.getReports(verdict.claims.runId, verdict.claims.userId).catch(() => [])
     return {
       runId: verdict.claims.runId,
       subject: verdict.claims.subject ?? null,
@@ -1160,6 +1224,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const result = await approvals.decide({
       jti: verdict.claims.jti,
       runId: verdict.claims.runId,
+      ...(verdict.claims.userId ? { userId: verdict.claims.userId } : {}),
       decision,
       ...(body.data.note ? { note: body.data.note } : {}),
       decidedAt,
@@ -1176,6 +1241,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     try {
       await engine.audit.logAction({
         actor: 'whatsapp',
+        ...(verdict.claims.userId ? { userId: verdict.claims.userId } : {}),
         action: 'whatsapp.approval',
         target: `run:${verdict.claims.runId}:${decision}`,
         lens: 'hybrid',
@@ -1259,6 +1325,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       try {
         await engine.audit.logAction({
           actor: 'facilitator',
+          userId: operatorOf(request).email,
           action: 'exercise.after_action',
           target: `exercise:${definition.id}`,
           lens: 'simulation',
@@ -1311,7 +1378,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/audit/chain', async () => engine.audit.verifyChain())
   app.get('/v1/audit/trace/:runId', async (request) => {
     const { runId } = z.object({ runId: z.string() }).parse(request.params)
-    return { runId, trace: await engine.audit.getTrace(runId) }
+    const operator = operatorOf(request)
+    return { runId, trace: await engine.audit.getTrace(runId, operator.email) }
   })
 
   // ── Run dossier (audit + CoT + reports + citations) ───────────────────────
@@ -1319,11 +1387,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const { runId } = z.object({ runId: z.string() }).parse(request.params)
     const format = z.object({ format: z.enum(['json', 'markdown']).default('json') }).parse(request.query)
 
+    const operator = operatorOf(request)
     const dossier = buildRunDossier({
       runId,
-      audit: await engine.audit.getAuditForRun(runId),
-      traces: await engine.audit.getTrace(runId),
-      reports: await engine.reports.getReports(runId),
+      audit: await engine.audit.getAuditForRun(runId, operator.email),
+      traces: await engine.audit.getTrace(runId, operator.email),
+      reports: await engine.reports.getReports(runId, operator.email),
       integrity: await engine.audit.verifyChain(),
     })
 

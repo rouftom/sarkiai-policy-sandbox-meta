@@ -32,7 +32,11 @@ export default function SignupPage() {
   const router = useRouter()
   const { t } = useI18n()
   const { operator, loading, signUp } = useAuth()
-  const [gate, setGate] = React.useState<Gate>('checking')
+  // Start open: the free API instance may still be waking up when the browser
+  // asks. A negative answer from the API still closes the gate.
+  const [gate, setGate] = React.useState<Gate>(() =>
+    process.env.NEXT_PUBLIC_SIGNUP === 'false' ? 'closed' : 'open',
+  )
   const [busy, setBusy] = React.useState(false)
   const [failure, setFailure] = React.useState<string | null>(null)
   const checked = React.useRef(false)
@@ -81,7 +85,9 @@ export default function SignupPage() {
     void authApi
       .setupStatus()
       .then((status) => setGate(status.signup ? 'open' : 'closed'))
-      .catch(() => setGate('closed'))
+      .catch(() => {
+        /* cold start: keep the gate open and let the POST answer for real */
+      })
   }, [])
 
   React.useEffect(() => {

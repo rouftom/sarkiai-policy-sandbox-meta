@@ -40,6 +40,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+async function requestText(path: string, init?: RequestInit): Promise<string> {
+  const token = readToken()
+  const response = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
+  })
+  if (!response.ok) throw new ApiError(response.status, await response.text())
+  return response.text()
+}
+
 export interface GapDto {
   id: string
   dimension: string
@@ -697,13 +710,13 @@ export const api = {
     constraints?: string[]
   }) => request<CommunicationDraftDto>('/v1/communications/draft', { method: 'POST', body: JSON.stringify(body) }),
 
-  dossierUrl: (runId: string, format: 'json' | 'markdown' = 'markdown') =>
-    `${API_URL}/v1/audit/dossier/${runId}?format=${format}`,
-
-  /** Opens the progressive scenario SSE stream. */
-  releaseScenario(id: string, country: string): EventSource {
-    return new EventSource(`${API_URL}/v1/scenarios/${id}/release?country=${country}`)
-  },
+  /**
+   * Run dossier, fetched with the operator Bearer token. The API rejects
+   * anonymous downloads, so the console turns the response into a blob instead
+   * of linking to a URL that would arrive without the Authorization header.
+   */
+  dossier: (runId: string, format: 'json' | 'markdown' = 'markdown') =>
+    requestText(`/v1/audit/dossier/${runId}?format=${format}`),
 }
 
 // ── Operator auth, preferences, audit feed ──────────────────────────────────
@@ -789,6 +802,16 @@ export const authApi = {
     request<LoginResultDto>('/v1/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
     request<LoginResultDto>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  forgotPassword: (email: string) =>
+    request<{ ok: boolean }>('/v1/auth/password/forgot', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (token: string, password: string) =>
+    request<{ ok: boolean }>('/v1/auth/password/reset', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    }),
   changePassword: (challenge: string, password: string) =>
     request<LoginResultDto>('/v1/auth/password', {
       method: 'POST',

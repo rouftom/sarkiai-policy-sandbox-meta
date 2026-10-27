@@ -25,19 +25,24 @@ export class ReportStore {
     return this.client.db(this.config.dbName).collection(this.collectionName)
   }
 
-  async saveReports(runId: string, reports: JointSituationReport[]): Promise<void> {
+  async saveReports(runId: string, reports: JointSituationReport[], userId?: string): Promise<void> {
     const collection = await this.collection()
-    await collection.deleteMany({ runId })
+    // Scoped delete: one operator's re-run must not erase another operator's
+    // report for a colliding run id.
+    await collection.deleteMany(userId ? { runId, userId } : { runId })
     if (reports.length) {
-      await collection.insertMany(reports.map((report) => ({ ...report })))
+      await collection.insertMany(
+        reports.map((report) => ({ ...report, ...(userId ? { userId } : {}) })),
+      )
     }
   }
 
-  async getReports(runId: string): Promise<JointSituationReport[]> {
+  async getReports(runId: string, userId?: string): Promise<JointSituationReport[]> {
     const collection = await this.collection()
-    const docs = await collection.find({ runId }).sort({ tick: 1 }).toArray()
+    const filter = userId ? { runId, userId } : { runId }
+    const docs = await collection.find(filter).sort({ tick: 1 }).toArray()
     return docs.map((doc) => {
-      const { _id, ...report } = doc
+      const { _id, userId: _userId, ...report } = doc
       return report as unknown as JointSituationReport
     })
   }

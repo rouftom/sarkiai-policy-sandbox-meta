@@ -40,11 +40,20 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-dvh bg-background text-foreground lg:grid-cols-2">
       <BrandPanel />
-      <main className="relative flex min-h-dvh flex-col justify-center px-6 py-12 sm:px-10 lg:px-16">
-        <div className="absolute right-6 top-6 sm:right-10">
+      {/*
+        The form column is the same themed panel surface as the signed-in
+        console (`--app-panel-bg` + the pack corner radius), not a plain white
+        card: switching pack or mode changes the sign-in screen too.
+      */}
+      <main className="relative flex min-h-dvh flex-col justify-center overflow-hidden border-border/70 bg-[var(--app-panel-bg)] px-6 py-12 sm:px-10 lg:m-3 lg:ml-0 lg:min-h-[calc(100dvh-1.5rem)] lg:rounded-3xl lg:border lg:px-16">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-brand-primary/[0.07] to-transparent dark:from-brand-primary-light/[0.06]"
+        />
+        <div className="absolute right-6 top-6 z-10 sm:right-10 lg:right-8 lg:top-8">
           <AuthThemeToggle />
         </div>
-        <div className="mx-auto w-full max-w-sm">
+        <div className="relative z-10 mx-auto w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2 lg:hidden">
             <BrandMark className="h-9 w-9" />
             <span className="font-display text-sm font-bold tracking-tight">SarkiAI Policy Sandbox</span>

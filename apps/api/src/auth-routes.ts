@@ -12,7 +12,7 @@ import { z, ZodError } from 'zod'
 import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
-import { MailError, sendInvitation } from './mailer.js'
+import { MailError, sendInvitation, sendPasswordReset } from './mailer.js'
 
 function bearer(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization
@@ -42,6 +42,15 @@ const setupInput = z.object({
 
 const passwordChange = z.object({
   challenge: z.string().min(10).max(4096),
+  password: z.string().min(12).max(200),
+})
+
+const forgotInput = z.object({
+  email: z.string().email().max(200),
+})
+
+const resetInput = z.object({
+  token: z.string().min(10).max(4096),
   password: z.string().min(12).max(200),
 })
 
@@ -81,9 +90,9 @@ function failure(reply: { status: (code: number) => { send: (body: unknown) => u
 
 /** Best-effort audit trail: never block a sign-in because Mongo is down. */
 function recorder(audit: AuditService) {
-  return async (actor: string, action: string, target?: string) => {
+  return async (actor: string, action: string, target?: string, userId?: string) => {
     try {
-      await audit.logAction({ actor, action, target, lens: 'hybrid' })
+      await audit.logAction({ actor, action, target, userId, lens: 'hybrid' })
     } catch {
       /* audit store unreachable — the console still works */
     }
@@ -145,8 +154,66 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
       throttleSignup(request.ip)
       const body = signupInput.parse(request.body)
       const result = await auth.signup(body)
-      await record(result.operator.email, 'auth.signup')
+      await record(result.operator.email, 'auth.signup', undefined, result.operator.email)
       return reply.status(201).send(result)
+    } catch (error) {
+      return failure(reply, error)
+    }
+  })
+
+  // ── Password reset ────────────────────────────────────────────────────────
+  // Requesting a link always answers 200, even for an unknown address: the
+  // console must not become an account-enumeration oracle. The link is signed
+  // and single-use; the route throttles by IP.
+  const forgotAttempts = new Map<string, { count: number; resetAt: number }>()
+  const FORGOT_WINDOW_MS = 15 * 60 * 1000
+  const FORGOT_MAX_ATTEMPTS = 5
+
+  function throttleForgot(ip: string): void {
+    const now = Date.now()
+    const entry = forgotAttempts.get(ip)
+    if (!entry || entry.resetAt < now) {
+      forgotAttempts.set(ip, { count: 1, resetAt: now + FORGOT_WINDOW_MS })
+      return
+    }
+    entry.count += 1
+    if (entry.count > FORGOT_MAX_ATTEMPTS) {
+      throw new AuthError('rate_limited', 'Too many reset requests, try again later.')
+    }
+  }
+
+  app.post('/v1/auth/password/forgot', async (request, reply) => {
+    try {
+      throttleForgot(request.ip)
+      const body = forgotInput.parse(request.body)
+      const reset = await auth.createPasswordReset(body.email)
+      if (reset) {
+        try {
+          await sendPasswordReset({
+            to: reset.email,
+            ...(reset.firstName ? { firstName: reset.firstName } : {}),
+            token: reset.token,
+            expiresAt: reset.expiresAt,
+          })
+          await record(reset.email, 'auth.password_reset_requested', undefined, reset.email)
+        } catch (error) {
+          if (!(error instanceof MailError)) throw error
+          // Anti-enumeration: the response does not reveal that mail failed.
+          request.log.error({ error: error.code }, 'password reset e-mail could not be sent')
+        }
+      }
+      return { ok: true }
+    } catch (error) {
+      return failure(reply, error)
+    }
+  })
+
+  app.post('/v1/auth/password/reset', async (request, reply) => {
+    try {
+      const body = resetInput.parse(request.body)
+      const operator = await auth.resetPassword(body.token, body.password)
+      await record(operator.email, 'auth.password_reset', undefined, operator.email)
+      return { ok: true }
     } catch (error) {
       return failure(reply, error)
     }
@@ -177,7 +244,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
         throw error
       }
 
-      await record(created.operator.email, 'auth.root_created')
+      await record(created.operator.email, 'auth.root_created', undefined, created.operator.email)
       return reply.status(201).send({
         ok: true,
         email: created.operator.email,
@@ -192,7 +259,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     try {
       const body = passwordChange.parse(request.body)
       const result = await auth.changePassword(body.challenge, body.password)
-      await record(result.operator.email, 'auth.password_changed')
+      await record(result.operator.email, 'auth.password_changed', undefined, result.operator.email)
       return result
     } catch (error) {
       return failure(reply, error)
@@ -205,7 +272,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
       const body = credentials.parse(request.body)
       email = body.email
       const result = await auth.login(body.email, body.password)
-      await record(result.operator.email, 'auth.password_accepted', result.status)
+      await record(result.operator.email, 'auth.password_accepted', result.status, result.operator.email)
       return result
     } catch (error) {
       await record(email, 'auth.failed')
@@ -226,8 +293,8 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     try {
       const body = codeStep.parse(request.body)
       const session = await auth.confirmEnrollment(body.challenge, body.code)
-      await record(session.operator.email, 'auth.mfa_enrolled')
-      await record(session.operator.email, 'auth.login')
+      await record(session.operator.email, 'auth.mfa_enrolled', undefined, session.operator.email)
+      await record(session.operator.email, 'auth.login', undefined, session.operator.email)
       return session
     } catch (error) {
       return failure(reply, error)
@@ -238,7 +305,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     try {
       const body = codeStep.parse(request.body)
       const session = await auth.verify(body.challenge, body.code)
-      await record(session.operator.email, 'auth.login')
+      await record(session.operator.email, 'auth.login', undefined, session.operator.email)
       return session
     } catch (error) {
       return failure(reply, error)
@@ -256,7 +323,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/logout', async (request) => {
     const operator = currentOperator(request)
-    if (operator) await record(operator.email, 'auth.logout')
+    if (operator) await record(operator.email, 'auth.logout', undefined, operator.email)
     return { ok: true }
   })
 
@@ -283,7 +350,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
       })
       .parse(request.body)
     const preferences = await auth.updatePreferences(operator.email, patch)
-    await record(operator.email, 'preferences.updated')
+    await record(operator.email, 'preferences.updated', undefined, operator.email)
     return { preferences }
   })
 
@@ -293,7 +360,10 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
     const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(500).default(50) }).parse(request.query)
     try {
-      const [events, chain] = await Promise.all([audit.listAudit(limit), audit.verifyChain()])
+      const [events, chain] = await Promise.all([
+        audit.listAudit(limit, operator.email),
+        audit.verifyChain(),
+      ])
       return { events, chain }
     } catch (error) {
       return reply.status(503).send({ error: 'audit_unavailable', message: (error as Error).message })

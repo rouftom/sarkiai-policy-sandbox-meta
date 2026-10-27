@@ -42,6 +42,8 @@ export interface AgentRunInput {
   domain: Domain
   lens: WorkflowLens
   runId?: string
+  /** Operator (e-mail) who launched the run: every trace/audit record is scoped to them. */
+  userId?: string
   topK?: number
   /**
    * Generation attempts allowed by the citation validator (default 2: one
@@ -124,6 +126,7 @@ export class PolicyOrchestrator {
     // 2. Trap the reasoning: pre-decision trace.
     await this.deps.audit?.traceStep({
       runId,
+      ...(input.userId ? { userId: input.userId } : {}),
       agentId: institution.id,
       step: 0,
       thought: `Retrieved ${chunks.length} provisions for "${question}" in ${country}.`,
@@ -208,6 +211,7 @@ export class PolicyOrchestrator {
       const lastAttempt = attempt >= maxAttempts
       await this.deps.audit?.traceStep({
         runId,
+        ...(input.userId ? { userId: input.userId } : {}),
         agentId: institution.id,
         step: attempt,
         thought: `Citation validator rejected answer ${attempt}/${maxAttempts}: ${
@@ -229,6 +233,7 @@ export class PolicyOrchestrator {
         handlers?.onStage?.('retry', { attempt, rejected: validation.rejected.length })
         await this.deps.audit?.logAction({
           actor: institution.id,
+          ...(input.userId ? { userId: input.userId } : {}),
           action: 'citation.rejected',
           target: `${domain};attempt:${attempt};quotes:${validation.rejected.length}`,
           lens,
@@ -244,6 +249,7 @@ export class PolicyOrchestrator {
     handlers?.onStage?.('persisting', { grounded })
     await this.deps.audit?.traceStep({
       runId,
+      ...(input.userId ? { userId: input.userId } : {}),
       agentId: institution.id,
       step: attempt + 1,
       thought: reasoningText || text,
@@ -258,6 +264,7 @@ export class PolicyOrchestrator {
     })
     await this.deps.audit?.logAction({
       actor: institution.id,
+      ...(input.userId ? { userId: input.userId } : {}),
       action: 'agent.assessment',
       target: input.attachmentMeta?.length ? `${domain};attachments:${input.attachmentMeta.map((a) => a.sha256).join(',')}` : domain,
       lens,

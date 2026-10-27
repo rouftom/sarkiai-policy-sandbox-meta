@@ -164,6 +164,23 @@ survive a restart. Password, enrolment and recovery-code writes fail loudly
 (`storage_unavailable`) rather than pretending: a change that a restart would
 forget is never reported as saved.
 
+Every API route except the sign-in handshake, `/health`, the Meta webhook and
+the signed approval links requires that Bearer token. Inside the console, the
+operator's e-mail is the tenant key: audit records, chain-of-thought traces,
+joint reports, scenario sessions, approvals and preferences are filtered by
+`userId`, so two judges sharing the demo never see each other's runs. The legal
+corpus and its vectors are deliberately shared — it is the same law.
+
+### Forgotten password
+
+`/login` → **Forgot password?** (`/forgot-password`) sends a signed, single-use
+link to `/reset-password?token=…`. The link expires after **30 minutes**; a
+completed reset invalidates every other pending link for that account and leaves
+TOTP enrolled. The request endpoint answers `200` even for an unknown address, so
+the console never reveals which e-mails are registered. It uses the same Resend
+credentials as the invitation (`AUTH_RESEND_KEY`), and `WEB_PUBLIC_URL` builds the
+link.
+
 ### Public sign-up (cloud demo only)
 
 The public demo at
@@ -175,6 +192,21 @@ name, e-mail and password. The account is created immediately and the operator
 is pushed into the mandatory TOTP enrolment — no session exists before the
 second factor. `AUTH_SIGNUP=true|false` overrides the default, which is *open in
 cloud mode, closed otherwise*; `AUTH_MAX_OPERATORS` (default 12) caps the demo.
+The **Create an account** link on `/login` stays visible once accounts exist —
+only the API gate closes self-service, not the presence of a root operator.
+
+### Reset the demo state
+
+Wipe the accounts and every operational collection while keeping the corpus:
+
+```bash
+bun run demo:reset -- --dry-run   # counts per collection, deletes nothing
+bun run demo:reset -- --yes       # operators, password_resets, audit_logs,
+                                  # cot_traces, joint_reports, whatsapp_approvals
+```
+
+It needs `MONGODB_URI` and never prints it. `kb_chunks`, the Atlas indexes and
+all configuration are left untouched; the console then shows `/setup` again.
 
 ### Switching provider
 

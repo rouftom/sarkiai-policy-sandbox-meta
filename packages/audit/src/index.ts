@@ -29,6 +29,7 @@ function hashPayload(base: Omit<AuditRecord, 'hash'>, prevHash?: string): string
   const canonical = JSON.stringify({
     id: base.id,
     runId: base.runId ?? undefined,
+    userId: base.userId ?? undefined,
     ts: base.ts,
     actor: base.actor,
     action: base.action,
@@ -80,6 +81,8 @@ export class AuditService {
     lens: WorkflowLens
     citations?: Citation[]
     runId?: string
+    /** Operator (e-mail) the record belongs to; absent on system-wide events. */
+    userId?: string
   }): Promise<AuditRecord> {
     const { audit } = await this.db()
     const previous = await audit.find({}).sort({ ts: -1, _id: -1 }).limit(1).next()
@@ -88,6 +91,7 @@ export class AuditService {
     const base: Omit<AuditRecord, 'hash'> = {
       id: sha256(`${input.actor}:${input.action}:${Date.now()}`).slice(0, 24),
       runId: input.runId,
+      userId: input.userId,
       ts: new Date().toISOString(),
       actor: input.actor,
       action: input.action,
@@ -112,9 +116,10 @@ export class AuditService {
     return record
   }
 
-  async getTrace(runId: string): Promise<CoTTrace[]> {
+  async getTrace(runId: string, userId?: string): Promise<CoTTrace[]> {
     const { cot } = await this.db()
-    const docs = await cot.find({ runId }).sort({ step: 1 }).toArray()
+    const filter = userId ? { runId, userId } : { runId }
+    const docs = await cot.find(filter).sort({ step: 1 }).toArray()
     return docs.map((doc) => doc as unknown as CoTTrace)
   }
 
@@ -125,17 +130,24 @@ export class AuditService {
     return (doc as unknown as AuditRecord | null) ?? null
   }
 
-  async getAuditForRun(runId: string): Promise<AuditRecord[]> {
+  async getAuditForRun(runId: string, userId?: string): Promise<AuditRecord[]> {
     const { audit } = await this.db()
-    const docs = await audit.find({ runId }).sort({ ts: 1 }).toArray()
+    const filter = userId ? { runId, userId } : { runId }
+    const docs = await audit.find(filter).sort({ ts: 1 }).toArray()
     return docs as unknown as AuditRecord[]
   }
 
-  /** Newest-first slice of the chain, for the console's audit page. */
-  async listAudit(limit = 50): Promise<AuditRecord[]> {
+  /**
+   * Newest-first slice of the chain, for the console's audit page. Scoped to
+   * one operator: the collection holds every operator's records, and a shared
+   * audit screen must never show another operator's work. The chain itself is
+   * still verified end-to-end (hashes link records across operators).
+   */
+  async listAudit(limit = 50, userId?: string): Promise<AuditRecord[]> {
     const { audit } = await this.db()
     const size = Math.min(Math.max(limit, 1), 500)
-    const docs = await audit.find({}).sort({ ts: -1 }).limit(size).toArray()
+    const filter = userId ? { userId } : {}
+    const docs = await audit.find(filter).sort({ ts: -1 }).limit(size).toArray()
     return docs as unknown as AuditRecord[]
   }
 

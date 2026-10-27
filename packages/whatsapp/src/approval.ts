@@ -19,6 +19,8 @@ export interface ApprovalClaims {
   exp: number
   /** Short human-readable subject, shown on the approval page. */
   subject?: string
+  /** Operator (e-mail) who owns the run, so the page only reads their reports. */
+  userId?: string
 }
 
 export type ApprovalVerification =
@@ -40,6 +42,7 @@ export interface CreateApprovalTokenInput {
   secret: string
   ttlSeconds?: number
   subject?: string
+  userId?: string
   jti?: string
   now?: number
 }
@@ -58,6 +61,7 @@ export function createApprovalToken(input: CreateApprovalTokenInput): {
     jti: input.jti ?? randomUUID(),
     exp: now + (input.ttlSeconds ?? 24 * 60 * 60),
     ...(input.subject ? { subject: input.subject.slice(0, 200) } : {}),
+    ...(input.userId ? { userId: input.userId.slice(0, 200) } : {}),
   }
   const payload = base64url(JSON.stringify(claims))
   return { token: `${payload}.${sign(payload, input.secret)}`, claims }
@@ -99,6 +103,9 @@ export function verifyApprovalToken(
     return { ok: false, reason: 'malformed' }
   }
   if (claims.exp <= now) return { ok: false, reason: 'expired' }
+  if (claims.userId !== undefined && typeof claims.userId !== 'string') {
+    return { ok: false, reason: 'malformed' }
+  }
 
   return { ok: true, claims }
 }

@@ -4,6 +4,17 @@ function env(name: string, fallback = ''): string {
   return process.env[name] ?? fallback
 }
 
+/**
+ * Is this the cloud demo?
+ *
+ * `SANDBOX_MODE=cloud` is the explicit switch, but a Render deployment that
+ * received the Meta key without the mode still runs on Meta models. Treating
+ * that as cloud keeps public sign-up open instead of silently closing it when
+ * one environment variable is missing.
+ */
+const cloudDeployment =
+  env('SANDBOX_MODE', 'local').toLowerCase() === 'cloud' || Boolean(env('MODEL_API_KEY'))
+
 export const config = {
   host: env('HOST', '0.0.0.0'),
   port: Number(env('PORT', '8000')),
@@ -100,7 +111,7 @@ export const config = {
      * judges create their own account); closed for local / sovereign runs.
      * `AUTH_SIGNUP` can force it either way.
      */
-    signup: env('AUTH_SIGNUP', env('SANDBOX_MODE', 'local').toLowerCase() === 'cloud' ? 'true' : 'false') === 'true',
+    signup: env('AUTH_SIGNUP', cloudDeployment ? 'true' : 'false') === 'true',
     maxOperators: Number(env('AUTH_MAX_OPERATORS', '12')) || 12,
   },
 

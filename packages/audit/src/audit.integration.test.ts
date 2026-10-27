@@ -22,4 +22,37 @@ describe.skipIf(!mongoUri)('AuditService (integration: MongoDB)', () => {
       await audit.close()
     }
   })
+
+  test('scopes reads to one operator without breaking the chain', async () => {
+    const audit = new AuditService({ mongodbUri: mongoUri!, dbName: `sps_test_scope_${Date.now()}` })
+    try {
+      await audit.logAction({
+        actor: 'agent-a',
+        userId: 'ada@sarkiai.dev',
+        action: 'assessment',
+        lens: 'hybrid',
+        runId: 'scope-run',
+      })
+      await audit.logAction({
+        actor: 'agent-b',
+        userId: 'bob@sarkiai.dev',
+        action: 'assessment',
+        lens: 'hybrid',
+        runId: 'scope-run',
+      })
+
+      const ada = await audit.listAudit(50, 'ada@sarkiai.dev')
+      expect(ada.every((record) => record.userId === 'ada@sarkiai.dev')).toBe(true)
+      expect(ada).toHaveLength(1)
+
+      const runForBob = await audit.getAuditForRun('scope-run', 'bob@sarkiai.dev')
+      expect(runForBob).toHaveLength(1)
+      expect(runForBob[0]!.actor).toBe('agent-b')
+
+      // The chain still covers every operator's records end to end.
+      expect((await audit.verifyChain()).valid).toBe(true)
+    } finally {
+      await audit.close()
+    }
+  })
 })

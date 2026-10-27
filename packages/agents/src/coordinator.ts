@@ -31,6 +31,8 @@ export interface CoordinatorDeps {
 
 export interface CoordinatorTickInput {
   runId: string
+  /** Operator (e-mail) who launched the run. */
+  userId?: string
   tick: number
   country: string
   domain: Domain
@@ -98,6 +100,7 @@ export class MultiAgentCoordinator {
           domain: input.domain,
           lens: input.lens,
           runId: input.runId,
+          ...(input.userId ? { userId: input.userId } : {}),
         })
       }),
     )
@@ -106,7 +109,14 @@ export class MultiAgentCoordinator {
 
   /** Reconcile independent assessments into a joint situation report. */
   async reconcile(
-    input: { runId: string; tick: number; country: string; domain: Domain; assessments: AgentAssessment[] },
+    input: {
+      runId: string
+      tick: number
+      country: string
+      domain: Domain
+      assessments: AgentAssessment[]
+      userId?: string
+    },
   ): Promise<JointSituationReport> {
     const digest = input.assessments
       .map(
@@ -147,6 +157,7 @@ export class MultiAgentCoordinator {
 
     await this.deps.audit?.logAction({
       actor: 'coordinator',
+      ...(input.userId ? { userId: input.userId } : {}),
       action: 'scenario.reconcile',
       target: `tick:${input.tick}`,
       lens: 'hybrid',

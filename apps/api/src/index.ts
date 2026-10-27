@@ -6,11 +6,14 @@ import { registerRoutes } from './routes/index.js'
 import { prepareCloudStores } from './engine.js'
 import { auth } from './auth.js'
 import { config } from './config.js'
+import type { PublicOperator } from '@sps/auth'
 
 declare module 'fastify' {
   interface FastifyRequest {
     /** Exact JSON bytes, kept for WhatsApp `X-Hub-Signature-256` verification. */
     rawBody?: Buffer
+    /** Operator established by the API-wide Bearer guard (`registerRoutes`). */
+    operator?: PublicOperator
   }
 }
 

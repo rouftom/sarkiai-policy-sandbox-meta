@@ -54,7 +54,9 @@ export default function LoginPage() {
   const [copied, setCopied] = React.useState<string | null>(null)
   const [code, setCode] = React.useState('')
   const [codeError, setCodeError] = React.useState<string | null>(null)
-  const [signupOpen, setSignupOpen] = React.useState(false)
+  const [signupOpen, setSignupOpen] = React.useState(
+    () => process.env.NEXT_PUBLIC_SIGNUP !== 'false',
+  )
   const enrollmentStarted = React.useRef(false)
   const setupChecked = React.useRef(false)
 
@@ -109,7 +111,11 @@ export default function LoginPage() {
         if (!status.initialized) router.replace('/setup')
       })
       .catch(() => {
-        /* API asleep: the sign-in form still works once it wakes up */
+        /*
+         * The API may still be asleep (free Render instance) when the page
+         * loads. Do not hide the Sign-up entry point on a transient failure:
+         * it starts visible and only the API can close it.
+         */
       })
   }, [router])
 
@@ -247,7 +253,15 @@ export default function LoginPage() {
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="password">{t('login.password')}</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">{t('login.password')}</Label>
+                <Link
+                  href="/forgot-password"
+                  className="text-[10px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  {t('login.forgotPassword')}
+                </Link>
+              </div>
               <PasswordInput
                 id="password"
                 autoComplete="current-password"

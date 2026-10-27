@@ -26,6 +26,8 @@ curl -s $API/v1/provider | jq '{mode, models, ready}'
 - [ ] Signed in **before** recording: password + TOTP are not part of the story.
       Keep the recovery codes out of frame. If you need a fresh account,
       `/signup` (cloud mode) creates one and walks straight into TOTP enrolment.
+- [ ] Lost the password? `/forgot-password` mails a single-use 30-minute link
+      (requires `AUTH_RESEND_KEY`); TOTP stays enrolled.
 - [ ] Browser: one window, zoom 110%, bookmarks bar hidden, notifications off.
       Light theme (Meta blue) is the default.
 - [ ] A second device with WhatsApp open, if the approval segment is recorded
@@ -114,3 +116,10 @@ git status --short     # should be clean
 Check Render logs for the run (`render logs -r srv-dbfvq1e1egvs73a6j4eg --limit 200`)
 — bootstrap index messages, no stack traces. Keep the take that shows a real
 score, not a sped-up one.
+
+To return the demo to a clean slate without touching the corpus:
+
+```bash
+bun run demo:reset -- --dry-run
+bun run demo:reset -- --yes
+```

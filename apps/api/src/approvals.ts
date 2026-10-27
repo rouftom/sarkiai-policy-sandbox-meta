@@ -19,11 +19,14 @@ interface ApprovalDocument extends Document {
   note?: string
   decidedAt: string
   channel: string
+  userId?: string
 }
 
 export interface ApprovalRecord {
   jti: string
   runId: string
+  /** Operator (e-mail) who owns the run this approval unlocks. */
+  userId?: string
   decision: ApprovalDecision
   note?: string
   decidedAt: string
@@ -86,5 +89,6 @@ function toRecord(doc: ApprovalDocument): ApprovalRecord {
     ...(typeof doc.note === 'string' ? { note: doc.note } : {}),
     decidedAt: String(doc.decidedAt),
     channel: 'whatsapp',
+    ...(typeof doc.userId === 'string' && doc.userId ? { userId: doc.userId } : {}),
   }
 }
