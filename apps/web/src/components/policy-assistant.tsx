@@ -1,23 +1,28 @@
 'use client'
 
 import * as React from 'react'
+import { ArrowUp, ImagePlus, Plus, RotateCcw, Scale, Shield, X } from 'lucide-react'
 import {
-  BadgeCheck,
-  Bot,
-  ImagePlus,
-  Plus,
-  Scale,
-  Send,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  X,
-} from 'lucide-react'
-import { Button, Select, Tooltip, cn } from '@sps/ui'
-import { institutionsForDomain, type Domain, type WorkflowLens } from '@sps/shared'
-import { api, type AssessmentDto } from '@/lib/api'
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  Tooltip,
+  cn,
+} from '@sps/ui'
+import { institutionsForDomain } from '@sps/shared'
+import { api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
+import { BrandMark } from '@/components/layout/brand-mark'
 
 interface Message {
   id: string
@@ -35,11 +40,10 @@ interface Attachment {
 }
 
 /**
- * Policy assistant, embedded in the left panel of the console shell — the same
- * geometry as the FSM admin assistant (`--assistant-panel-bg`, rounded-3xl,
- * header with close/new actions, scrollable transcript, composer at the bottom).
- * It is a panel, not an overlay: the operator reads the policy answer next to
- * the workspace it applies to.
+ * Policy assistant in the left panel of the console. Same composer as the FSM
+ * assistant: one rounded pill, a `+` icon button that holds every option (the
+ * mandated institution and the Meta model as sub-menus, image attachment, new
+ * conversation), and the send button on the right. No selects, no toolbars.
  */
 export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const { t } = useI18n()
@@ -48,11 +52,19 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = React.useState(false)
   const [messages, setMessages] = React.useState<Message[]>([])
   const [attachments, setAttachments] = React.useState<Attachment[]>([])
+  const [menuOpen, setMenuOpen] = React.useState(false)
   const fileRef = React.useRef<HTMLInputElement>(null)
   const scrollRef = React.useRef<HTMLDivElement>(null)
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
   const institutions = React.useMemo(() => institutionsForDomain(domain), [domain])
   const [institutionId, setInstitutionId] = React.useState(institutions[0]?.id ?? 'legal_advisor')
+  const activeInstitution = institutions.find((institution) => institution.id === institutionId) ?? institutions[0]
+
+  const [models, setModels] = React.useState<MetaModelDto[]>([])
+  const [modelState, setModelState] = React.useState<'loading' | 'ready' | 'error'>('loading')
+  const [model, setModel] = React.useState('')
+  const [modelError, setModelError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (!institutions.some((institution) => institution.id === institutionId)) {
@@ -61,8 +73,38 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }, [institutions, institutionId])
 
   React.useEffect(() => {
+    let cancelled = false
+    api
+      .models()
+      .then((result) => {
+        if (cancelled) return
+        setModels(result.models)
+        setModel(result.selected)
+        setModelState('ready')
+      })
+      .catch(() => {
+        if (!cancelled) setModelState('error')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, busy])
+
+  const chooseModel = async (id: string) => {
+    const previous = model
+    setModel(id)
+    setModelError(null)
+    try {
+      await api.selectModel(id)
+    } catch (error) {
+      setModel(previous)
+      setModelError((error as Error).message)
+    }
+  }
 
   const addFiles = async (files: FileList | null) => {
     if (!files) return
@@ -81,24 +123,25 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       const commaIndex = dataUrl.indexOf(',')
       if (commaIndex < 0) continue
       const meta = dataUrl.slice(0, commaIndex)
-      const base64 = dataUrl.slice(commaIndex + 1)
-      const mime = meta.slice(meta.indexOf(':') + 1, meta.indexOf(';'))
-      next.push({ mime, dataBase64: base64, url: dataUrl })
+      next.push({
+        mime: meta.slice(meta.indexOf(':') + 1, meta.indexOf(';')),
+        dataBase64: dataUrl.slice(commaIndex + 1),
+        url: dataUrl,
+      })
     }
     setAttachments((previous) => [...previous, ...next].slice(0, 3))
   }
 
-  const send = async (event?: React.FormEvent) => {
-    event?.preventDefault()
-    const question = input.trim()
-    if (!question || busy) return
+  const send = async (override?: string) => {
+    const question = (override ?? input).trim()
+    if (!question || busy || !activeInstitution) return
     setInput('')
     setMessages((previous) => [...previous, { id: crypto.randomUUID(), role: 'user', content: question }])
     setBusy(true)
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64 }))
     try {
       const result = await api.ask({
-        institutionId,
+        institutionId: activeInstitution.id,
         question,
         country,
         domain,
@@ -127,7 +170,13 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const activeAgent = institutions.find((institution) => institution.id === institutionId)
+  const newConversation = () => {
+    setMessages([])
+    setAttachments([])
+    textareaRef.current?.focus()
+  }
+
+  const suggestions = [t('assistant.suggest1'), t('assistant.suggest2'), t('assistant.suggest3')]
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -143,204 +192,115 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         }}
       />
 
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-brand-primary/10 px-3 dark:border-brand-primary-dark/25">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 dark:bg-brand-primary-dark/40">
-          <Bot className="h-4 w-4 text-brand-primary-dark dark:text-brand-primary-light" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[10px] font-medium text-foreground">
-            {t('assistant.title')}
-          </p>
-          <p className="truncate text-[10px] text-muted-foreground">
-            {country.toUpperCase()} · {t(`domain.${domain}` as 'domain.health')} ·{' '}
-            {t(`lens.${lens}.label` as 'lens.hybrid.label')}
-          </p>
-        </div>
-        <Tooltip label={t('assistant.newChat')}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t('assistant.newChat')}
-            onClick={() => {
-              setMessages([])
-              setAttachments([])
-            }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </Tooltip>
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
+        <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-foreground">{t('assistant.title')}</p>
         <Tooltip label={t('assistant.close')}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t('assistant.close')}
-            onClick={onClose}
-          >
+          <Button type="button" variant="ghost" size="icon-sm" aria-label={t('assistant.close')} onClick={onClose}>
             <X className="h-3.5 w-3.5" />
           </Button>
         </Tooltip>
       </header>
 
-      <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-        {messages.length === 0 && (
-          <div className="space-y-3">
-            <div className="rounded-xl border border-brand-primary/15 bg-background/50 px-3 py-2.5 dark:border-brand-primary-dark/30">
-              <p className="flex items-center gap-1.5 text-[10px] font-medium text-brand-primary-dark dark:text-brand-primary-light">
-                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                {t('assistant.emptyTitle')}
+      <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
+        {messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+            <BrandMark className="h-12 w-12" />
+            <div>
+              <p className="text-[14px] font-semibold text-foreground">{t('assistant.greeting')}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {t('assistant.emptyBody')}
               </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{t('assistant.emptyBody')}</p>
             </div>
-
-            <p className="px-1 text-[9px] font-medium text-muted-foreground">
-              {t('assistant.mandates')}
-            </p>
-            <div className="grid gap-1.5">
-              {institutions.map((institution) => {
-                const Icon = institution.role === 'legal_advisor' ? Scale : Shield
-                const selected = institution.id === institutionId
-                return (
-                  <button
-                    key={institution.id}
-                    type="button"
-                    onClick={() => setInstitutionId(institution.id)}
-                    className={cn(
-                      'flex items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors',
-                      selected
-                        ? 'border-brand-primary/40 bg-brand-primary/10 dark:border-brand-primary-light/30 dark:bg-brand-primary-dark/30'
-                        : 'border-border bg-card/60 hover:bg-secondary',
-                    )}
-                  >
-                    <Icon className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', institution.color)} aria-hidden="true" />
-                    <span className="min-w-0">
-                      <span className="block truncate text-[11px] font-semibold text-foreground">{institution.name}</span>
-                      <span className="mt-0.5 line-clamp-2 block text-[10px] leading-relaxed text-muted-foreground">
-                        {institution.mandate}
-                      </span>
-                    </span>
-                    {selected && <BadgeCheck className="ml-auto h-3.5 w-3.5 shrink-0 text-brand-primary dark:text-brand-primary-light" />}
-                  </button>
-                )
-              })}
+            <div className="grid w-full gap-1.5">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => void send(suggestion)}
+                  disabled={busy}
+                  className="rounded-2xl border border-border bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
             </div>
           </div>
-        )}
-
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={cn(
-              'rounded-2xl px-3 py-2 text-[11px] leading-relaxed',
-              message.role === 'user'
-                ? 'ml-6 bg-brand-primary text-white'
-                : 'border border-border bg-card text-card-foreground',
-            )}
-          >
-            {message.role === 'assistant' && message.agentId && (
-              <p className="mb-1 text-[9px] font-medium text-muted-foreground">
-                {institutions.find((institution) => institution.id === message.agentId)?.name ?? message.agentId}
-              </p>
-            )}
-            <p className="whitespace-pre-wrap">{message.content}</p>
-            {message.validation && (
-              <p
+        ) : (
+          <div className="space-y-3">
+            {messages.map((message) => (
+              <div
+                key={message.id}
                 className={cn(
-                  'mt-1.5 flex items-center gap-1 text-[10px]',
-                  message.validation.ok
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-amber-600 dark:text-amber-400',
+                  'rounded-2xl px-3 py-2 text-[11px] leading-relaxed',
+                  message.role === 'user'
+                    ? 'ml-6 bg-brand-primary text-white'
+                    : 'border border-border bg-card text-card-foreground',
                 )}
               >
-                {message.validation.ok ? (
-                  <BadgeCheck className="h-3 w-3 shrink-0" aria-hidden="true" />
-                ) : (
-                  <ShieldAlert className="h-3 w-3 shrink-0" aria-hidden="true" />
+                {message.role === 'assistant' && message.agentId && (
+                  <p className="mb-1 text-[10px] font-medium text-muted-foreground">
+                    {institutions.find((institution) => institution.id === message.agentId)?.name ?? message.agentId}
+                  </p>
                 )}
-                {message.validation.ok
-                  ? message.validation.attempts > 1
-                    ? t('citation.verifiedAfterRetry', { attempts: message.validation.attempts })
-                    : t('citation.verified')
-                  : t('citation.rejected', { count: message.validation.rejected.length })}
-              </p>
-            )}
-            {message.citations && message.citations.length > 0 && (
-              <ul className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[10px]">
-                {message.citations.slice(0, 4).map((citation, index) => {
-                  const label = [
-                    citation.filename,
-                    citation.articleNumber ? `ARTICLE ${citation.articleNumber}` : '',
-                    citation.headingPath ?? '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')
-                  return (
-                    <li key={index} className="text-muted-foreground">
-                      {citation.sourceUrl ? (
-                        <a
-                          href={citation.sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-semibold text-brand-primary-dark hover:underline dark:text-brand-primary-light"
-                        >
-                          {label}
-                        </a>
-                      ) : (
-                        <span className="font-semibold">{label}</span>
-                      )}
-                      {citation.quote && <p className="mt-0.5 line-clamp-2 italic opacity-80">“{citation.quote}”</p>}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
+                <p className="whitespace-pre-wrap">{message.content}</p>
+                {message.validation && (
+                  <p
+                    className={cn(
+                      'mt-1.5 text-[10px]',
+                      message.validation.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                    )}
+                  >
+                    {message.validation.ok
+                      ? message.validation.attempts > 1
+                        ? t('citation.verifiedAfterRetry', { attempts: message.validation.attempts })
+                        : t('citation.verified')
+                      : t('citation.rejected', { count: message.validation.rejected.length })}
+                  </p>
+                )}
+                {message.citations && message.citations.length > 0 && (
+                  <ul className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[10px]">
+                    {message.citations.slice(0, 4).map((citation, index) => {
+                      const label = [
+                        citation.filename,
+                        citation.articleNumber ? `Article ${citation.articleNumber}` : '',
+                        citation.headingPath ?? '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                      return (
+                        <li key={index} className="text-muted-foreground">
+                          {citation.sourceUrl ? (
+                            <a
+                              href={citation.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-brand-primary-dark hover:underline dark:text-brand-primary-light"
+                            >
+                              {label}
+                            </a>
+                          ) : (
+                            <span className="font-semibold">{label}</span>
+                          )}
+                          {citation.quote && <p className="mt-0.5 line-clamp-2 italic opacity-80">“{citation.quote}”</p>}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            ))}
+            {busy && <p className="px-1 text-[10px] text-muted-foreground">{t('assistant.searching')}</p>}
           </div>
-        ))}
-
-        {busy && (
-          <p className="flex items-center gap-1.5 px-1 text-[10px] text-muted-foreground">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-primary dark:bg-brand-primary-light" />
-            {t('assistant.searching')}
-          </p>
         )}
       </div>
 
-      <form
-        onSubmit={send}
-        className="shrink-0 space-y-2 border-t border-brand-primary/10 p-2.5 dark:border-brand-primary-dark/25"
-      >
-        <div className="flex items-center gap-1.5">
-          <Select
-            value={institutionId}
-            onValueChange={setInstitutionId}
-            ariaLabel={t('assistant.agent')}
-            options={institutions.map((institution) => ({ value: institution.id, label: institution.name }))}
-            className="min-w-0 flex-1"
-          />
-          <Tooltip label={t('assistant.attach')} side="top">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('assistant.attach')}
-              onClick={() => fileRef.current?.click()}
-            >
-              <ImagePlus className="h-3.5 w-3.5" />
-            </Button>
-          </Tooltip>
-        </div>
-
+      <div className="shrink-0 space-y-2 p-3">
         {attachments.length > 0 && (
           <div className="flex gap-1.5">
             {attachments.map((attachment, index) => (
               <div key={index} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={attachment.url}
-                  alt=""
-                  className="h-11 w-11 rounded-lg border border-border object-cover"
-                />
+                <img src={attachment.url} alt="" className="h-11 w-11 rounded-lg border border-border object-cover" />
                 <button
                   type="button"
                   onClick={() => setAttachments((previous) => previous.filter((_, i) => i !== index))}
@@ -354,8 +314,80 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        <div className="relative">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void send()
+          }}
+          className="flex items-end gap-1 rounded-3xl border border-input bg-card p-1.5 shadow-sm focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25"
+        >
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon-sm" className="rounded-full" aria-label={t('assistant.options')}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-56">
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Scale className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{t('assistant.institution')}</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuLabel>{t('assistant.institution')}</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={institutionId} onValueChange={setInstitutionId}>
+                    {institutions.map((institution) => {
+                      const Icon = institution.role === 'legal_advisor' ? Scale : Shield
+                      return (
+                        <DropdownMenuRadioItem key={institution.id} value={institution.id}>
+                          <Icon className={cn('h-3.5 w-3.5 shrink-0', institution.color)} />
+                          <span className="truncate">{institution.name}</span>
+                        </DropdownMenuRadioItem>
+                      )
+                    })}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <span className="min-w-0 flex-1 truncate">{t('assistant.model')}</span>
+                  <span className="max-w-[6rem] truncate font-mono text-[10px] text-muted-foreground">{model || '—'}</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuLabel>{t('assistant.modelMeta')}</DropdownMenuLabel>
+                  {modelState === 'loading' && <DropdownMenuItem disabled>{t('assistant.modelLoading')}</DropdownMenuItem>}
+                  {modelState === 'error' && <DropdownMenuItem disabled>{t('assistant.modelUnavailable')}</DropdownMenuItem>}
+                  {modelState === 'ready' && models.length === 0 && (
+                    <DropdownMenuItem disabled>{t('assistant.modelNone')}</DropdownMenuItem>
+                  )}
+                  {modelState === 'ready' && (
+                    <DropdownMenuRadioGroup value={model} onValueChange={(value) => void chooseModel(value)}>
+                      {models.map((entry) => (
+                        <DropdownMenuRadioItem key={entry.id} value={entry.id} className="font-mono text-[11px]">
+                          {entry.id}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  )}
+                  {modelError && <p className="px-2.5 py-1 text-[10px] text-destructive">{modelError}</p>}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => fileRef.current?.click()}>
+                <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
+                {t('assistant.attach')}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={newConversation}>
+                <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+                {t('assistant.newChat')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
@@ -364,26 +396,28 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                 void send()
               }
             }}
-            rows={2}
+            rows={1}
             placeholder={t('assistant.placeholder')}
             aria-label={t('assistant.placeholder')}
-            className="custom-scrollbar w-full resize-none rounded-xl border border-input bg-background/70 px-2.5 py-2 pr-10 text-[11px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
+            className="custom-scrollbar max-h-28 min-h-[28px] flex-1 resize-none bg-transparent px-1.5 py-1 text-[12px] text-foreground outline-none placeholder:text-muted-foreground"
           />
+
           <Button
             type="submit"
             size="icon-sm"
+            className="rounded-full"
             aria-label={t('assistant.send')}
             disabled={busy || !input.trim()}
-            className="absolute bottom-1.5 right-1.5"
           >
-            <Send className="h-3.5 w-3.5" />
+            <ArrowUp className="h-3.5 w-3.5" />
           </Button>
-        </div>
+        </form>
 
-        <p className="text-center text-[9px] tracking-wide text-muted-foreground">
-          {t('assistant.footer', { agent: activeAgent?.name ?? '—' })}
+        <p className="text-center text-[10px] text-muted-foreground">
+          {t('assistant.footer', { agent: activeInstitution?.name ?? '—' })}
+          {model ? ` · ${model}` : ''}
         </p>
-      </form>
+      </div>
     </div>
   )
 }

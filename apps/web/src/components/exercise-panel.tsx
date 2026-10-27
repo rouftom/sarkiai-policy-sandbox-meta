@@ -156,7 +156,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
       <CardHeader>
         <ClipboardList className="h-4 w-4 text-primary" />
         <CardTitle>{t('exercise.title')}</CardTitle>
-        <span className="ml-auto text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <span className="ml-auto text-[10px] font-semibold text-muted-foreground">
           {t('exercise.subtitle')}
         </span>
       </CardHeader>
@@ -189,7 +189,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
           <>
             <div className="rounded-xl border border-border p-2.5">
               <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[10px] font-black tracking-widest text-muted-foreground">
+                <span className="text-[10px] font-semibold text-muted-foreground">
                   {t('exercise.clock')}
                 </span>
                 <span className="font-mono text-xs font-semibold">
@@ -237,7 +237,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
             </div>
 
             <div className="space-y-1.5">
-              <p className="text-[10px] font-black tracking-widest text-muted-foreground">
+              <p className="text-[10px] font-semibold text-muted-foreground">
                 {t('exercise.injects')}
               </p>
               {released.length === 0 && (
@@ -254,7 +254,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
                     </span>
                     <span className="font-semibold">{inject.title}</span>
                     {inject.severity && (
-                      <span className="rounded bg-background/60 px-1 text-[9px] uppercase tracking-wide">
+                      <span className="rounded bg-background/60 px-1 text-[9px]">
                         {t(`severity.${inject.severity}` as 'severity.high')}
                       </span>
                     )}
@@ -274,7 +274,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
             </div>
 
             <div className="rounded-xl border border-border p-2.5">
-              <p className="mb-2 text-[10px] font-black tracking-widest text-muted-foreground">
+              <p className="mb-2 text-[10px] font-semibold text-muted-foreground">
                 {t('exercise.logTitle')}
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -335,7 +335,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
             </div>
 
             <div className="space-y-1.5">
-              <p className="text-[10px] font-black tracking-widest text-muted-foreground">
+              <p className="text-[10px] font-semibold text-muted-foreground">
                 {t('exercise.actions')}
               </p>
               {actions.length === 0 && (
@@ -348,7 +348,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
                     className="flex items-start gap-2 rounded-lg border border-border px-2 py-1 text-[11px]"
                   >
                     <span className="shrink-0 font-mono text-[10px] text-muted-foreground">T+{action.atMinute}</span>
-                    <span className={cn('shrink-0 rounded px-1 text-[9px] uppercase', KIND_TONE[action.kind])}>
+                    <span className={cn('shrink-0 rounded px-1 text-[9px]', KIND_TONE[action.kind])}>
                       {t(`exercise.kind.${action.kind}` as 'exercise.kind.action')}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -425,7 +425,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
                           <AlertTriangle className="h-3.5 w-3.5 text-amber-500" aria-hidden />
                           {item.injectId} · {item.title}
                         </span>
-                        <span className="ml-1 rounded bg-background/60 px-1 text-[9px] uppercase">
+                        <span className="ml-1 rounded bg-background/60 px-1 text-[9px]">
                           {item.reason === 'late' ? t('exercise.late') : t('exercise.noAction')}
                         </span>
                         <p className="mt-0.5 text-muted-foreground">{item.expectedAction}</p>
@@ -438,7 +438,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
 
             {afterAction && (
               <div className="space-y-2 rounded-xl border border-primary/40 bg-primary/5 p-2.5">
-                <p className="text-[10px] font-black tracking-widest text-muted-foreground">
+                <p className="text-[10px] font-semibold text-muted-foreground">
                   {t('exercise.narrative')} · {afterAction.model}
                 </p>
                 <p className="text-xs leading-relaxed">{afterAction.narrative.summary}</p>
@@ -452,7 +452,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
                   .filter((section) => section.items.length > 0)
                   .map((section) => (
                     <div key={section.label}>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <p className="text-[10px] font-semibold text-muted-foreground">
                         {section.label}
                       </p>
                       <ul className="list-disc space-y-0.5 pl-4 text-[11px]">
@@ -474,7 +474,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
 function Metric({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="rounded-lg bg-secondary/60 px-2 py-1">
-      <span className="block text-[9px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="block text-[9px] text-muted-foreground">{label}</span>
       <strong className={strong ? 'text-emerald-600 dark:text-emerald-400' : undefined}>{value}</strong>
     </div>
   )

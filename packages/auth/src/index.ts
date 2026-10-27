@@ -27,6 +27,8 @@ export interface Preferences {
   density: 'comfortable' | 'compact'
   radius: 'rounded' | 'square'
   notifications: { whatsapp: boolean; email: boolean; digest: boolean }
+  /** Meta model id chosen from the Meta model list (never read from the environment). */
+  model?: string
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -644,6 +646,26 @@ export class AuthService {
     const record = await this.load(email)
     if (!record) throw new AuthError('not_found', 'Unknown operator.')
     return record.preferences
+  }
+
+  /**
+   * The Meta model the console last saved, across operators. The engine restores
+   * it on boot so a redeploy keeps the chosen model.
+   */
+  async activeModel(): Promise<string | null> {
+    for (const record of this.memory.values()) {
+      if (record.preferences.model) return record.preferences.model
+    }
+    const collection = await this.operators()
+    if (!collection) return null
+    try {
+      const doc = await collection.findOne({ 'preferences.model': { $type: 'string' } }, { projection: { 'preferences.model': 1 } })
+      const model = (doc as { preferences?: { model?: unknown } } | null)?.preferences?.model
+      return typeof model === 'string' && model ? model : null
+    } catch {
+      this.mongoFailed = true
+      return null
+    }
   }
 
   async updatePreferences(

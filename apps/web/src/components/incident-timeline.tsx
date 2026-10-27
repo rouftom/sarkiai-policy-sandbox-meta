@@ -64,7 +64,7 @@ export function IncidentTimeline({
               aria-hidden="true"
             />
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-black tracking-widest text-muted-foreground">
+              <span className="text-[10px] font-semibold text-muted-foreground">
                 {t('timeline.batch', { n: item.releaseChunk + 1 })}
               </span>
               <span className={cn('text-xs font-semibold', !released && 'text-muted-foreground')}>{item.title}</span>

@@ -115,7 +115,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
       <CardHeader>
         <Languages className="h-4 w-4 text-primary" />
         <CardTitle>{t('comm.title')}</CardTitle>
-        <span className="ml-auto text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <span className="ml-auto text-[10px] font-semibold text-muted-foreground">
           {t('comm.subtitle')}
         </span>
       </CardHeader>
@@ -124,7 +124,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
 
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1">
-            <span className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.language')}</span>
+            <span className="text-[10px] font-semibold text-muted-foreground">{t('comm.language')}</span>
             <Select
               ariaLabel={t('comm.language')}
               value={language}
@@ -140,7 +140,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[10px] font-black tracking-widest text-muted-foreground">
+            <span className="text-[10px] font-semibold text-muted-foreground">
               {t('comm.jurisdiction')}
             </span>
             <input
@@ -151,7 +151,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
             />
           </label>
           <label className="space-y-1 sm:col-span-2">
-            <span className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.audience')}</span>
+            <span className="text-[10px] font-semibold text-muted-foreground">{t('comm.audience')}</span>
             <input
               value={audience}
               onChange={(event) => setAudience(event.target.value)}
@@ -161,7 +161,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
             />
           </label>
           <label className="space-y-1 sm:col-span-2">
-            <span className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.facts')}</span>
+            <span className="text-[10px] font-semibold text-muted-foreground">{t('comm.facts')}</span>
             <textarea
               value={facts}
               onChange={(event) => setFacts(event.target.value)}
@@ -174,7 +174,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.channels')}</span>
+          <span className="text-[10px] font-semibold text-muted-foreground">{t('comm.channels')}</span>
           {CHANNELS.map((channel) => (
             <label key={channel} className="inline-flex items-center gap-1 text-[11px]">
               <input
@@ -219,7 +219,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
         {draft && (
           <div className="space-y-2 rounded-xl border border-amber-500/40 bg-amber-500/5 p-2.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-black tracking-widest text-amber-700 dark:text-amber-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
                 <ShieldAlert className="h-3.5 w-3.5" aria-hidden />
                 {t('comm.reviewPending')}
               </span>
@@ -231,19 +231,19 @@ export function CommunicationsPanel({ country }: { country: string }) {
 
             <h4 className="text-sm font-black tracking-tight">{draft.title}</h4>
             <div>
-              <p className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.message')}</p>
+              <p className="text-[10px] font-semibold text-muted-foreground">{t('comm.message')}</p>
               <p className="whitespace-pre-wrap text-xs leading-relaxed">{draft.message}</p>
             </div>
 
             <div>
-              <p className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.smsLabel')}</p>
+              <p className="text-[10px] font-semibold text-muted-foreground">{t('comm.smsLabel')}</p>
               <p className="rounded-lg bg-background/70 px-2 py-1 font-mono text-[11px]">{draft.sms}</p>
               <span className="text-[10px] text-muted-foreground">{draft.sms.length} / 320</span>
             </div>
 
             {draft.keyTerms.length > 0 && (
               <div>
-                <p className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.keyTerms')}</p>
+                <p className="text-[10px] font-semibold text-muted-foreground">{t('comm.keyTerms')}</p>
                 <div className="mt-1 overflow-hidden rounded-lg border border-border">
                   <Table className="min-w-0">
                     <TableHeader>
@@ -267,7 +267,7 @@ export function CommunicationsPanel({ country }: { country: string }) {
 
             {draft.caveats.length > 0 && (
               <div>
-                <p className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.caveats')}</p>
+                <p className="text-[10px] font-semibold text-muted-foreground">{t('comm.caveats')}</p>
                 <ul className="list-disc space-y-0.5 pl-4 text-[11px]">
                   {draft.caveats.map((caveat, index) => (
                     <li key={index}>{caveat}</li>

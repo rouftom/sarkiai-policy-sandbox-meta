@@ -473,9 +473,27 @@ export interface CommunicationDraftDto {
   generatedAt: string
 }
 
+export interface MetaModelDto {
+  id: string
+  ownedBy?: string
+}
+
+export interface ModelsDto {
+  mode: string
+  selected: string
+  models: MetaModelDto[]
+}
+
 export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
+
+  /** Chat models from Meta's own list for this key, and the saved selection. */
+  models: () => request<ModelsDto>('/v1/models'),
+
+  /** Save the operator's chat model (the API checks it against the Meta list). */
+  selectModel: (model: string) =>
+    request<{ selected: string }>('/v1/models/selection', { method: 'PUT', body: JSON.stringify({ model }) }),
 
   ask: (body: {
     institutionId: string
@@ -860,6 +878,16 @@ export const knowledgeApi = {
     namespace?: string
     topK?: number
   }) => request<KbExplorationDto>('/v1/kb/search', { method: 'POST', body: JSON.stringify(body) }),
+  /** PDF or text file, sent as base64; the API extracts the text and ingests it. */
+  ingestFile: (body: {
+    filename: string
+    contentBase64: string
+    country: string
+    jurisdiction: 'national' | 'regional' | 'international'
+    docType: string
+    namespace?: string
+    version?: string
+  }) => request<KbIngestResultDto>('/v1/kb/ingest/file', { method: 'POST', body: JSON.stringify(body) }),
   setDocumentActive: (filename: string, active: boolean) =>
     request<{ filename: string; active: boolean; modified: number }>('/v1/kb/documents/active', {
       method: 'POST',

@@ -131,7 +131,7 @@ export function BrandPanel() {
         </ul>
       </div>
 
-      <p className="relative text-[10px] uppercase tracking-[0.18em] text-white/40">
+      <p className="relative text-[10px] text-white/40">
         Meta Global AI Developer Hackathon · Startup track
       </p>
     </section>

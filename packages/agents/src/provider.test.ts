@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { PROVIDER_MODES, createModel, describeProvider, providerModeFromEnv, resolveProvider } from './index'
+import { PROVIDER_MODES, createModel, describeProvider, eligibleChatModels, providerModeFromEnv, resolveProvider } from './index'
 
 /** A clean, empty environment: nothing is configured unless stated. */
 const base: Record<string, string | undefined> = {}
@@ -28,7 +28,8 @@ describe('provider layer', () => {
     const unconfigured = resolveProvider({ SANDBOX_MODE: 'cloud' })
     expect(unconfigured.servedBy).toBe('Meta')
     expect(unconfigured.baseURL).toBe('https://api.meta.ai/v1')
-    expect(unconfigured.models.reasoning).toBe('muse-spark-1.3')
+    // The chat model is chosen from Meta's list, never from the environment.
+    expect(unconfigured.models.reasoning).toBe('')
     expect(unconfigured.models.segmentation).toBe('sam-3.1')
     expect(unconfigured.models.transcription).toBe('muse-voice-transcribe-1.0')
     expect(unconfigured.residency).toBe('cloud')
@@ -46,15 +47,33 @@ describe('provider layer', () => {
     expect(JSON.stringify(descriptor)).not.toContain('super-secret-key')
   })
 
-  test('cloud honours model overrides and the per-run budget', () => {
+  test('cloud ignores model environment variables and keeps the per-run budget', () => {
     const descriptor = resolveProvider({
       SANDBOX_MODE: 'cloud',
       MODEL_API_KEY: 'k',
       META_REASONING_MODEL: 'muse-spark-1.3-large',
       RUN_BUDGET_USD: '1.50',
     })
-    expect(descriptor.models.reasoning).toBe('muse-spark-1.3-large')
+    expect(descriptor.models.reasoning).toBe('')
     expect(descriptor.budgetUsd).toBe(1.5)
+  })
+
+  test('the Meta model list keeps chat models and drops embedding, speech and segmentation', () => {
+    const models = eligibleChatModels({
+      object: 'list',
+      data: [
+        { id: 'muse-spark-1.3', object: 'model', owned_by: 'meta' },
+        { id: 'sam-3.1', object: 'model' },
+        { id: 'muse-voice-transcribe-1.0', object: 'model' },
+        { id: 'llama-embed-nemotron', object: 'model' },
+        { id: 'muse-spark-1.3', object: 'model' },
+        { id: 'muse-glimmer', object: 'model', owned_by: 'meta' },
+        { object: 'model' },
+      ],
+    })
+    expect(models.map((m) => m.id)).toEqual(['muse-glimmer', 'muse-spark-1.3'])
+    expect(eligibleChatModels({ data: [] })).toEqual([])
+    expect(eligibleChatModels(null)).toEqual([])
   })
 
   test('sovereign mode serves Muse Glimmer on-premise by default', () => {

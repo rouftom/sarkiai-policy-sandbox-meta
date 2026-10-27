@@ -48,7 +48,7 @@ export function AuditPanel({ runId }: { runId: string }) {
         {integrity && (
           <span
             className={cn(
-              'ml-auto inline-flex items-center gap-1 text-[10px] font-black tracking-widest',
+              'ml-auto inline-flex items-center gap-1 text-[10px] font-semibold',
               integrity.valid ? 'text-primary' : 'text-destructive',
             )}
           >
@@ -64,7 +64,7 @@ export function AuditPanel({ runId }: { runId: string }) {
         <div className="space-y-2">
           {byAgent.map(([agentId, steps]) => (
             <div key={agentId} className="rounded-xl border border-border p-2">
-              <p className="text-[10px] font-black tracking-widest text-muted-foreground">{agentId}</p>
+              <p className="text-[10px] font-semibold text-muted-foreground">{agentId}</p>
               <ul className="mt-1 space-y-1 text-xs">
                 {steps.map((step) => (
                   <li key={step.id} className="flex gap-2">

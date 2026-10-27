@@ -108,9 +108,9 @@ export function ApprovalView({ token }: { token: string }) {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-primary" aria-hidden />
-          <h1 className="text-base font-black tracking-widest">{t('approval.title')}</h1>
+          <h1 className="text-base font-semibold">{t('approval.title')}</h1>
         </div>
-        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black tracking-widest ${STATUS_TONE[status]}`}>
+        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_TONE[status]}`}>
           {t(`approval.${status}` as 'approval.pending')}
         </span>
       </header>
@@ -156,7 +156,7 @@ export function ApprovalView({ token }: { token: string }) {
           <CardContent className="space-y-2">
             {approval.reports.map((report, index) => (
               <div key={`${report.tick}-${index}`} className="rounded-lg border border-border p-2.5">
-                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-black tracking-widest text-muted-foreground">
+                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] font-semibold text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
                     <FileText className="h-3.5 w-3.5" aria-hidden />
                     T{report.tick}
@@ -178,7 +178,7 @@ export function ApprovalView({ token }: { token: string }) {
         <Card>
           <CardContent className="space-y-3">
             <label className="block space-y-1">
-              <span className="text-[10px] font-black tracking-widest text-muted-foreground">{t('approval.note')}</span>
+              <span className="text-[10px] font-semibold text-muted-foreground">{t('approval.note')}</span>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}

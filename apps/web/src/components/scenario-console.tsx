@@ -25,7 +25,7 @@ function TickReport({ tick }: { tick: JointReportDto }) {
   return (
     <div className="rounded-xl border border-border p-3">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-black tracking-widest text-muted-foreground">
+        <span className="text-[10px] font-semibold text-muted-foreground">
           {t('scenario.batch', { n: tick.tick + 1 })}
         </span>
         <span className="text-xs">{tick.summary}</span>
@@ -33,7 +33,7 @@ function TickReport({ tick }: { tick: JointReportDto }) {
 
       {tick.agreements.length > 0 && (
         <div className="mt-2">
-          <p className="text-[10px] font-black tracking-widest text-primary">{t('scenario.agreements')}</p>
+          <p className="text-[10px] font-semibold text-primary">{t('scenario.agreements')}</p>
           <ul className="text-xs">
             {tick.agreements.map((a, i) => (
               <li key={i}>· {a}</li>
@@ -44,7 +44,7 @@ function TickReport({ tick }: { tick: JointReportDto }) {
 
       {tick.conflicts.length > 0 && (
         <div className="mt-2">
-          <p className="text-[10px] font-black tracking-widest text-destructive">{t('scenario.conflicts')}</p>
+          <p className="text-[10px] font-semibold text-destructive">{t('scenario.conflicts')}</p>
           <ul className="space-y-1">
             {tick.conflicts.map((conflict) => (
               <li key={conflict.id} className="rounded-lg bg-secondary/60 p-2 text-xs">
@@ -53,7 +53,7 @@ function TickReport({ tick }: { tick: JointReportDto }) {
                   <span className="font-semibold">
                     {conflict.between[0]} ↔ {conflict.between[1]}
                   </span>
-                  <span className={cn('ml-auto uppercase', SEVERITY[conflict.severity])}>
+                  <span className={cn('ml-auto', SEVERITY[conflict.severity])}>
                     {t(`severity.${conflict.severity}` as 'severity.low')}
                   </span>
                 </div>
@@ -71,7 +71,7 @@ function TickReport({ tick }: { tick: JointReportDto }) {
 
       {tick.openQuestions.length > 0 && (
         <div className="mt-2">
-          <p className="text-[10px] font-black tracking-widest text-muted-foreground">
+          <p className="text-[10px] font-semibold text-muted-foreground">
             {t('scenario.openQuestions')}
           </p>
           <ul className="text-xs text-muted-foreground">
@@ -82,7 +82,7 @@ function TickReport({ tick }: { tick: JointReportDto }) {
         </div>
       )}
 
-      <p className="mt-2 text-[10px] font-black tracking-widest text-muted-foreground">
+      <p className="mt-2 text-[10px] font-semibold text-muted-foreground">
         {t('scenario.assessments', { count: tick.assessments.length })}
       </p>
     </div>
@@ -121,18 +121,27 @@ export function ScenarioConsole({
     setError(null)
   }
 
+  // Auto-run: one short request per tick instead of one long request for the
+  // whole scenario. A multi-agent tick takes about a minute on the Meta model,
+  // and a single request that long is cut by the hosting proxy.
   const runAll = async () => {
     setBusy(true)
     setError(null)
     reset()
     try {
-      const result = await api.runScenario({ id: 'health-data-breach', country, domain })
-      setRunId(result.runId)
-      onRunId?.(result.runId)
-      setReports(result.ticks)
-      setEvents(result.events)
-      setTotal(result.ticks.length)
-      setReleased(result.ticks.length)
+      const start = await api.startScenario({ id: 'health-data-breach', country, domain })
+      setRunId(start.runId)
+      onRunId?.(start.runId)
+      setAgenda(start.agenda)
+      setTotal(start.totalTicks)
+      let finished = false
+      while (!finished) {
+        const tick = await api.nextTick(start.runId)
+        if (tick.events.length) setEvents((prev) => [...prev, ...tick.events])
+        if (tick.report) setReports((prev) => [...prev, tick.report as JointReportDto])
+        setReleased(tick.releasedTicks)
+        finished = tick.done
+      }
       setDone(true)
     } catch (e) {
       setError((e as Error).message)
@@ -249,7 +258,7 @@ export function ScenarioConsole({
 
         {items.length > 0 && (
           <div className="mb-3 rounded-xl border border-border p-3">
-            <p className="mb-2 text-[10px] font-black tracking-widest text-primary">{t('scenario.timeline')}</p>
+            <p className="mb-2 text-[10px] font-semibold text-primary">{t('scenario.timeline')}</p>
             <IncidentTimeline items={items} releasedChunks={released} totalTicks={total} domain={domain} />
           </div>
         )}

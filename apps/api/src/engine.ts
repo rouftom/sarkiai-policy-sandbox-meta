@@ -1,8 +1,12 @@
 /** Composes the shared packages into the two lenses + the hybrid profile. */
 
-import { createModel, resolveProvider } from '@sps/agents'
-import { PolicyOrchestrator } from '@sps/agents'
-import { MultiAgentCoordinator } from '@sps/agents'
+import {
+  createModel,
+  listProviderModels,
+  resolveProvider,
+  PolicyOrchestrator,
+  MultiAgentCoordinator,
+} from '@sps/agents'
 import {
   AtlasRetriever,
   AtlasIngestor,
@@ -19,14 +23,47 @@ import { AuditService } from '@sps/audit'
 import { ReportStore } from '@sps/report'
 import { ObjectStore } from '@sps/storage'
 import { ScenarioEngine, type ScenarioDefinition } from '@sps/scenarios'
-import { getWorkflowProfile, institutionsForDomain, type Domain, type WorkflowLens } from '@sps/shared'
+import {
+  getWorkflowProfile,
+  institutionsForDomain,
+  type Domain,
+  type ProviderDescriptor,
+  type WorkflowLens,
+} from '@sps/shared'
 import { config } from './config.js'
 
+/**
+ * Everything that talks to the chat model. Rebuilt when the operator picks a
+ * different Meta model, so the agents, the coordinator and the readiness lens
+ * always share one handle.
+ */
+function buildModelStack(
+  provider: ProviderDescriptor,
+  modelId: string,
+  retriever: Retriever,
+  audit: AuditService,
+) {
+  const active: ProviderDescriptor =
+    provider.mode === 'cloud'
+      ? { ...provider, models: { ...provider.models, reasoning: modelId, vision: modelId } }
+      : provider
+  const model = createModel({ provider: active })
+  const orchestrator = new PolicyOrchestrator({
+    model,
+    retriever,
+    audit,
+    provider: active,
+    maxOutputTokens: Number(process.env.AGENT_MAX_OUTPUT_TOKENS ?? 4096) || 4096,
+  })
+  const coordinator = new MultiAgentCoordinator({ model, orchestrator, audit })
+  const readiness = new ReadinessEngine({ model, retriever })
+  return { provider: active, model, orchestrator, coordinator, readiness }
+}
+
 export function createEngine() {
-  // One provider decision for the whole engine: every agent, the coordinator
-  // and the readiness lens share the same model handle.
+  // One provider decision for the whole engine. In cloud mode the chat model
+  // is not read from the environment: it is selected from Meta's model list.
   const provider = resolveProvider(process.env)
-  const model = createModel({ provider })
   const retrievalBackend = resolveRetrievalBackend(provider.mode, config.retrieval.backend)
 
   const retriever: Retriever =
@@ -56,15 +93,6 @@ export function createEngine() {
 
   const audit = new AuditService({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
   const reports = new ReportStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
-  const orchestrator = new PolicyOrchestrator({
-    model,
-    retriever,
-    audit,
-    provider,
-    maxOutputTokens: Number(process.env.AGENT_MAX_OUTPUT_TOKENS ?? 4096) || 4096,
-  })
-  const coordinator = new MultiAgentCoordinator({ model, orchestrator, audit })
-  const readiness = new ReadinessEngine({ model, retriever })
   const storage = new ObjectStore({
     endpoint: config.s3.endpoint,
     bucket: config.s3.bucket,
@@ -72,7 +100,25 @@ export function createEngine() {
     secretKey: config.s3.secretKey,
   })
 
-  return { model, provider, retriever, retrievalBackend, audit, reports, orchestrator, coordinator, readiness, storage }
+  const engine = {
+    retriever,
+    retrievalBackend,
+    audit,
+    reports,
+    storage,
+    ...buildModelStack(provider, '', retriever, audit),
+    /** Point the engine at a Meta model id (cloud mode). Rebuilds the model stack. */
+    useModel(modelId: string): ProviderDescriptor {
+      if (engine.provider.mode !== 'cloud') return engine.provider
+      Object.assign(engine, buildModelStack(provider, modelId, retriever, audit))
+      return engine.provider
+    },
+    /** Chat-capable models this key may use, from Meta's own list. */
+    listModels() {
+      return listProviderModels(provider)
+    },
+  }
+  return engine
 }
 
 export interface CloudStorePreparation {

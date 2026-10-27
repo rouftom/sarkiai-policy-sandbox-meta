@@ -33,7 +33,8 @@ import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { healthDataBreach } from '../scenarios.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
-import { registerAuthRoutes } from '../auth-routes.js'
+import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
+import { auth } from '../auth.js'
 
 const engine = createEngine()
 const ingestion = new IngestionClient({ baseUrl: config.ingestion.baseUrl, apiKey: config.ingestion.apiKey })
@@ -92,11 +93,80 @@ function gazettePricing() {
 }
 
 
+/**
+ * The chat model is never read from the environment. On boot the engine takes
+ * the model the operator saved last (if still eligible), otherwise the first
+ * chat-capable model Meta lists for this key.
+ */
+async function selectBootModel(app: FastifyInstance): Promise<void> {
+  if (engine.provider.mode !== 'cloud') return
+  const saved = await auth.activeModel().catch(() => null)
+  try {
+    const models = await engine.listModels()
+    const pick = models.find((m) => m.id === saved) ?? models[0]
+    if (!pick) {
+      app.log.error('Meta model list is empty: no chat model selected')
+      return
+    }
+    engine.useModel(pick.id)
+    app.log.info({ model: pick.id, eligible: models.length }, 'chat model selected from the Meta model list')
+  } catch (error) {
+    app.log.error({ error: (error as Error).message }, 'Meta model list unavailable')
+    if (saved) engine.useModel(saved)
+  }
+}
+
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthRoutes(app, engine.audit)
 
   // Announce the active provider in the audit chain (no-op when unchanged).
   void recordProviderSwitch(engine.provider, engine.audit)
+  void selectBootModel(app)
+
+  // ── Chat models: Meta's own list, one saved choice per operator ───────────
+  app.get('/v1/models', async (request, reply) => {
+    if (engine.provider.mode !== 'cloud') {
+      return { mode: engine.provider.mode, selected: engine.provider.models.reasoning, models: [] }
+    }
+    try {
+      return {
+        mode: engine.provider.mode,
+        selected: engine.provider.models.reasoning,
+        models: await engine.listModels(),
+      }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  app.put('/v1/models/selection', async (request, reply) => {
+    const operator = currentOperator(request)
+    if (!operator) return reply.status(401).send({ error: 'unauthenticated' })
+    const body = z.object({ model: z.string().min(1).max(120) }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (engine.provider.mode !== 'cloud') {
+      return reply.status(409).send({ error: 'Model selection applies to the Meta Model API mode only.' })
+    }
+
+    let models: Awaited<ReturnType<typeof engine.listModels>>
+    try {
+      models = await engine.listModels()
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+    if (!models.some((m) => m.id === body.data.model)) {
+      return reply.status(400).send({ error: 'model_not_eligible', message: 'This model is not in the Meta list for this key.' })
+    }
+
+    engine.useModel(body.data.model)
+    await auth.updatePreferences(operator.email, { model: body.data.model })
+    await engine.audit
+      .logAction({ actor: operator.email, action: 'model.selected', target: body.data.model, lens: 'hybrid' })
+      .catch(() => undefined)
+    return { selected: body.data.model }
+  })
 
   app.get('/health', async () => ({
     status: 'ok',
@@ -213,6 +283,69 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     try {
       const result = await knowledge.ingest({ ...body.data, docType: body.data.docType as DocType })
+      if (!result.ok) return reply.status(422).send(result)
+      return result
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  /**
+   * File upload from the console: PDF or plain text, sent as base64 JSON. The
+   * API extracts the text (PDF via unpdf, no system binary) and runs the same
+   * ingestion path as pasted text. Scans without a text layer are refused with
+   * a pointer to the Gazette screen instead of being stored empty.
+   */
+  app.post('/v1/kb/ingest/file', { bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') {
+      return reply.status(409).send({ error: 'Direct ingestion is available in cloud mode (Atlas + Voyage).' })
+    }
+    const body = z
+      .object({
+        filename: z.string().min(1).max(200),
+        contentBase64: z.string().min(4).max(34_000_000),
+        country: z.string().min(2).max(2).or(z.literal('global')),
+        jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
+        docType: z.string().min(1).default('policy'),
+        namespace: z.string().max(80).optional(),
+        version: z.string().max(80).optional(),
+        sourceUrl: z.string().url().optional(),
+      })
+      .safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+
+    const bytes = Buffer.from(body.data.contentBase64, 'base64')
+    let text: string
+    try {
+      if (/\.pdf$/i.test(body.data.filename)) {
+        const { extractText, getDocumentProxy } = await import('unpdf')
+        const pdf = await getDocumentProxy(new Uint8Array(bytes))
+        text = String((await extractText(pdf, { mergePages: true })).text ?? '')
+      } else {
+        text = bytes.toString('utf8')
+      }
+    } catch (error) {
+      return reply.status(422).send({ error: `Could not read the file: ${(error as Error).message}` })
+    }
+
+    if (text.trim().length < 200) {
+      return reply.status(422).send({
+        error: 'No text layer found. A scanned document goes through the Scanned gazette screen (OCR and zone segmentation).',
+      })
+    }
+
+    try {
+      const result = await knowledge.ingest({
+        text,
+        filename: body.data.filename.replace(/\.pdf$/i, '.txt'),
+        country: body.data.country,
+        jurisdiction: body.data.jurisdiction,
+        docType: body.data.docType as DocType,
+        ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
+        ...(body.data.version ? { version: body.data.version } : {}),
+        ...(body.data.sourceUrl ? { sourceUrl: body.data.sourceUrl } : {}),
+      })
       if (!result.ok) return reply.status(422).send(result)
       return result
     } catch (error) {

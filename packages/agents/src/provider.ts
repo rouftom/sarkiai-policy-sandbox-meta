@@ -76,9 +76,11 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
       label: PROVIDER_LABELS.cloud,
       servedBy: 'Meta',
       baseURL: withV1(env(source, 'META_BASE_URL', 'https://api.meta.ai/v1')),
+      // The chat model is chosen from Meta's model list and saved as a preference;
+      // it is never read from the environment. Empty until the engine selects one.
       models: {
-        reasoning: env(source, 'META_REASONING_MODEL', 'muse-spark-1.3'),
-        vision: env(source, 'META_VISION_MODEL', 'muse-spark-1.3'),
+        reasoning: '',
+        vision: '',
         segmentation: env(source, 'META_SAM_MODEL', 'sam-3.1'),
         transcription: env(source, 'META_VOICE_MODEL', 'muse-voice-transcribe-1.0'),
         embedding,
@@ -163,19 +165,71 @@ export function providerApiKey(descriptor: ProviderDescriptor, source: Env = pro
   return 'ollama'
 }
 
+/**
+ * Optional egress relay: some container networks cannot reach the Meta API
+ * directly, so `META_BASE_URL` points at our own relay and the shared secret
+ * travels in a header. The key itself never leaves the server.
+ */
+function relayHeaders(source: Env): Record<string, string> {
+  const relayKey = env(source, 'MODEL_RELAY_KEY')
+  return relayKey ? { 'x-sps-relay-key': relayKey } : {}
+}
+
 /** Build the chat model for a descriptor (lazy: no network call happens here). */
 export function createProviderModel(descriptor: ProviderDescriptor, source: Env = process.env): LanguageModel {
-  // Optional egress relay: some container networks cannot reach the Meta API
-  // directly, so `META_BASE_URL` points at our own relay and the shared secret
-  // travels in a header. The key itself never leaves the server.
-  const relayKey = env(source, 'MODEL_RELAY_KEY')
+  const headers = relayHeaders(source)
   const provider = createOpenAICompatible({
     name: descriptor.servedBy.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'provider',
     baseURL: descriptor.baseURL,
     apiKey: providerApiKey(descriptor, source),
-    ...(relayKey ? { headers: { 'x-sps-relay-key': relayKey } } : {}),
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
   })
   return provider.chatModel(descriptor.models.reasoning)
+}
+
+export interface ProviderModelInfo {
+  id: string
+  ownedBy?: string
+}
+
+/**
+ * Non-chat models the Meta list also returns: embeddings, rerankers, segmentation,
+ * speech, image generation and moderation. They cannot answer a policy question.
+ */
+const NON_CHAT_MODEL = /embed|rerank|\bsam\b|sam-|voice|transcri|whisper|speech|tts|image|moderat|guard|safety/i
+
+/** Keep only the chat-capable entries of a provider's `GET /models` answer. */
+export function eligibleChatModels(payload: unknown): ProviderModelInfo[] {
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray((payload as { data?: unknown })?.data)
+      ? ((payload as { data: unknown[] }).data)
+      : []
+  const seen = new Set<string>()
+  const out: ProviderModelInfo[] = []
+  for (const row of rows) {
+    const entry = row as { id?: unknown; owned_by?: unknown; object?: unknown }
+    if (typeof entry.id !== 'string' || !entry.id) continue
+    if (entry.object !== undefined && entry.object !== 'model') continue
+    if (NON_CHAT_MODEL.test(entry.id) || seen.has(entry.id)) continue
+    seen.add(entry.id)
+    out.push({ id: entry.id, ...(typeof entry.owned_by === 'string' ? { ownedBy: entry.owned_by } : {}) })
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+/** Ask the provider which models this key may use. The key stays on the server. */
+export async function listProviderModels(
+  descriptor: ProviderDescriptor,
+  source: Env = process.env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ProviderModelInfo[]> {
+  const response = await fetchImpl(`${descriptor.baseURL.replace(/\/+$/, '')}/models`, {
+    headers: { Authorization: `Bearer ${providerApiKey(descriptor, source)}`, ...relayHeaders(source) },
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!response.ok) throw new Error(`Meta model list failed (${response.status}).`)
+  return eligibleChatModels(await response.json())
 }
 
 /** One-line, secret-free summary used in logs, the API and the UI badge. */

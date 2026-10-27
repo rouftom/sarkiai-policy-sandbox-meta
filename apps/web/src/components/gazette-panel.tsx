@@ -142,7 +142,7 @@ export function GazettePanel({ country }: { country: string }) {
       <CardHeader>
         <FileScan className="h-4 w-4 text-primary" />
         <CardTitle>{t('gazette.title')}</CardTitle>
-        <span className="ml-auto text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <span className="ml-auto text-[10px] font-semibold text-muted-foreground">
           {t('gazette.subtitle')}
         </span>
       </CardHeader>
@@ -304,15 +304,15 @@ export function GazettePanel({ country }: { country: string }) {
                         <span className="font-mono text-[10px] text-muted-foreground">{region.id}</span>
                         {region.articleNumber && <span className="font-semibold">{region.articleNumber}</span>}
                         {region.kind === 'table' && (
-                          <span className="rounded bg-amber-500/15 px-1 text-[9px] uppercase">
+                          <span className="rounded bg-amber-500/15 px-1 text-[9px]">
                             {t('gazette.artifact.table')}
                           </span>
                         )}
                         {region.skipped && (
-                          <span className="rounded bg-rose-500/15 px-1 text-[9px] uppercase">{t('gazette.skipped')}</span>
+                          <span className="rounded bg-rose-500/15 px-1 text-[9px]">{t('gazette.skipped')}</span>
                         )}
                         {region.blank && !region.skipped && (
-                          <span className="rounded bg-muted px-1 text-[9px] uppercase">{t('gazette.noText')}</span>
+                          <span className="rounded bg-muted px-1 text-[9px]">{t('gazette.noText')}</span>
                         )}
                         <span className="ml-auto text-[10px] text-muted-foreground">
                           {t('gazette.column')} {region.column} · {region.characters} {t('gazette.characters')}

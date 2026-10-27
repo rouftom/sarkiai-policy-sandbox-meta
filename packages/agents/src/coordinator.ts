@@ -7,7 +7,6 @@
  * agreements, mandate conflicts and unresolved questions.
  */
 
-import { generateObject } from 'ai'
 import type { LanguageModel } from 'ai'
 import { z } from 'zod'
 import type {
@@ -22,6 +21,7 @@ import type {
 } from '@sps/shared'
 import type { AuditService } from '@sps/audit'
 import type { PolicyOrchestrator } from './orchestrator'
+import { StructuredOutputError, generateStructured } from './structured'
 
 export interface CoordinatorDeps {
   model: LanguageModel
@@ -48,7 +48,7 @@ const reconcileSchema = z.object({
   conflicts: z
     .array(
       z.object({
-        between: z.tuple([z.string(), z.string()]),
+        between: z.array(z.string()).min(2).max(2),
         summary: z.string(),
         positions: z.array(z.object({ agentId: z.string(), position: z.string() })).min(1),
         severity: z.enum(['low', 'medium', 'high', 'critical']),
@@ -58,6 +58,10 @@ const reconcileSchema = z.object({
   openQuestions: z.array(z.string()).default([]),
   summary: z.string().default(''),
 })
+
+const RECONCILE_SHAPE = `{"agreements": string[], "conflicts": [{"between": [string, string], "summary": string, "positions": [{"agentId": string, "position": string}], "severity": "low" | "medium" | "high" | "critical"}], "openQuestions": string[], "summary": string}`
+
+const RECONCILE_UNAVAILABLE = 'Reconciliation unavailable: the model did not return a valid joint report. The individual assessments above are unchanged.'
 
 export class MultiAgentCoordinator {
   constructor(private readonly deps: CoordinatorDeps) {}
@@ -113,21 +117,28 @@ export class MultiAgentCoordinator {
       )
       .join('\n\n')
 
-    const { object } = await generateObject({
-      model: this.deps.model,
-      schema: reconcileSchema,
-      system: `You are the inter-institutional coordinator. Reconcile the independent assessments of mandated institutions into a joint situation report.
+    let object: z.infer<typeof reconcileSchema>
+    try {
+      object = await generateStructured({
+        model: this.deps.model,
+        schema: reconcileSchema,
+        shape: RECONCILE_SHAPE,
+        system: `You are the inter-institutional coordinator. Reconcile the independent assessments of mandated institutions into a joint situation report.
 - Identify AGREEMENTS (shared conclusions).
 - Identify CONFLICTS between mandates (e.g. one actor's duty clashes with another's): state both positions and the provisions in tension. Be precise, do not invent conflicts.
 - List OPEN QUESTIONS where no single actor has the full picture.
 - Focus on domain-specific gaps and coordination problems, not country-specific policy recommendations.`,
-      prompt: `Country: ${input.country} · Domain: ${input.domain}\n\n${digest}`,
-    })
+        prompt: `Country: ${input.country} · Domain: ${input.domain}\n\n${digest}`,
+      })
+    } catch (error) {
+      if (!(error instanceof StructuredOutputError)) throw error
+      object = { agreements: [], conflicts: [], openQuestions: [], summary: RECONCILE_UNAVAILABLE }
+    }
 
     const citations = input.assessments.flatMap((a) => a.citations)
     const conflicts: MandateConflict[] = object.conflicts.map((c, i) => ({
       id: `${input.runId}-t${input.tick}-c${i}`,
-      between: c.between,
+      between: [c.between[0] ?? '', c.between[1] ?? ''],
       summary: c.summary,
       positions: c.positions,
       severity: c.severity,
