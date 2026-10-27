@@ -12,6 +12,7 @@ import {
   getThemePack,
   resolveCornerStyle,
   resolveMode,
+  surfaceFor,
   type CornerStyle,
   type ThemeMode,
   type ThemePack,
@@ -32,7 +33,7 @@ const ThemeContext = React.createContext<ThemeContextValue | null>(null)
 
 function applyChrome(pack: ThemePack, mode: ThemeMode) {
   const meta = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-  const color = pack.preview.surface
+  const color = surfaceFor(pack, mode)
   if (meta) {
     meta.setAttribute('content', color)
     meta.removeAttribute('media')

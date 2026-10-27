@@ -33,7 +33,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 export function StepIntro({ kicker, title, subtitle }: { kicker: string; title: string; subtitle: string }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-primary dark:text-brand-primary-light">
+      <p className="text-[10px] font-medium text-brand-primary dark:text-brand-primary-light">
         {kicker}
       </p>
       <h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-foreground">{title}</h1>
@@ -99,7 +99,7 @@ export function BrandPanel() {
         <BrandMark className="h-10 w-10" />
         <span className="flex items-baseline gap-2">
           <span className="font-display text-base font-bold tracking-tight">SPS</span>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-primary-light">SarkiAI</span>
+          <span className="text-[10px] font-medium text-brand-primary-light">SarkiAI</span>
         </span>
       </div>
 

@@ -4,10 +4,10 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Compass, Cpu, Gauge, Globe, Languages, LayoutDashboard, Menu, Newspaper, Network, PlayCircle,
-  Rocket, ScrollText, Settings, ShieldCheck, Siren, SlidersHorizontal, Sparkles, X,
+  Compass, Cpu, Database, Gauge, Globe, Languages, LayoutDashboard, Menu, Newspaper, Network,
+  Rocket, ScrollText, Settings, Settings2, ShieldCheck, Siren, SlidersHorizontal, Sparkles, X,
 } from 'lucide-react'
-import { cn } from '@sps/ui'
+import { cn, Select } from '@sps/ui'
 import { BrandMark, BrandWordmark } from './brand-mark'
 import { ThemeSwitcher } from './theme-switcher'
 import { useI18n, type Locale, type MessageKey } from '@/lib/i18n'
@@ -15,10 +15,11 @@ import { useI18n, type Locale, type MessageKey } from '@/lib/i18n'
 const TITLES: Array<{ href: string; labelKey: MessageKey }> = [
   { href: '/guide/start', labelKey: 'nav.guide_start' },
   { href: '/guide/engine', labelKey: 'nav.guide_engine' },
-  { href: '/guide/demo', labelKey: 'nav.guide_demo' },
+  { href: '/guide/operations', labelKey: 'nav.guide_operations' },
   { href: '/guide/meta', labelKey: 'nav.guide_meta' },
   { href: '/guide', labelKey: 'nav.guide' },
   { href: '/console', labelKey: 'nav.console' },
+  { href: '/knowledge', labelKey: 'nav.knowledge' },
   { href: '/readiness', labelKey: 'nav.readiness' },
   { href: '/scenarios', labelKey: 'nav.scenarios' },
   { href: '/gazette', labelKey: 'nav.gazette' },
@@ -33,6 +34,7 @@ const TITLES: Array<{ href: string; labelKey: MessageKey }> = [
 const MOBILE_NAV: Array<{ href: string; labelKey: MessageKey; icon: React.ComponentType<{ className?: string }> }> = [
   { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
   { href: '/console', labelKey: 'nav.console', icon: SlidersHorizontal },
+  { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
   { href: '/gazette', labelKey: 'nav.gazette', icon: Newspaper },
@@ -42,7 +44,7 @@ const MOBILE_NAV: Array<{ href: string; labelKey: MessageKey; icon: React.Compon
   { href: '/guide', labelKey: 'nav.guide', icon: Compass },
   { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
   { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
-  { href: '/guide/demo', labelKey: 'nav.guide_demo', icon: PlayCircle },
+  { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
   { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Sparkles },
   { href: '/preferences', labelKey: 'nav.settings', icon: Settings },
   { href: '/security', labelKey: 'nav.security', icon: ShieldCheck },
@@ -77,18 +79,19 @@ export function AppHeader() {
         </h1>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <label className="relative flex items-center">
-            <Globe className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-brand-primary-dark dark:text-brand-primary-light" />
-            <select
+          <div className="flex items-center gap-1">
+            <Globe className="h-3.5 w-3.5 shrink-0 text-brand-primary-dark dark:text-brand-primary-light" />
+            <Select
+              ariaLabel={t('app.language')}
               value={locale}
-              onChange={(event) => setLocale(event.target.value as Locale)}
-              aria-label={t('app.language')}
-              className="h-7 cursor-pointer appearance-none rounded-3xl border-none bg-brand-primary/10 py-0 pl-7 pr-2 text-[10px] font-semibold uppercase tracking-wide text-brand-primary-dark outline-none transition-colors hover:bg-brand-primary/20 dark:bg-brand-primary-dark/30 dark:text-brand-primary-light dark:hover:bg-brand-primary-dark/50"
-            >
-              <option value="en">EN</option>
-              <option value="fr">FR</option>
-            </select>
-          </label>
+              onValueChange={(value) => setLocale(value as Locale)}
+              options={[
+                { value: 'en', label: 'EN' },
+                { value: 'fr', label: 'FR' },
+              ]}
+              className="w-[74px]"
+            />
+          </div>
 
           <ThemeSwitcher />
         </div>

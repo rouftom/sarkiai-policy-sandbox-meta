@@ -5,6 +5,8 @@
 
 import type { DocType, Jurisdiction, ReadinessDimension, Taxonomy } from '@sps/shared'
 
+export * from './chunk'
+
 export interface IngestionConfig {
   baseUrl: string
   apiKey?: string

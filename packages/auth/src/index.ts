@@ -30,8 +30,8 @@ export interface Preferences {
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  theme: 'dark',
-  pack: 'fada',
+  theme: 'light',
+  pack: 'meta',
   locale: 'en',
   density: 'comfortable',
   // The console's chrome is square by default; the app-bar menu switches it.

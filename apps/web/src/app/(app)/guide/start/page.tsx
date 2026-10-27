@@ -1,6 +1,14 @@
 'use client'
 
-import { GuideNote, GuideSection, GuideShell, GuideSteps } from '@/components/guide-shell'
+import { BookOpen, Compass, Flag, Users } from 'lucide-react'
+import {
+  GuideBanner,
+  GuideChecklist,
+  GuideSection,
+  GuideShell,
+  GuideSteps,
+  GuideTable,
+} from '@/components/guide-shell'
 import { useI18n } from '@/lib/i18n'
 
 export default function GuideStartPage() {
@@ -8,50 +16,173 @@ export default function GuideStartPage() {
   const fr = locale === 'fr'
 
   return (
-    <GuideShell title={t('guide.start.title')} subtitle={t('guide.subtitle.short')} current="/guide/start">
-      <GuideSection title={locale === 'fr' ? 'Le parcours' : 'The path'}>
-        <GuideSteps
-          steps={
-            locale === 'fr'
-              ? [
-                  { title: 'Création du compte racine', body: 'Au premier démarrage, la console ouvre l’écran de configuration : prénom, nom et e-mail de l’opérateur racine. Le compte est créé avec un mot de passe aléatoire envoyé par e-mail (Resend).' },
-                  { title: 'Connexion + nouveau mot de passe', body: 'Connectez-vous avec le mot de passe provisoire : la console impose immédiatement un nouveau mot de passe (12 caractères minimum, lettres et chiffres).' },
-                  { title: 'Activer la 2FA', body: 'Scannez le QR code TOTP et confirmez le code à 6 chiffres. Dix codes de secours sont affichés une seule fois. Les connexions suivantes exigent le code TOTP ou un code de secours.' },
-                  { title: 'Choisir un espace de travail', body: 'Pays, domaine et lentille sont partagés par toutes les pages. Le choix est mémorisé dans le navigateur et dans le profil opérateur.' },
-                  { title: 'Noter la maturité', body: 'Ouvrez Maturité IA, lancez l’évaluation des 13 dimensions, puis projetez un changement de politique (what-if causal).' },
-                  { title: 'Lancer un scénario de crise', body: 'Libérez les faits par lots. Chaque agence mandatée évalue à partir de ce qu’elle voit ; le coordinateur réconcilie et signale les conflits de mandat.' },
-                  { title: 'Lire la chaîne d’audit', body: 'Chaque action est horodatée, hachée et chaînée. La page Journal d’audit vérifie l’intégrité de bout en bout.' },
-                ]
-              : [
-                  { title: 'Create the root account', body: 'On first run the console opens the setup screen: first name, last name and e-mail of the root operator. The account is created with a random password mailed through Resend.' },
-                  { title: 'Sign in + new password', body: 'Sign in with the temporary password: the console immediately requires a new one (12 characters minimum, letters and digits).' },
-                  { title: 'Activate 2FA', body: 'Scan the TOTP QR code and confirm the 6-digit code. Ten recovery codes are shown once. Later sign-ins need the TOTP code or a recovery code.' },
-                  { title: 'Pick a workspace', body: 'Country, domain and lens are shared by every page. The choice is remembered in the browser and in the operator profile.' },
-                  { title: 'Score readiness', body: 'Open AI readiness, score the 13 dimensions, then project a policy change through the causal graph.' },
-                  { title: 'Run a crisis scenario', body: 'Release facts in batches. Each mandated institution assesses what it can see; the coordinator reconciles and flags mandate conflicts.' },
-                  { title: 'Read the audit chain', body: 'Every action is timestamped, hashed and chained. The audit page verifies the whole chain end to end.' },
-                ]
-          }
-        />
-        <GuideNote>
+    <GuideShell
+      title={t('guide.start.title')}
+      subtitle={t('guide.subtitle.short')}
+      current="/guide/start"
+      kicker={fr ? 'Déroulé · prise de poste' : 'Runbook · taking over'}
+      meta={[
+        { label: fr ? 'Durée' : 'Duration', value: fr ? '≈ 20 min' : '≈ 20 min' },
+        { label: fr ? 'Responsable' : 'Owner', value: fr ? 'Opérateur racine' : 'Root operator' },
+        { label: fr ? 'Sortie' : 'Output', value: fr ? '1er run audité' : 'First audited run' },
+      ]}
+    >
+      <GuideBanner tone="gold" title={fr ? 'Ce que la console fait — et ne fait pas' : 'What the console does — and does not do'}>
+        <p>
           {fr
-            ? 'Aucun mot de passe n’est écrit dans le code ni dans une variable d’environnement : le compte racine est créé depuis l’écran de configuration, avec un mot de passe aléatoire envoyé par Resend.'
-            : 'No password is hard-coded or kept in an environment variable: the root account is created from the setup screen, with a random password mailed through Resend.'}
-        </GuideNote>
+            ? 'Le moteur rassemble des faits, les fait évaluer par des agences mandatées, vérifie chaque citation contre le corpus, puis journalise la décision. Il ne publie pas, n’envoie pas de message officiel et ne remplace aucun signataire : chaque sortie attend une validation humaine.'
+            : 'The engine gathers facts, has mandated institutions assess them, verifies every quote against the corpus, then logs the decision. It never publishes, never sends an official message and never replaces a signatory: every output waits for human validation.'}
+        </p>
+      </GuideBanner>
+
+      <GuideSection title={fr ? 'Rôles et garde-fous' : 'Roles and guardrails'} icon={Users}>
+        <GuideTable
+          headers={[fr ? 'Rôle' : 'Role', fr ? 'Ce qu’il fait' : 'What it does', fr ? 'Garde-fou' : 'Guardrail']}
+          rows={[
+            {
+              a: fr ? 'Opérateur racine' : 'Root operator',
+              b: fr
+                ? 'Crée les comptes, garde les codes de secours, lit le journal.'
+                : 'Creates accounts, holds recovery codes, reads the log.',
+              c: fr ? '2FA obligatoire' : '2FA enforced',
+            },
+            {
+              a: fr ? 'Analyste' : 'Analyst',
+              b: fr
+                ? 'Lance les évaluations de maturité et les scénarios.'
+                : 'Runs readiness assessments and scenarios.',
+              c: fr ? 'Lecture seule sur l’audit' : 'Read-only audit',
+            },
+            {
+              a: fr ? 'Point focal institutionnel' : 'Institutional focal point',
+              b: fr
+                ? 'Valide la position de son agence, signale un conflit de mandat.'
+                : 'Confirms its agency position, flags a mandate conflict.',
+              c: fr ? 'Périmètre limité à son mandat' : 'Scoped to its mandate',
+            },
+            {
+              a: fr ? 'Communication' : 'Communications',
+              b: fr
+                ? 'Relit les brouillons fulfuldé / haoussa avant diffusion.'
+                : 'Reviews Fulfulde / Hausa drafts before release.',
+              c: fr ? 'Locuteur natif requis' : 'Native speaker required',
+            },
+          ]}
+        />
       </GuideSection>
 
-      <GuideSection title={locale === 'fr' ? 'Ce que vous verrez' : 'What you will see'}>
-        <ul className="grid gap-1.5 sm:grid-cols-2">
-          {(fr
-            ? ['Score 0–5 sur 13 dimensions', 'Conflits de mandat entre agences', 'Citations vérifiées dans le corpus', 'Journal chaîné par empreintes', 'Journal officiel scanné et indexé', 'Exercice sur table noté', 'Brouillons fulfuldé / haoussa']
-            : ['0–5 score across 13 dimensions', 'Mandate conflicts between agencies', 'Quotes verified against the corpus', 'Hash-chained audit log', 'Scanned gazette segmented and indexed', 'Scored table-top exercise', 'Fulfulde / Hausa drafts']
-          ).map((item) => (
-            <li key={item} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-[11px]">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-primary dark:bg-brand-primary-light" />
-              {item}
-            </li>
-          ))}
-        </ul>
+      <GuideSection title={fr ? 'Déroulé de la première mise en service' : 'First-run procedure'} icon={Compass}>
+        <GuideSteps
+          steps={[
+            {
+              title: fr ? 'Créer le compte racine depuis /setup' : 'Create the root account from /setup',
+              body: fr
+                ? 'La base est vide : la console ouvre l’écran de configuration (prénom, nom, e-mail). Un mot de passe provisoire de 20 caractères est envoyé à l’adresse indiquée. Si l’e-mail échoue, le compte est annulé — jamais de compte sans mot de passe reçu.'
+                : 'The store is empty: the console opens the setup screen (first name, last name, e-mail). A 20-character temporary password is mailed to that address. If the mail fails, the account is rolled back — never an account without a delivered password.',
+              owner: fr ? 'Racine' : 'Root',
+            },
+            {
+              title: fr ? 'Remplacer le mot de passe, puis activer la 2FA' : 'Replace the password, then enrol 2FA',
+              body: fr
+                ? 'Le mot de passe provisoire expire après 12 minutes et doit être remplacé (12 caractères minimum, lettres et chiffres). Le QR code TOTP suit immédiatement ; dix codes de secours sont affichés une seule fois — téléchargez-les avant de continuer.'
+                : 'The temporary password expires after 12 minutes and must be replaced (12 characters minimum, letters and digits). The TOTP QR code follows immediately; ten recovery codes are shown once — download them before continuing.',
+              owner: fr ? 'Racine' : 'Root',
+            },
+            {
+              title: fr ? 'Fixer l’espace de travail' : 'Set the workspace',
+              body: fr
+                ? 'Pays, domaine et lentille sont partagés par toutes les pages et enregistrés dans le profil. Une démo correcte commence par vérifier que ces trois valeurs sont celles annoncées.'
+                : 'Country, domain and lens are shared by every page and stored on the profile. A correct run starts by checking that these three values are the announced ones.',
+              owner: fr ? 'Analyste' : 'Analyst',
+            },
+            {
+              title: fr ? 'Chauffer l’API avant le premier run' : 'Warm the API before the first run',
+              body: fr
+                ? 'Le service gratuit s’endort : le premier appel peut prendre 40 secondes. Ouvrez la vue d’ensemble une fois, attendez le badge fournisseur, puis lancez le scénario.'
+                : 'The free service sleeps: the first call can take 40 seconds. Open the overview once, wait for the provider badge, then run the scenario.',
+              owner: fr ? 'Analyste' : 'Analyst',
+            },
+            {
+              title: fr ? 'Produire un run auditable' : 'Produce one auditable run',
+              body: fr
+                ? 'Libérez le premier lot de faits, laissez chaque agence rendre sa position, puis ouvrez le journal : la chaîne doit être vérifiée et le run reconstructible.'
+                : 'Release the first batch of facts, let each agency return its position, then open the log: the chain must verify and the run must be reconstructible.',
+              owner: fr ? 'Analyste' : 'Analyst',
+            },
+          ]}
+        />
+      </GuideSection>
+
+      <GuideSection title={fr ? 'Contrôles du premier jour' : 'Day-one checks'} icon={BookOpen}>
+        <GuideChecklist
+          items={[
+            {
+              label: fr ? 'Deux facteurs exigés à chaque connexion' : 'Second factor required on every sign-in',
+              detail: fr
+                ? 'Déconnectez-vous puis reconnectez-vous : le code TOTP doit être demandé, pas seulement à l’activation.'
+                : 'Sign out and back in: the TOTP code must be requested, not only at enrolment.',
+              state: 'ok',
+            },
+            {
+              label: fr ? 'Codes de secours hors ligne' : 'Recovery codes offline',
+              detail: fr
+                ? 'Les codes ne sont plus jamais affichés. Un fichier perdu impose une réinitialisation manuelle.'
+                : 'Codes are never shown again. A lost file forces a manual reset.',
+              state: 'watch',
+            },
+            {
+              label: fr ? 'Chaîne d’audit vérifiée' : 'Audit chain verified',
+              detail: fr
+                ? 'La vue d’ensemble affiche « Vérifiée » et le nombre d’enregistrements. Une chaîne rompue nomme l’enregistrement fautif.'
+                : 'The overview shows “Verified” and the record count. A broken chain names the offending record.',
+              state: 'ok',
+            },
+            {
+              label: fr ? 'Mode de retrieval annoncé' : 'Retrieval mode announced',
+              detail: fr
+                ? 'Le badge fournisseur dit si le raisonnement tourne dans le cloud Meta ou sur site. En souverain, aucune clé Meta n’est appelée.'
+                : 'The provider badge says whether reasoning runs in the Meta cloud or on-premise. In sovereign mode no Meta key is called.',
+              state: 'ok',
+            },
+          ]}
+        />
+      </GuideSection>
+
+      <GuideSection title={fr ? 'Flags à connaître (noms seulement)' : 'Flags worth knowing (names only)'} icon={Flag}>
+        <p>
+          {fr
+            ? 'Aucune valeur de secret n’est affichée ni documentée ici. Ces variables changent le comportement visible de la console :'
+            : 'No secret value is displayed or documented here. These variables change what the console visibly does:'}
+        </p>
+        <GuideTable
+          headers={[fr ? 'Variable' : 'Variable', fr ? 'Effet visible' : 'Visible effect']}
+          rows={[
+            {
+              a: 'SANDBOX_MODE',
+              b: fr
+                ? 'cloud / sovereign / local : choisit le fournisseur de raisonnement et de retrieval.'
+                : 'cloud / sovereign / local: picks the reasoning and retrieval provider.',
+            },
+            {
+              a: 'WHATSAPP_TEMPLATE_LANGUAGE',
+              b: fr
+                ? 'Langue demandée pour les trois modèles utilitaires approuvés.'
+                : 'Language requested for the three approved utility templates.',
+            },
+            {
+              a: 'WEB_PUBLIC_URL',
+              b: fr
+                ? 'Base des liens signés envoyés dans un message WhatsApp.'
+                : 'Base of the signed links carried by a WhatsApp message.',
+            },
+            {
+              a: 'AUTH_RESEND_EMAIL_FROM',
+              b: fr
+                ? 'Expéditeur du mot de passe provisoire. Un domaine non vérifié bloque /setup.'
+                : 'Sender of the temporary password. An unverified domain blocks /setup.',
+            },
+          ]}
+        />
       </GuideSection>
     </GuideShell>
   )

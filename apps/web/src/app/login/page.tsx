@@ -6,10 +6,12 @@ import { QRCodeSVG } from 'qrcode.react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { ArrowRight, Check, Copy, KeyRound, Loader, LockKeyhole, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Check, Copy, Download, KeyRound, Loader, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { Button, Input, Label } from '@sps/ui'
 import { BrandMark } from '@/components/layout/brand-mark'
 import { AuthLayout, ErrorNote, StepIntro, messageFor } from '@/components/auth/auth-frame'
+import { OtpField, formatBackupCode } from '@/components/auth/otp-field'
+import { PasswordInput } from '@/components/auth/password-input'
 import { authApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
@@ -19,17 +21,13 @@ type Step = 'credentials' | 'password' | 'enroll' | 'mfa' | 'recovery'
 /** Same floor as the API (`assertPassword`). */
 const MIN_PASSWORD = 12
 
-function formatBackupCode(value: string): string {
-  const characters = value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10)
-  return characters.length > 5 ? `${characters.slice(0, 5)}-${characters.slice(5)}` : characters
-}
-
 /**
  * Operator sign-in: e-mail and password, then the second factor.
  *
  * An invited account arrives with a one-time password and `mustChangePassword`
  * set, so the console first asks for a new password, then walks straight into
- * TOTP enrolment. Recovery codes are shown once, right after activation.
+ * TOTP enrolment. Recovery codes are shown once, right after activation, and
+ * stay on screen until the operator downloads or copies them.
  */
 export default function LoginPage() {
   const router = useRouter()
@@ -53,6 +51,8 @@ export default function LoginPage() {
   const [factor, setFactor] = React.useState<'totp' | 'backup'>('totp')
   const [busy, setBusy] = React.useState(false)
   const [copied, setCopied] = React.useState<string | null>(null)
+  const [code, setCode] = React.useState('')
+  const [codeError, setCodeError] = React.useState<string | null>(null)
   const enrollmentStarted = React.useRef(false)
   const setupChecked = React.useRef(false)
 
@@ -83,14 +83,6 @@ export default function LoginPage() {
     [t],
   )
 
-  const codeSchema = React.useMemo(
-    () =>
-      z.object({
-        code: factor === 'backup' ? z.string().min(8, t('login.badBackup')) : z.string().regex(/^\d{6}$/, t('login.badCode')),
-      }),
-    [factor, t],
-  )
-
   const credentialsForm = useForm<z.infer<typeof credentialsSchema>>({
     resolver: zodResolver(credentialsSchema),
     defaultValues: { email: '', password: '' },
@@ -99,11 +91,10 @@ export default function LoginPage() {
     resolver: zodResolver(passwordSchema),
     defaultValues: { password: '', confirm: '' },
   })
-  const codeForm = useForm<z.infer<typeof codeSchema>>({ resolver: zodResolver(codeSchema), defaultValues: { code: '' } })
 
   React.useEffect(() => {
-    if (!loading && operator && step !== 'recovery') router.replace('/')
-  }, [loading, operator, router, step])
+    if (!loading && operator && step !== 'recovery' && !backupCodes) router.replace('/')
+  }, [loading, operator, router, step, backupCodes])
 
   // No operator in the store yet: the first visit belongs to the setup screen.
   React.useEffect(() => {
@@ -130,12 +121,12 @@ export default function LoginPage() {
       setStep('enroll')
       void startEnrollment().catch((cause) => {
         enrollmentStarted.current = false
-        codeForm.setError('root', { message: messageFor(cause, t('login.expired'), t) })
+        setCodeError(messageFor(cause, t('login.expired'), t))
       })
     }
     if (pending?.status === 'mfa_required') setStep('mfa')
     if (backupCodes) setStep('recovery')
-  }, [pending, enrollment, backupCodes, startEnrollment, t, passwordForm, codeForm])
+  }, [pending, enrollment, backupCodes, startEnrollment, t, passwordForm])
 
   const submitCredentials = credentialsForm.handleSubmit(async (values) => {
     setBusy(true)
@@ -160,34 +151,36 @@ export default function LoginPage() {
     }
   })
 
-  const submitCode = codeForm.handleSubmit(async (values) => {
-    setBusy(true)
-    try {
-      const candidate = values.code.trim()
-      if (step === 'enroll') await confirmEnrollment(candidate)
-      else await verifyCode(candidate.toLowerCase())
-      codeForm.reset()
-    } catch (cause) {
-      codeForm.setError('root', {
-        message: messageFor(cause, factor === 'backup' ? t('login.badBackup') : t('login.badCode'), t),
-      })
-    } finally {
-      setBusy(false)
-    }
-  })
+  const submitCode = React.useCallback(
+    async (candidate: string) => {
+      if (busy) return
+      const value = step === 'mfa' && factor === 'backup' ? formatBackupCode(candidate) : candidate.trim()
+      if (!value) return
+      setBusy(true)
+      setCodeError(null)
+      try {
+        if (step === 'enroll') await confirmEnrollment(value)
+        else await verifyCode(value)
+        setCode('')
+      } catch (cause) {
+        setCode('')
+        setCodeError(messageFor(cause, factor === 'backup' ? t('login.badBackup') : t('login.badCode'), t))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy, confirmEnrollment, factor, step, t, verifyCode],
+  )
 
   function restart() {
     resetFlow()
     setStep('credentials')
-    setErrorless()
-    setFactor('totp')
-    enrollmentStarted.current = false
-  }
-
-  function setErrorless() {
     credentialsForm.clearErrors()
     passwordForm.reset()
-    codeForm.reset()
+    setCode('')
+    setCodeError(null)
+    setFactor('totp')
+    enrollmentStarted.current = false
   }
 
   function copy(value: string, id: string) {
@@ -195,6 +188,25 @@ export default function LoginPage() {
       setCopied(id)
       window.setTimeout(() => setCopied(null), 1600)
     })
+  }
+
+  function downloadCodes(codes: string[]) {
+    const header = [
+      'SarkiAI Policy Sandbox — recovery codes / codes de secours',
+      `Account: ${operator?.email ?? pending?.operator.email ?? ''}`,
+      `Generated: ${new Date().toISOString()}`,
+      'Each code is single use. Keep them offline. / Chaque code sert une seule fois.',
+      '',
+    ].join('\n')
+    const blob = new Blob([`${header}${codes.join('\n')}\n`], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'sarkiai-policy-sandbox-recovery-codes.txt'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
   }
 
   if (loading) {
@@ -208,7 +220,7 @@ export default function LoginPage() {
   const rootError =
     credentialsForm.formState.errors.root?.message ??
     passwordForm.formState.errors.root?.message ??
-    codeForm.formState.errors.root?.message
+    codeError
 
   return (
     <AuthLayout>
@@ -233,10 +245,11 @@ export default function LoginPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">{t('login.password')}</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="current-password"
+                showLabel={t('login.showPassword')}
+                hideLabel={t('login.hidePassword')}
                 {...credentialsForm.register('password')}
                 aria-invalid={Boolean(credentialsForm.formState.errors.password)}
                 className="h-9"
@@ -264,11 +277,12 @@ export default function LoginPage() {
           <form onSubmit={submitPassword} className="mt-8 flex flex-col gap-4" noValidate>
             <div className="space-y-1.5">
               <Label htmlFor="new-password">{t('login.newPassword')}</Label>
-              <Input
+              <PasswordInput
                 id="new-password"
-                type="password"
                 autoComplete="new-password"
                 autoFocus
+                showLabel={t('login.showPassword')}
+                hideLabel={t('login.hidePassword')}
                 {...passwordForm.register('password')}
                 aria-invalid={Boolean(passwordForm.formState.errors.password)}
                 className="h-9"
@@ -281,10 +295,11 @@ export default function LoginPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="confirm-password">{t('login.confirmPassword')}</Label>
-              <Input
+              <PasswordInput
                 id="confirm-password"
-                type="password"
                 autoComplete="new-password"
+                showLabel={t('login.showPassword')}
+                hideLabel={t('login.hidePassword')}
                 {...passwordForm.register('confirm')}
                 aria-invalid={Boolean(passwordForm.formState.errors.confirm)}
                 className="h-9"
@@ -332,23 +347,28 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
-              <form onSubmit={submitCode} className="space-y-3" noValidate>
-                <div className="space-y-1.5">
-                  <Label htmlFor="enroll-code">{t('login.code')}</Label>
-                  <Input
-                    id="enroll-code"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void submitCode(code)
+                }}
+                className="space-y-3"
+                noValidate
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="otp-totp">{t('login.code')}</Label>
+                  <OtpField
+                    value={code}
+                    onChange={setCode}
+                    onComplete={(next) => void submitCode(next)}
+                    label={t('login.code')}
+                    disabled={busy}
                     autoFocus
-                    {...codeForm.register('code')}
-                    aria-invalid={Boolean(codeForm.formState.errors.code)}
-                    className="h-10 text-center font-mono text-lg tracking-[0.4em]"
+                    invalid={Boolean(codeError)}
                   />
-                  {codeForm.formState.errors.code && <FieldNote>{codeForm.formState.errors.code.message}</FieldNote>}
                 </div>
                 {rootError && <ErrorNote>{rootError}</ErrorNote>}
-                <Button type="submit" disabled={busy} size="lg" className="w-full">
+                <Button type="submit" disabled={busy || code.length < 6} size="lg" className="w-full">
                   {busy ? <Loader className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                   {t('login.enrollConfirm')}
                 </Button>
@@ -365,38 +385,37 @@ export default function LoginPage() {
             title={factor === 'totp' ? t('login.mfaTitle') : t('login.backupTitle')}
             subtitle={factor === 'totp' ? t('login.mfaSubtitle') : t('login.backupSubtitle')}
           />
-          <form onSubmit={submitCode} className="mt-8 space-y-4" noValidate>
-            <div className="space-y-1.5">
-              <Label htmlFor="mfa-code">{factor === 'totp' ? t('login.code') : t('login.backupCode')}</Label>
-              {factor === 'totp' ? (
-                <Input
-                  id="mfa-code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  autoFocus
-                  {...codeForm.register('code')}
-                  aria-invalid={Boolean(codeForm.formState.errors.code)}
-                  className="h-11 text-center font-mono text-xl tracking-[0.4em]"
-                />
-              ) : (
-                <Input
-                  id="mfa-code"
-                  autoComplete="off"
-                  maxLength={11}
-                  autoFocus
-                  {...codeForm.register('code', {
-                    onChange: (event) =>
-                      codeForm.setValue('code', formatBackupCode(event.target.value), { shouldValidate: false }),
-                  })}
-                  aria-invalid={Boolean(codeForm.formState.errors.code)}
-                  className="h-10 text-center font-mono text-sm tracking-[0.25em]"
-                />
-              )}
-              {codeForm.formState.errors.code && <FieldNote>{codeForm.formState.errors.code.message}</FieldNote>}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              void submitCode(code)
+            }}
+            className="mt-8 space-y-4"
+            noValidate
+          >
+            <div className="space-y-2">
+              <Label htmlFor={factor === 'totp' ? 'otp-totp' : 'otp-backup'}>
+                {factor === 'totp' ? t('login.code') : t('login.backupCode')}
+              </Label>
+              <OtpField
+                key={factor}
+                variant={factor}
+                value={code}
+                onChange={(next) => setCode(factor === 'backup' ? formatBackupCode(next) : next)}
+                onComplete={(next) => void submitCode(factor === 'backup' ? formatBackupCode(next) : next)}
+                label={factor === 'totp' ? t('login.code') : t('login.backupCode')}
+                disabled={busy}
+                autoFocus
+                invalid={Boolean(codeError)}
+              />
             </div>
             {rootError && <ErrorNote>{rootError}</ErrorNote>}
-            <Button type="submit" disabled={busy} size="lg" className="w-full">
+            <Button
+              type="submit"
+              disabled={busy || (factor === 'totp' ? code.length < 6 : code.length < 11)}
+              size="lg"
+              className="w-full"
+            >
               {busy ? <Loader className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
               {busy ? t('login.verifying') : t('login.verify')}
             </Button>
@@ -405,8 +424,8 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => {
                   setFactor(factor === 'totp' ? 'backup' : 'totp')
-                  codeForm.reset()
-                  codeForm.clearErrors()
+                  setCode('')
+                  setCodeError(null)
                 }}
                 className="font-semibold text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
               >
@@ -437,12 +456,20 @@ export default function LoginPage() {
               </code>
             ))}
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => copy(backupCodes.join('\n'), 'codes')} className="flex-1">
               {copied === 'codes' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied === 'codes' ? t('login.copied') : t('login.copy')}
             </Button>
+            <Button variant="outline" size="sm" onClick={() => downloadCodes(backupCodes)} className="flex-1">
+              <Download className="h-3.5 w-3.5" />
+              {t('login.downloadCodes')}
+            </Button>
           </div>
+          <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {t('login.recoveryWarning')}
+          </p>
           <Button
             size="lg"
             className="mt-4 w-full"

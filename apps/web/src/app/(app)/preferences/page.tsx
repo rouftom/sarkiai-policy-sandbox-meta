@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { Check, Loader, Monitor, Moon, Palette, Save, Sun } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, Label, Switch, cn } from '@sps/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle, Label, Select, Switch, cn } from '@sps/ui'
 import { useAuth } from '@/lib/auth'
 import { useI18n, type Locale } from '@/lib/i18n'
 import { useTheme } from '@/components/theme-provider'
@@ -153,39 +153,45 @@ export default function PreferencesPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="locale">{t('prefs.locale')}</Label>
-                <select
+                <Select
                   id="locale"
+                  ariaLabel={t('prefs.locale')}
+                  size="md"
                   value={draft.locale}
-                  onChange={(event) => chooseLocale(event.target.value as Locale)}
-                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
-                >
-                  <option value="en">English</option>
-                  <option value="fr">Français</option>
-                </select>
+                  onValueChange={(value) => chooseLocale(value as Locale)}
+                  options={[
+                    { value: 'en', label: 'English' },
+                    { value: 'fr', label: 'Français' },
+                  ]}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="density">{t('prefs.density')}</Label>
-                <select
+                <Select
                   id="density"
+                  ariaLabel={t('prefs.density')}
+                  size="md"
                   value={draft.density}
-                  onChange={(event) => patch('density', event.target.value as PreferencesDto['density'])}
-                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
-                >
-                  <option value="comfortable">{t('prefs.comfortable')}</option>
-                  <option value="compact">{t('prefs.compact')}</option>
-                </select>
+                  onValueChange={(value) => patch('density', value as PreferencesDto['density'])}
+                  options={[
+                    { value: 'comfortable', label: t('prefs.comfortable') },
+                    { value: 'compact', label: t('prefs.compact') },
+                  ]}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="radius">{t('prefs.radius')}</Label>
-                <select
+                <Select
                   id="radius"
+                  ariaLabel={t('prefs.radius')}
+                  size="md"
                   value={draft.radius}
-                  onChange={(event) => chooseRadius(event.target.value as PreferencesDto['radius'])}
-                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25"
-                >
-                  <option value="square">{t('prefs.square')}</option>
-                  <option value="rounded">{t('prefs.rounded')}</option>
-                </select>
+                  onValueChange={(value) => chooseRadius(value as PreferencesDto['radius'])}
+                  options={[
+                    { value: 'square', label: t('prefs.square') },
+                    { value: 'rounded', label: t('prefs.rounded') },
+                  ]}
+                />
               </div>
             </div>
           </CardContent>

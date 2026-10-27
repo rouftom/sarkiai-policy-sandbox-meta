@@ -2,12 +2,28 @@
 
 import * as React from 'react'
 import { AlertTriangle, Loader, RefreshCw, ScrollText, ShieldCheck } from 'lucide-react'
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from '@sps/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  DataTablePagination,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@sps/ui'
 import { authApi, type AuditEventDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { PageIntro } from '@/components/page-intro'
 
-const PAGE_SIZE = 100
+/** The API caps a page at 500 records; the table pages through them locally. */
+const FETCH_SIZE = 500
 
 function formatTime(value: string, locale: string): string {
   const date = new Date(value)
@@ -25,12 +41,14 @@ export default function AuditPage() {
   const [loading, setLoading] = React.useState(true)
   const [unreachable, setUnreachable] = React.useState(false)
   const [query, setQuery] = React.useState('')
+  const [page, setPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(20)
 
   const load = React.useCallback(async () => {
     setLoading(true)
     setUnreachable(false)
     try {
-      const response = await authApi.auditEvents(PAGE_SIZE)
+      const response = await authApi.auditEvents(FETCH_SIZE)
       setEvents(response.events)
       setChain(response.chain)
     } catch {
@@ -54,21 +72,25 @@ export default function AuditPage() {
     )
   }, [events, query])
 
+  React.useEffect(() => {
+    setPage(1)
+  }, [query, pageSize])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const current = Math.min(page, totalPages)
+  const visible = filtered.slice((current - 1) * pageSize, current * pageSize)
+
   return (
     <>
       <PageIntro title={t('audit.title')} subtitle={t('audit.pageSubtitle')} />
 
-      <Card>
+      <Card className="flex min-h-[420px] flex-col">
         <CardHeader className="flex-wrap gap-2">
           <ScrollText className="h-4 w-4 text-brand-primary dark:text-brand-primary-light" />
           <CardTitle>{t('audit.title')}</CardTitle>
           {chain && (
             <Badge tone={chain.valid ? 'success' : 'danger'} className="ml-2">
-              {chain.valid ? (
-                <ShieldCheck className="h-3 w-3" />
-              ) : (
-                <AlertTriangle className="h-3 w-3" />
-              )}
+              {chain.valid ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
               {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? '—' })}
             </Badge>
           )}
@@ -78,7 +100,8 @@ export default function AuditPage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('audit.filter')}
-              className="h-8 w-48 text-[11px] sm:w-64"
+              aria-label={t('audit.filter')}
+              className="h-8 w-40 text-[11px] sm:w-64"
             />
             <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
               {loading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -86,7 +109,8 @@ export default function AuditPage() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+
+        <CardContent className="flex min-h-0 flex-1 flex-col p-0">
           {loading && events.length === 0 && (
             <div className="flex items-center gap-2 px-4 py-8 text-xs text-muted-foreground">
               <Loader className="h-4 w-4 animate-spin" />
@@ -105,35 +129,58 @@ export default function AuditPage() {
             <p className="px-4 py-8 text-xs text-muted-foreground">{t('audit.empty')}</p>
           )}
 
-          {filtered.length > 0 && (
-            <div className="custom-scrollbar overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-[11px]">
-                <thead>
-                  <tr className="border-b border-border text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                    <th className="px-4 py-2 font-semibold">{t('audit.time')}</th>
-                    <th className="px-4 py-2 font-semibold">{t('audit.actor')}</th>
-                    <th className="px-4 py-2 font-semibold">{t('audit.action')}</th>
-                    <th className="px-4 py-2 font-semibold">{t('audit.target')}</th>
-                    <th className="px-4 py-2 font-semibold">{t('audit.hash')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((event) => (
-                    <tr key={event.id} className="border-b border-border/60 last:border-0 hover:bg-secondary/40">
-                      <td className="whitespace-nowrap px-4 py-2 text-muted-foreground">{formatTime(event.ts, locale)}</td>
-                      <td className="max-w-[180px] truncate px-4 py-2 font-medium">{event.actor}</td>
-                      <td className="px-4 py-2">
-                        <span className="rounded bg-brand-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-brand-primary-dark dark:text-brand-primary-light">
-                          {event.action}
-                        </span>
-                      </td>
-                      <td className="max-w-[200px] truncate px-4 py-2 text-muted-foreground">{event.target ?? '—'}</td>
-                      <td className="px-4 py-2 font-mono text-[10px] text-muted-foreground">{event.hash.slice(0, 12)}…</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {visible.length > 0 && (
+            <>
+              <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
+                <Table className="min-w-[720px]">
+                  <TableHeader>
+                    <TableRow className="border-b border-slate-200 hover:bg-transparent dark:border-brand-primary-dark/30">
+                      <TableHead>{t('audit.time')}</TableHead>
+                      <TableHead>{t('audit.actor')}</TableHead>
+                      <TableHead>{t('audit.action')}</TableHead>
+                      <TableHead>{t('audit.target')}</TableHead>
+                      <TableHead>{t('audit.hash')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visible.map((event) => (
+                      <TableRow key={event.id}>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {formatTime(event.ts, locale)}
+                        </TableCell>
+                        <TableCell className="max-w-[180px] truncate font-medium">{event.actor}</TableCell>
+                        <TableCell>
+                          <span className="bg-brand-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-brand-primary-dark dark:text-brand-primary-light">
+                            {event.action}
+                          </span>
+                        </TableCell>
+                        <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                          {event.target ?? '—'}
+                        </TableCell>
+                        <TableCell className="font-mono text-[10px] text-muted-foreground">
+                          {event.hash.slice(0, 12)}…
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <DataTablePagination
+                currentPage={current}
+                totalPages={totalPages}
+                totalItems={filtered.length}
+                itemsPerPage={pageSize}
+                onPageChange={setPage}
+                onItemsPerPageChange={setPageSize}
+                labels={{
+                  rowsPerPage: t('table.rowsPerPage'),
+                  range: (from, to, total) => t('table.range', { from, to, total }),
+                  page: (currentPage, totalPageCount) =>
+                    t('table.page', { current: currentPage, total: totalPageCount }),
+                }}
+              />
+            </>
           )}
         </CardContent>
       </Card>

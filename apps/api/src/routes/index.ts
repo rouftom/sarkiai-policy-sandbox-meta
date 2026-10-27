@@ -14,6 +14,7 @@ import { CommunicationPolicyError, COMMUNICATION_LANGUAGES, draftCommunication }
 import { evaluateExercise, writeAfterAction, type ExerciseDefinition } from '@sps/exercise'
 import { analyzeImpact } from '@sps/impact'
 import { IngestionClient } from '@sps/kb'
+import type { AtlasIngestor } from '@sps/retrieval'
 import { whatIf } from '@sps/readiness'
 import {
   WhatsAppClient,
@@ -27,7 +28,7 @@ import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
 import { institutionsForDomain } from '@sps/shared'
 import type { DocType, Domain, InstitutionSpec, JointSituationReport, ScenarioEvent, WorkflowLens } from '@sps/shared'
-import { createEngine, createScenario, recordProviderSwitch } from '../engine.js'
+import { createEngine, createKnowledgeIngestor, createScenario, recordProviderSwitch } from '../engine.js'
 import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { healthDataBreach } from '../scenarios.js'
 import { healthBreachExercise } from '../exercises.js'
@@ -36,6 +37,7 @@ import { registerAuthRoutes } from '../auth-routes.js'
 
 const engine = createEngine()
 const ingestion = new IngestionClient({ baseUrl: config.ingestion.baseUrl, apiKey: config.ingestion.apiKey })
+const knowledge: AtlasIngestor = createKnowledgeIngestor()
 
 const whatsapp = new WhatsAppClient({
   version: config.whatsapp.version,
@@ -106,6 +108,181 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/provider', async () => engine.provider)
 
   // ── Knowledge base ────────────────────────────────────────────────────────
+  // Live corpus + Atlas index state. This is the source of truth behind the
+  // Knowledge base screen: counts, embeddings, `READY` vs `BUILDING` indexes.
+  app.get('/v1/kb/status', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') {
+      return {
+        backend: engine.retrievalBackend,
+        provider: { mode: engine.provider.mode, reasoning: engine.provider.models.reasoning },
+        collection: config.qdrant.collection,
+        collectionExists: undefined,
+        totals: { chunks: 0, activeChunks: 0, documents: 0, characters: 0, lastIngestedAt: null },
+        byCountry: [],
+        byDocType: [],
+        indexes: { supported: false, collectionExists: false, indexes: [], error: 'Atlas is only used in cloud mode.' },
+        expectedIndexes: [],
+        embedding: {
+          model: config.embeddings.model,
+          rerankModel: config.rerank.model,
+          dimensions: null,
+          missingVectors: 0,
+          mismatchedVectors: 0,
+          voyageConfigured: false,
+        },
+        recentRuns: [],
+      }
+    }
+    try {
+      const status = await knowledge.status()
+      return {
+        backend: engine.retrievalBackend,
+        provider: { mode: engine.provider.mode, reasoning: engine.provider.models.reasoning },
+        ...status,
+      }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: `Knowledge base unavailable: ${(error as Error).message}` })
+    }
+  })
+
+  app.get('/v1/kb/documents', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        q: z.string().max(120).optional(),
+        includeRetired: z.coerce.boolean().default(false),
+      })
+      .safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    try {
+      return { documents: await knowledge.listDocuments(query.data) }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  app.post('/v1/kb/documents/active', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const body = z
+      .object({ filename: z.string().min(1), active: z.boolean() })
+      .safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    try {
+      const modified = await knowledge.setDocumentActive(body.data.filename, body.data.active)
+      return { filename: body.data.filename, active: body.data.active, modified }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  /** Create or repair the Atlas vector + BM25 indexes, on demand. */
+  app.post('/v1/kb/indexes', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    try {
+      const result = await knowledge.ensureIndexes()
+      return result
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  /** Full-text ingestion: chunk → embed → upsert → ensure indexes. */
+  app.post('/v1/kb/ingest/text', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') {
+      return reply.status(409).send({ error: 'Direct ingestion is available in cloud mode (Atlas + Voyage).' })
+    }
+    const body = z
+      .object({
+        text: z.string().min(24).max(2_000_000),
+        filename: z.string().min(1).max(200),
+        country: z.string().min(2).max(2).or(z.literal('global')),
+        jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
+        docType: z.string().min(1).default('policy'),
+        namespace: z.string().max(80).optional(),
+        version: z.string().max(80).optional(),
+        sourceUrl: z.string().url().optional(),
+        maxChars: z.number().int().min(300).max(6000).optional(),
+        overlapChars: z.number().int().min(0).max(1000).optional(),
+      })
+      .safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    try {
+      const result = await knowledge.ingest({ ...body.data, docType: body.data.docType as DocType })
+      if (!result.ok) return reply.status(422).send(result)
+      return result
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  /** Retrieval playground: every stage, with scores and provenance. */
+  app.post('/v1/kb/search', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const body = z
+      .object({
+        text: z.string().min(2).max(2000),
+        country: z.string().min(2).max(2).or(z.literal('global')).or(z.literal('')).default(''),
+        jurisdiction: z.enum(['national', 'regional', 'international']).optional(),
+        docType: z.string().optional(),
+        namespace: z.string().optional(),
+        topK: z.number().int().min(1).max(12).default(6),
+      })
+      .safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    try {
+      const exploration = await knowledge.explore({
+        text: body.data.text,
+        country: body.data.country,
+        ...(body.data.jurisdiction ? { jurisdiction: body.data.jurisdiction } : {}),
+        ...(body.data.docType ? { docType: body.data.docType as DocType } : {}),
+        ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
+        topK: body.data.topK,
+      })
+      return exploration
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  /**
+   * Cloud mode does not need the optional Python service: go straight through
+   * `AtlasIngestor` so the public demo can vectorise a document. Local and
+   * sovereign modes keep the service (Qdrant + bge-m3).
+   */
+  async function ingestText(input: Parameters<IngestionClient['ingestText']>[0]) {
+    if (engine.retrievalBackend === 'atlas') {
+      const result = await knowledge.ingest({
+        text: input.text,
+        filename: input.filename,
+        country: input.country,
+        jurisdiction: input.jurisdiction,
+        docType: input.docType,
+        ...(input.namespace ? { namespace: input.namespace } : {}),
+        ...(input.version ? { version: input.version } : {}),
+        ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
+      })
+      if (!result.ok) throw new Error(result.error ?? 'Knowledge ingestion failed.')
+      return {
+        success: true,
+        filename: result.filename,
+        country: result.country,
+        docType: result.docType,
+        chunksProcessed: result.chunks,
+        chunksInserted: result.inserted,
+        chunksSkipped: result.unchanged,
+        usedOcr: false,
+      }
+    }
+    return ingestion.ingestText(input)
+  }
+
   app.post('/v1/kb/ingest', async (request, reply) => {
     const body = z
       .object({
@@ -121,7 +298,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
-    const result = await ingestion.ingestText({ ...body.data, docType: body.data.docType as DocType })
+    const result = await ingestText({ ...body.data, docType: body.data.docType as DocType })
     return result
   })
 
@@ -468,7 +645,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const text = chunks.map((chunk) => `## ${chunk.headingPath}\n\n${chunk.text}`).join('\n\n')
     const sourceUrl = chunks[0]!.sourceUrl
     try {
-      const result = await ingestion.ingestText({
+      const result = await ingestText({
         text,
         filename: body.data.page.filename,
         country: body.data.country,

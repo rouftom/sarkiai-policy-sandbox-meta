@@ -87,7 +87,7 @@ export function OperatorMenu({
             align === 'start' ? 'left-0' : 'right-0',
           )}
         >
-          <p className="px-2 py-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="px-2 py-1.5 text-[9px] font-medium text-muted-foreground">
             {t('header.account')}
           </p>
           <div className="my-1 h-px bg-border" />

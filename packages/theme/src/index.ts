@@ -1,8 +1,10 @@
 /**
  * @sps/theme — the SarkiAI admin charter (apps/organization) replicated for the
- * Policy Sandbox. Theme packs: fada (default), green, ocean, sunset, mono.
+ * Policy Sandbox. Theme packs: meta (default, Meta blue), fada, green, ocean,
+ * sunset, mono.
  */
 
+import meta from './packs/meta.json'
 import fada from './packs/fada.json'
 import green from './packs/green.json'
 import ocean from './packs/ocean.json'
@@ -10,7 +12,7 @@ import sunset from './packs/sunset.json'
 import mono from './packs/mono.json'
 import type { ThemePack } from './types'
 
-const rawPacks: ThemePack[] = [fada, green, ocean, sunset, mono] as ThemePack[]
+const rawPacks: ThemePack[] = [meta, fada, green, ocean, sunset, mono] as ThemePack[]
 
 export const THEME_PACKS: ThemePack[] = rawPacks
 

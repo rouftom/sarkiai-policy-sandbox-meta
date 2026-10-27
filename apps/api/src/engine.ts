@@ -1,14 +1,15 @@
 /** Composes the shared packages into the two lenses + the hybrid profile. */
 
-import { fileURLToPath } from 'node:url'
 import { createModel, resolveProvider } from '@sps/agents'
 import { PolicyOrchestrator } from '@sps/agents'
 import { MultiAgentCoordinator } from '@sps/agents'
 import {
   AtlasRetriever,
+  AtlasIngestor,
+  KB_COLLECTION,
+  KB_INDEX_DEFINITIONS,
   PolicyRetriever,
   ensureAtlasIndexes,
-  loadIndexDefinitions,
   resolveRetrievalBackend,
   type Retriever,
   type RetrievalBackend,
@@ -103,18 +104,37 @@ export async function prepareCloudStores(): Promise<CloudStorePreparation> {
   }
 
   try {
-    const file = fileURLToPath(new URL('../../../deploy/mongo/kb.indexes.json', import.meta.url))
-    const artifact = loadIndexDefinitions(file)
+    // Definitions come from @sps/retrieval, not from a file: the API image only
+    // ships packages/ + apps/api/, so reading deploy/ here used to fail silently
+    // and the indexes were never created on Render.
     const result = await ensureAtlasIndexes({
       uri: config.mongodb.uri,
       dbName: config.mongodb.dbName,
-      collection: config.retrieval.atlas.collection ?? artifact.collection,
-      indexes: artifact.indexes,
+      collection: config.retrieval.atlas.collection ?? KB_COLLECTION,
+      indexes: KB_INDEX_DEFINITIONS,
     })
     return { backend, skipped: false, ...result }
   } catch (error) {
     return { backend, skipped: false, error: (error as Error).message }
   }
+}
+
+/** Direct ingestion/status client for the Knowledge base screen. */
+export function createKnowledgeIngestor(): AtlasIngestor {
+  return new AtlasIngestor({
+    mongodbUri: config.mongodb.uri,
+    dbName: config.mongodb.dbName,
+    collectionName: config.retrieval.atlas.collection ?? KB_COLLECTION,
+    vectorIndex: config.retrieval.atlas.vectorIndex,
+    textIndex: config.retrieval.atlas.textIndex,
+    autoIndexes: config.retrieval.atlas.autoIndexes,
+    voyage: {
+      apiKey: config.retrieval.voyage.apiKey,
+      baseUrl: config.retrieval.voyage.baseUrl,
+      embeddingModel: config.retrieval.voyage.embeddingModel,
+      rerankModel: config.retrieval.voyage.rerankModel,
+    },
+  })
 }
 
 /**

@@ -21,13 +21,13 @@ export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<
 )
 CardHeader.displayName = 'CardHeader'
 
-/** Compact label: small caps, muted, semibold. */
+/** Compact label: sentence case, semibold (no uppercase micro-caps). */
 export const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
       className={cn(
-        'text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground',
+        'text-[12px] font-semibold text-foreground',
         className,
       )}
       {...props}

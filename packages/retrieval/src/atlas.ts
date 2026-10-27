@@ -44,12 +44,45 @@ export interface RankedChunk {
   chunk: KbChunk
 }
 
+/** One candidate as returned by a retrieval stage, ready for the playground UI. */
+export interface RetrievalStageItem {
+  id: string
+  rank: number
+  score?: number
+  filename: string
+  text: string
+  chunkIndex: number
+  country: string
+  jurisdiction: string
+  docType: string
+  headingPath?: string
+  articleNumber?: string
+  sourceUrl?: string
+}
+
+export interface RetrievalExploration {
+  query: string
+  filter: Record<string, string | boolean>
+  topK: number
+  models: { embedding: string; rerank: string }
+  timings: { embedMs: number; denseMs: number; sparseMs: number; rerankMs: number; totalMs: number }
+  stages: {
+    dense: RetrievalStageItem[]
+    sparse: RetrievalStageItem[]
+    fused: RetrievalStageItem[]
+    reranked: RetrievalStageItem[]
+    final: RetrievalStageItem[]
+  }
+  warnings: string[]
+}
+
+
 /** Exact-match filter understood by both `$vectorSearch` and `$search`. */
 export function atlasFilter(query: RetrievalQuery): Record<string, string | boolean> {
   const filter: Record<string, string | boolean> = {
     isActive: true,
-    country: query.country,
   }
+  if (query.country) filter.country = query.country
   if (query.jurisdiction) filter.jurisdiction = query.jurisdiction
   if (query.docType) filter.docType = query.docType
   if (query.namespace) filter.namespace = query.namespace
@@ -183,6 +216,101 @@ export class AtlasRetriever implements Retriever {
   async close(): Promise<void> {
     await this.client?.close()
     this.client = null
+  }
+
+  /**
+   * Same pipeline as `search`, but every stage is returned with scores so the
+   * console's retrieval playground can *show* the RAG instead of asserting it:
+   * query embedding → dense + BM25 → RRF → Voyage rerank.
+   */
+  async explore(query: RetrievalQuery): Promise<RetrievalExploration> {
+    const started = Date.now()
+    const topK = query.topK ?? 6
+    const filter = atlasFilter(query)
+    const limit = Math.max(topK * 6, 24, this.numCandidates)
+    const warnings: string[] = []
+
+    const embedStart = Date.now()
+    const [vector] = await this.voyage.embed([query.text], 'query')
+    const embedMs = Date.now() - embedStart
+    if (!vector) throw new Error('Voyage returned no query vector.')
+
+    const denseStart = Date.now()
+    const dense = await this.vectorSearch(vector, limit, filter).catch((error) => {
+      warnings.push(`Dense branch: ${(error as Error).message}`)
+      return [] as RankedChunk[]
+    })
+    const denseMs = Date.now() - denseStart
+
+    const sparseStart = Date.now()
+    const sparse = await this.textSearch(query.text, limit, filter).catch((error) => {
+      warnings.push(`BM25 branch: ${(error as Error).message}`)
+      return [] as RankedChunk[]
+    })
+    const sparseMs = Date.now() - sparseStart
+
+    const fused = fuseRanked([
+      { items: dense, weight: this.vectorWeight },
+      { items: sparse, weight: this.textWeight },
+    ])
+    const candidates = fused.slice(0, Math.max(topK * 3, 16))
+
+    const rerankStart = Date.now()
+    let reranked: Array<RankedChunk & { score: number }> = []
+    try {
+      const hits = await this.voyage.rerank(
+        query.text,
+        candidates.map((candidate) => candidate.chunk.text),
+        candidates.length,
+      )
+      reranked = hits
+        .map((hit) => {
+          const candidate = candidates[hit.index]
+          return candidate ? { ...candidate, score: hit.score } : null
+        })
+        .filter((candidate): candidate is RankedChunk & { score: number } => candidate !== null)
+    } catch (error) {
+      warnings.push(`Rerank: ${(error as Error).message}`)
+    }
+    const rerankMs = Date.now() - rerankStart
+
+    const toItem = (entry: { id: string; chunk: KbChunk; score?: number }, rank: number): RetrievalStageItem => ({
+      id: entry.id,
+      rank,
+      ...(entry.score === undefined ? {} : { score: entry.score }),
+      filename: entry.chunk.filename,
+      text: entry.chunk.text.slice(0, 420),
+      chunkIndex: entry.chunk.chunkIndex,
+      country: entry.chunk.country,
+      jurisdiction: entry.chunk.jurisdiction,
+      docType: entry.chunk.docType,
+      ...(entry.chunk.headingPath ? { headingPath: entry.chunk.headingPath } : {}),
+      ...(entry.chunk.articleNumber ? { articleNumber: entry.chunk.articleNumber } : {}),
+      ...(entry.chunk.sourceUrl ? { sourceUrl: entry.chunk.sourceUrl } : {}),
+    })
+
+    const final = reranked.length > 0 ? reranked : candidates
+    return {
+      query: query.text,
+      filter,
+      topK,
+      models: { embedding: this.voyage.model, rerank: this.voyage.reranker },
+      timings: {
+        embedMs,
+        denseMs,
+        sparseMs,
+        rerankMs,
+        totalMs: Date.now() - started,
+      },
+      stages: {
+        dense: dense.map(toItem),
+        sparse: sparse.map(toItem),
+        fused: fused.map(toItem),
+        reranked: reranked.map(toItem),
+        final: final.slice(0, topK).map(toItem),
+      },
+      warnings,
+    }
   }
 
   private async collection(): Promise<Collection<Document>> {

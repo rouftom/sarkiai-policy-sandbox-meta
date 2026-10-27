@@ -2,14 +2,11 @@
 
 import * as React from 'react'
 import { Activity, FileCheck2, Gauge, Waypoints } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@sps/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select } from '@sps/ui'
 import { WORKFLOW_PROFILES } from '@sps/shared'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { api, type ReadinessReportDto, type WhatIfResultDto } from '@/lib/api'
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2 text-[11px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25'
 
 /** AI-readiness scoring + what-if, shared by the console and its dedicated page. */
 export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) {
@@ -125,28 +122,26 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
               </div>
 
               <div className="rounded-lg border border-border bg-secondary/40 p-3">
-                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
                   <Waypoints className="h-3.5 w-3.5" /> {t('readiness.whatIf')}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    aria-label={t('readiness.dimension')}
+                  <Select
+                    ariaLabel={t('readiness.dimension')}
                     value={change.dimension}
-                    onChange={(event) => setChange((state) => ({ ...state, dimension: event.target.value }))}
-                    className={selectClass}
-                  >
-                    {report.scores?.map((score) => (
-                      <option key={score.dimension} value={score.dimension}>
-                        {score.dimensionName}
-                      </option>
-                    ))}
-                  </select>
-                  <input
+                    onValueChange={(value) => setChange((state) => ({ ...state, dimension: value }))}
+                    options={(report.scores ?? []).map((score) => ({
+                      value: score.dimension,
+                      label: score.dimensionName,
+                    }))}
+                    className="min-w-0 flex-1 sm:w-56 sm:flex-none"
+                  />
+                  <Input
                     type="number"
                     step="0.5"
                     value={change.delta}
                     onChange={(event) => setChange((state) => ({ ...state, delta: Number(event.target.value) }))}
-                    className={`${selectClass} w-20`}
+                    className="h-8 w-20 text-[11px]"
                     aria-label={t('readiness.delta')}
                   />
                   <Button onClick={simulate} disabled={busy} size="sm" variant="secondary">

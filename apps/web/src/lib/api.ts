@@ -710,3 +710,159 @@ export const authApi = {
     }),
   auditEvents: (limit = 50) => request<AuditFeedDto>(`/v1/audit/events?limit=${limit}`),
 }
+
+
+// ── Knowledge base / RAG ────────────────────────────────────────────────────
+
+export type IngestStepStatus = 'ok' | 'skipped' | 'warning' | 'error'
+
+export interface KbIndexStatusDto {
+  name: string
+  type: string
+  status: string
+  queryable: boolean
+}
+
+export interface KbIndexesDto {
+  supported: boolean
+  collectionExists: boolean
+  indexes: KbIndexStatusDto[]
+  error?: string
+}
+
+export interface KbIngestStepDto {
+  id: string
+  status: IngestStepStatus
+  label: string
+  detail: string
+  count?: number
+  ms: number
+}
+
+export interface KbIngestResultDto {
+  ok: boolean
+  documentId: string
+  filename: string
+  country: string
+  docType: string
+  collection: string
+  chunks: number
+  inserted: number
+  unchanged: number
+  deactivated: number
+  characters: number
+  embeddingModel: string
+  dimensions: number | null
+  durationMs: number
+  steps: KbIngestStepDto[]
+  error?: string
+}
+
+export interface KbStatusDto {
+  backend: 'atlas' | 'qdrant'
+  provider: { mode: string; reasoning?: string }
+  collection: string
+  collectionExists: boolean
+  totals: {
+    chunks: number
+    activeChunks: number
+    documents: number
+    characters: number
+    lastIngestedAt: string | null
+  }
+  byCountry: Array<{ value: string; chunks: number }>
+  byDocType: Array<{ value: string; chunks: number }>
+  indexes: KbIndexesDto
+  expectedIndexes: string[]
+  embedding: {
+    model: string
+    rerankModel: string
+    dimensions: number | null
+    missingVectors: number
+    mismatchedVectors: number
+    voyageConfigured: boolean
+  }
+  recentRuns: KbIngestResultDto[]
+}
+
+export interface KbDocumentDto {
+  filename: string
+  documentId: string
+  chunks: number
+  activeChunks: number
+  characters: number
+  country: string
+  docType: string
+  namespace?: string
+  version?: string
+  sourceUrl?: string
+  lastIngestedAt: string | null
+}
+
+export interface KbStageItemDto {
+  id: string
+  rank: number
+  score?: number
+  filename: string
+  text: string
+  chunkIndex: number
+  country: string
+  jurisdiction: string
+  docType: string
+  headingPath?: string
+  articleNumber?: string
+  sourceUrl?: string
+}
+
+export interface KbExplorationDto {
+  query: string
+  filter: Record<string, string | boolean>
+  topK: number
+  models: { embedding: string; rerank: string }
+  timings: { embedMs: number; denseMs: number; sparseMs: number; rerankMs: number; totalMs: number }
+  stages: {
+    dense: KbStageItemDto[]
+    sparse: KbStageItemDto[]
+    fused: KbStageItemDto[]
+    reranked: KbStageItemDto[]
+    final: KbStageItemDto[]
+  }
+  warnings: string[]
+}
+
+export const knowledgeApi = {
+  status: () => request<KbStatusDto>('/v1/kb/status'),
+  documents: (options: { limit?: number; q?: string; includeRetired?: boolean } = {}) => {
+    const params = new URLSearchParams()
+    params.set('limit', String(options.limit ?? 50))
+    if (options.q) params.set('q', options.q)
+    if (options.includeRetired) params.set('includeRetired', 'true')
+    return request<{ documents: KbDocumentDto[] }>(`/v1/kb/documents?${params.toString()}`)
+  },
+  ensureIndexes: () => request<{ inspection: KbIndexesDto; ensured: { supported: boolean; created: string[]; updated: string[]; unchanged: string[] } }>('/v1/kb/indexes', { method: 'POST', body: '{}' }),
+  ingestText: (body: {
+    text: string
+    filename: string
+    country: string
+    jurisdiction: 'national' | 'regional' | 'international'
+    docType: string
+    namespace?: string
+    version?: string
+    sourceUrl?: string
+    maxChars?: number
+    overlapChars?: number
+  }) => request<KbIngestResultDto>('/v1/kb/ingest/text', { method: 'POST', body: JSON.stringify(body) }),
+  search: (body: {
+    text: string
+    country?: string
+    jurisdiction?: 'national' | 'regional' | 'international'
+    docType?: string
+    namespace?: string
+    topK?: number
+  }) => request<KbExplorationDto>('/v1/kb/search', { method: 'POST', body: JSON.stringify(body) }),
+  setDocumentActive: (filename: string, active: boolean) =>
+    request<{ filename: string; active: boolean; modified: number }>('/v1/kb/documents/active', {
+      method: 'POST',
+      body: JSON.stringify({ filename, active }),
+    }),
+}

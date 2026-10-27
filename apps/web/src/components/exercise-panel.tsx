@@ -12,7 +12,7 @@
 
 import * as React from 'react'
 import { AlertTriangle, CheckCircle2, ClipboardList, Loader2, Plus, Timer, Trash2 } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@sps/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle, Select, cn } from '@sps/ui'
 import { institutionsForDomain, type Domain } from '@sps/shared'
 import {
   api,
@@ -280,48 +280,41 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1">
                   <span className="text-[10px] text-muted-foreground">{t('exercise.actor')}</span>
-                  <select
+                  <Select
+                    ariaLabel={t('exercise.actor')}
                     value={form.actor}
-                    onChange={(event) => setForm((previous) => ({ ...previous, actor: event.target.value }))}
-                    className="h-7 w-full rounded-xl border border-border bg-transparent px-2 text-[11px]"
-                  >
-                    {institutions.map((institution) => (
-                      <option key={institution.id} value={institution.id}>
-                        {institution.name}
-                      </option>
-                    ))}
-                  </select>
+                    onValueChange={(value) => setForm((previous) => ({ ...previous, actor: value }))}
+                    options={institutions.map((institution) => ({
+                      value: institution.id,
+                      label: institution.name,
+                    }))}
+                  />
                 </label>
                 <label className="space-y-1">
                   <span className="text-[10px] text-muted-foreground">{t('exercise.kind')}</span>
-                  <select
+                  <Select
+                    ariaLabel={t('exercise.kind')}
                     value={form.kind}
-                    onChange={(event) =>
-                      setForm((previous) => ({ ...previous, kind: event.target.value as ExerciseActionKind }))
+                    onValueChange={(value) =>
+                      setForm((previous) => ({ ...previous, kind: value as ExerciseActionKind }))
                     }
-                    className="h-7 w-full rounded-xl border border-border bg-transparent px-2 text-[11px]"
-                  >
-                    {KINDS.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {t(`exercise.kind.${kind}` as 'exercise.kind.action')}
-                      </option>
-                    ))}
-                  </select>
+                    options={KINDS.map((kind) => ({
+                      value: kind,
+                      label: t(`exercise.kind.${kind}` as 'exercise.kind.action'),
+                    }))}
+                  />
                 </label>
                 <label className="space-y-1 sm:col-span-2">
                   <span className="text-[10px] text-muted-foreground">{t('exercise.inject')}</span>
-                  <select
+                  <Select
+                    ariaLabel={t('exercise.inject')}
                     value={form.injectId}
-                    onChange={(event) => setForm((previous) => ({ ...previous, injectId: event.target.value }))}
-                    className="h-7 w-full rounded-xl border border-border bg-transparent px-2 text-[11px]"
-                  >
-                    <option value="">{t('exercise.noInject')}</option>
-                    {released.map((inject) => (
-                      <option key={inject.id} value={inject.id}>
-                        {inject.id} · {inject.title}
-                      </option>
-                    ))}
-                  </select>
+                    onValueChange={(value) => setForm((previous) => ({ ...previous, injectId: value }))}
+                    options={[
+                      { value: '', label: t('exercise.noInject') },
+                      ...released.map((inject) => ({ value: inject.id, label: `${inject.id} · ${inject.title}` })),
+                    ]}
+                  />
                 </label>
                 <label className="space-y-1 sm:col-span-2">
                   <span className="text-[10px] text-muted-foreground">{t('exercise.text')}</span>

@@ -125,7 +125,7 @@ export default function SetupPage() {
         </div>
         <StepIntro kicker={t('setup.kicker')} title={t('setup.sentTitle')} subtitle={t('setup.sentBody')} />
         <div className="mt-5 rounded-xl border border-border bg-secondary/40 px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-[10px] font-medium text-muted-foreground">
             {t('setup.sentTo')}
           </p>
           <p className="mt-1 break-all font-mono text-[12px] text-foreground">{delivered.email}</p>

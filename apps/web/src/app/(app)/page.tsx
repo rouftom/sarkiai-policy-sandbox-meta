@@ -87,7 +87,7 @@ export default function OverviewPage() {
     <>
       <section className="flex flex-wrap items-end justify-between gap-4 pb-5 pt-2">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-primary dark:text-brand-primary-light">
+          <p className="text-[10px] font-medium text-brand-primary dark:text-brand-primary-light">
             SarkiAI · Meta hackathon
           </p>
           <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
@@ -104,7 +104,7 @@ export default function OverviewPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardContent className="space-y-1 py-4">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-[9px] font-medium text-muted-foreground">
               {t('overview.kpi.provider')}
             </p>
             <p className="truncate font-display text-base font-bold text-foreground">
@@ -118,7 +118,7 @@ export default function OverviewPage() {
 
         <Card>
           <CardContent className="space-y-1 py-4">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-[9px] font-medium text-muted-foreground">
               {t('overview.kpi.chain')}
             </p>
             <p className="flex items-center gap-1.5 font-display text-base font-bold">
@@ -141,7 +141,7 @@ export default function OverviewPage() {
 
         <Card>
           <CardContent className="space-y-1 py-4">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-[9px] font-medium text-muted-foreground">
               {t('overview.kpi.mfa')}
             </p>
             <p className="flex items-center gap-1.5 font-display text-base font-bold">
@@ -156,7 +156,7 @@ export default function OverviewPage() {
 
         <Card>
           <CardContent className="space-y-1 py-4">
-            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            <p className="text-[9px] font-medium text-muted-foreground">
               {t('overview.kpi.workspace')}
             </p>
             <p className="flex items-center gap-1.5 font-display text-base font-bold">

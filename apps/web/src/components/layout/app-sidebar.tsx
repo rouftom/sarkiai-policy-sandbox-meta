@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Compass,
   Cpu,
+  Database,
   Gauge,
   Languages,
   LayoutDashboard,
@@ -14,10 +15,10 @@ import {
   Network,
   PanelLeftClose,
   PanelLeftOpen,
-  PlayCircle,
   Rocket,
   ScrollText,
   Settings,
+  Settings2,
   ShieldCheck,
   Siren,
   SlidersHorizontal,
@@ -40,13 +41,14 @@ interface NavEntry {
 const GUIDE_NAV: NavEntry[] = [
   { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
   { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
-  { href: '/guide/demo', labelKey: 'nav.guide_demo', icon: PlayCircle },
+  { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
   { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Sparkles },
 ]
 
 const GENERAL_NAV: NavEntry[] = [
   { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
   { href: '/console', labelKey: 'nav.console', icon: SlidersHorizontal },
+  { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
   { href: '/gazette', labelKey: 'nav.gazette', icon: Newspaper },
@@ -72,11 +74,11 @@ export function AdminSidebar() {
   const pathname = usePathname()
   const { t } = useI18n()
   const [collapsed, setCollapsed] = React.useState(false)
-  const [guideOpen, setGuideOpen] = React.useState(true)
+  const [guideOpen, setGuideOpen] = React.useState(false)
 
   React.useEffect(() => {
     setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === '1')
-    setGuideOpen(localStorage.getItem('sps-guide-open') !== '0')
+    setGuideOpen(localStorage.getItem('sps-guide-open') === '1')
   }, [])
 
   const toggle = () => {
@@ -141,7 +143,7 @@ export function AdminSidebar() {
 
   const groupLabel = (key: MessageKey) =>
     !collapsed && (
-      <p className="px-3 pb-1 pt-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+      <p className="px-3 pb-1 pt-3 text-[11px] font-medium text-slate-500 dark:text-slate-400">
         {t(key)}
       </p>
     )

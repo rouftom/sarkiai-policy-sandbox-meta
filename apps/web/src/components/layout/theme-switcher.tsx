@@ -91,7 +91,7 @@ export function ThemeSwitcher() {
           role="menu"
           className="absolute right-0 top-full z-50 mt-2 w-60 overflow-hidden rounded-xl border border-border bg-popover p-2 shadow-xl"
         >
-          <p className="px-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="px-2 pb-1 text-[9px] font-medium text-muted-foreground">
             {t('theme.pack')}
           </p>
           {packs.map((pack) => (
@@ -112,7 +112,7 @@ export function ThemeSwitcher() {
           ))}
 
           <div className="my-1 h-px bg-border" />
-          <p className="px-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="px-2 pb-1 text-[9px] font-medium text-muted-foreground">
             {t('theme.mode')}
           </p>
           <div className="grid grid-cols-3 gap-1">
@@ -136,7 +136,7 @@ export function ThemeSwitcher() {
           </div>
 
           <div className="my-1 h-px bg-border" />
-          <p className="px-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <p className="px-2 pb-1 text-[9px] font-medium text-muted-foreground">
             {t('theme.corners')}
           </p>
           <div className="grid grid-cols-2 gap-1">

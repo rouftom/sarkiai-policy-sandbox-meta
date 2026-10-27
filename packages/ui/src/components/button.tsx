@@ -4,7 +4,7 @@ import * as React from 'react'
 import { cn } from '../lib/cn'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'outline' | 'gold'
-type Size = 'sm' | 'md' | 'lg' | 'icon'
+type Size = 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm'
 
 const variants: Record<Variant, string> = {
   primary: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
@@ -20,6 +20,7 @@ const sizes: Record<Size, string> = {
   md: 'h-9 px-3.5 text-sm',
   lg: 'h-10 px-5 text-sm',
   icon: 'h-9 w-9',
+  'icon-sm': 'h-7 w-7',
 }
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

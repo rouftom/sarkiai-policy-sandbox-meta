@@ -16,6 +16,8 @@ export * from './types'
 export * from './voyage'
 export * from './atlas'
 export * from './atlas-indexes'
+export * from './atlas-index-definitions'
+export * from './atlas-ingest'
 
 export interface RetrievalConfig {
   qdrantUrl: string

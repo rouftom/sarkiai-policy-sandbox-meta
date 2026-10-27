@@ -11,7 +11,7 @@
 
 import * as React from 'react'
 import { AlertTriangle, Languages, Loader2, ShieldAlert } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@sps/ui'
+import { Button, Card, CardContent, CardHeader, CardTitle, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, cn } from '@sps/ui'
 import {
   ApiError,
   api,
@@ -125,21 +125,19 @@ export function CommunicationsPanel({ country }: { country: string }) {
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.language')}</span>
-            <select
+            <Select
+              ariaLabel={t('comm.language')}
               value={language}
-              onChange={(event) => {
-                setLanguage(event.target.value as CommunicationLanguageCode)
+              onValueChange={(value) => {
+                setLanguage(value as CommunicationLanguageCode)
                 setDraft(null)
                 setViolations([])
               }}
-              className="h-7 w-full rounded-xl border border-border bg-transparent px-2 text-[11px]"
-            >
-              {languages.map((item) => (
-                <option key={item.code} value={item.code}>
-                  {item.name} ({item.code})
-                </option>
-              ))}
-            </select>
+              options={languages.map((item) => ({
+                value: item.code,
+                label: `${item.name} (${item.code})`,
+              }))}
+            />
           </label>
           <label className="space-y-1">
             <span className="text-[10px] font-black tracking-widest text-muted-foreground">
@@ -246,22 +244,24 @@ export function CommunicationsPanel({ country }: { country: string }) {
             {draft.keyTerms.length > 0 && (
               <div>
                 <p className="text-[10px] font-black tracking-widest text-muted-foreground">{t('comm.keyTerms')}</p>
-                <table className="mt-1 w-full text-left text-[11px]">
-                  <thead>
-                    <tr className="text-muted-foreground">
-                      <th className="font-semibold">{t('comm.term')}</th>
-                      <th className="font-semibold">{t('comm.translation')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draft.keyTerms.map((entry) => (
-                      <tr key={`${entry.term}-${entry.translation}`}>
-                        <td className="py-0.5 pr-2">{entry.term}</td>
-                        <td className="py-0.5">{entry.translation}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="mt-1 overflow-hidden rounded-lg border border-border">
+                  <Table className="min-w-0">
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>{t('comm.term')}</TableHead>
+                        <TableHead>{t('comm.translation')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {draft.keyTerms.map((entry) => (
+                        <TableRow key={`${entry.term}-${entry.translation}`}>
+                          <TableCell className="font-medium">{entry.term}</TableCell>
+                          <TableCell className="text-muted-foreground">{entry.translation}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
 

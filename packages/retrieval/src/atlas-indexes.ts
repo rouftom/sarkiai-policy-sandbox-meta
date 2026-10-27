@@ -161,3 +161,67 @@ export async function ensureAtlasIndexes(
     await client.close()
   }
 }
+
+export interface AtlasIndexStatus {
+  name: string
+  type: AtlasIndexType | 'unknown'
+  /** Atlas lifecycle: `READY`, `BUILDING`, `FAILED`, `DOES_NOT_EXIST`… */
+  status: string
+  queryable: boolean
+  definition?: Record<string, unknown>
+}
+
+export interface AtlasIndexInspection {
+  supported: boolean
+  collectionExists: boolean
+  indexes: AtlasIndexStatus[]
+  error?: string
+}
+
+/**
+ * Read the live index state without creating anything. Used by
+ * `GET /v1/kb/status` so the console can show `BUILDING` vs `READY` and offer a
+ * repair action instead of guessing.
+ */
+export async function inspectAtlasIndexes(options: {
+  uri: string
+  dbName: string
+  collection: string
+}): Promise<AtlasIndexInspection> {
+  const client = new MongoClient(options.uri)
+  try {
+    await client.connect()
+    const db = client.db(options.dbName)
+    const collectionExists = await db.listCollections({ name: options.collection }, { nameOnly: true }).hasNext()
+    if (!collectionExists) return { supported: true, collectionExists: false, indexes: [] }
+
+    const collection = db.collection(options.collection)
+    let raw: Array<Record<string, unknown>>
+    try {
+      raw = (await collection.listSearchIndexes().toArray()) as Array<Record<string, unknown>>
+    } catch (error) {
+      return {
+        supported: false,
+        collectionExists: true,
+        indexes: [],
+        error: (error as Error).message ?? String(error),
+      }
+    }
+
+    return {
+      supported: true,
+      collectionExists: true,
+      indexes: raw.map((index) => ({
+        name: String(index.name ?? ''),
+        type: (index.type === 'vectorSearch' || index.type === 'search' ? index.type : 'unknown') as AtlasIndexType | 'unknown',
+        status: String(index.status ?? 'UNKNOWN').toUpperCase(),
+        queryable: index.queryable === true,
+        ...(index.latestDefinition && typeof index.latestDefinition === 'object'
+          ? { definition: index.latestDefinition as Record<string, unknown> }
+          : {}),
+      })),
+    }
+  } finally {
+    await client.close()
+  }
+}

@@ -19,6 +19,37 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+/**
+ * Canonical hash payload. `runId` and `target` are optional, and Mongo stores
+ * an absent value as `null`: both are normalised away so a record written from
+ * the API and read back from the collection hash to the same string. The key
+ * order is part of the contract — do not reorder.
+ */
+function hashPayload(base: Omit<AuditRecord, 'hash'>, prevHash?: string): string {
+  const canonical = JSON.stringify({
+    id: base.id,
+    runId: base.runId ?? undefined,
+    ts: base.ts,
+    actor: base.actor,
+    action: base.action,
+    target: base.target ?? undefined,
+    lens: base.lens,
+    citations: base.citations ?? [],
+  })
+  return sha256(canonical + (prevHash ?? ''))
+}
+
+/**
+ * Hash recomputation for records written before the canonical payload landed.
+ * The legacy code hashed `JSON.stringify(base)` where `base` still carried
+ * `prevHash`, then appended `prevHash` a second time. Records already in the
+ * collection stay verifiable: the chain is evidence, it is not rewritten.
+ */
+function legacyHash(record: Record<string, unknown>, prevHash: string | undefined): string {
+  const { _id: _ignoredId, hash: _ignoredHash, ...base } = record
+  return sha256(JSON.stringify(base) + (prevHash ?? ''))
+}
+
 export class AuditService {
   private client: MongoClient | null = null
   private readonly auditCol: string
@@ -51,7 +82,7 @@ export class AuditService {
     runId?: string
   }): Promise<AuditRecord> {
     const { audit } = await this.db()
-    const previous = await audit.find({}).sort({ ts: -1 }).limit(1).next()
+    const previous = await audit.find({}).sort({ ts: -1, _id: -1 }).limit(1).next()
     const prevHash = previous?.hash as string | undefined
 
     const base: Omit<AuditRecord, 'hash'> = {
@@ -64,7 +95,7 @@ export class AuditService {
       lens: input.lens,
       citations: input.citations ?? [],
     }
-    const record: AuditRecord = { ...base, prevHash, hash: sha256(JSON.stringify(base) + (prevHash ?? '')) }
+    const record: AuditRecord = { ...base, prevHash, hash: hashPayload(base, prevHash) }
     await audit.insertOne({ ...record })
     return record
   }
@@ -111,11 +142,17 @@ export class AuditService {
   /** Verify the hash chain end-to-end; returns the first broken record, if any. */
   async verifyChain(): Promise<{ valid: boolean; brokenAt?: string }> {
     const { audit } = await this.db()
-    const records = (await audit.find({}).sort({ ts: 1 }).toArray()) as unknown as AuditRecord[]
+    const records = (await audit
+      .find({})
+      .sort({ ts: 1, _id: 1 })
+      .toArray()) as unknown as Array<AuditRecord & { _id: unknown }>
     let prevHash: string | undefined
     for (const record of records) {
-      const { hash, ...base } = record
-      if (sha256(JSON.stringify(base) + (prevHash ?? '')) !== hash) {
+      // `_id` is added by MongoDB after the hash was computed: strip it before
+      // recomputing, otherwise every record looks tampered with.
+      const { _id: _ignored, hash, ...base } = record
+      const recomputed = hashPayload(base as Omit<AuditRecord, 'hash'>, prevHash)
+      if (recomputed !== hash && legacyHash(record as unknown as Record<string, unknown>, prevHash) !== hash) {
         return { valid: false, brokenAt: record.id }
       }
       prevHash = hash
