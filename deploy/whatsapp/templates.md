@@ -12,9 +12,30 @@ the same template if the focal points read French). Body variables are positiona
 
 | Template | Body | Button |
 |---|---|---|
-| `meta_hackathon_joint_report` | `Run {{1}} — tick {{2}}.\n\n{{3}}` | None |
-| `meta_hackathon_deadline_alert` | `{{1}}\n\nDeadline: {{2}}\n\n{{3}}` | URL (static), suffix optional |
-| `meta_hackathon_approval_request` | `Approval requested.\n\n{{1}}\n\nDecide before {{2}}.` | URL (dynamic): `https://<WEB_PUBLIC_URL>/approve/{{1}}` |
+| `meta_hackathon_joint_report` | `Joint report for run {{1}}, crisis tick {{2}}.\n\nThe coordination cell cross-checked every claim against the retrieved policy corpus and published this summary:\n\n{{3}}\n\nOpen the console to review the citations before the next tick.` | None |
+| `meta_hackathon_deadline_alert` | `Deadline alert: {{1}}\n\nThe clock on this item stops at {{2}}. The coordination cell has flagged the outstanding clauses and prepared the review pack.\n\n{{3}}\n\nOpen the console to approve, amend or reject before the deadline.` | URL (static): `https://<WEB_PUBLIC_URL>/` |
+| `meta_hackathon_approval_request` | `Approval requested.\n\nA decision from the focal point is needed on the following item:\n\n{{1}}\n\nThe signed link below opens the approval page. It works once and expires on {{2}}. Nothing is published until you decide.` | URL (dynamic): `https://<WEB_PUBLIC_URL>/approve/{{1}}` |
+
+### Current status (27 Oct 2026)
+
+Created through `POST /{WABA}/message_templates` (`v26.0`), category `UTILITY`,
+language `en`:
+
+| Template | ID | Status |
+|---|---|---|
+| `meta_hackathon_joint_report` | `1389658312947485` | PENDING |
+| `meta_hackathon_deadline_alert` | `1106780912229163` | PENDING |
+| `meta_hackathon_approval_request` | `1682829429905161` | PENDING |
+
+`WEB_PUBLIC_URL` is `https://sarkiai-policy-sandbox-meta.vercel.app`, so the
+approval button base is
+`https://sarkiai-policy-sandbox-meta.vercel.app/approve/{{1}}`.
+
+The bodies above are longer than the first draft on purpose: Meta rejects a
+template whose variable-to-word ratio is too high (`error_subcode 2388293`,
+*"Ce modèle comporte trop de variables par rapport à sa longueur"*). Keep at
+least a full sentence of static text per variable when editing them — the
+runtime contract is unaffected, `bodyParams` stays positional.
 
 ## Creating them
 

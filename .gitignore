@@ -59,3 +59,6 @@ coverage/
 
 # generated gazette fixture intermediates
 .gazette-build/
+
+# vercel
+.vercel/

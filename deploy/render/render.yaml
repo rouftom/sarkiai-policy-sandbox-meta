@@ -1,0 +1,99 @@
+# Render blueprint — public API (free instance)
+#
+# Why Render and not Vercel: the API is a long-lived Fastify process that keeps
+# an SSE stream open and receives Meta webhooks on a stable HTTPS origin. That is
+# exactly what a container web service gives you and what a serverless function
+# does not.
+#
+# Create the service from this file:
+#   Render dashboard → New → Blueprint → pick rouftom/sarkiai-policy-sandbox-meta
+#   Blueprint path: deploy/render/render.yaml
+#
+# `sync: false` means Render asks for the value at creation time and never stores
+# it in this file. Never commit real values here.
+
+services:
+  - type: web
+    name: sps-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    rootDir: .
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      # ── runtime ────────────────────────────────────────────────────────────
+      - key: NODE_ENV
+        value: production
+      - key: SANDBOX_MODE
+        value: cloud
+      - key: RUN_BUDGET_USD
+        value: "1.50"
+      - key: AUDIT_ENABLED
+        value: "true"
+      - key: COT_TRACE_ENABLED
+        value: "true"
+
+      # ── model provider (Meta Model API) ────────────────────────────────────
+      - key: MODEL_API_KEY
+        sync: false
+      - key: META_BASE_URL
+        value: https://api.meta.ai/v1
+      - key: META_REASONING_MODEL
+        value: muse-spark-1.3
+      - key: META_VISION_MODEL
+        value: sam-3.1
+      - key: META_VOICE_MODEL
+        value: muse-voice-transcribe-1.0
+
+      # ── retrieval (Voyage + Atlas) ─────────────────────────────────────────
+      - key: RETRIEVAL_BACKEND
+        value: atlas
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: VOYAGE_API_URL
+        value: https://api.voyageai.com/v1
+      - key: VOYAGE_EMBEDDING_MODEL
+        value: voyage-4
+      - key: VOYAGE_RERANK_MODEL
+        value: rerank-2
+      - key: EMBEDDING_DIMENSION
+        value: "1024"
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: policy_sandbox
+      - key: MONGODB_RAG_COLLECTION
+        value: kb_chunks
+      - key: MONGODB_VECTOR_INDEX
+        value: sps_vector_index
+      - key: MONGODB_TEXT_INDEX
+        value: sps_text_index
+      - key: MONGODB_AUTO_INDEXES
+        value: "true"
+
+      # ── WhatsApp Cloud API ─────────────────────────────────────────────────
+      - key: WHATSAPP_VERSION
+        value: v26.0
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_WABA
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_WEBHOOK_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_RECIPIENT_WAID
+        sync: false
+      - key: WHATSAPP_TEMPLATE_LANGUAGE
+        value: en
+
+      # ── approval links (web app origin) ────────────────────────────────────
+      - key: APPROVAL_SECRET
+        sync: false
+      - key: WEB_PUBLIC_URL
+        value: https://sarkiai-policy-sandbox-meta.vercel.app

@@ -321,6 +321,26 @@ make clean         # stop + remove volumes
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
+## Deployment
+
+The public demo splits in two, because the two halves have different shapes:
+
+| Piece | Host | Why |
+|---|---|---|
+| `apps/web` (Next.js) | **Vercel** — <https://sarkiai-policy-sandbox-meta.vercel.app> | static + one dynamic route (`/approve/[token]`) |
+| `apps/api` (Fastify) | **Render**, Docker, free plan | long-lived process, SSE stream, WhatsApp webhook |
+
+The API is deliberately *not* on Vercel: serverless functions cannot hold the
+`/simulate` stream open or receive a webhook on a stable host. Exact settings,
+environment variables and the cold-start strategy live in
+[`deploy/vercel/README.md`](deploy/vercel/README.md) and
+[`deploy/render/README.md`](deploy/render/README.md); the blueprint is
+[`deploy/render/render.yaml`](deploy/render/render.yaml).
+
+WhatsApp needs three approved utility templates before any business-initiated
+message is delivered: [`deploy/whatsapp/templates.md`](deploy/whatsapp/templates.md)
+lists their exact bodies, ids and review status.
+
 ## Contributing
 
 - Branch model and conventions: [`docs/RULES.md`](docs/RULES.md)

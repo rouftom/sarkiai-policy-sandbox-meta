@@ -45,6 +45,18 @@ Cloud mode also switches the retrieval backend: chunk embeddings come from
 Qdrant, so no corpus leaves the machine. Atlas indexes are declared in
 `deploy/mongo/kb.indexes.json` and created only in cloud mode.
 
+## Deployment
+
+Public demo: <https://sarkiai-policy-sandbox-meta.vercel.app> (Next.js console on
+Vercel). The Fastify API runs as a Docker web service on Render's free plan, so
+the SSE stream and the WhatsApp webhook keep a stable origin; settings are in
+`deploy/vercel/README.md` and `deploy/render/README.md`.
+
+WhatsApp: the three `meta_hackathon_*` utility templates were submitted to the
+WABA on 27 October 2026 (ids in `deploy/whatsapp/templates.md`) and stay
+`PENDING` until Meta approves them — no business-initiated message is delivered
+before that.
+
 ## How to run
 
 See the README: environment variables, the three provider modes, and one command
