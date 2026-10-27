@@ -193,3 +193,50 @@ describe('operator sign-in', () => {
     expect(created.operator.preferences.radius).toBe('square')
   })
 })
+
+describe('public sign-up', () => {
+  test('is closed unless the deployment opens it', async () => {
+    const auth = service()
+    await expect(
+      auth.signup({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL, password: CHOSEN }),
+    ).rejects.toThrow(/closed/)
+  })
+
+  test('creates an account that must still enrol 2FA before any session', async () => {
+    const auth = service({ signup: true })
+    const result = await auth.signup({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL, password: CHOSEN })
+    expect(result.status).toBe('enrollment_required')
+    expect(result.operator.role).toBe('operator')
+    expect(result.operator.mustChangePassword).toBe(false)
+    expect(result.operator.mfaEnrolled).toBe(false)
+
+    const enrollment = await auth.startEnrollment(result.challenge)
+    const session = await auth.confirmEnrollment(result.challenge, totpCode(enrollment.secret))
+    expect(session.operator.email).toBe(EMAIL)
+    expect(session.operator.mfaEnrolled).toBe(true)
+    expect(session.backupCodes).toHaveLength(10)
+
+    // The chosen password now signs in, still behind the second factor.
+    const login = await auth.login(EMAIL, CHOSEN)
+    expect(login.status).toBe('mfa_required')
+  })
+
+  test('refuses a duplicate address and a weak password', async () => {
+    const auth = service({ signup: true })
+    await auth.signup({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL, password: CHOSEN })
+    await expect(
+      auth.signup({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL, password: CHOSEN }),
+    ).rejects.toThrow(/already exists/)
+    await expect(
+      auth.signup({ firstName: 'Bo', lastName: 'Njoya', email: 'bo@sarkiai.dev', password: 'short1' }),
+    ).rejects.toThrow(/at least/)
+  })
+
+  test('honours the operator cap', async () => {
+    const auth = service({ signup: true, maxOperators: 1 })
+    await auth.signup({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL, password: CHOSEN })
+    await expect(
+      auth.signup({ firstName: 'Bo', lastName: 'Njoya', email: 'bo@sarkiai.dev', password: CHOSEN }),
+    ).rejects.toThrow(/limited/)
+  })
+})

@@ -484,6 +484,91 @@ export interface ModelsDto {
   models: MetaModelDto[]
 }
 
+/** Server-Sent Events emitted by `POST /v1/agents/ask/stream`. */
+export type AgentStreamEvent =
+  | { type: 'open'; agentId: string; runId?: string }
+  | { type: 'stage'; stage: string; attempt?: number; rejected?: number; grounded?: boolean; country?: string }
+  | { type: 'delta'; text: string }
+  | { type: 'done'; assessment: AssessmentDto }
+  | { type: 'error'; message: string }
+
+export interface AgentStreamHandlers {
+  onOpen?: (agentId: string) => void
+  onStage?: (stage: string, detail: { attempt?: number; rejected?: number; grounded?: boolean }) => void
+  onDelta?: (text: string) => void
+  signal?: AbortSignal
+}
+
+/**
+ * Streamed agent answer. The SSE stream carries progress stages, text deltas
+ * and the final assessment; if anything goes wrong before the first delta the
+ * caller can fall back to the buffered `api.ask`.
+ */
+async function streamAgentAnswer(
+  body: {
+    institutionId: string
+    question: string
+    country: string
+    domain: string
+    lens: string
+    attachments?: Array<{ mime: string; dataBase64: string }>
+  },
+  handlers: AgentStreamHandlers = {},
+): Promise<AssessmentDto> {
+  const token = readToken()
+  const response = await fetch(`${API_URL}/v1/agents/ask/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal: handlers.signal,
+  })
+  if (!response.ok) throw new ApiError(response.status, await response.text())
+  if (!response.body) throw new Error('This browser cannot read a streamed response.')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let assessment: AssessmentDto | null = null
+
+  const handle = (event: AgentStreamEvent) => {
+    if (event.type === 'open') handlers.onOpen?.(event.agentId)
+    else if (event.type === 'stage')
+      handlers.onStage?.(event.stage, {
+        attempt: event.attempt,
+        rejected: event.rejected,
+        grounded: event.grounded,
+      })
+    else if (event.type === 'delta') handlers.onDelta?.(event.text)
+    else if (event.type === 'done') assessment = event.assessment
+    else if (event.type === 'error') throw new Error(event.message)
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary >= 0) {
+      const frame = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      const data = frame
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n')
+      if (data) handle(JSON.parse(data) as AgentStreamEvent)
+      boundary = buffer.indexOf('\n\n')
+    }
+  }
+
+  if (!assessment) throw new Error('The stream ended before an answer was produced.')
+  return assessment
+}
+
 export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
@@ -503,6 +588,8 @@ export const api = {
     lens: string
     attachments?: Array<{ mime: string; dataBase64: string }>
   }) => request<AssessmentDto>('/v1/agents/ask', { method: 'POST', body: JSON.stringify(body) }),
+
+  askStream: streamAgentAnswer,
 
   readiness: (body: { country: string; domain: string; globalCountry?: string }) =>
     request<ReadinessReportDto>('/v1/readiness/report', { method: 'POST', body: JSON.stringify(body) }),
@@ -660,6 +747,8 @@ export type LoginResultDto =
 export interface SetupStatusDto {
   initialized: boolean
   storage: 'mongo' | 'memory'
+  /** Public self-service sign-up is open (cloud demo only). */
+  signup: boolean
 }
 
 export interface SetupResultDto {
@@ -696,6 +785,8 @@ export const authApi = {
   setupStatus: () => request<SetupStatusDto>('/v1/auth/setup'),
   setup: (body: { firstName: string; lastName: string; email: string }) =>
     request<SetupResultDto>('/v1/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
+  signup: (body: { firstName: string; lastName: string; email: string; password: string }) =>
+    request<LoginResultDto>('/v1/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
     request<LoginResultDto>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   changePassword: (challenge: string, password: string) =>

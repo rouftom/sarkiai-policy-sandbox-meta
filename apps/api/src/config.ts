@@ -95,6 +95,13 @@ export const config = {
   // one-time setup screen; no password is seeded from the environment.
   auth: {
     sessionSecret: env('SESSION_SECRET') || env('APPROVAL_SECRET'),
+    /**
+     * Public self-service sign-up. Open on the cloud demo only (the hackathon
+     * judges create their own account); closed for local / sovereign runs.
+     * `AUTH_SIGNUP` can force it either way.
+     */
+    signup: env('AUTH_SIGNUP', env('SANDBOX_MODE', 'local').toLowerCase() === 'cloud' ? 'true' : 'false') === 'true',
+    maxOperators: Number(env('AUTH_MAX_OPERATORS', '12')) || 12,
   },
 
   // Transactional e-mail (Resend): only used to mail an operator's first password.

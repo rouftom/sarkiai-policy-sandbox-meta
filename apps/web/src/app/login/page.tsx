@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -53,6 +54,7 @@ export default function LoginPage() {
   const [copied, setCopied] = React.useState<string | null>(null)
   const [code, setCode] = React.useState('')
   const [codeError, setCodeError] = React.useState<string | null>(null)
+  const [signupOpen, setSignupOpen] = React.useState(false)
   const enrollmentStarted = React.useRef(false)
   const setupChecked = React.useRef(false)
 
@@ -103,6 +105,7 @@ export default function LoginPage() {
     void authApi
       .setupStatus()
       .then((status) => {
+        setSignupOpen(status.signup)
         if (!status.initialized) router.replace('/setup')
       })
       .catch(() => {
@@ -264,6 +267,18 @@ export default function LoginPage() {
               {busy ? t('login.signingIn') : t('login.signIn')}
             </Button>
           </form>
+
+          {signupOpen && (
+            <div className="mt-6 border-t border-border pt-4 text-center text-[11px] text-muted-foreground">
+              {t('login.noAccount')}{' '}
+              <Link
+                href="/signup"
+                className="font-semibold text-brand-primary-dark underline-offset-4 hover:underline dark:text-brand-primary-light"
+              >
+                {t('login.createAccount')}
+              </Link>
+            </div>
+          )}
         </>
       )}
 

@@ -45,6 +45,13 @@ const passwordChange = z.object({
   password: z.string().min(12).max(200),
 })
 
+const signupInput = z.object({
+  firstName: z.string().trim().min(2).max(60),
+  lastName: z.string().trim().min(2).max(60),
+  email: z.string().email().max(200),
+  password: z.string().min(12).max(200),
+})
+
 function failure(reply: { status: (code: number) => { send: (body: unknown) => unknown } }, error: unknown) {
   if (error instanceof ZodError) {
     return reply.status(400).send({ error: 'invalid_request', message: 'Invalid request body.' })
@@ -56,13 +63,17 @@ function failure(reply: { status: (code: number) => { send: (body: unknown) => u
   }
   if (error instanceof AuthError) {
     const status =
-      error.code === 'rate_limited'
+      error.code === 'rate_limited' || error.code === 'operator_limit'
         ? 429
         : error.code === 'invalid_credentials'
           ? 401
-          : error.code === 'already_initialized'
-            ? 409
-            : 400
+          : error.code === 'signup_closed'
+            ? 403
+            : error.code === 'storage_unavailable'
+              ? 503
+              : error.code === 'already_initialized' || error.code === 'email_taken'
+                ? 409
+                : 400
     return reply.status(status).send({ error: error.code, message: error.message })
   }
   return reply.status(500).send({ error: 'auth_failed', message: (error as Error).message })
@@ -105,7 +116,41 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   app.get('/v1/auth/setup', async () => ({
     initialized: !(await auth.isEmpty()),
     storage: auth.storage,
+    // The console only shows the Signup entry point when the API opens it.
+    signup: auth.signupEnabled,
   }))
+
+  // ── Public sign-up (cloud demo only) ──────────────────────────────────────
+  // The judge creates an account with their own password, then enrols TOTP:
+  // no session is issued before the second factor exists.
+  const signupAttempts = new Map<string, { count: number; resetAt: number }>()
+  const SIGNUP_WINDOW_MS = 15 * 60 * 1000
+  const SIGNUP_MAX_ATTEMPTS = 6
+
+  function throttleSignup(ip: string): void {
+    const now = Date.now()
+    const entry = signupAttempts.get(ip)
+    if (!entry || entry.resetAt < now) {
+      signupAttempts.set(ip, { count: 1, resetAt: now + SIGNUP_WINDOW_MS })
+      return
+    }
+    entry.count += 1
+    if (entry.count > SIGNUP_MAX_ATTEMPTS) {
+      throw new AuthError('rate_limited', 'Too many sign-up attempts, try again later.')
+    }
+  }
+
+  app.post('/v1/auth/signup', async (request, reply) => {
+    try {
+      throttleSignup(request.ip)
+      const body = signupInput.parse(request.body)
+      const result = await auth.signup(body)
+      await record(result.operator.email, 'auth.signup')
+      return reply.status(201).send(result)
+    } catch (error) {
+      return failure(reply, error)
+    }
+  })
 
   app.post('/v1/auth/setup', async (request, reply) => {
     try {
@@ -155,20 +200,22 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   })
 
   app.post('/v1/auth/login', async (request, reply) => {
-    const body = credentials.parse(request.body)
+    let email = 'unknown'
     try {
+      const body = credentials.parse(request.body)
+      email = body.email
       const result = await auth.login(body.email, body.password)
       await record(result.operator.email, 'auth.password_accepted', result.status)
       return result
     } catch (error) {
-      await record(body.email, 'auth.failed')
+      await record(email, 'auth.failed')
       return failure(reply, error)
     }
   })
 
   app.post('/v1/auth/mfa/enroll', async (request, reply) => {
-    const { challenge } = z.object({ challenge: z.string().min(10).max(4096) }).parse(request.body)
     try {
+      const { challenge } = z.object({ challenge: z.string().min(10).max(4096) }).parse(request.body)
       return await auth.startEnrollment(challenge)
     } catch (error) {
       return failure(reply, error)
@@ -176,8 +223,8 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   })
 
   app.post('/v1/auth/mfa/confirm', async (request, reply) => {
-    const body = codeStep.parse(request.body)
     try {
+      const body = codeStep.parse(request.body)
       const session = await auth.confirmEnrollment(body.challenge, body.code)
       await record(session.operator.email, 'auth.mfa_enrolled')
       await record(session.operator.email, 'auth.login')
@@ -188,8 +235,8 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   })
 
   app.post('/v1/auth/mfa/verify', async (request, reply) => {
-    const body = codeStep.parse(request.body)
     try {
+      const body = codeStep.parse(request.body)
       const session = await auth.verify(body.challenge, body.code)
       await record(session.operator.email, 'auth.login')
       return session
@@ -201,7 +248,10 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   app.get('/v1/auth/me', async (request, reply) => {
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
-    return { operator }
+    // Hydrate from Mongo: `verifySession` is stateless and its in-memory copy is
+    // empty after a restart, which used to reset preferences to the defaults.
+    const hydrated = await auth.me(operator.email)
+    return { operator: hydrated ?? operator }
   })
 
   app.post('/v1/auth/logout', async (request) => {

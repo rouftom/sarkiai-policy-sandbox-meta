@@ -33,6 +33,8 @@ interface AuthContextValue {
   enrollment: EnrollmentDto | null
   backupCodes: string[] | null
   signIn: (email: string, password: string) => Promise<LoginResultDto>
+  /** Public sign-up (cloud demo): creates the account and starts TOTP enrolment. */
+  signUp: (input: { firstName: string; lastName: string; email: string; password: string }) => Promise<LoginResultDto>
   changePassword: (password: string) => Promise<LoginResultDto>
   startEnrollment: () => Promise<EnrollmentDto>
   confirmEnrollment: (code: string) => Promise<void>
@@ -102,6 +104,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setBackupCodes(null)
     return result
   }, [])
+
+  const signUp = React.useCallback(
+    async (input: { firstName: string; lastName: string; email: string; password: string }) => {
+      const result = await authApi.signup(input)
+      setPending(result)
+      setEnrollment(null)
+      setBackupCodes(null)
+      return result
+    },
+    [],
+  )
 
   const startEnrollment = React.useCallback(async () => {
     if (!pending) throw new Error('No sign-in in progress.')
@@ -184,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       enrollment,
       backupCodes,
       signIn,
+      signUp,
       changePassword,
       startEnrollment,
       confirmEnrollment,
@@ -201,6 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       enrollment,
       backupCodes,
       signIn,
+      signUp,
       changePassword,
       startEnrollment,
       confirmEnrollment,

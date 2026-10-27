@@ -107,6 +107,10 @@ export type AuthErrorCode =
   | 'already_enrolled'
   | 'already_initialized'
   | 'weak_password'
+  | 'email_taken'
+  | 'signup_closed'
+  | 'operator_limit'
+  | 'storage_unavailable'
 
 export class AuthError extends Error {
   constructor(
@@ -126,6 +130,13 @@ export interface AuthConfig {
   sessionSecret: string
   sessionTtlSeconds?: number
   challengeTtlSeconds?: number
+  /**
+   * Public self-service sign-up. Only the cloud demo opens it; the console hides
+   * the entry point when this is false. Defaults to false (closed).
+   */
+  signup?: boolean
+  /** Upper bound on operator accounts created through the public form. */
+  maxOperators?: number
 }
 
 interface SessionClaims {
@@ -338,8 +349,15 @@ export class AuthService {
   private readonly attempts = new Map<string, { count: number; resetAt: number }>()
   private readonly pendingEnrollments = new Map<string, PendingEnrollment>()
   private client: MongoClient | null = null
-  private mongoFailed = false
+  /**
+   * A transient Atlas failure must not downgrade the whole process to memory
+   * for its lifetime (the previous sticky flag silently lost a password change).
+   * The client is dropped and a new attempt is allowed after a short cooldown.
+   */
+  private mongoFailedAt = 0
   private creatingRoot = false
+
+  private static readonly MONGO_RETRY_MS = 10_000
 
   constructor(private readonly config: AuthConfig) {
     this.issuer = config.issuer ?? 'SarkiAI Policy Sandbox'
@@ -348,19 +366,38 @@ export class AuthService {
   }
 
   get storage(): 'mongo' | 'memory' {
-    return this.client && !this.mongoFailed ? 'mongo' : 'memory'
+    return this.client && !this.mongoDown ? 'mongo' : 'memory'
+  }
+
+  /** Sign-up is a cloud-demo feature; it stays closed unless explicitly enabled. */
+  get signupEnabled(): boolean {
+    return Boolean(this.config.signup)
+  }
+
+  private get mongoDown(): boolean {
+    return this.mongoFailedAt > 0 && Date.now() - this.mongoFailedAt < AuthService.MONGO_RETRY_MS
+  }
+
+  private markMongoFailure(): void {
+    this.mongoFailedAt = Date.now()
+    const client = this.client
+    this.client = null
+    void client?.close().catch(() => undefined)
   }
 
   private async operators(): Promise<Collection<Document> | null> {
-    if (this.mongoFailed || !this.config.mongodbUri) return null
+    if (!this.config.mongodbUri || this.mongoDown) return null
     try {
       if (!this.client) {
         this.client = new MongoClient(this.config.mongodbUri, { serverSelectionTimeoutMS: 2500 })
         await this.client.connect()
+        // Reachability check: `connect()` can succeed lazily against Atlas.
+        await this.client.db(this.config.dbName ?? 'policy_sandbox').command({ ping: 1 })
       }
+      this.mongoFailedAt = 0
       return this.client.db(this.config.dbName ?? 'policy_sandbox').collection('operators')
     } catch {
-      this.mongoFailed = true
+      this.markMongoFailure()
       return null
     }
   }
@@ -377,30 +414,58 @@ export class AuthService {
       const { _id: _ignored, ...rest } = doc as unknown as OperatorRecord & { _id: string }
       const record: OperatorRecord = {
         ...rest,
-        preferences: { ...DEFAULT_PREFERENCES, ...rest.preferences, notifications: { ...DEFAULT_PREFERENCES.notifications, ...rest.preferences?.notifications } },
+        preferences: normalizePreferences(rest.preferences),
+      }
+      // Repair: an account that is already enrolled cannot still be waiting for
+      // a forced password change (that flag is cleared before enrolment). Older
+      // documents could keep both after a Mongo write that never landed.
+      if (record.mustChangePassword && record.totpSecret) {
+        delete record.mustChangePassword
+        void this.save(record)
       }
       this.memory.set(key, record)
       return record
     } catch {
-      this.mongoFailed = true
+      this.markMongoFailure()
       return null
     }
   }
 
-  private async save(record: OperatorRecord): Promise<void> {
+  /**
+   * Write-through: memory first (the console keeps working during an outage),
+   * Mongo when reachable. `durable` tells the caller whether the write really
+   * landed, so password and enrolment changes can fail loudly instead of
+   * pretending and losing the new secret on the next restart.
+   */
+  private async save(record: OperatorRecord): Promise<{ durable: boolean }> {
     const key = normalizeEmail(record.email)
     this.memory.set(key, record)
     const collection = await this.operators()
-    if (!collection) return
+    if (!collection) return { durable: false }
     try {
-      const { email: _email, ...rest } = record
-      await collection.updateOne(
-        { _id: key as unknown as Document['_id'] },
-        { $set: rest, $setOnInsert: { email: record.email } },
-        { upsert: true },
-      )
+      const { email: _email, mustChangePassword, ...rest } = record
+      const update: Document = { $set: { ...rest }, $setOnInsert: { email: record.email } }
+      // `$set` alone never removes a field: unset the flag explicitly, otherwise
+      // the stored document keeps `mustChangePassword: true` for ever.
+      if (mustChangePassword) update.$set.mustChangePassword = true
+      else update.$unset = { mustChangePassword: '' }
+      await collection.updateOne({ _id: key as unknown as Document['_id'] }, update, { upsert: true })
+      return { durable: true }
     } catch {
-      this.mongoFailed = true
+      this.markMongoFailure()
+      return { durable: false }
+    }
+  }
+
+  /** Password/enrolment writes are only meaningful if they survive a restart. */
+  private async persistOrFail(record: OperatorRecord, before: OperatorRecord): Promise<void> {
+    const { durable } = await this.save(record)
+    if (!durable && this.config.mongodbUri) {
+      this.memory.set(normalizeEmail(before.email), before)
+      throw new AuthError(
+        'storage_unavailable',
+        'The operator store is unreachable, so this change could not be saved. Try again in a moment.',
+      )
     }
   }
 
@@ -413,7 +478,7 @@ export class AuthService {
       const doc = await collection.findOne({}, { projection: { _id: 1 } })
       return !doc
     } catch {
-      this.mongoFailed = true
+      this.markMongoFailure()
       return true
     }
   }
@@ -449,12 +514,82 @@ export class AuthService {
     }
 
     this.creatingRoot = true
+    let durable = true
     try {
-      await this.save(record)
+      ;({ durable } = await this.save(record))
     } finally {
       this.creatingRoot = false
     }
+    if (!durable && this.config.mongodbUri) {
+      // Never mail a password for an account that a restart would forget.
+      this.memory.delete(email)
+      throw new AuthError('storage_unavailable', 'The operator store is unreachable; setup was not saved.')
+    }
     return { operator: toPublic(record), password, storage: this.storage }
+  }
+
+  /** Number of operator accounts, used to cap the public sign-up. */
+  async operatorCount(): Promise<number> {
+    const collection = await this.operators()
+    if (!collection) return this.memory.size
+    try {
+      return await collection.countDocuments({})
+    } catch {
+      this.markMongoFailure()
+      return this.memory.size
+    }
+  }
+
+  /**
+   * Public self-service account (cloud demo only). The operator picks the
+   * password, then the very same first-sign-in path applies: TOTP enrolment is
+   * mandatory, so no session is issued before the second factor exists.
+   */
+  async signup(input: {
+    firstName: string
+    lastName: string
+    email: string
+    password: string
+  }): Promise<LoginResult> {
+    if (!this.config.signup) {
+      throw new AuthError('signup_closed', 'Self-service sign-up is closed on this deployment.')
+    }
+    assertPassword(input.password)
+    const email = normalizeEmail(input.email)
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new AuthError('not_found', 'Enter a valid e-mail address.')
+    if (await this.load(email)) throw new AuthError('email_taken', 'An account already exists for this address.')
+
+    const limit = this.config.maxOperators ?? 10
+    if ((await this.operatorCount()) >= limit) {
+      throw new AuthError('operator_limit', `This demo is limited to ${limit} operator accounts.`)
+    }
+
+    const firstName = input.firstName.trim()
+    const lastName = input.lastName.trim()
+    const record: OperatorRecord = {
+      email,
+      firstName,
+      lastName,
+      name: `${firstName} ${lastName}`.trim() || email.split('@')[0]!,
+      role: 'operator',
+      passwordHash: hashPassword(input.password),
+      preferences: { ...DEFAULT_PREFERENCES },
+      createdAt: new Date().toISOString(),
+    }
+
+    const { durable } = await this.save(record)
+    if (!durable && this.config.mongodbUri) {
+      this.memory.delete(email)
+      throw new AuthError('storage_unavailable', 'The operator store is unreachable; the account was not created.')
+    }
+
+    const challenge = this.issueChallenge(record, 'enroll')
+    return {
+      status: 'enrollment_required',
+      challenge: challenge.token,
+      expiresAt: challenge.expiresAt,
+      operator: toPublic(record),
+    }
   }
 
   /** Roll back a root creation whose invitation e-mail could not be delivered. */
@@ -466,7 +601,7 @@ export class AuthService {
     try {
       await collection.deleteOne({ _id: key as unknown as Document['_id'] })
     } catch {
-      this.mongoFailed = true
+      this.markMongoFailure()
     }
   }
 
@@ -480,9 +615,10 @@ export class AuthService {
     const record = await this.load(claims.sub)
     if (!record) throw new AuthError('not_found', 'Unknown operator.')
 
+    const before: OperatorRecord = { ...record }
     record.passwordHash = hashPassword(newPassword)
     delete record.mustChangePassword
-    await this.save(record)
+    await this.persistOrFail(record, before)
 
     const enrolled = Boolean(record.totpSecret)
     const next = this.issueChallenge(record, enrolled ? 'mfa' : 'enroll')
@@ -599,9 +735,13 @@ export class AuthService {
     if (!record) throw new AuthError('not_found', 'Unknown operator.')
 
     const codes = Array.from({ length: BACKUP_CODE_COUNT }, () => backupCode())
+    const before: OperatorRecord = { ...record }
     record.totpSecret = pending.secret
     record.totpEnrolledAt = new Date().toISOString()
     record.backupCodes = codes.map((code) => sha256(code))
+    // The secret must survive a restart, otherwise the operator is locked out
+    // with an authenticator that points at a secret the server no longer has.
+    await this.persistOrFail(record, before)
     this.pendingEnrollments.delete(claims.jti)
     const session = await this.issueSession(record)
     return { ...session, backupCodes: codes }
@@ -621,7 +761,10 @@ export class AuthService {
       const digest = sha256(normalized)
       const index = (record.backupCodes ?? []).indexOf(digest)
       if (index === -1) throw new AuthError('code_invalid', 'Invalid or already used recovery code.')
+      const before: OperatorRecord = { ...record }
       record.backupCodes = (record.backupCodes ?? []).filter((_, position) => position !== index)
+      // A recovery code is single-use across restarts, not just in memory.
+      await this.persistOrFail(record, before)
     }
 
     this.clearThrottle(`mfa:${claims.sub}`)
@@ -663,7 +806,7 @@ export class AuthService {
       const model = (doc as { preferences?: { model?: unknown } } | null)?.preferences?.model
       return typeof model === 'string' && model ? model : null
     } catch {
-      this.mongoFailed = true
+      this.markMongoFailure()
       return null
     }
   }

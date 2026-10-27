@@ -15,7 +15,12 @@ declare module 'fastify' {
 }
 
 export async function buildServer() {
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } })
+  const app = Fastify({
+    logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    // Render terminates TLS in front of the service: without this, every
+    // request shares the proxy's IP and the sign-up/sign-in throttles are global.
+    trustProxy: true,
+  })
 
   // Keep the raw bytes of JSON bodies: Meta signs the exact payload, so
   // re-serialising `request.body` would invalidate the HMAC.

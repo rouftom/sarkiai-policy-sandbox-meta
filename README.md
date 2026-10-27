@@ -160,7 +160,21 @@ WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
 Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators
 live in MongoDB when it is reachable; otherwise the service keeps them in memory
 so the console still authenticates, and `/setup` warns that the account will not
-survive a restart.
+survive a restart. Password, enrolment and recovery-code writes fail loudly
+(`storage_unavailable`) rather than pretending: a change that a restart would
+forget is never reported as saved.
+
+### Public sign-up (cloud demo only)
+
+The public demo at
+[sarkiai-policy-sandbox-meta.vercel.app](https://sarkiai-policy-sandbox-meta.vercel.app)
+opens self-service accounts so judges can walk the console with their own login:
+`/signup` shows what the sandbox does, the hackathon notice (prompts, answers and
+files **may be used by Meta to train or improve its models**), then asks for a
+name, e-mail and password. The account is created immediately and the operator
+is pushed into the mandatory TOTP enrolment — no session exists before the
+second factor. `AUTH_SIGNUP=true|false` overrides the default, which is *open in
+cloud mode, closed otherwise*; `AUTH_MAX_OPERATORS` (default 12) caps the demo.
 
 ### Switching provider
 

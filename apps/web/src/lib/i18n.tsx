@@ -119,6 +119,11 @@ const en = {
   'assistant.send': 'Send',
   'assistant.removeImage': 'Remove the image',
   'assistant.searching': 'Looking up the applicable provision…',
+  'assistant.stage.retrieving': 'Searching the corpus…',
+  'assistant.stage.generating': 'Drafting the answer…',
+  'assistant.stage.validating': 'Checking every quote against the corpus…',
+  'assistant.stage.retry': 'A quote was not found — the agent is answering again…',
+  'assistant.stage.persisting': 'Recording the audit trail…',
   'assistant.newChat': 'New conversation',
   'assistant.close': 'Close the assistant',
   'assistant.emptyTitle': 'Grounded answers, cited provisions',
@@ -299,6 +304,20 @@ const en = {
   'theme.square': 'Square',
   'theme.rounded': 'Rounded',
 
+  'auth.heroTitle': 'Policy decisions,',
+  'auth.heroAccent': 'under human control.',
+  'auth.heroBody':
+    'A multi-agent engine that runs error scenarios, scores AI readiness and drafts public communication — with a hash-chained audit trail behind every step.',
+  'auth.point1Title': 'Mandated agents, shared facts',
+  'auth.point1Body':
+    'Information is released in batches so each institution reasons from its own mandate.',
+  'auth.point2Title': 'Citation validator',
+  'auth.point2Body': 'Quotes are checked against the corpus before an answer reaches the operator.',
+  'auth.point3Title': 'WhatsApp approvals',
+  'auth.point3Body':
+    'Meta Cloud API pushes the alert; the decision stays inside this console.',
+  'auth.hackathon': 'Meta Global AI Developer Hackathon · Startup track',
+
   'login.kicker': 'SarkiAI · Meta hackathon',
   'login.title': 'Policy Sandbox',
   'login.subtitle': 'Sign in to the operator console.',
@@ -353,6 +372,37 @@ const en = {
   'login.downloadCodes': 'Download (.txt)',
   'login.recoveryWarning':
     'These codes are shown only once and will not be displayed again. Download or copy them before continuing.',
+  'login.noAccount': 'No account yet?',
+  'login.createAccount': 'Create an account',
+
+  'signup.kicker': 'Meta hackathon · demo access',
+  'signup.title': 'Create your demo account',
+  'signup.subtitle':
+    'The sandbox is open to hackathon judges and reviewers. Create an account, activate two-factor authentication, and the whole console is yours.',
+  'signup.pitchTitle': 'What you can try',
+  'signup.pitch1': 'Multi-agent crisis simulation on real policy texts',
+  'signup.pitch2': 'AI-readiness scoring, RAG playground and a hash-chained audit trail',
+  'signup.pitch3': 'WhatsApp approvals through the Meta Cloud API',
+  'signup.noticeTitle': 'Before you create the account',
+  'signup.notice':
+    'This prototype was built for the Meta Global AI Developer Hackathon. Prompts, answers, uploaded documents and files may be processed by Meta models and may be used by Meta to train or improve its models, as part of the hackathon. Do not submit personal, confidential or sensitive data.',
+  'signup.accept': 'I have read this notice and I agree',
+  'signup.acceptRequired': 'Accept the notice to continue.',
+  'signup.firstName': 'First name',
+  'signup.lastName': 'Last name',
+  'signup.email': 'Email address',
+  'signup.password': 'Password',
+  'signup.confirm': 'Confirm the password',
+  'signup.submit': 'Create my account',
+  'signup.submitting': 'Creating the account…',
+  'signup.back': 'Back to sign-in',
+  'signup.closedTitle': 'Sign-up is closed',
+  'signup.closedBody': 'This deployment does not open public accounts. Use the operator account provided for the demo.',
+  'signup.emailTaken': 'An account already exists for this address. Sign in instead.',
+  'signup.limit': 'This demo has reached its operator limit.',
+  'signup.unavailable': 'The operator store is unreachable. Try again in a moment.',
+  'signup.failed': 'Could not create the account. Try again.',
+  'signup.next': 'Next: scan the QR code with your authenticator app and confirm a 6-digit code.',
 
   'setup.kicker': 'First run',
   'setup.title': 'Create the root operator',
@@ -760,6 +810,11 @@ const fr: Record<keyof typeof en, string> = {
   'assistant.send': 'Envoyer',
   'assistant.removeImage': 'Retirer l’image',
   'assistant.searching': 'Recherche de la disposition applicable…',
+  'assistant.stage.retrieving': 'Recherche dans le corpus…',
+  'assistant.stage.generating': 'Rédaction de la réponse…',
+  'assistant.stage.validating': 'Vérification de chaque citation contre le corpus…',
+  'assistant.stage.retry': 'Une citation est introuvable — l’agent répond à nouveau…',
+  'assistant.stage.persisting': 'Enregistrement du journal d’audit…',
   'assistant.newChat': 'Nouvelle conversation',
   'assistant.close': 'Fermer l’assistant',
   'assistant.emptyTitle': 'Réponses ancrées, dispositions citées',
@@ -939,6 +994,21 @@ const fr: Record<keyof typeof en, string> = {
   'theme.square': 'Carrés',
   'theme.rounded': 'Arrondis',
 
+  'auth.heroTitle': 'Les décisions publiques,',
+  'auth.heroAccent': 'sous contrôle humain.',
+  'auth.heroBody':
+    'Un moteur multi-agents qui joue des scénarios de crise, évalue la maturité IA et rédige la communication publique — avec un journal d’audit chaîné par hachage à chaque étape.',
+  'auth.point1Title': 'Agents mandatés, faits partagés',
+  'auth.point1Body':
+    'L’information est libérée par blocs pour que chaque institution raisonne depuis son propre mandat.',
+  'auth.point2Title': 'Validateur de citations',
+  'auth.point2Body':
+    'Les citations sont confrontées au corpus avant qu’une réponse n’atteigne l’opérateur.',
+  'auth.point3Title': 'Approbations WhatsApp',
+  'auth.point3Body':
+    'La Meta Cloud API pousse l’alerte ; la décision reste dans cette console.',
+  'auth.hackathon': 'Meta Global AI Developer Hackathon · catégorie Startup',
+
   'login.kicker': 'SarkiAI · hackathon Meta',
   'login.title': 'Policy Sandbox',
   'login.subtitle': 'Connexion à la console des opérateurs.',
@@ -993,6 +1063,38 @@ const fr: Record<keyof typeof en, string> = {
   'login.downloadCodes': 'Télécharger (.txt)',
   'login.recoveryWarning':
     'Ces codes ne sont affichés qu’une seule fois et ne seront plus jamais visibles. Téléchargez-les ou copiez-les avant de continuer.',
+  'login.noAccount': 'Pas encore de compte ?',
+  'login.createAccount': 'Créer un compte',
+
+  'signup.kicker': 'Hackathon Meta · accès démo',
+  'signup.title': 'Créez votre compte de démonstration',
+  'signup.subtitle':
+    'Le bac à sable est ouvert aux jurés et aux relecteurs du hackathon. Créez un compte, activez la double authentification, et toute la console est à vous.',
+  'signup.pitchTitle': 'Ce que vous pouvez essayer',
+  'signup.pitch1': 'Simulation de crise multi-agents sur de vrais textes réglementaires',
+  'signup.pitch2': 'Score de maturité IA, playground RAG et journal d’audit chaîné par hachage',
+  'signup.pitch3': 'Approbations WhatsApp via la Meta Cloud API',
+  'signup.noticeTitle': 'Avant de créer le compte',
+  'signup.notice':
+    'Ce prototype a été réalisé pour le Meta Global AI Developer Hackathon. Les invites, réponses, documents et fichiers déposés peuvent être traités par les modèles Meta et utilisés par Meta pour entraîner ou améliorer ses modèles, dans le cadre du hackathon. N’y déposez aucune donnée personnelle, confidentielle ou sensible.',
+  'signup.accept': 'J’ai lu cet avis et j’accepte',
+  'signup.acceptRequired': 'Acceptez l’avis pour continuer.',
+  'signup.firstName': 'Prénom',
+  'signup.lastName': 'Nom',
+  'signup.email': 'Adresse e-mail',
+  'signup.password': 'Mot de passe',
+  'signup.confirm': 'Confirmer le mot de passe',
+  'signup.submit': 'Créer mon compte',
+  'signup.submitting': 'Création du compte…',
+  'signup.back': 'Retour à la connexion',
+  'signup.closedTitle': 'Inscription fermée',
+  'signup.closedBody':
+    'Ce déploiement n’ouvre pas de comptes publics. Utilisez le compte opérateur fourni pour la démo.',
+  'signup.emailTaken': 'Un compte existe déjà pour cette adresse. Connectez-vous plutôt.',
+  'signup.limit': 'Cette démo a atteint sa limite de comptes opérateurs.',
+  'signup.unavailable': 'Le stockage des opérateurs est injoignable. Réessayez dans un instant.',
+  'signup.failed': 'Impossible de créer le compte. Réessayez.',
+  'signup.next': 'Ensuite : scannez le QR code avec votre application d’authentification et confirmez un code à 6 chiffres.',
 
   'setup.kicker': 'Premier démarrage',
   'setup.title': 'Créer l’opérateur racine',
