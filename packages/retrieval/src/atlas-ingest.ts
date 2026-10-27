@@ -486,7 +486,7 @@ export class AtlasIngestor {
                     _id: null,
                     chunks: { $sum: 1 },
                     activeChunks: { $sum: { $cond: [{ $ne: ['$isActive', false] }, 1, 0] } },
-                    docs: { $addToSet: '$filename' },
+                    docs: { $addToSet: { $cond: [{ $ne: ['$isActive', false] }, '$filename', null] } },
                     characters: { $sum: { $strLenCP: { $ifNull: ['$text', ''] } } },
                     lastIngestedAt: { $max: '$ingestedAt' },
                   },
@@ -510,7 +510,7 @@ export class AtlasIngestor {
       const scalar = (facet?.totals as Array<Record<string, unknown>> | undefined)?.[0]
       totals.chunks = Number(scalar?.chunks ?? 0)
       totals.activeChunks = Number(scalar?.activeChunks ?? 0)
-      totals.documents = Array.isArray(scalar?.docs) ? scalar.docs.length : 0
+      totals.documents = Array.isArray(scalar?.docs) ? scalar.docs.filter(Boolean).length : 0
       totals.characters = Number(scalar?.characters ?? 0)
       totals.lastIngestedAt = iso(scalar?.lastIngestedAt)
       byCountry = ((facet?.byCountry as Array<{ _id?: string; chunks?: number }>) ?? []).map((row) => ({
