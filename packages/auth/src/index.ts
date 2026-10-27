@@ -1,10 +1,13 @@
 /**
  * Operator authentication for the console: password, then a second factor.
  *
- * The first sign-in of an operator is also the TOTP enrolment: the password
- * step returns `enrollment_required`, the console shows the otpauth URI (QR) and
- * the operator confirms a 6-digit code once. Later sign-ins require that code,
- * or a single-use backup code.
+ * There is no account in the source tree and no seeded password. While the
+ * operator store is empty, the console shows a one-time setup screen that asks
+ * for the root operator's name and e-mail; the API creates the account with a
+ * random password and mails it. The first sign-in forces a password change
+ * (`password_change_required`), then the TOTP enrolment (`enrollment_required`):
+ * the console shows the otpauth URI (QR) and the operator confirms a 6-digit
+ * code once. Later sign-ins require that code, or a single-use backup code.
  *
  * Sessions are stateless HMAC-signed tokens (7 days), so a restart does not sign
  * anyone out and no session table has to be reachable for the demo to work.
@@ -38,8 +41,12 @@ export const DEFAULT_PREFERENCES: Preferences = {
 export interface OperatorRecord {
   email: string
   name: string
+  firstName?: string
+  lastName?: string
   role: Role
   passwordHash: string
+  /** Set on a freshly invited account: the first sign-in must replace the password. */
+  mustChangePassword?: boolean
   totpSecret?: string
   totpEnrolledAt?: string
   backupCodes?: string[]
@@ -51,8 +58,11 @@ export interface OperatorRecord {
 export interface PublicOperator {
   email: string
   name: string
+  firstName?: string
+  lastName?: string
   role: Role
   mfaEnrolled: boolean
+  mustChangePassword: boolean
   lastLoginAt?: string
   createdAt: string
   preferences: Preferences
@@ -68,6 +78,7 @@ export interface SessionResult {
 export type LoginResult =
   | { status: 'mfa_required'; challenge: string; expiresAt: string; operator: PublicOperator }
   | { status: 'enrollment_required'; challenge: string; expiresAt: string; operator: PublicOperator }
+  | { status: 'password_change_required'; challenge: string; expiresAt: string; operator: PublicOperator }
 
 export type AuthErrorCode =
   | 'invalid_credentials'
@@ -77,6 +88,8 @@ export type AuthErrorCode =
   | 'not_found'
   | 'not_enrolled'
   | 'already_enrolled'
+  | 'already_initialized'
+  | 'weak_password'
 
 export class AuthError extends Error {
   constructor(
@@ -94,9 +107,6 @@ export interface AuthConfig {
   issuer?: string
   /** HMAC key for sessions and MFA challenges. */
   sessionSecret: string
-  operatorEmail?: string
-  operatorPassword?: string
-  operatorName?: string
   sessionTtlSeconds?: number
   challengeTtlSeconds?: number
 }
@@ -112,7 +122,7 @@ interface SessionClaims {
 interface ChallengeClaims {
   v: 1
   sub: string
-  purpose: 'mfa' | 'enroll'
+  purpose: 'mfa' | 'enroll' | 'password'
   jti: string
   exp: number
 }
@@ -228,6 +238,42 @@ function backupCode(): string {
   return `${pick(5)}-${pick(5)}`
 }
 
+/** Minimum length accepted when the operator replaces an invited password. */
+export const MIN_PASSWORD_LENGTH = 12
+
+const PASSWORD_ALPHABET = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+/**
+ * One-time password mailed to a freshly invited operator: 20 characters, at
+ * least one lower-case, one upper-case and one digit. It only lives long enough
+ * for the first sign-in, which then forces a replacement.
+ */
+export function generatePassword(groups = 5, size = 4): string {
+  const draw = () => PASSWORD_ALPHABET[randomInt(0, PASSWORD_ALPHABET.length)]!
+  const chars = [
+    'abcdefghijkmnpqrstuvwxyz'[randomInt(0, 24)]!,
+    'ABCDEFGHJKLMNPQRSTUVWXYZ'[randomInt(0, 24)]!,
+    '23456789'[randomInt(0, 8)]!,
+  ]
+  const total = groups * size
+  while (chars.length < total) chars.push(draw())
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = randomInt(0, i + 1)
+    ;[chars[i], chars[j]] = [chars[j]!, chars[i]!]
+  }
+  const raw = chars.join('')
+  return Array.from({ length: groups }, (_, index) => raw.slice(index * size, (index + 1) * size)).join('-')
+}
+
+export function assertPassword(password: string): void {
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+    throw new AuthError('weak_password', `Use at least ${MIN_PASSWORD_LENGTH} characters.`)
+  }
+  if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
+    throw new AuthError('weak_password', 'Mix letters and digits.')
+  }
+}
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
@@ -256,8 +302,11 @@ function toPublic(record: OperatorRecord): PublicOperator {
   return {
     email: record.email,
     name: record.name,
+    firstName: record.firstName,
+    lastName: record.lastName,
     role: record.role,
     mfaEnrolled: Boolean(record.totpSecret),
+    mustChangePassword: Boolean(record.mustChangePassword),
     lastLoginAt: record.lastLoginAt,
     createdAt: record.createdAt,
     preferences: record.preferences,
@@ -273,6 +322,7 @@ export class AuthService {
   private readonly pendingEnrollments = new Map<string, PendingEnrollment>()
   private client: MongoClient | null = null
   private mongoFailed = false
+  private creatingRoot = false
 
   constructor(private readonly config: AuthConfig) {
     this.issuer = config.issuer ?? 'SarkiAI Policy Sandbox'
@@ -337,24 +387,95 @@ export class AuthService {
     }
   }
 
-  /** Seed the operator from the environment once; never overwrite an enrolled secret. */
-  async bootstrap(): Promise<{ seeded: boolean; email?: string; storage: 'mongo' | 'memory' }> {
-    const email = this.config.operatorEmail ? normalizeEmail(this.config.operatorEmail) : ''
-    if (!email || !this.config.operatorPassword) return { seeded: false, storage: this.storage }
-    const existing = await this.load(email)
-    if (existing) return { seeded: false, email, storage: this.storage }
-    const now = new Date().toISOString()
-    await this.save({
-      email,
-      name: this.config.operatorName ?? email.split('@')[0]!,
-      role: 'admin',
-      passwordHash: hashPassword(this.config.operatorPassword),
-      preferences: { ...DEFAULT_PREFERENCES },
-      createdAt: now,
-    })
-    return { seeded: true, email, storage: this.storage }
+  /** True while the operator store is empty: the console then shows the one-time setup. */
+  async isEmpty(): Promise<boolean> {
+    if (this.memory.size > 0) return false
+    const collection = await this.operators()
+    if (!collection) return true
+    try {
+      const doc = await collection.findOne({}, { projection: { _id: 1 } })
+      return !doc
+    } catch {
+      this.mongoFailed = true
+      return true
+    }
   }
 
+  /**
+   * Create the root operator once. The random password is returned to the caller
+   * so it can be mailed; it never reaches an HTTP client and must be replaced on
+   * the first sign-in.
+   */
+  async createRoot(input: {
+    firstName: string
+    lastName: string
+    email: string
+  }): Promise<{ operator: PublicOperator; password: string; storage: 'mongo' | 'memory' }> {
+    const email = normalizeEmail(input.email)
+    if (this.creatingRoot) throw new AuthError('already_initialized', 'This deployment already has an operator.')
+    if (!(await this.isEmpty())) throw new AuthError('already_initialized', 'This deployment already has an operator.')
+
+    const firstName = input.firstName.trim()
+    const lastName = input.lastName.trim()
+    const password = generatePassword()
+    const now = new Date().toISOString()
+    const record: OperatorRecord = {
+      email,
+      firstName,
+      lastName,
+      name: `${firstName} ${lastName}`.trim() || email.split('@')[0]!,
+      role: 'admin',
+      passwordHash: hashPassword(password),
+      mustChangePassword: true,
+      preferences: { ...DEFAULT_PREFERENCES },
+      createdAt: now,
+    }
+
+    this.creatingRoot = true
+    try {
+      await this.save(record)
+    } finally {
+      this.creatingRoot = false
+    }
+    return { operator: toPublic(record), password, storage: this.storage }
+  }
+
+  /** Roll back a root creation whose invitation e-mail could not be delivered. */
+  async remove(email: string): Promise<void> {
+    const key = normalizeEmail(email)
+    this.memory.delete(key)
+    const collection = await this.operators()
+    if (!collection) return
+    try {
+      await collection.deleteOne({ _id: key as unknown as Document['_id'] })
+    } catch {
+      this.mongoFailed = true
+    }
+  }
+
+  /**
+   * Replace an invited password. The returned challenge continues the same
+   * sign-in, so the operator cannot reach the console without enrolling 2FA.
+   */
+  async changePassword(challenge: string, newPassword: string): Promise<LoginResult> {
+    const claims = this.readChallenge(challenge, 'password')
+    assertPassword(newPassword)
+    const record = await this.load(claims.sub)
+    if (!record) throw new AuthError('not_found', 'Unknown operator.')
+
+    record.passwordHash = hashPassword(newPassword)
+    delete record.mustChangePassword
+    await this.save(record)
+
+    const enrolled = Boolean(record.totpSecret)
+    const next = this.issueChallenge(record, enrolled ? 'mfa' : 'enroll')
+    return {
+      status: enrolled ? 'mfa_required' : 'enrollment_required',
+      challenge: next.token,
+      expiresAt: next.expiresAt,
+      operator: toPublic(record),
+    }
+  }
   private throttle(key: string): void {
     const now = Date.now()
     const entry = this.attempts.get(key)
@@ -370,7 +491,7 @@ export class AuthService {
     this.attempts.delete(key)
   }
 
-  private issueChallenge(record: OperatorRecord, purpose: 'mfa' | 'enroll'): { token: string; expiresAt: string } {
+  private issueChallenge(record: OperatorRecord, purpose: 'mfa' | 'enroll' | 'password'): { token: string; expiresAt: string } {
     const exp = Math.floor(Date.now() / 1000) + this.challengeTtl
     const claims: ChallengeClaims = {
       v: 1,
@@ -382,7 +503,7 @@ export class AuthService {
     return { token: signToken(claims, this.config.sessionSecret), expiresAt: new Date(exp * 1000).toISOString() }
   }
 
-  private readChallenge(token: string, purpose: 'mfa' | 'enroll'): ChallengeClaims {
+  private readChallenge(token: string, purpose: 'mfa' | 'enroll' | 'password'): ChallengeClaims {
     const claims = readToken<ChallengeClaims>(token, this.config.sessionSecret)
     if (!claims || claims.v !== 1 || claims.purpose !== purpose) {
       throw new AuthError('challenge_invalid', 'This sign-in attempt expired. Start again.')
@@ -399,6 +520,19 @@ export class AuthService {
       throw new AuthError('invalid_credentials', 'Invalid credentials.')
     }
     this.clearThrottle(`login:${key}`)
+
+    // A freshly invited account must replace its mailed password before the
+    // second factor, so the one-time password never becomes a lasting secret.
+    if (record.mustChangePassword) {
+      const passwordStep = this.issueChallenge(record, 'password')
+      return {
+        status: 'password_change_required',
+        challenge: passwordStep.token,
+        expiresAt: passwordStep.expiresAt,
+        operator: toPublic(record),
+      }
+    }
+
     const enrolled = Boolean(record.totpSecret)
     const challenge = this.issueChallenge(record, enrolled ? 'mfa' : 'enroll')
     return {
@@ -482,7 +616,7 @@ export class AuthService {
     const claims = readToken<SessionClaims>(token, this.config.sessionSecret)
     if (!claims || claims.v !== 1 || claims.exp * 1000 < Date.now()) return null
     const record = this.memory.get(normalizeEmail(claims.sub))
-    if (!record) return { email: claims.sub, name: claims.name, role: claims.role, mfaEnrolled: true, createdAt: '', preferences: { ...DEFAULT_PREFERENCES } }
+    if (!record) return { email: claims.sub, name: claims.name, role: claims.role, mfaEnrolled: true, mustChangePassword: false, createdAt: '', preferences: { ...DEFAULT_PREFERENCES } }
     return toPublic(record)
   }
 

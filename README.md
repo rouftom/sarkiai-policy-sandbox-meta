@@ -129,6 +129,36 @@ Then:
 - MinIO console (attachments) → http://localhost:9001
 - MongoDB (audit + CoT) → `mongodb://localhost:27017`
 
+### Operator accounts (first run)
+
+There is no seeded operator and no password in the source tree or in an
+environment variable. The console knows one state: *is the operator store
+empty?*
+
+1. On the first visit, `/login` forwards to `/setup`. The screen asks for the
+   root operator's first name, last name and e-mail.
+2. The API creates the account with a **random one-time password** and mails it
+   through [Resend](https://resend.com) (`POST /v1/auth/setup`). If the message
+   cannot be delivered, the account is rolled back and the screen can be retried.
+3. The first sign-in returns `password_change_required`: the console asks for a
+   new password (12 characters minimum, letters and digits).
+4. The same sign-in then continues into TOTP enrolment — QR code, 6-digit
+   confirmation, ten single-use recovery codes shown once.
+
+Setup requires three variables, shared with the enterprise stack:
+
+```bash
+AUTH_RESEND_KEY=re_...                       # Resend API key
+AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
+AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
+WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
+```
+
+Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators
+live in MongoDB when it is reachable; otherwise the service keeps them in memory
+so the console still authenticates, and `/setup` warns that the account will not
+survive a restart.
+
 ### Switching provider
 
 ```bash

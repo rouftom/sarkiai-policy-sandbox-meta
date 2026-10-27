@@ -13,7 +13,4 @@ export const auth = new AuthService({
   mongodbUri: config.mongodb.uri,
   dbName: config.mongodb.dbName,
   sessionSecret: secret || 'sps-dev-insecure-session-secret',
-  operatorEmail: config.auth.email,
-  operatorPassword: config.auth.password,
-  operatorName: config.auth.name,
 })

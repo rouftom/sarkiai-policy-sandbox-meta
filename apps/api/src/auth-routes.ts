@@ -8,10 +8,11 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { z } from 'zod'
+import { z, ZodError } from 'zod'
 import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
+import { MailError, sendInvitation } from './mailer.js'
 
 function bearer(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization
@@ -33,9 +34,35 @@ const codeStep = z.object({
   code: z.string().min(4).max(32),
 })
 
+const setupInput = z.object({
+  firstName: z.string().trim().min(2).max(60),
+  lastName: z.string().trim().min(2).max(60),
+  email: z.string().email().max(200),
+})
+
+const passwordChange = z.object({
+  challenge: z.string().min(10).max(4096),
+  password: z.string().min(12).max(200),
+})
+
 function failure(reply: { status: (code: number) => { send: (body: unknown) => unknown } }, error: unknown) {
+  if (error instanceof ZodError) {
+    return reply.status(400).send({ error: 'invalid_request', message: 'Invalid request body.' })
+  }
+  if (error instanceof MailError) {
+    return reply
+      .status(error.code === 'mail_not_configured' ? 503 : 502)
+      .send({ error: error.code, message: error.message })
+  }
   if (error instanceof AuthError) {
-    const status = error.code === 'rate_limited' ? 429 : error.code === 'invalid_credentials' ? 401 : 400
+    const status =
+      error.code === 'rate_limited'
+        ? 429
+        : error.code === 'invalid_credentials'
+          ? 401
+          : error.code === 'already_initialized'
+            ? 409
+            : 400
     return reply.status(status).send({ error: error.code, message: error.message })
   }
   return reply.status(500).send({ error: 'auth_failed', message: (error as Error).message })
@@ -54,6 +81,78 @@ function recorder(audit: AuditService) {
 
 export async function registerAuthRoutes(app: FastifyInstance, audit: AuditService): Promise<void> {
   const record = recorder(audit)
+
+  // ── One-time root setup ───────────────────────────────────────────────────
+  // No operator exists until someone completes this screen; the account is
+  // created with a random password and mailed through Resend.
+  const setupAttempts = new Map<string, { count: number; resetAt: number }>()
+  const SETUP_WINDOW_MS = 15 * 60 * 1000
+  const SETUP_MAX_ATTEMPTS = 5
+
+  function throttleSetup(ip: string): void {
+    const now = Date.now()
+    const entry = setupAttempts.get(ip)
+    if (!entry || entry.resetAt < now) {
+      setupAttempts.set(ip, { count: 1, resetAt: now + SETUP_WINDOW_MS })
+      return
+    }
+    entry.count += 1
+    if (entry.count > SETUP_MAX_ATTEMPTS) {
+      throw new AuthError('rate_limited', 'Too many setup attempts, try again later.')
+    }
+  }
+
+  app.get('/v1/auth/setup', async () => ({
+    initialized: !(await auth.isEmpty()),
+    storage: auth.storage,
+  }))
+
+  app.post('/v1/auth/setup', async (request, reply) => {
+    try {
+      throttleSetup(request.ip)
+      const body = setupInput.parse(request.body)
+      if (!(await auth.isEmpty())) {
+        return reply.status(409).send({
+          error: 'already_initialized',
+          message: 'This deployment already has an operator.',
+        })
+      }
+
+      const created = await auth.createRoot(body)
+      try {
+        await sendInvitation({
+          to: created.operator.email,
+          firstName: body.firstName,
+          lastName: body.lastName,
+          password: created.password,
+        })
+      } catch (error) {
+        // No e-mail, no account: the screen stays usable and setup can be retried.
+        await auth.remove(created.operator.email)
+        throw error
+      }
+
+      await record(created.operator.email, 'auth.root_created')
+      return reply.status(201).send({
+        ok: true,
+        email: created.operator.email,
+        storage: created.storage,
+      })
+    } catch (error) {
+      return failure(reply, error)
+    }
+  })
+
+  app.post('/v1/auth/password', async (request, reply) => {
+    try {
+      const body = passwordChange.parse(request.body)
+      const result = await auth.changePassword(body.challenge, body.password)
+      await record(result.operator.email, 'auth.password_changed')
+      return result
+    } catch (error) {
+      return failure(reply, error)
+    }
+  })
 
   app.post('/v1/auth/login', async (request, reply) => {
     const body = credentials.parse(request.body)

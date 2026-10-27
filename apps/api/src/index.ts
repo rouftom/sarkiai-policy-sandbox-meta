@@ -43,11 +43,14 @@ async function main(): Promise<void> {
 
   // Cloud vector store only: create kb_chunks then its Atlas indexes. A failure
   // is logged, not fatal (the console still boots and the provider is visible).
-  const operator = await auth.bootstrap()
-  if (operator.seeded) {
-    app.log.info({ email: operator.email, storage: operator.storage }, 'operator seeded from environment')
-  } else {
-    app.log.info({ email: operator.email, storage: operator.storage }, 'operator store ready')
+  // Accounts are created from the console: no seeded operator, no seeded password.
+  const empty = await auth.isEmpty()
+  app.log.info(
+    { initialized: !empty, storage: auth.storage, mail: Boolean(config.mail.apiKey) },
+    empty ? 'operator store empty — the console will show the root setup screen' : 'operator store ready',
+  )
+  if (empty && !config.mail.apiKey) {
+    app.log.warn('AUTH_RESEND_KEY is not set: the root setup screen cannot mail an invitation.')
   }
 
   const stores = await prepareCloudStores()

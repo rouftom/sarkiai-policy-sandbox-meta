@@ -91,11 +91,17 @@ export const config = {
     webPublicUrl: env('WEB_PUBLIC_URL', 'http://localhost:3000'),
   },
 
-  // Operator auth: session signing + the bootstrap operator.
+  // Operator auth: session signing only. Accounts are created from the console's
+  // one-time setup screen; no password is seeded from the environment.
   auth: {
     sessionSecret: env('SESSION_SECRET') || env('APPROVAL_SECRET'),
-    email: env('SPS_OPERATOR_EMAIL', 'rouftomb@gmail.com'),
-    password: env('SPS_OPERATOR_PASSWORD'),
-    name: env('SPS_OPERATOR_NAME', 'Policy operator'),
+  },
+
+  // Transactional e-mail (Resend): only used to mail an operator's first password.
+  mail: {
+    apiKey: env('AUTH_RESEND_KEY'),
+    from: env('AUTH_RESEND_EMAIL_FROM', 'SarkiAI Policy Sandbox <onboarding@resend.dev>'),
+    replyTo: env('AUTH_RESEND_EMAIL_REPLY_TO'),
+    publicUrl: env('WEB_PUBLIC_URL', 'https://sarkiai-policy-sandbox-meta.vercel.app'),
   },
 } as const

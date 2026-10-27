@@ -617,8 +617,11 @@ export interface PreferencesDto {
 export interface OperatorDto {
   email: string
   name: string
+  firstName?: string
+  lastName?: string
   role: OperatorRole
   mfaEnrolled: boolean
+  mustChangePassword: boolean
   lastLoginAt?: string
   createdAt: string
   preferences: PreferencesDto
@@ -634,6 +637,18 @@ export interface SessionDto {
 export type LoginResultDto =
   | { status: 'mfa_required'; challenge: string; expiresAt: string; operator: OperatorDto }
   | { status: 'enrollment_required'; challenge: string; expiresAt: string; operator: OperatorDto }
+  | { status: 'password_change_required'; challenge: string; expiresAt: string; operator: OperatorDto }
+
+export interface SetupStatusDto {
+  initialized: boolean
+  storage: 'mongo' | 'memory'
+}
+
+export interface SetupResultDto {
+  ok: boolean
+  email: string
+  storage: 'mongo' | 'memory'
+}
 
 export interface EnrollmentDto {
   secret: string
@@ -660,8 +675,16 @@ export interface AuditFeedDto {
 }
 
 export const authApi = {
+  setupStatus: () => request<SetupStatusDto>('/v1/auth/setup'),
+  setup: (body: { firstName: string; lastName: string; email: string }) =>
+    request<SetupResultDto>('/v1/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
   login: (body: { email: string; password: string }) =>
     request<LoginResultDto>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  changePassword: (challenge: string, password: string) =>
+    request<LoginResultDto>('/v1/auth/password', {
+      method: 'POST',
+      body: JSON.stringify({ challenge, password }),
+    }),
   enroll: (challenge: string) =>
     request<EnrollmentDto>('/v1/auth/mfa/enroll', {
       method: 'POST',

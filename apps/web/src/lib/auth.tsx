@@ -29,10 +29,11 @@ interface AuthContextValue {
   operator: OperatorDto | null
   loading: boolean
   /** Steps of the sign-in flow, kept here so the login page survives a rerender. */
-  pending: Extract<LoginResultDto, { status: 'enrollment_required' }> | Extract<LoginResultDto, { status: 'mfa_required' }> | null
+  pending: LoginResultDto | null
   enrollment: EnrollmentDto | null
   backupCodes: string[] | null
   signIn: (email: string, password: string) => Promise<LoginResultDto>
+  changePassword: (password: string) => Promise<LoginResultDto>
   startEnrollment: () => Promise<EnrollmentDto>
   confirmEnrollment: (code: string) => Promise<void>
   verifyCode: (code: string) => Promise<void>
@@ -109,6 +110,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return next
   }, [pending])
 
+  /** First sign-in of an invited account: replace the mailed password, then 2FA. */
+  const changePassword = React.useCallback(
+    async (password: string) => {
+      if (!pending) throw new Error('No sign-in in progress.')
+      const result = await authApi.changePassword(pending.challenge, password)
+      setPending(result)
+      return result
+    },
+    [pending],
+  )
+
   const acceptSession = React.useCallback((session: SessionDto) => {
     sessionFrom(session)
     setOperator(session.operator)
@@ -172,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       enrollment,
       backupCodes,
       signIn,
+      changePassword,
       startEnrollment,
       confirmEnrollment,
       verifyCode,
@@ -188,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       enrollment,
       backupCodes,
       signIn,
+      changePassword,
       startEnrollment,
       confirmEnrollment,
       verifyCode,
