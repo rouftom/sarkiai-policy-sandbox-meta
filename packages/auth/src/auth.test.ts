@@ -5,6 +5,7 @@ import {
   DEFAULT_PREFERENCES,
   generatePassword,
   MIN_PASSWORD_LENGTH,
+  normalizePreferences,
   totpCode,
   verifyTotp,
 } from './index'
@@ -174,5 +175,21 @@ describe('operator sign-in', () => {
     expect(after.locale).toBe('fr')
     expect(after.notifications.email).toBe(true)
     expect(after.theme).toBe(before.theme)
+  })
+
+  test('corner style defaults to square and coerces legacy documents', () => {
+    expect(DEFAULT_PREFERENCES.radius).toBe('square')
+    expect(normalizePreferences(undefined).radius).toBe('square')
+    expect(normalizePreferences({ radius: 'rounded' }).radius).toBe('rounded')
+    const legacy = normalizePreferences({ theme: 'light', radius: undefined } as never)
+    expect(legacy.radius).toBe('square')
+    expect(legacy.theme).toBe('light')
+    expect(legacy.notifications.digest).toBe(true)
+  })
+
+  test('a new root account starts with square corners', async () => {
+    const auth = service()
+    const created = await auth.createRoot({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL })
+    expect(created.operator.preferences.radius).toBe('square')
   })
 })

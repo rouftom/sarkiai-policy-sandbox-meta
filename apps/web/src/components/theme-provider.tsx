@@ -85,9 +85,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   )
 
   const setRadius = React.useCallback((next: CornerStyle) => {
-    setRadiusState(next)
-    localStorage.setItem(RADIUS_STORAGE_KEY, next)
-    document.documentElement.dataset.radius = next
+    const value: CornerStyle = next === 'rounded' ? 'rounded' : DEFAULT_CORNER_STYLE
+    setRadiusState(value)
+    localStorage.setItem(RADIUS_STORAGE_KEY, value)
+    document.documentElement.dataset.radius = value
   }, [])
 
   const value = React.useMemo<ThemeContextValue>(

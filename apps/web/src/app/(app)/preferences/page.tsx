@@ -26,7 +26,12 @@ export default function PreferencesPage() {
   const [status, setStatus] = React.useState<'idle' | 'saved' | 'error'>('idle')
 
   React.useEffect(() => {
-    if (operator?.preferences) setDraft(operator.preferences)
+    if (operator?.preferences) {
+      setDraft({
+        ...operator.preferences,
+        radius: operator.preferences.radius === 'rounded' ? 'rounded' : 'square',
+      })
+    }
   }, [operator?.preferences])
 
   if (!draft) return null

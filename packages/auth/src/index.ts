@@ -39,6 +39,20 @@ export const DEFAULT_PREFERENCES: Preferences = {
   notifications: { whatsapp: true, email: false, digest: true },
 }
 
+/**
+ * Coerce a stored/partial preferences object into the current shape. Older
+ * operator documents pre-date `radius`, so they fall back to square rather than
+ * leaving the attribute unset.
+ */
+export function normalizePreferences(preferences?: Partial<Preferences> | null): Preferences {
+  return {
+    ...DEFAULT_PREFERENCES,
+    ...preferences,
+    radius: preferences?.radius === 'rounded' ? 'rounded' : 'square',
+    notifications: { ...DEFAULT_PREFERENCES.notifications, ...(preferences?.notifications ?? {}) },
+  }
+}
+
 export interface OperatorRecord {
   email: string
   name: string
@@ -310,7 +324,7 @@ function toPublic(record: OperatorRecord): PublicOperator {
     mustChangePassword: Boolean(record.mustChangePassword),
     lastLoginAt: record.lastLoginAt,
     createdAt: record.createdAt,
-    preferences: record.preferences,
+    preferences: normalizePreferences(record.preferences),
   }
 }
 
@@ -638,11 +652,11 @@ export class AuthService {
   ): Promise<Preferences> {
     const record = await this.load(email)
     if (!record) throw new AuthError('not_found', 'Unknown operator.')
-    const next: Preferences = {
+    const next: Preferences = normalizePreferences({
       ...record.preferences,
       ...patch,
       notifications: { ...record.preferences.notifications, ...(patch.notifications ?? {}) },
-    }
+    })
     record.preferences = next
     await this.save(record)
     return next
