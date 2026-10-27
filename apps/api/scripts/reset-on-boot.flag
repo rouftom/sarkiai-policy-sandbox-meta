@@ -1,3 +1,0 @@
-Armed: the next API boot wipes operators, password resets, audit logs, CoT
-traces, joint reports and WhatsApp approvals. `kb_chunks` (corpus and vectors)
-stays. Delete this file and deploy again to disarm the hook.
