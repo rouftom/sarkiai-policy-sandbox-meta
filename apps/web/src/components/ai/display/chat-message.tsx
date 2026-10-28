@@ -8,16 +8,16 @@
  */
 
 import * as React from 'react'
-import { motion } from 'framer-motion'
 import type { AgentUiRequest } from '@/lib/agent-ui'
-import { Check, Copy, RotateCw } from 'lucide-react'
-import { StarBorder, cn } from '@sps/ui'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, GalleryHorizontal, List, RotateCw, ShieldCheck } from 'lucide-react'
+import { Button, StarBorder, cn } from '@sps/ui'
 import { AnimatedTextCompletion } from '@/components/ui/animated-text-completion'
 import { MessageReasoning } from '@/components/ai/display/message-reasoning'
 import { AgentActivityTrail, type TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 import { useI18n } from '@/lib/i18n'
 import type { AssessmentDto } from '@/lib/api'
 import { CitationDialog, type CitationView } from '@/components/ai/display/citation-dialog'
+import { StreamIndicator } from '@/components/ai/display/stream-indicator'
 
 export interface ChatTurn {
   id: string
@@ -28,6 +28,8 @@ export interface ChatTurn {
   webSources?: AssessmentDto['webSources']
   validation?: AssessmentDto['validation']
   agentName?: string
+  /** Auto mode: every institution the question was routed to (the first one answers). */
+  routedTo?: string[]
   steps?: TrailStepView[]
   /** Epoch ms when the turn started, for the elapsed counter. */
   startedAt?: number
@@ -102,7 +104,7 @@ export function ChatMessage({
         <div className="w-full">
           <AgentActivityTrail
             steps={turn.steps}
-            agents={turn.agentName ? [turn.agentName] : []}
+            agents={turn.routedTo?.length ? turn.routedTo : turn.agentName ? [turn.agentName] : []}
             isStreaming={!!turn.active}
             startedAt={turn.startedAt}
             endedAt={turn.endedAt}
@@ -116,55 +118,38 @@ export function ChatMessage({
           {hasText && <AnimatedTextCompletion isLast={isLast} text={turn.content} isStreaming={!!turn.active} />}
 
           {turn.active && (
-            <div className="mt-3 flex items-center gap-3">
-              <motion.div
-                animate={{ scale: [1, 1.15, 1.15, 1, 1], backgroundColor: ['#4f46e5', '#ffffff', '#4f46e5', '#ffffff', '#4f46e5'] }}
-                transition={{ duration: 2, ease: 'easeInOut', repeat: Infinity }}
-                className="h-3.5 w-3.5 rounded-full"
-              />
+            <div className="mt-3">
+              <StreamIndicator />
             </div>
           )}
 
           {turn.validation && !turn.active && (
-            <p
+            <div
+              role="status"
               className={cn(
-                'mt-1.5 text-[10px]',
-                turn.validation.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                'mt-2 flex items-start gap-2 rounded-xl border px-3 py-2 text-[11px] font-medium leading-snug shadow-sm',
+                turn.validation.ok
+                  ? 'border-emerald-600/40 bg-emerald-50 text-emerald-950 dark:border-emerald-400/40 dark:bg-emerald-950/70 dark:text-emerald-50'
+                  : 'border-amber-600/50 bg-amber-50 text-amber-950 dark:border-amber-400/50 dark:bg-amber-950/70 dark:text-amber-50',
               )}
             >
-              {turn.validation.ok
-                ? turn.validation.attempts > 1
-                  ? t('citation.verifiedAfterRetry', { attempts: turn.validation.attempts })
-                  : t('citation.verified')
-                : t('citation.rejected', { count: turn.validation.rejected.length })}
-            </p>
+              {turn.validation.ok ? (
+                <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ) : (
+                <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              )}
+              <span className="min-w-0">
+                {turn.validation.ok
+                  ? turn.validation.attempts > 1
+                    ? t('citation.verifiedAfterRetry', { attempts: turn.validation.attempts })
+                    : t('citation.verified')
+                  : t('citation.rejected', { count: turn.validation.rejected.length })}
+              </span>
+            </div>
           )}
 
           {turn.citations && turn.citations.length > 0 && !turn.active && (
-            <ul className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[10px]">
-              {turn.citations.slice(0, 6).map((citation, index) => {
-                const label = [citation.filename, citation.articleNumber ? `Article ${citation.articleNumber}` : '', citation.headingPath ?? '']
-                  .filter(Boolean)
-                  .join(' · ')
-                return (
-                  <li key={index}>
-                    <button
-                      type="button"
-                      onClick={() => setOpenCitation(citation)}
-                      className="group block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-brand-primary/5"
-                    >
-                      <span className="flex items-center gap-1.5 font-semibold text-brand-primary-dark group-hover:underline dark:text-brand-primary-light">
-                        <span className="truncate">{label}</span>
-                        {citation.images && citation.images.length > 0 && (
-                          <span className="shrink-0 rounded bg-brand-primary/10 px-1 font-normal">{citation.images.length}</span>
-                        )}
-                      </span>
-                      {citation.quote && <span className="mt-0.5 line-clamp-2 block italic text-muted-foreground">“{citation.quote}”</span>}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <CitationStrip citations={turn.citations.slice(0, 6)} onOpen={(citation) => setOpenCitation(citation)} />
           )}
           <CitationDialog citation={openCitation} onClose={() => setOpenCitation(null)} />
 
@@ -207,6 +192,99 @@ export function ChatMessage({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+type CitationItem = NonNullable<ChatTurn['citations']>[number]
+
+const VIEW_KEY = 'sps.citations.view'
+
+/**
+ * The sources of an answer, as a list or a horizontal carousel. The toggle is
+ * remembered on this device. Each source opens the passage in the citation modal.
+ */
+function CitationStrip({ citations, onOpen }: { citations: CitationItem[]; onOpen: (citation: CitationItem) => void }) {
+  const { t } = useI18n()
+  const [view, setView] = React.useState<'list' | 'swipe'>('list')
+  const track = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    const saved = window.localStorage.getItem(VIEW_KEY)
+    if (saved === 'list' || saved === 'swipe') setView(saved)
+  }, [])
+
+  const toggle = () => {
+    const next = view === 'list' ? 'swipe' : 'list'
+    setView(next)
+    window.localStorage.setItem(VIEW_KEY, next)
+  }
+
+  const scroll = (direction: -1 | 1) => track.current?.scrollBy({ left: direction * (track.current.clientWidth * 0.85), behavior: 'smooth' })
+
+  const label = (citation: CitationItem) =>
+    [citation.filename, citation.articleNumber ? `Article ${citation.articleNumber}` : '', citation.headingPath ?? ''].filter(Boolean).join(' · ')
+
+  const card = (citation: CitationItem, index: number) => (
+    <button
+      key={index}
+      type="button"
+      onClick={() => onOpen(citation)}
+      className="group block h-full w-full rounded-xl border border-border/70 bg-card px-3 py-2 text-left shadow-sm transition-colors hover:border-brand-primary/50 hover:bg-brand-primary/5"
+    >
+      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-primary-dark group-hover:underline dark:text-brand-primary-light">
+        <span className="truncate">{label(citation)}</span>
+        {citation.images && citation.images.length > 0 && (
+          <span className="shrink-0 rounded bg-brand-primary/10 px-1 font-normal">{citation.images.length}</span>
+        )}
+      </span>
+      {citation.quote && <span className="mt-0.5 line-clamp-2 block text-[10px] italic text-muted-foreground">“{citation.quote}”</span>}
+    </button>
+  )
+
+  return (
+    <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold text-muted-foreground">{t('assistant.citations.count', { count: citations.length })}</p>
+        <div className="flex items-center gap-1">
+          {view === 'swipe' && (
+            <>
+              <Button variant="ghost" size="icon-sm" className="h-6 w-6 rounded-md" aria-label={t('assistant.citations.previous')} onClick={() => scroll(-1)}>
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon-sm" className="h-6 w-6 rounded-md" aria-label={t('assistant.citations.next')} onClick={() => scroll(1)}>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="h-6 w-6 rounded-md"
+            aria-label={view === 'list' ? t('assistant.citations.swipe') : t('assistant.citations.list')}
+            title={view === 'list' ? t('assistant.citations.swipe') : t('assistant.citations.list')}
+            onClick={toggle}
+          >
+            {view === 'list' ? <GalleryHorizontal className="h-3.5 w-3.5" /> : <List className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+      </div>
+
+      {view === 'list' ? (
+        <ul className="space-y-1.5">
+          {citations.map((citation, index) => (
+            <li key={index}>{card(citation, index)}</li>
+          ))}
+        </ul>
+      ) : (
+        <div ref={track} className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {citations.map((citation, index) => (
+            <div key={index} className="w-[85%] shrink-0 snap-start sm:w-[60%]">
+              {card(citation, index)}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

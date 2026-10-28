@@ -644,6 +644,10 @@ export const api = {
 
   askStream: streamAgentAnswer,
 
+  /** Auto mode: the institution a question belongs to (one, or several). */
+  routeQuestion: (body: { question: string; domain: string }) =>
+    request<{ primary: string; others: string[]; reason: string }>('/v1/agents/route', { method: 'POST', body: JSON.stringify(body) }),
+
   readiness: (body: { country: string; domain: string; globalCountry?: string }) =>
     request<ReadinessReportDto>('/v1/readiness/report', { method: 'POST', body: JSON.stringify(body) }),
 

@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import { History, ImagePlus, ListChecks, Plus, Scale, Shield, X } from 'lucide-react'
+import { History, ImagePlus, ListChecks, Plus, Scale, Shield, Sparkles, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -41,6 +41,7 @@ import { RequestInputCard } from '@/components/ai/tools/request-input-card'
 import { ApprovalCard } from '@/components/ai/tools/approval-card'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
+import { institutionAccent } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
@@ -90,8 +91,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
   const institutions = React.useMemo(() => institutionsForDomain(domain), [domain])
-  const [institutionId, setInstitutionId] = React.useState(institutions[0]?.id ?? 'legal_advisor')
-  const activeInstitution = institutions.find((institution) => institution.id === institutionId) ?? institutions[0]
+  /** `auto` lets the router pick the institution per question; otherwise the operator's choice. */
+  const [institutionId, setInstitutionId] = React.useState<string>('auto')
+  const pinned = institutionId === 'auto' ? undefined : institutions.find((institution) => institution.id === institutionId)
 
   const [models, setModels] = React.useState<MetaModelDto[]>([])
   const [modelState, setModelState] = React.useState<'loading' | 'ready' | 'error'>('loading')
@@ -99,8 +101,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [modelError, setModelError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    if (!institutions.some((institution) => institution.id === institutionId)) {
-      setInstitutionId(institutions[0]?.id ?? 'legal_advisor')
+    if (institutionId !== 'auto' && !institutions.some((institution) => institution.id === institutionId)) {
+      setInstitutionId('auto')
     }
   }, [institutions, institutionId])
 
@@ -175,12 +177,27 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
   const send = async (override?: string) => {
     const question = (override ?? input).trim()
-    if (!question || busy || !activeInstitution) return
+    if (!question || busy || institutions.length === 0) return
     const now = Date.now()
     setInput('')
     dictation.current = { base: null, last: '' }
     setBusy(true)
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64 }))
+
+    // Auto: the router picks the institution(s) first; the first one answers.
+    let target = pinned ?? institutions[0]!
+    let routedTo: string[] | undefined
+    if (!pinned) {
+      const routed = await api.routeQuestion({ question, domain }).catch(() => null)
+      const primary = institutions.find((institution) => institution.id === routed?.primary) ?? institutions[0]!
+      target = primary
+      const others = (routed?.others ?? [])
+        .map((id) => institutions.find((institution) => institution.id === id)?.name)
+        .filter((name): name is string => Boolean(name))
+      routedTo = [primary.name, ...others]
+    }
+    const activeInstitution = target
+
     setTurns((previous) => [
       ...previous,
       { id: crypto.randomUUID(), role: 'user', content: question },
@@ -189,6 +206,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         role: 'assistant',
         content: '',
         agentName: activeInstitution.name,
+        ...(routedTo ? { routedTo } : {}),
         steps: [],
         startedAt: now,
         active: true,
@@ -477,6 +495,10 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           <DropdownMenuSubContent>
             <DropdownMenuLabel>{t('assistant.institution')}</DropdownMenuLabel>
             <DropdownMenuRadioGroup value={institutionId} onValueChange={setInstitutionId}>
+              <DropdownMenuRadioItem value="auto">
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{t('assistant.institution.auto')}</span>
+              </DropdownMenuRadioItem>
               {institutions.map((institution) => {
                 const Icon = institution.role === 'legal_advisor' ? Scale : Shield
                 return (
@@ -544,7 +566,20 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       />
 
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
-        <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-foreground">{t('assistant.title')}</p>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <p className="shrink-0 text-[12px] font-semibold text-foreground">{t('assistant.title')}</p>
+          {pinned ? (
+            <span
+              className="flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{ backgroundColor: `${institutionAccent(pinned.color)}24`, color: institutionAccent(pinned.color) }}
+            >
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: institutionAccent(pinned.color) }} />
+              <span className="truncate">{pinned.name}</span>
+            </span>
+          ) : (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{t('assistant.institution.auto')}</span>
+          )}
+        </div>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -660,6 +695,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
         <ChatInput
           ref={textareaRef}
+          accent={pinned ? institutionAccent(pinned.color) : undefined}
           input={input}
           handleInputChange={(event) => setInput(event.target.value)}
           handleSubmit={(event) => {

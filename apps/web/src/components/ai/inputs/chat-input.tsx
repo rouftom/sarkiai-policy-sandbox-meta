@@ -21,10 +21,12 @@ interface ChatInputProps {
   isStreaming?: boolean
   /** Dictation: when provided, the microphone button is shown. `text` is the whole dictation so far. */
   onTranscript?: (text: string, final: boolean) => void
+  /** The colour of the institution answering: tints the composer. */
+  accent?: string
 }
 
 export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
-  function ChatInput({ input, handleInputChange, handleSubmit, status = 'ready', stop, placeholder: customPlaceholder, optionsMenu, onFocus, onBlur, onClose, isStreaming, onTranscript }, ref) {
+  function ChatInput({ input, handleInputChange, handleSubmit, status = 'ready', stop, placeholder: customPlaceholder, optionsMenu, onFocus, onBlur, onClose, isStreaming, onTranscript, accent }, ref) {
     const { t } = useI18n()
 
     const placeholderText = customPlaceholder || t('assistant.placeholder')
@@ -34,8 +36,11 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
     return (
       <>
         <form onSubmit={handleSubmit} className="relative">
-          <div className={cn(
-            "bg-white dark:bg-brand-ink rounded-3xl overflow-hidden shadow-2xl transition-all flex box-border",
+          <div
+            style={accent ? { backgroundColor: `${accent}1a`, boxShadow: `0 0 0 1px ${accent}88, 0 10px 30px -12px ${accent}66` } : undefined}
+            className={cn(
+            "rounded-3xl overflow-hidden shadow-2xl transition-all flex box-border",
+            !accent && "bg-white dark:bg-brand-ink",
             isMultiline ? "flex-col" : "flex-row items-center gap-1 px-2 py-1 min-h-[40px]"
           )}>
             {!isMultiline && optionsMenu}

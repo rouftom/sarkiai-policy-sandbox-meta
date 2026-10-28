@@ -1,6 +1,6 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { providerAccess, providerApiKey, describeProvider, referenceImage } from '@sps/agents'
+import { generateStructured, providerAccess, providerApiKey, describeProvider, referenceImage } from '@sps/agents'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -907,6 +907,44 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   })
 
+  /**
+   * Auto routing: which institution a question belongs to, or several when it
+   * clearly touches more than one. A short structured call; the chosen agent
+   * then answers through the normal stream. Falls back to the first institution.
+   */
+  app.post('/v1/agents/route', async (request, reply) => {
+    const body = z.object({ question: z.string().min(3).max(2000), domain: z.string() }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    const institutions = institutionsForDomain(body.data.domain as Domain)
+    if (institutions.length === 0) return reply.status(404).send({ error: 'No institution for this domain.' })
+    const known = new Set(institutions.map((institution) => institution.id))
+    const fallback = { primary: institutions[0]!.id, others: [] as string[], reason: '' }
+    try {
+      const choice = await generateStructured({
+        model: engine.model,
+        system:
+          'Route a policy question to the institutions whose mandate it concerns. Choose one institution, or two or three when the question clearly touches several. Use only the ids listed.',
+        prompt: `QUESTION:\n${body.data.question}\n\nINSTITUTIONS:\n${institutions
+          .map((institution) => `- ${institution.id}: ${institution.name}. ${institution.mandate.slice(0, 240)}`)
+          .join('\n')}`,
+        shape: '{"institutionIds": ["<id>"], "reason": "<one short sentence>"}',
+        schema: z.object({
+          institutionIds: z.array(z.string()).min(1).max(3),
+          reason: z.string().default(''),
+        }),
+        attempts: 2,
+        reasoningEffort: 'low',
+        maxOutputTokens: 512,
+      })
+      const picked = choice.institutionIds.filter((id) => known.has(id))
+      if (picked.length === 0) return fallback
+      return { primary: picked[0]!, others: picked.slice(1), reason: choice.reason }
+    } catch (error) {
+      request.log.error(error)
+      return fallback
+    }
+  })
+
   // ── Scenarios: progressive release + multi-agent reconciliation ───────────
 
   function buildSession(country: string, domain: Domain, userId: string): ScenarioSession {
@@ -1339,8 +1377,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
       return { ...transcript, facts: toVoiceFacts(transcript) }
     } catch (error) {
-      request.log.error(error)
-      return reply.status(422).send({ error: (error as Error).message })
+      const relayed = engine.provider.mode === 'cloud' && Object.keys(providerAccess(engine.provider).headers).length > 0
+      request.log.error({ relayed, message: (error as Error).message }, 'voice transcription failed')
+      return reply.status(422).send({ error: (error as Error).message, relayed })
     }
   })
 
