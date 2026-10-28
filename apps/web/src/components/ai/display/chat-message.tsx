@@ -127,10 +127,10 @@ export function ChatMessage({
             <div
               role="status"
               className={cn(
-                'mt-2 flex items-start gap-2 rounded-xl border px-3 py-2 text-[11px] font-medium leading-snug shadow-sm',
+                'mt-2 flex items-start gap-2 rounded-xl px-3 py-2 text-[11px] font-medium leading-snug shadow-sm',
                 turn.validation.ok
-                  ? 'border-emerald-600/40 bg-emerald-50 text-emerald-950 dark:border-emerald-400/40 dark:bg-emerald-950/70 dark:text-emerald-50'
-                  : 'border-amber-600/50 bg-amber-50 text-amber-950 dark:border-amber-400/50 dark:bg-amber-950/70 dark:text-amber-50',
+                  ? 'bg-emerald-50 text-emerald-950 dark:bg-emerald-950/70 dark:text-emerald-50'
+                  : 'bg-amber-50 text-amber-950 dark:bg-amber-950/70 dark:text-amber-50',
               )}
             >
               {turn.validation.ok ? (

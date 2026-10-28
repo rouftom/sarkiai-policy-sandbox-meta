@@ -6,6 +6,8 @@ import { Mic } from 'lucide-react'
 import { motion, useAnimationControls } from 'framer-motion'
 import { useI18n } from '@/lib/i18n'
 import { startRealtimeTranscription, supportsRealtimeVoice, transcribeClip, type RealtimeSession } from '@/lib/voice'
+import { api } from '@/lib/api'
+import { useWorkspace } from '@/lib/workspace'
 
 interface AudioRecorderProps {
   /**
@@ -34,6 +36,8 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
 
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
+  const [isCorrecting, setIsCorrecting] = useState(false)
+  const { domain } = useWorkspace()
 
   const mediaStream = useRef<MediaStream | null>(null)
   const session = useRef<RealtimeSession | null>(null)
@@ -87,6 +91,29 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
     [t],
   )
 
+  /**
+   * The last words of a dictation, corrected by the chat model against the glossary
+   * (institutions, dimensions, corpus titles) before they reach the composer. The
+   * correction keeps the original when it looks unsafe, so a dictation is never lost.
+   */
+  const finalize = useCallback(
+    async (raw: string) => {
+      if (!raw.trim()) {
+        callbacks.current.onTranscript('', true)
+        return
+      }
+      setIsCorrecting(true)
+      const corrected = await api
+        .correctVoice({ text: raw, domain })
+        .then((result) => result.text)
+        .catch(() => raw)
+      committed.current = corrected
+      setIsCorrecting(false)
+      callbacks.current.onTranscript(corrected, true)
+    },
+    [domain],
+  )
+
   /** Transcribe one finished segment and append it. Errors surface, the recording goes on. */
   const transcribeSegment = useCallback(
     (blob: Blob, last: boolean) => {
@@ -107,7 +134,7 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
         } finally {
           pending.current -= 1
           if (pending.current === 0) setIsTranscribing(false)
-          if (last) callbacks.current.onTranscript(committed.current, true)
+          if (last) void finalize(committed.current)
         }
       })
     },
@@ -203,7 +230,7 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
       const text = [committed.current, partial.current].filter(Boolean).join(' ')
       partial.current = ''
       committed.current = text
-      callbacks.current.onTranscript(text, true)
+      void finalize(text)
       return
     }
     if (segmentTimer.current) clearTimeout(segmentTimer.current)
@@ -234,7 +261,7 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
         variant="ghost"
         size="icon"
         onClick={handleToggleRecording}
-        disabled={disabled || isTranscribing}
+        disabled={disabled || isTranscribing || isCorrecting}
         style={accent ? (isRecording ? { backgroundColor: accent, color: '#fff' } : { color: accent }) : undefined}
         className={cn(
           'h-8 w-8 sm:h-8 sm:w-8 rounded-full shrink-0 transition-colors',

@@ -37,10 +37,11 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
       <>
         <form onSubmit={handleSubmit} className="relative">
           <div
-            style={accent ? { backgroundColor: `${accent}1f` } : undefined}
+            style={accent ? ({ '--institution': accent } as React.CSSProperties) : undefined}
             className={cn(
             "rounded-3xl overflow-hidden shadow-2xl transition-all flex box-border",
             !accent && "bg-white dark:bg-brand-ink",
+            accent && "bg-[color-mix(in_oklab,var(--institution)_22%,white)] dark:bg-[color-mix(in_oklab,var(--institution)_16%,var(--brand-ink,#0b1220))]",
             isMultiline ? "flex-col" : "flex-row items-center gap-1 px-2 py-1 min-h-[40px]"
           )}>
             {!isMultiline && optionsMenu}

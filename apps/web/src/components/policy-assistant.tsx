@@ -41,7 +41,7 @@ import { RequestInputCard } from '@/components/ai/tools/request-input-card'
 import { ApprovalCard } from '@/components/ai/tools/approval-card'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
-import { institutionAccent } from '@/lib/institutions'
+import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
@@ -582,7 +582,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           {pinned ? (
             <span
               className="flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              style={{ backgroundColor: `${institutionAccent(pinned.color)}24`, color: institutionAccent(pinned.color) }}
+              style={{ backgroundColor: `${institutionAccent(pinned.color)}33`, color: institutionInk(pinned.color) }}
             >
               <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: institutionAccent(pinned.color) }} />
               <span className="truncate">{pinned.name}</span>

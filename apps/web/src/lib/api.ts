@@ -644,6 +644,10 @@ export const api = {
 
   askStream: streamAgentAnswer,
 
+  /** Corrects a dictated text against the glossary (institutions, dimensions, corpus titles). */
+  correctVoice: (body: { text: string; domain?: string }) =>
+    request<{ text: string; changed: boolean }>('/v1/voice/correct', { method: 'POST', body: JSON.stringify(body) }),
+
   /** Auto mode: the institution a question belongs to (one, or several). */
   routeQuestion: (body: { question: string; domain: string }) =>
     request<{ primary: string; others: string[]; reason: string }>('/v1/agents/route', { method: 'POST', body: JSON.stringify(body) }),

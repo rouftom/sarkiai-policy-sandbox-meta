@@ -15,3 +15,20 @@ const ACCENTS: Record<string, string> = {
 export function institutionAccent(colorClass: string): string {
   return ACCENTS[colorClass] ?? '#0f766e'
 }
+
+/**
+ * A darker shade of the same colour for text: the bright accent is too pale on
+ * a light background, so labels use this one in light mode.
+ */
+const INKS: Record<string, string> = {
+  'text-amber-500': '#b45309',
+  'text-emerald-500': '#047857',
+  'text-sky-500': '#0369a1',
+  'text-violet-500': '#6d28d9',
+  'text-rose-500': '#be123c',
+  'text-primary': '#0f766e',
+}
+
+export function institutionInk(colorClass: string): string {
+  return INKS[colorClass] ?? '#0f766e'
+}
