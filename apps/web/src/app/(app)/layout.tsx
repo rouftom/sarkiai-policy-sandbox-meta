@@ -94,8 +94,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const assistantPanel = (
     <Panel
       collapsible
-      minSize={assistantOpen ? (isMobile ? '40%' : '22%') : '0%'}
-      defaultSize={assistantOpen ? (isMobile ? '50%' : '26%') : '0%'}
+      minSize={assistantOpen ? (isMobile ? '40%' : '30%') : '0%'}
+      defaultSize={assistantOpen ? (isMobile ? '50%' : '30%') : '0%'}
       panelRef={panelRef}
       onResize={(size: PanelSize) => {
         // The drag gesture is the source of truth: collapsing the panel closes

@@ -17,11 +17,11 @@ import {
   SlidersHorizontal,
   Waypoints,
 } from 'lucide-react'
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@sps/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sps/ui'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
-import { api, authApi, knowledgeApi, type AuditEventDto, type ProviderDto } from '@/lib/api'
+import { authApi, knowledgeApi, type AuditEventDto } from '@/lib/api'
 
 function relativeTime(value: string, locale: string): string {
   const delta = Date.now() - Date.parse(value)
@@ -38,7 +38,6 @@ export default function OverviewPage() {
   const { t, locale } = useI18n()
   const { operator } = useAuth()
   const { country, domain } = useWorkspace()
-  const [provider, setProvider] = React.useState<ProviderDto | null>(null)
   const [corpus, setCorpus] = React.useState<{ documents: number; chunks: number } | null>(null)
   const [events, setEvents] = React.useState<AuditEventDto[]>([])
   const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string } | null>(null)
@@ -46,12 +45,6 @@ export default function OverviewPage() {
 
   React.useEffect(() => {
     let cancelled = false
-    void api
-      .provider()
-      .then((value) => {
-        if (!cancelled) setProvider(value)
-      })
-      .catch(() => {})
     void knowledgeApi
       .status()
       .then((status) => {
@@ -98,10 +91,6 @@ export default function OverviewPage() {
             {t('overview.title')}
           </h2>
           <p className="mt-1 max-w-2xl text-xs text-muted-foreground sm:text-sm">{t('overview.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-2 text-[10px]">
-          <Badge tone="brand">{country.toUpperCase()}</Badge>
-          <Badge tone="neutral">{t(`domain.${domain}` as 'domain.health')}</Badge>
         </div>
       </section>
 
@@ -167,10 +156,6 @@ export default function OverviewPage() {
               <Waypoints className="h-4 w-4 text-brand-accent" />
               {country.toUpperCase()} · {t(`domain.${domain}` as 'domain.health')}
             </p>
-            <p className="text-[10px] text-muted-foreground">
-              {provider ? t('provider.budget') : t('overview.kpi.budget')}
-              {provider ? `: $${provider.budgetUsd.toFixed(2)}` : ''}
-            </p>
           </CardContent>
         </Card>
       </div>
@@ -226,7 +211,7 @@ export default function OverviewPage() {
               <Link
                 key={href}
                 href={href}
-                className="group flex items-start gap-2 rounded-lg border border-border px-2.5 py-2 transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/5"
+                className="group flex items-start gap-2 rounded-lg px-2.5 py-2 transition-colors hover:bg-brand-primary/5"
               >
                 <Icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-primary dark:text-brand-primary-light" />
                 <span className="min-w-0">
@@ -256,7 +241,7 @@ export default function OverviewPage() {
             <Link
               key={href}
               href={href}
-              className="group rounded-xl border border-border bg-card p-3 transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/5"
+              className="group rounded-xl bg-card p-3 transition-colors hover:bg-brand-primary/5"
             >
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary dark:bg-brand-primary-dark/40 dark:text-brand-primary-light">

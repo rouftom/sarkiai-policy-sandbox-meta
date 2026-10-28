@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import { ImagePlus, ListChecks, Plus, RotateCcw, Scale, Shield, X } from 'lucide-react'
+import { History, ImagePlus, ListChecks, Plus, RotateCcw, Scale, Shield, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -28,6 +28,14 @@ import type { ActionRecord, ActionStatus, AgentUiRequest } from '@/lib/agent-ui'
 import { decideAction, listActions } from '@/lib/actions-client'
 import { ActionCenter } from '@/components/ai/tools/action-center'
 import { McpAppView } from '@/components/ai/mcp/mcp-app-wrapper'
+import { ChatHistory } from '@/components/ai/display/chat-history'
+import {
+  deleteChatSession,
+  getChatSession,
+  listChatSessions,
+  saveChatSession,
+  type ChatSessionSummary,
+} from '@/lib/chat-sessions-client'
 import { AskUserPanel } from '@/components/ai/tools/ask-user-panel'
 import { RequestInputCard } from '@/components/ai/tools/request-input-card'
 import { ApprovalCard } from '@/components/ai/tools/approval-card'
@@ -66,6 +74,12 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [actionBusy, setActionBusy] = React.useState<string | null>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
   const [actionsOpen, setActionsOpen] = React.useState(false)
+  const [sessionId, setSessionId] = React.useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = React.useState(false)
+  const [sessions, setSessions] = React.useState<ChatSessionSummary[]>([])
+  const [sessionsLoading, setSessionsLoading] = React.useState(false)
+  /** Set when a saved conversation is loaded, so loading it is not saved back as a change. */
+  const skipSave = React.useRef(false)
   const [actionRecords, setActionRecords] = React.useState<ActionRecord[]>([])
   const [actionsLoading, setActionsLoading] = React.useState(false)
   /** Base text and last dictation of the current voice recording (the recorder sends the whole dictation each time). */
@@ -379,7 +393,63 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     )
   }
 
+  const loadSessions = async () => {
+    setSessionsLoading(true)
+    try {
+      setSessions(await listChatSessions())
+    } catch (error) {
+      setActionError((error as Error).message)
+    } finally {
+      setSessionsLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    if (historyOpen) void loadSessions()
+  }, [historyOpen])
+
+  // Each finished exchange is saved as the conversation's current state.
+  React.useEffect(() => {
+    if (busy || turns.length === 0) return
+    if (skipSave.current) {
+      skipSave.current = false
+      return
+    }
+    const id = sessionId ?? crypto.randomUUID()
+    if (!sessionId) setSessionId(id)
+    const title = turns.find((turn) => turn.role === 'user')?.content ?? ''
+    const payload = turns.map(({ active: _active, ...turn }) => ({ ...turn }) as unknown as Record<string, unknown>)
+    void saveChatSession(id, { title, turns: payload })
+      .then(() => undefined)
+      .catch(() => undefined)
+  }, [turns, busy])
+
+  const openSession = async (id: string) => {
+    if (busy) return
+    try {
+      const detail = await getChatSession(id)
+      skipSave.current = true
+      setSessionId(id)
+      setTurns(detail.turns as unknown as ChatTurn[])
+      setHistoryOpen(false)
+    } catch (error) {
+      setActionError((error as Error).message)
+    }
+  }
+
+  const removeSession = async (id: string) => {
+    try {
+      await deleteChatSession(id)
+      if (id === sessionId) newConversation()
+      await loadSessions()
+    } catch (error) {
+      setActionError((error as Error).message)
+    }
+  }
+
   const newConversation = () => {
+    setSessionId(null)
+    setHistoryOpen(false)
     setTurns([])
     setAttachments([])
     textareaRef.current?.focus()
@@ -478,6 +548,21 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t('assistant.history')}
+                aria-pressed={historyOpen}
+                onClick={() => setHistoryOpen((open) => !open)}
+              >
+                <History className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('assistant.history')}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button type="button" variant="ghost" size="icon-sm" aria-label={t('assistant.close')} onClick={onClose}>
                 <X className="h-3.5 w-3.5" />
               </Button>
@@ -488,7 +573,15 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       </header>
 
       <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
-        {turns.length === 0 ? (
+        {historyOpen ? (
+          <ChatHistory
+            sessions={sessions}
+            loading={sessionsLoading}
+            activeId={sessionId}
+            onOpen={(id) => void openSession(id)}
+            onDelete={(id) => void removeSession(id)}
+          />
+        ) : turns.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <BrandMark className="h-12 w-12" />
             <div>
@@ -502,7 +595,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={() => void send(suggestion)}
                   disabled={busy}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+                  className="rounded-lg bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
                 >
                   {suggestion}
                 </button>

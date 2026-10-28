@@ -37,6 +37,7 @@ import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
 import { auth as operatorAuth } from '../auth.js'
 import { McpGateway } from '../mcp.js'
+import { ChatSessionStore } from '../chat-sessions.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
@@ -95,6 +96,8 @@ async function executeAction(record: ActionRecord): Promise<string> {
 }
 
 const mcpGateway = new McpGateway(process.env.SEA_MCP_API_KEY)
+
+const chatSessions = new ChatSessionStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 
 const actionStore = new ActionStore({
   mongodbUri: config.mongodb.uri,
@@ -1040,6 +1043,38 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       request.log.error(error)
       return reply.status(500).send({ error: 'action_failed', message: (error as Error).message })
     }
+  })
+
+  // ── Chat sessions: the operator's saved conversations with the assistant ──
+  app.get('/v1/chat/sessions', async (request) => {
+    return { sessions: await chatSessions.list(operatorOf(request).email) }
+  })
+
+  app.get('/v1/chat/sessions/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const session = await chatSessions.get(id, operatorOf(request).email)
+    if (!session) return reply.status(404).send({ error: 'not_found' })
+    return session
+  })
+
+  app.put('/v1/chat/sessions/:id', { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = z
+      .object({
+        title: z.string().min(1).max(200),
+        turns: z.array(z.record(z.string(), z.unknown())).max(200),
+      })
+      .safeParse(request.body ?? {})
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return reply.status(400).send({ error: 'invalid_id' })
+    return chatSessions.save({ id, userId: operatorOf(request).email, ...body.data })
+  })
+
+  app.delete('/v1/chat/sessions/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const removed = await chatSessions.remove(id, operatorOf(request).email)
+    if (!removed) return reply.status(404).send({ error: 'not_found' })
+    return { deleted: true }
   })
 
   // ── N6: voice notes as timed facts ────────────────────────────────────────
