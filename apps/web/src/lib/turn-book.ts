@@ -31,7 +31,10 @@ export class TurnBook {
   private echoesLastTurn(text: string): boolean {
     const last = [...this.turns.entries()].filter(([, turn]) => turn.done).sort(([a], [b]) => b - a)[0]?.[1]
     if (!last?.text) return false
-    return last.text.includes(text) || text.includes(last.text)
+    const norm = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+    const echo = norm(text)
+    const done = norm(last.text)
+    return Boolean(echo) && (done.includes(echo) || echo.includes(done))
   }
 
   complete(turnId: number, text: string) {
