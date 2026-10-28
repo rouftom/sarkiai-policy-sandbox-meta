@@ -132,6 +132,10 @@ export interface AssessmentDto {
     quote?: string
     sourceUrl?: string
     country?: string
+    chunkId?: string
+    chunkIndex?: number
+    documentId?: string
+    images?: KbImageDto[]
   }>
   confidence: number
   /** Citation-validator verdict (N2). */
@@ -981,6 +985,43 @@ export interface KbDocumentDto {
   version?: string
   sourceUrl?: string
   lastIngestedAt: string | null
+  title?: string
+  summary?: string
+  images?: KbImageDto[]
+}
+
+/** A figure attached to a document or cited with a passage. `url` may be relative to the API. */
+export interface KbImageDto {
+  id: string
+  url: string
+  caption: string
+  alt?: string
+  tags?: string[]
+  dimension?: string
+  articleNumber?: string
+  headingPath?: string
+  source?: 'upload' | 'meta-image' | 'sample'
+}
+
+export interface KbChunkDto {
+  id: string
+  chunkIndex: number
+  text: string
+  isActive: boolean
+  headingPath?: string
+  articleNumber?: string
+}
+
+export interface KbPreviewDto {
+  document: KbDocumentDto | null
+  chunks: Array<KbChunkDto & { images: KbImageDto[] }>
+  images: KbImageDto[]
+  selected: number
+}
+
+/** Absolute URL of a figure: API paths are served by the API host. */
+export function assetUrl(url: string): string {
+  return url.startsWith('http') ? url : `${API_URL}${url}`
 }
 
 export interface KbStageItemDto {
@@ -1058,5 +1099,53 @@ export const knowledgeApi = {
     request<{ filename: string; active: boolean; modified: number }>('/v1/kb/documents/active', {
       method: 'POST',
       body: JSON.stringify({ filename, active }),
+    }),
+
+  /** One document with its passages (the selected one first) and figures, for the citation modal. */
+  preview: (filename: string, chunkIndex?: number) => {
+    const params = new URLSearchParams({ filename })
+    if (chunkIndex !== undefined) params.set('chunkIndex', String(chunkIndex))
+    return request<KbPreviewDto>(`/v1/kb/documents/preview?${params.toString()}`)
+  },
+
+  chunks: (filename: string) =>
+    request<{ chunks: KbChunkDto[] }>(`/v1/kb/documents/chunks?${new URLSearchParams({ filename }).toString()}`),
+
+  updateDocument: (body: {
+    filename: string
+    title?: string
+    summary?: string
+    country?: string
+    docType?: string
+    namespace?: string
+    version?: string
+    sourceUrl?: string
+  }) => request<{ filename: string; modified: number }>('/v1/kb/documents', { method: 'PATCH', body: JSON.stringify(body) }),
+
+  updateChunk: (id: string, body: { text?: string; active?: boolean }) =>
+    request<{ id: string; updated: boolean }>(`/v1/kb/chunks/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  attachImages: (body: {
+    filename: string
+    images: Array<{ caption: string; alt?: string; tags?: string[]; dimension?: string; mime: string; dataBase64: string }>
+  }) => request<{ filename: string; images: KbImageDto[] }>('/v1/kb/documents/images', { method: 'POST', body: JSON.stringify(body) }),
+
+  updateImage: (id: string, body: { caption?: string; alt?: string; tags?: string[]; dimension?: string | null }) =>
+    request<{ id: string; updated: boolean }>(`/v1/kb/images/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteImage: (id: string) =>
+    request<{ id: string; deleted: boolean }>(`/v1/kb/images/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** Generates the 13 readiness reference figures (Meta Image, or labelled samples) and attaches them. */
+  seedReferenceImages: () =>
+    request<{ generated: number; skipped: number; documents: number; source: string }>('/v1/kb/images/reference', {
+      method: 'POST',
+      body: '{}',
     }),
 }

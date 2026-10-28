@@ -8,8 +8,8 @@ import { cn } from '../lib/cn'
  */
 export function Table({ className, ...props }: React.ComponentProps<'table'>) {
   return (
-    <div className="custom-scrollbar w-full overflow-x-auto">
-      <table className={cn('w-full caption-bottom text-left text-[11px]', className)} {...props} />
+    <div data-slot="table-container" className="custom-scrollbar w-full overflow-x-auto">
+      <table data-slot="table" className={cn('w-full caption-bottom text-left text-[11px]', className)} {...props} />
     </div>
   )
 }

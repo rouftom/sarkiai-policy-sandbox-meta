@@ -136,7 +136,7 @@ export class PolicyOrchestrator {
       jurisdiction: input.jurisdiction,
       topK: input.topK ?? 8,
     })
-    const citations: Citation[] = chunks.map((chunk) => citationFromChunk(chunk))
+    const citations: Citation[] = chunks.map((chunk) => citationFromChunk(chunk, 0))
 
     // 2. Trap the reasoning: pre-decision trace.
     await this.deps.audit?.traceStep({

@@ -20,12 +20,9 @@ export function WorkspaceControls({ lens: withLens = false }: { lens?: boolean }
         ariaLabel={t('app.country')}
         value={country}
         onValueChange={setCountry}
-        options={[
-          { value: 'cm', label: t('country.cm') },
-          { value: 'ae', label: t('country.ae') },
-        ]}
+        options={[{ value: 'cm', label: t('country.cm') }]}
         size="sm"
-        className="w-28"
+        className="w-20"
       />
       <Select
         ariaLabel={t('app.domain')}
@@ -33,7 +30,7 @@ export function WorkspaceControls({ lens: withLens = false }: { lens?: boolean }
         onValueChange={(value) => setDomain(value as Domain)}
         options={DOMAINS.map((value) => ({ value, label: t(`domain.${value}` as 'domain.health') }))}
         size="sm"
-        className="w-36"
+        className="w-32"
       />
     </>
   )

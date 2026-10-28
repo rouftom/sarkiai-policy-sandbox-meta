@@ -23,6 +23,8 @@ interface AgentActivityTrailProps {
   isStreaming: boolean
   /** Epoch ms of the first step, for the elapsed counter. */
   startedAt?: number
+  /** Epoch ms when the turn finished: the counter stops here, whenever the view is opened. */
+  endedAt?: number
   headerLabel: string
 }
 
@@ -34,7 +36,7 @@ const STATUS_ICON: Record<ActivityStatus, React.ReactNode> = {
 }
 
 /** Live elapsed timer, ticking only while streaming. */
-function useElapsed(startedAt: number | undefined, active: boolean): string {
+function useElapsed(startedAt: number | undefined, active: boolean, endedAt?: number): string {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!active || !startedAt) return
@@ -42,7 +44,10 @@ function useElapsed(startedAt: number | undefined, active: boolean): string {
     return () => clearInterval(id)
   }, [active, startedAt])
   if (!startedAt) return ''
-  return formatElapsed(now - startedAt)
+  // A finished turn shows its real duration, never the time since this view mounted.
+  const end = active ? now : endedAt
+  if (!end) return ''
+  return formatElapsed(Math.max(0, end - startedAt))
 }
 
 /**
@@ -56,9 +61,9 @@ function useElapsed(startedAt: number | undefined, active: boolean): string {
  *
  * Shared source of truth for all apps (`@fada/agentic-ui` in the source monorepo).
  */
-export function AgentActivityTrail({ steps, agents, isStreaming, startedAt, headerLabel }: AgentActivityTrailProps) {
+export function AgentActivityTrail({ steps, agents, isStreaming, startedAt, endedAt, headerLabel }: AgentActivityTrailProps) {
   const [open, setOpen] = useState(isStreaming)
-  const elapsed = useElapsed(startedAt, isStreaming)
+  const elapsed = useElapsed(startedAt, isStreaming, endedAt)
 
   // Follow the stream: open while running, fold away when done.
   useEffect(() => {

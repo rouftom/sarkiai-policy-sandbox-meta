@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
-import { registerRoutes } from './routes/index.js'
+import { registerRoutes, seedReferenceImages } from './routes/index.js'
 import { prepareCloudStores } from './engine.js'
 import { auth } from './auth.js'
 import { config } from './config.js'
@@ -115,6 +115,21 @@ async function maybeMaintainAuditChain(app: FastifyInstance): Promise<void> {
   }
 }
 
+/**
+ * Reference figures hatch: committing `apps/api/scripts/reference-images.flag`
+ * generates the 13 readiness figures after the console answers. The job is
+ * idempotent, so the flag may stay; it runs in the background and never blocks boot.
+ */
+function maybeSeedReferenceImages(app: FastifyInstance): void {
+  const flag = new URL('../scripts/reference-images.flag', import.meta.url)
+  if (!existsSync(flag)) return
+  void seedReferenceImages(app.log)
+    .then((result) => app.log.warn(result, 'reference figures seeded at boot'))
+    .catch((error) =>
+      app.log.error({ message: error instanceof Error ? error.message : 'unknown error' }, 'reference figures seeding failed'),
+    )
+}
+
 async function main(): Promise<void> {
   const app = await buildServer()
   await maybeMaintainAuditChain(app)
@@ -146,6 +161,7 @@ async function main(): Promise<void> {
   try {
     await app.listen({ host: config.host, port: config.port })
     app.log.info(`SarkiAI Policy Sandbox API listening on http://${config.host}:${config.port}`)
+    maybeSeedReferenceImages(app)
   } catch (error) {
     app.log.error(error)
     process.exit(1)

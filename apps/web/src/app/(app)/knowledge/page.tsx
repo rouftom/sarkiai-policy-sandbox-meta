@@ -11,7 +11,6 @@ import { KbDocuments } from '@/components/kb-documents'
 const COUNTRY_OPTIONS = [
   { value: '', label: 'All countries' },
   { value: 'cm', label: 'CM' },
-  { value: 'ae', label: 'AE' },
   { value: 'global', label: 'Global' },
 ]
 
@@ -45,7 +44,6 @@ export default function KnowledgePage() {
   const [documents, setDocuments] = React.useState<KbDocumentDto[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
-  const [repairing, setRepairing] = React.useState(false)
   const [tab, setTab] = React.useState('documents')
 
   const load = React.useCallback(async () => {
@@ -68,18 +66,6 @@ export default function KnowledgePage() {
     void load()
   }, [load])
 
-  const repairIndexes = async () => {
-    setRepairing(true)
-    try {
-      await knowledgeApi.ensureIndexes()
-      await load()
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      setRepairing(false)
-    }
-  }
-
   const toggleDocument = async (document: KbDocumentDto, active: boolean) => {
     try {
       await knowledgeApi.setDocumentActive(document.filename, active)
@@ -89,9 +75,6 @@ export default function KnowledgePage() {
     }
   }
 
-  const expected = status?.expectedIndexes ?? []
-  const indexByName = new Map((status?.indexes.indexes ?? []).map((index) => [index.name, index]))
-  const pending = expected.filter((name) => indexByName.get(name)?.queryable !== true)
   const corpus = status?.totals
 
   return (
@@ -139,13 +122,8 @@ export default function KnowledgePage() {
               summary={{
                 documents: corpus?.documents ?? 0,
                 chunks: corpus?.activeChunks ?? 0,
-                dimensions: status.embedding.dimensions || undefined,
-                model: status.embedding.model,
                 lastIngestedAt: corpus?.lastIngestedAt,
-                pendingIndexes: pending.length,
               }}
-              repairing={repairing}
-              onRepair={pending.length > 0 ? () => void repairIndexes() : undefined}
             />
           </TabsContent>
           <TabsContent value="retrieval" className="pt-2">

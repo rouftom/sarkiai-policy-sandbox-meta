@@ -8,8 +8,15 @@
 
 import type { Citation, CitationValidation, DocType, KbChunk } from '@sps/shared'
 
+/**
+ * Citations carry the *whole* provision, not a 240-character preview: the
+ * console opens the passage in a modal and must be able to highlight the cited
+ * text inside it. Pass `quoteLength = 0` to keep the whole provision; the
+ * default excerpt is only for compact displays.
+ */
 export function citationFromChunk(chunk: KbChunk, quoteLength = 240): Citation {
-  const quote = chunk.text.length > quoteLength ? `${chunk.text.slice(0, quoteLength).trim()}…` : chunk.text
+  const quote =
+    quoteLength > 0 && chunk.text.length > quoteLength ? `${chunk.text.slice(0, quoteLength).trim()}…` : chunk.text
   return {
     country: chunk.country,
     docType: (chunk.docType ?? 'policy') as DocType,
@@ -18,6 +25,10 @@ export function citationFromChunk(chunk: KbChunk, quoteLength = 240): Citation {
     headingPath: chunk.headingPath,
     sourceUrl: chunk.sourceUrl,
     quote,
+    chunkId: chunk.id,
+    chunkIndex: chunk.chunkIndex,
+    ...(chunk.documentId ? { documentId: chunk.documentId } : {}),
+    ...(chunk.images && chunk.images.length > 0 ? { images: chunk.images } : {}),
   }
 }
 

@@ -16,7 +16,10 @@ export function buildKnowledgeBlock(chunks: KbChunk[]): string {
       const label = [chunk.filename, chunk.articleNumber && `ARTICLE ${chunk.articleNumber}`, chunk.headingPath]
         .filter(Boolean)
         .join(' · ')
-      return `[${i + 1}] ${label}\n${chunk.text}`
+      const figures = chunk.images?.length
+        ? `\nFIGURES: ${chunk.images.map((image) => `"${image.caption}"`).join('; ')} (refer to a figure by its caption when it helps the reader)`
+        : ''
+      return `[${i + 1}] ${label}\n${chunk.text}${figures}`
     })
     .join('\n\n')
 }

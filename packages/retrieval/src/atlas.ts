@@ -125,6 +125,7 @@ function toChunk(doc: Document, score?: number): KbChunk | null {
 
   return {
     id: String(doc._id ?? asString(doc.contentHash) ?? `${String(doc.filename)}:${String(doc.chunkIndex)}`),
+    ...(asString(doc.documentId) ? { documentId: asString(doc.documentId) } : {}),
     filename: asString(doc.filename) ?? '',
     text,
     chunkIndex: typeof doc.chunkIndex === 'number' ? doc.chunkIndex : 0,
@@ -204,13 +205,63 @@ export class AtlasRetriever implements Retriever {
             return candidate ? { ...candidate, score: hit.score } : null
           })
           .filter((candidate): candidate is RankedChunk & { score: number } => candidate !== null)
-        if (reranked.length > 0) return reranked.slice(0, topK).map((c) => ({ ...c.chunk, score: c.score }))
+        if (reranked.length > 0) {
+          return this.withImages(reranked.slice(0, topK).map((c) => ({ ...c.chunk, score: c.score })))
+        }
       }
     } catch (error) {
       console.warn(`[atlas] rerank unavailable: ${(error as Error).message}`)
     }
 
-    return candidates.slice(0, topK).map((c) => ({ ...c.chunk, score: c.score }))
+    return this.withImages(candidates.slice(0, topK).map((c) => ({ ...c.chunk, score: c.score })))
+  }
+
+  /**
+   * Attach the figures of each retrieved document. Images are stored once in
+   * `kb_images`; the chunk payload stays small and the console can decide which
+   * figure to show from the citation context.
+   */
+  private async withImages(chunks: KbChunk[]): Promise<KbChunk[]> {
+    if (chunks.length === 0) return chunks
+    try {
+      const collection = await this.imageCollection()
+      const filenames = [...new Set(chunks.map((chunk) => chunk.filename).filter(Boolean))]
+      const rows = await collection
+        .aggregate([
+          { $match: { filename: { $in: filenames } } },
+          { $sort: { createdAt: 1 } },
+          { $project: { _id: 1, filename: 1, caption: 1, alt: 1, tags: 1, dimension: 1, articleNumber: 1, headingPath: 1, source: 1, externalUrl: 1 } },
+        ])
+        .toArray()
+        .catch(() => [] as Document[])
+      if (rows.length === 0) return chunks
+      const byFile = new Map<string, NonNullable<KbChunk['images']>>()
+      for (const row of rows) {
+        const filename = String(row.filename ?? '')
+        if (!filename) continue
+        const id = String(row._id)
+        const list = byFile.get(filename) ?? []
+        list.push({
+          id,
+          url: typeof row.externalUrl === 'string' ? row.externalUrl : `/v1/kb/images/${encodeURIComponent(id)}`,
+          caption: String(row.caption ?? ''),
+          ...(typeof row.alt === 'string' ? { alt: row.alt } : {}),
+          ...(Array.isArray(row.tags) ? { tags: row.tags.map(String) } : {}),
+          ...(typeof row.dimension === 'string' ? { dimension: row.dimension as ReadinessDimension } : {}),
+          ...(typeof row.articleNumber === 'string' ? { articleNumber: row.articleNumber } : {}),
+          ...(typeof row.headingPath === 'string' ? { headingPath: row.headingPath } : {}),
+          ...(typeof row.source === 'string' ? { source: row.source as NonNullable<KbChunk['images']>[number]['source'] } : {}),
+        })
+        byFile.set(filename, list)
+      }
+      return chunks.map((chunk) => {
+        const images = byFile.get(chunk.filename)
+        return images && images.length > 0 ? { ...chunk, images } : chunk
+      })
+    } catch (error) {
+      console.warn(`[atlas] image metadata unavailable: ${(error as Error).message}`)
+      return chunks
+    }
   }
 
   async close(): Promise<void> {
@@ -319,6 +370,11 @@ export class AtlasRetriever implements Retriever {
       await this.client.connect()
     }
     return this.client.db(this.config.dbName).collection(this.collectionName)
+  }
+
+  private async imageCollection(): Promise<Collection<Document>> {
+    await this.collection()
+    return this.client!.db(this.config.dbName).collection('kb_images')
   }
 
   private async vectorSearch(

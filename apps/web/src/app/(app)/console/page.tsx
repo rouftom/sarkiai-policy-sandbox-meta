@@ -13,6 +13,7 @@ import { ModelSelect } from '@/components/model-select'
 import { ReadinessPanel } from '@/components/readiness-panel'
 import { ScenarioConsole } from '@/components/scenario-console'
 import { WorkspaceControls } from '@/components/workspace-bar'
+import { PageIntro } from '@/components/page-intro'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 
@@ -64,21 +65,10 @@ export default function ConsolePage() {
 
   return (
     <>
-      <section className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-3 pt-1">
-        <div className="min-w-0">
-          <h2 className="font-display text-lg font-bold tracking-tight text-foreground sm:text-xl">{t('console.title')}</h2>
-          <p className="text-[11px] text-muted-foreground">{t('app.tagline')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <ModelSelect />
-        </div>
-      </section>
-
-      <Card className="mb-3">
-        <CardContent className="flex flex-wrap items-center gap-2 py-2">
-          <WorkspaceControls lens />
-        </CardContent>
-      </Card>
+      <PageIntro title={t('console.title')} subtitle={t('app.tagline')}>
+        <WorkspaceControls lens />
+        <ModelSelect />
+      </PageIntro>
 
       <Tabs value={tab} onValueChange={setTab} className="gap-3">
         <AnimatedTabsList items={tabs} value={tab} onValueChange={setTab} dense />

@@ -10,7 +10,11 @@
 import * as React from 'react'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { TableActionItem } from '@/components/ui/table-actions'
-import { RotateCcw, Search, Upload, X } from 'lucide-react'
+import { RowActionButton } from '@/components/ui/row-action-button'
+import { ImageIcon, Pencil, RotateCcw, Search, Upload, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { KbImageUploader } from '@/components/kb-image-uploader'
+import { documentHref } from '@/lib/kb-links'
 import { Badge, Button, DataTablePagination, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Dialog, DialogContent, DialogHeader, DialogTitle } from '@sps/ui'
 import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
@@ -24,7 +28,6 @@ const DEFAULT_PAGE_SIZE = 10
 /** Country codes are data identifiers, shown as they are stored. */
 const COUNTRY_OPTIONS = [
   { value: 'cm', label: 'CM' },
-  { value: 'ae', label: 'AE' },
   { value: 'global', label: 'Global' },
 ]
 const DOC_TYPES = ['law', 'policy', 'regulation', 'strategy', 'report', 'guidance']
@@ -47,16 +50,12 @@ export function KbDocuments({
   onChanged,
   onToggle,
   summary,
-  repairing,
-  onRepair,
 }: {
   documents: KbDocumentDto[]
   loading: boolean
   onChanged: () => Promise<void>
   onToggle: (document: KbDocumentDto, active: boolean) => Promise<void>
   summary?: KbSummary
-  repairing?: boolean
-  onRepair?: () => void
 }) {
   const { t, locale } = useI18n()
   const [country, setCountry] = React.useState('cm')
@@ -103,6 +102,7 @@ export function KbDocuments({
   const rows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const [uploadOpen, setUploadOpen] = React.useState(false)
+  const router = useRouter()
 
   return (
     <div className="space-y-3">
@@ -139,25 +139,30 @@ export function KbDocuments({
                 </>
               }
             />
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-[12px] font-semibold text-foreground">{t('kb.image.sectionTitle')}</p>
+              <p className="text-[10px] text-muted-foreground">{t('kb.image.sectionHint')}</p>
+              <KbImageUploader documents={documents} onUploaded={() => void onChanged()} />
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full max-w-xs">
+        <div className="flex flex-nowrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 sm:max-w-[200px] sm:flex-none">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('knowledge.corpus.filter')}
               aria-label={t('knowledge.corpus.filter')}
-              className="h-8 pl-8 text-[12px]"
+              className="h-8 w-full pl-8 text-[12px] sm:w-[200px]"
             />
           </div>
           {summary && (
-            <div className="ml-auto">
-              <KbMiniStats summary={summary} repairing={repairing} onRepair={onRepair} />
+            <div className="ml-auto hidden shrink-0 sm:block">
+              <KbMiniStats summary={summary} />
             </div>
           )}
           <Button
@@ -166,7 +171,7 @@ export function KbDocuments({
             aria-label={t('knowledge.upload')}
             title={t('knowledge.upload')}
             onClick={() => setUploadOpen(true)}
-            className="h-8 w-8 rounded-lg"
+            className="h-8 w-8 shrink-0 rounded-lg"
           >
             <Upload className="h-3.5 w-3.5" />
           </Button>
@@ -209,15 +214,33 @@ export function KbDocuments({
                         <RowActionMenu
                           overlay
                           inline={
-                            <div className="flex items-center justify-end gap-1.5">
-                              {retired && <Badge tone="warning">{t('knowledge.corpus.retired')}</Badge>}
-                              <Button variant="ghost" size="sm" disabled={loading} onClick={() => void onToggle(document, retired)}>
+                            <div className="flex items-center justify-end gap-1">
+                              <RowActionButton label={t('kb.action.edit')} onClick={() => router.push(documentHref(document.filename))}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </RowActionButton>
+                              <RowActionButton
+                                label={t('kb.action.media')}
+                                onClick={() => router.push(documentHref(document.filename, 'media'))}
+                              >
+                                <ImageIcon className="h-3.5 w-3.5" />
+                              </RowActionButton>
+                              <RowActionButton
+                                label={retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
+                                tone={retired ? 'default' : 'danger'}
+                                disabled={loading}
+                                onClick={() => void onToggle(document, retired)}
+                              >
                                 {retired ? <RotateCcw className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                                {retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
-                              </Button>
+                              </RowActionButton>
                             </div>
                           }
                         >
+                          <TableActionItem icon={Pencil} onClick={() => router.push(documentHref(document.filename))}>
+                            {t('kb.action.edit')}
+                          </TableActionItem>
+                          <TableActionItem icon={ImageIcon} onClick={() => router.push(documentHref(document.filename, 'media'))}>
+                            {t('kb.action.media')}
+                          </TableActionItem>
                           <TableActionItem
                             icon={retired ? RotateCcw : X}
                             variant={retired ? 'default' : 'danger'}

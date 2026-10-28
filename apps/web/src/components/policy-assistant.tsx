@@ -197,6 +197,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
     // Tool calls get their own trail steps, closed by their own `end` event.
     const toolSteps = new Map<string, { key: string; startedAt: number }>()
+    /** The answer is written here and shown only once it is validated: the user watches the reasoning, then reads the result. */
+    let answer = ''
 
     // Trail bookkeeping: one open step at a time, closed with its duration.
     let openStep: { key: string; label: string; startedAt: number } | null = null
@@ -233,15 +235,14 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           counter += 1
           openStep = { key: `${stage}-${counter}`, label: stageLabel(stage, detail.attempt), startedAt: at }
           const step: TrailStepView = { key: openStep.key, label: openStep.label, count: 1, status: 'active' }
-          patchLast((turn) => ({
-            ...turn,
-            // A retry clears the draft: two answers must never appear mixed.
-            ...(stage === 'retry' ? { content: '', reasoning: '' } : {}),
-            steps: [...(turn.steps ?? []), step],
-          }))
+          // A rejected attempt is discarded; its reasoning and trail stay visible.
+          if (stage === 'retry') answer = ''
+          patchLast((turn) => ({ ...turn, steps: [...(turn.steps ?? []), step] }))
         },
         onReasoning: (text) => patchLast((turn) => ({ ...turn, reasoning: `${turn.reasoning ?? ''}${text}` })),
-        onDelta: (text) => patchLast((turn) => ({ ...turn, content: `${turn.content}${text}` })),
+        onDelta: (text) => {
+          answer += text
+        },
         onTool: (event) => {
           const at = Date.now()
           if (event.phase === 'start') {
@@ -272,6 +273,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         citations: result.citations,
         validation: result.validation,
         active: false,
+        endedAt: Date.now(),
         steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'complete' } : step)),
       }))
     } catch (error) {
@@ -281,6 +283,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         ...turn,
         content: turn.content ? turn.content : `⚠️ ${message}`,
         active: false,
+        endedAt: Date.now(),
         steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step)),
       }))
     } finally {

@@ -48,7 +48,7 @@ export function ModelSelect() {
       options={models.map((entry) => ({ value: entry.id, label: entry.id }))}
       disabled={!ready || models.length === 0}
       size="sm"
-      className="w-64"
+      className="w-48"
       triggerClassName="h-7 rounded-xl border-primary/40 bg-primary/5 px-2.5 text-[11px] font-semibold text-foreground hover:border-primary"
     />
   )

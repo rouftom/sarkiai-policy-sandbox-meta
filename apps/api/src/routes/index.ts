@@ -1,6 +1,6 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { providerApiKey, describeProvider } from '@sps/agents'
+import { providerApiKey, describeProvider, referenceImage } from '@sps/agents'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -28,7 +28,16 @@ import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sp
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
 import { institutionsForDomain } from '@sps/shared'
-import type { DocType, Domain, InstitutionSpec, JointSituationReport, ScenarioEvent, WorkflowLens } from '@sps/shared'
+import {
+  READINESS_DIMENSIONS,
+  type DocType,
+  type Domain,
+  type InstitutionSpec,
+  type JointSituationReport,
+  type ReadinessDimension,
+  type ScenarioEvent,
+  type WorkflowLens,
+} from '@sps/shared'
 import { createEngine, createKnowledgeIngestor, createScenario, recordProviderSwitch } from '../engine.js'
 import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { healthDataBreach } from '../scenarios.js'
@@ -185,6 +194,7 @@ function isPublicRoute(method: string, path: string): boolean {
   if (path === '/v1/whatsapp/webhook') return true
   if (path.startsWith('/v1/whatsapp/approvals/')) return true
   if (path === '/v1/voice/realtime') return true
+  if (path.startsWith('/v1/kb/images/') && method === 'GET') return true
   if (path === '/v1/auth/setup') return true
   if (path === '/v1/auth/signup') return true
   if (path === '/v1/auth/login') return true
@@ -203,6 +213,63 @@ function isPublicRoute(method: string, path: string): boolean {
 function operatorOf(request: FastifyRequest) {
   if (!request.operator) throw new Error('Operator missing after the auth guard.')
   return request.operator
+}
+
+/**
+ * Reference figure per readiness dimension (13), attached to an existing
+ * document. Idempotent: a dimension whose figure already exists is skipped, so
+ * the boot hatch can be left in place. Meta Image draws the figure when the
+ * provider is configured; otherwise a labelled sample is stored instead.
+ */
+export async function seedReferenceImages(log: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }) {
+  const docs = await knowledge.listDocuments({ limit: 200 })
+  if (docs.length === 0) return { generated: 0, skipped: 0, documents: 0, source: 'none' as const }
+  const imageOptions =
+    engine.provider.mode === 'cloud' && providerApiKey(engine.provider)
+      ? {
+          baseURL: engine.provider.baseURL,
+          apiKey: providerApiKey(engine.provider),
+          ...(process.env.MODEL_RELAY_KEY ? { headers: { 'x-sps-relay-key': process.env.MODEL_RELAY_KEY } } : {}),
+        }
+      : null
+
+  let generated = 0
+  let skipped = 0
+  const sources = new Set<string>()
+  for (const dimension of READINESS_DIMENSIONS) {
+    const id = `ref_${dimension.shortName}`
+    if (docs.some((doc) => doc.images.some((image) => image.id === id))) {
+      skipped += 1
+      continue
+    }
+    const target = docs[(dimension.id - 1) % docs.length]!
+    const figure = await referenceImage(
+      `A clean, labelled editorial diagram illustrating "${dimension.name}" for national AI readiness: ${dimension.factors.join(', ')}. Flat vector style, no text beyond short labels, white background.`,
+      { title: dimension.name, lines: dimension.factors.map((factor) => `Factor: ${factor}`) },
+      imageOptions,
+    )
+    sources.add(figure.source)
+    await knowledge.attachImages(target.filename, [
+      {
+        id,
+        caption: `${dimension.name} · reference`,
+        alt: `Reference diagram: ${dimension.name}`,
+        tags: [dimension.shortName, ...dimension.factors],
+        dimension: dimension.shortName,
+        source: figure.source,
+        mime: figure.mime,
+        dataBase64: figure.dataBase64,
+      },
+    ])
+    generated += 1
+    log.info({ dimension: dimension.shortName, document: target.filename, source: figure.source }, 'reference figure attached')
+  }
+  return {
+    generated,
+    skipped,
+    documents: docs.length,
+    source: sources.size === 1 ? [...sources][0]! : sources.size > 1 ? 'mixed' : 'none',
+  }
 }
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -364,6 +431,153 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       request.log.error(error)
       return reply.status(502).send({ error: (error as Error).message })
     }
+  })
+
+  /** Preview of one document: its passages (chunk selected) and figures. */
+  app.get('/v1/kb/documents/preview', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const query = z
+      .object({ filename: z.string().min(1).max(300), chunkIndex: z.coerce.number().int().min(0).optional() })
+      .safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    try {
+      return await knowledge.preview(query.data.filename, query.data.chunkIndex)
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  /** Every passage of one document, retired ones included, for the editor. */
+  app.get('/v1/kb/documents/chunks', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const query = z.object({ filename: z.string().min(1).max(300) }).safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    return { chunks: await knowledge.chunksOf(query.data.filename) }
+  })
+
+  /** Document metadata: title, summary, and the fields propagated to its passages. */
+  app.patch('/v1/kb/documents', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const body = z
+      .object({
+        filename: z.string().min(1).max(300),
+        title: z.string().max(200).optional(),
+        summary: z.string().max(2000).optional(),
+        country: z.string().min(2).max(10).optional(),
+        docType: z.string().min(1).max(40).optional(),
+        namespace: z.string().max(80).optional(),
+        version: z.string().max(80).optional(),
+        sourceUrl: z.string().url().max(500).optional().or(z.literal('')),
+      })
+      .safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    const { filename, ...patch } = body.data
+    const modified = await knowledge.updateDocument(filename, { ...patch, docType: patch.docType as DocType | undefined })
+    return { filename, modified }
+  })
+
+  /** Edit one passage (re-embedded when its text changes) or retire / restore it. */
+  app.patch('/v1/kb/chunks/:id', { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const { id } = request.params as { id: string }
+    const body = z.object({ text: z.string().max(20_000).optional(), active: z.boolean().optional() }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    try {
+      const updated = await knowledge.updateChunk(id, body.data)
+      if (!updated) return reply.status(404).send({ error: 'Passage not found.' })
+      return { id, updated }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(422).send({ error: (error as Error).message })
+    }
+  })
+
+  /** Attach figures to a document: uploaded bytes, stored once, shown in the document's Media tab and in citations. */
+  app.post('/v1/kb/documents/images', { bodyLimit: 40 * 1024 * 1024 }, async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const body = z
+      .object({
+        filename: z.string().min(1).max(300),
+        images: z
+          .array(
+            z.object({
+              caption: z.string().min(1).max(300),
+              alt: z.string().max(300).optional(),
+              tags: z.array(z.string().max(40)).max(12).optional(),
+              dimension: z.string().max(60).optional(),
+              mime: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']),
+              dataBase64: z.string().min(4).max(30_000_000),
+            }),
+          )
+          .min(1)
+          .max(12),
+      })
+      .safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    const images = await knowledge.attachImages(
+      body.data.filename,
+      body.data.images.map((image) => ({
+        ...image,
+        source: 'upload' as const,
+        dimension: image.dimension as ReadinessDimension | undefined,
+      })),
+    )
+    return { filename: body.data.filename, images }
+  })
+
+  /** Edit a figure's caption, alt text, tags or dimension. */
+  app.patch('/v1/kb/images/:id', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const { id } = request.params as { id: string }
+    const body = z
+      .object({
+        caption: z.string().min(1).max(300).optional(),
+        alt: z.string().max(300).optional(),
+        tags: z.array(z.string().max(40)).max(12).optional(),
+        dimension: z.string().max(60).nullable().optional(),
+      })
+      .safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    const updated = await knowledge.updateImage(id, {
+      ...body.data,
+      dimension: body.data.dimension as ReadinessDimension | null | undefined,
+    })
+    if (!updated) return reply.status(404).send({ error: 'Image not found or nothing to change.' })
+    return { id, updated }
+  })
+
+  app.delete('/v1/kb/images/:id', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const { id } = request.params as { id: string }
+    const deleted = await knowledge.deleteImage(id)
+    if (!deleted) return reply.status(404).send({ error: 'Image not found.' })
+    return { id, deleted }
+  })
+
+  /** Generate the reference figures (Meta Image, or a labelled sample) and attach them to existing documents. */
+  app.post('/v1/kb/images/reference', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    try {
+      return await seedReferenceImages(request.log)
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
+  /**
+   * Figure bytes. Public on purpose: an `<img>` cannot send the Bearer token,
+   * and the figures are corpus material, not operator data.
+   */
+  app.get('/v1/kb/images/:id', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const { id } = request.params as { id: string }
+    const image = await knowledge.getImage(id)
+    if (!image) return reply.status(404).send({ error: 'Image not found.' })
+    if (image.externalUrl) return reply.redirect(image.externalUrl)
+    reply.header('Cache-Control', 'public, max-age=86400')
+    return reply.type(image.mime).send(image.data)
   })
 
   /** Create or repair the Atlas vector + BM25 indexes, on demand. */

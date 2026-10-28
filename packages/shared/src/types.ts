@@ -152,8 +152,28 @@ export interface Taxonomy {
   version?: string
 }
 
+/**
+ * A figure attached to a provision: a diagram, a scanned chart, a generated
+ * reference image. Retrieval carries the metadata, never the bytes, so a
+ * citation stays small; `url` is served by the API (`/v1/kb/images/:id`).
+ */
+export interface DocumentImage {
+  id: string
+  url: string
+  caption: string
+  alt?: string
+  tags?: string[]
+  /** Readiness dimension this figure illustrates, when known. */
+  dimension?: ReadinessDimension
+  articleNumber?: string
+  headingPath?: string
+  /** Where the image came from: an upload or a generated reference. */
+  source?: 'upload' | 'meta-image' | 'sample'
+}
+
 export interface KbChunk extends Taxonomy {
   id: string
+  documentId?: string
   filename: string
   text: string
   chunkIndex: number
@@ -162,6 +182,7 @@ export interface KbChunk extends Taxonomy {
   unitType?: string
   chunkRole?: 'parent' | 'child'
   sourceUrl?: string
+  images?: DocumentImage[]
   score?: number
   isActive: boolean
 }
@@ -174,6 +195,11 @@ export interface Citation {
   headingPath?: string
   sourceUrl?: string
   quote: string
+  /** Stable identifiers so the console can load the passage, not just the excerpt. */
+  chunkId?: string
+  chunkIndex?: number
+  documentId?: string
+  images?: DocumentImage[]
 }
 
 export interface Gap {

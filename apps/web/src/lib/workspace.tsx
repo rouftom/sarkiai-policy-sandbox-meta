@@ -35,7 +35,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       const raw = window.localStorage.getItem(STORAGE_KEY)
       if (!raw) return
       const stored = JSON.parse(raw) as Partial<WorkspaceState>
-      setState((current) => ({ ...current, ...stored }))
+      // Only Cameroon is offered: an earlier choice of another country falls back to it.
+      const country = stored.country === 'cm' ? 'cm' : DEFAULT_WORKSPACE.country
+      setState((current) => ({ ...current, ...stored, country }))
     } catch {
       /* malformed value: keep the defaults */
     }

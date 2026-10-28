@@ -17,6 +17,7 @@ import { MessageReasoning } from '@/components/ai/display/message-reasoning'
 import { AgentActivityTrail, type TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 import { useI18n } from '@/lib/i18n'
 import type { AssessmentDto } from '@/lib/api'
+import { CitationDialog, type CitationView } from '@/components/ai/display/citation-dialog'
 
 export interface ChatTurn {
   id: string
@@ -29,6 +30,8 @@ export interface ChatTurn {
   steps?: TrailStepView[]
   /** Epoch ms when the turn started, for the elapsed counter. */
   startedAt?: number
+  /** Epoch ms when the turn finished. */
+  endedAt?: number
   /** The turn is still being written. */
   active?: boolean
   /** Interactive cards the agent opened on this turn (questions, approvals). */
@@ -46,6 +49,7 @@ export function ChatMessage({
 }) {
   const { t } = useI18n()
   const [copied, setCopied] = React.useState(false)
+  const [openCitation, setOpenCitation] = React.useState<CitationView | null>(null)
 
   const copy = () => {
     void navigator.clipboard?.writeText(turn.content).then(() => {
@@ -100,6 +104,7 @@ export function ChatMessage({
             agents={turn.agentName ? [turn.agentName] : []}
             isStreaming={!!turn.active}
             startedAt={turn.startedAt}
+            endedAt={turn.endedAt}
             headerLabel={t('assistant.trail.header')}
           />
         </div>
@@ -136,30 +141,31 @@ export function ChatMessage({
 
           {turn.citations && turn.citations.length > 0 && !turn.active && (
             <ul className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[10px]">
-              {turn.citations.slice(0, 4).map((citation, index) => {
+              {turn.citations.slice(0, 6).map((citation, index) => {
                 const label = [citation.filename, citation.articleNumber ? `Article ${citation.articleNumber}` : '', citation.headingPath ?? '']
                   .filter(Boolean)
                   .join(' · ')
                 return (
-                  <li key={index} className="text-muted-foreground">
-                    {citation.sourceUrl ? (
-                      <a
-                        href={citation.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-semibold text-brand-primary-dark hover:underline dark:text-brand-primary-light"
-                      >
-                        {label}
-                      </a>
-                    ) : (
-                      <span className="font-semibold">{label}</span>
-                    )}
-                    {citation.quote && <p className="mt-0.5 line-clamp-2 italic opacity-80">“{citation.quote}”</p>}
+                  <li key={index}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenCitation(citation)}
+                      className="group block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-brand-primary/5"
+                    >
+                      <span className="flex items-center gap-1.5 font-semibold text-brand-primary-dark group-hover:underline dark:text-brand-primary-light">
+                        <span className="truncate">{label}</span>
+                        {citation.images && citation.images.length > 0 && (
+                          <span className="shrink-0 rounded bg-brand-primary/10 px-1 font-normal">{citation.images.length}</span>
+                        )}
+                      </span>
+                      {citation.quote && <span className="mt-0.5 line-clamp-2 block italic text-muted-foreground">“{citation.quote}”</span>}
+                    </button>
                   </li>
                 )
               })}
             </ul>
           )}
+          <CitationDialog citation={openCitation} onClose={() => setOpenCitation(null)} />
 
           {hasText && !turn.active && (
             <div className="mt-2 flex items-center gap-1">

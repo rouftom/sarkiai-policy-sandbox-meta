@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { animate, useMotionValue } from 'framer-motion'
 import remarkMath from 'remark-math'
 import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
@@ -29,48 +28,14 @@ interface AnimatedTextCompletionProps {
   isStreaming: boolean
 }
 
-export function useAnimatedText({ text, isStreaming }: { text: string; isStreaming: boolean }) {
-  const animatedCursor = useMotionValue(0)
-
-  const [cursor, setCursor] = useState(0)
-  const [prevText, setPrevText] = useState(text)
-  const [isSameText, setIsSameText] = useState(true)
-  const [isAnimating, setIsAnimating] = useState(false)
-
-  if (prevText !== text) {
-    setPrevText(text)
-    setIsSameText(text.startsWith(prevText))
-
-    if (!text.startsWith(prevText)) {
-      setCursor(0)
-    }
-  }
-
-  useEffect(() => {
-    if (!isSameText) {
-      animatedCursor.jump(0)
-    }
-
-    setIsAnimating(true)
-
-    const controls = animate(animatedCursor, text.split(delimiter).length, {
-      duration: 0.5,
-      ease: 'easeOut',
-      onUpdate(latest) {
-        setCursor(Math.floor(latest))
-      },
-      onComplete() {
-        setIsAnimating(false)
-      },
-    })
-
-    return () => controls.stop()
-  }, [animatedCursor, isSameText, text, isStreaming])
-
-  return {
-    animatedText: text.split(delimiter).slice(0, cursor).join(delimiter),
-    isAnimating,
-  }
+/**
+ * The answer is shown exactly as it arrives. The earlier per-word reveal
+ * replayed from zero whenever the text changed shape (the final answer is not
+ * always a prefix of the streamed draft), which read as the answer vanishing
+ * and streaming again. The server already streams token by token.
+ */
+export function useAnimatedText({ text }: { text: string; isStreaming: boolean }) {
+  return { animatedText: text, isAnimating: false }
 }
 
 function ThinkBlock({ children }: { children: any }) {

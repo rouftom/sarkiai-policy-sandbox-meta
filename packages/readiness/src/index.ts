@@ -56,15 +56,20 @@ export interface ReadinessReport {
   summary: string
 }
 
+const severity = z.preprocess(
+  (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+  z.enum(['low', 'medium', 'high', 'critical']),
+)
+
 const dimensionSchema = z.object({
-  score: z.number().min(0).max(5).describe('Maturity 0-5 per the readiness framework'),
-  confidence: z.number().min(0).max(1).default(0.5),
+  score: z.coerce.number().min(0).max(5).describe('Maturity 0-5 per the readiness framework'),
+  confidence: z.coerce.number().min(0).max(1).default(0.5),
   evidence: z.array(z.string()).default([]),
   gaps: z
     .array(
       z.object({
         description: z.string(),
-        severity: z.enum(['low', 'medium', 'high', 'critical']),
+        severity,
         globalBestPractice: z.string().optional(),
       }),
     )

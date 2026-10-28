@@ -13,10 +13,10 @@
  * happened instead of a spinner with no explanation.
  */
 
-import { createHash } from 'node:crypto'
-import { MongoClient, type Collection, type Document } from 'mongodb'
+import { createHash, randomUUID } from 'node:crypto'
+import { Binary, MongoClient, type Collection, type Document } from 'mongodb'
 import { chunkDocument, type ChunkOptions } from '@sps/kb'
-import type { DocType, Jurisdiction, ReadinessDimension } from '@sps/shared'
+import type { DocType, DocumentImage, Jurisdiction, ReadinessDimension } from '@sps/shared'
 import { inspectAtlasIndexes, ensureAtlasIndexes, type AtlasIndexInspection } from './atlas-indexes'
 import { KB_INDEX_DEFINITIONS } from './atlas-index-definitions'
 import { AtlasRetriever, type RetrievalExploration } from './atlas'
@@ -34,6 +34,25 @@ export interface AtlasIngestorConfig {
   textIndex?: string
 }
 
+/**
+ * A figure to attach to a document. Bytes arrive as base64 (`dataBase64`) and are
+ * stored once in `kb_images`; the citation only ever carries the metadata and a
+ * URL, so retrieval stays light. A already-hosted `url` is accepted unchanged.
+ */
+export interface ImageInput {
+  id?: string
+  caption: string
+  alt?: string
+  tags?: string[]
+  dimension?: ReadinessDimension
+  articleNumber?: string
+  headingPath?: string
+  source?: DocumentImage['source']
+  mime?: string
+  dataBase64?: string
+  url?: string
+}
+
 export interface IngestInput extends ChunkOptions {
   text: string
   filename: string
@@ -44,6 +63,8 @@ export interface IngestInput extends ChunkOptions {
   version?: string
   sourceUrl?: string
   pillar?: ReadinessDimension[]
+  /** Figures attached to this document (stored separately, copied to citations). */
+  images?: ImageInput[]
 }
 
 export type IngestStepStatus = 'ok' | 'skipped' | 'warning' | 'error'
@@ -97,6 +118,25 @@ export interface KnowledgeDocument {
   version?: string
   sourceUrl?: string
   lastIngestedAt: string | null
+  title?: string
+  summary?: string
+  images: DocumentImage[]
+}
+
+/** One document opened in the console's preview modal. */
+export interface DocumentPreview {
+  document: KnowledgeDocument | null
+  chunks: Array<{
+    id: string
+    chunkIndex: number
+    text: string
+    headingPath?: string
+    articleNumber?: string
+    images: DocumentImage[]
+  }>
+  images: DocumentImage[]
+  /** Index of the requested chunk inside `chunks`, when it exists. */
+  selected: number
 }
 
 export interface KnowledgeStatus {
@@ -122,6 +162,28 @@ export interface KnowledgeStatus {
 interface KbChunkDocument extends Document {
   _id: string
 }
+
+/** Bytes of one figure, keyed by image id. Metadata lives on `kb_images` too. */
+interface KbImageDocument extends Document {
+  _id: string
+  filename: string
+  documentId?: string
+  caption: string
+  alt?: string
+  tags?: string[]
+  dimension?: ReadinessDimension
+  articleNumber?: string
+  headingPath?: string
+  source?: DocumentImage['source']
+  mime: string
+  data?: Binary
+  externalUrl?: string
+  createdAt: Date
+}
+
+const IMAGE_COLLECTION = 'kb_images'
+/** One metadata record per document (title, summary), keyed by filename. */
+const DOCUMENT_COLLECTION = 'kb_documents'
 
 const INGEST_DEFAULTS = {
   collectionName: 'kb_chunks',
@@ -160,6 +222,135 @@ export class AtlasIngestor {
 
   private async chunks(): Promise<Collection<KbChunkDocument>> {
     return (await this.db()).collection<KbChunkDocument>(this.collectionName)
+  }
+
+  private async imageCollection(): Promise<Collection<KbImageDocument>> {
+    return (await this.db()).collection<KbImageDocument>(IMAGE_COLLECTION)
+  }
+
+  /** Public metadata of one image; the bytes stay on the server. */
+  private imageMetadata(doc: KbImageDocument): DocumentImage {
+    return {
+      id: String(doc._id),
+      url: doc.externalUrl ?? `/v1/kb/images/${encodeURIComponent(String(doc._id))}`,
+      caption: doc.caption,
+      ...(doc.alt ? { alt: doc.alt } : {}),
+      ...(doc.tags && doc.tags.length > 0 ? { tags: doc.tags } : {}),
+      ...(doc.dimension ? { dimension: doc.dimension } : {}),
+      ...(doc.articleNumber ? { articleNumber: doc.articleNumber } : {}),
+      ...(doc.headingPath ? { headingPath: doc.headingPath } : {}),
+      ...(doc.source ? { source: doc.source } : {}),
+    }
+  }
+
+  /** Every figure attached to a document, newest last. */
+  async listImages(filename: string): Promise<DocumentImage[]> {
+    const rows = await (await this.imageCollection()).find({ filename }).sort({ createdAt: 1 }).toArray()
+    return rows.map((row) => this.imageMetadata(row))
+  }
+
+  /** Read one image's bytes for `GET /v1/kb/images/:id`. */
+  async getImage(id: string): Promise<{ mime: string; data: Buffer; externalUrl?: string } | null> {
+    const row = await (await this.imageCollection()).findOne({ _id: id })
+    if (!row) return null
+    if (row.externalUrl) return { mime: row.mime, data: Buffer.alloc(0), externalUrl: row.externalUrl }
+    const data = row.data
+    if (!data) return null
+    return { mime: row.mime, data: Buffer.from(data.buffer) }
+  }
+
+  /**
+   * Attach figures to an existing document. An entry that already has an `id`
+   * updates only its metadata; a new `dataBase64` creates a new image.
+   */
+  async attachImages(filename: string, images: ImageInput[]): Promise<DocumentImage[]> {
+    if (images.length === 0) return this.listImages(filename)
+    const documentId = (await (await this.chunks()).findOne({ filename }, { projection: { documentId: 1 } }))?.documentId
+    const collection = await this.imageCollection()
+    for (const image of images.slice(0, 40)) {
+      const id = image.id ?? `img_${randomUUID()}`
+      if (image.dataBase64) {
+        const mime = image.mime ?? 'image/png'
+        const bytes = Buffer.from(image.dataBase64, 'base64')
+        await collection.replaceOne(
+          { _id: id },
+          {
+            _id: id,
+            filename,
+            ...(documentId ? { documentId: String(documentId) } : {}),
+            caption: image.caption,
+            ...(image.alt ? { alt: image.alt } : {}),
+            ...(image.tags && image.tags.length > 0 ? { tags: image.tags } : {}),
+            ...(image.dimension ? { dimension: image.dimension } : {}),
+            ...(image.articleNumber ? { articleNumber: image.articleNumber } : {}),
+            ...(image.headingPath ? { headingPath: image.headingPath } : {}),
+            source: image.source ?? 'upload',
+            mime,
+            data: new Binary(bytes),
+            createdAt: new Date(),
+          },
+          { upsert: true },
+        )
+      } else {
+        const patch = {
+          caption: image.caption,
+          ...(image.alt ? { alt: image.alt } : {}),
+          ...(image.tags && image.tags.length > 0 ? { tags: image.tags } : {}),
+          ...(image.dimension ? { dimension: image.dimension } : {}),
+          ...(image.articleNumber ? { articleNumber: image.articleNumber } : {}),
+          ...(image.headingPath ? { headingPath: image.headingPath } : {}),
+          ...(image.source ? { source: image.source } : {}),
+          ...(image.url ? { externalUrl: image.url, mime: image.mime ?? 'image/svg+xml' } : {}),
+        }
+        await collection.updateOne(
+          { _id: id },
+          {
+            $set: patch,
+            $setOnInsert: {
+              filename,
+              ...(documentId ? { documentId: String(documentId) } : {}),
+              createdAt: new Date(),
+            },
+          },
+          { upsert: true },
+        )
+      }
+    }
+    return this.listImages(filename)
+  }
+
+  /** Re-read the image metadata for a set of files in one query. */
+  async imagesByFilename(filenames: string[]): Promise<Map<string, DocumentImage[]>> {
+    const unique = [...new Set(filenames.filter(Boolean))]
+    const out = new Map<string, DocumentImage[]>()
+    if (unique.length === 0) return out
+    const rows = await (await this.imageCollection()).find({ filename: { $in: unique } }).sort({ createdAt: 1 }).toArray()
+    for (const row of rows) {
+      const list = out.get(row.filename) ?? []
+      list.push(this.imageMetadata(row))
+      out.set(row.filename, list)
+    }
+    return out
+  }
+
+  /** One document with its passages, for the citation preview modal. */
+  async preview(filename: string, chunkIndex?: number): Promise<DocumentPreview> {
+    const [documents, images, rows] = await Promise.all([
+      this.listDocuments({ query: filename, limit: 200, includeRetired: true }),
+      this.listImages(filename),
+      (await this.chunks()).find({ filename }).sort({ chunkIndex: 1 }).limit(400).toArray(),
+    ])
+    const document = documents.find((entry) => entry.filename === filename) ?? null
+    const chunks = rows.map((row) => ({
+      id: String(row._id),
+      chunkIndex: Number(row.chunkIndex ?? 0),
+      text: String(row.text ?? ''),
+      ...(row.headingPath ? { headingPath: String(row.headingPath) } : {}),
+      ...(row.articleNumber ? { articleNumber: String(row.articleNumber) } : {}),
+      images,
+    }))
+    const selected = chunkIndex === undefined ? 0 : Math.max(0, chunks.findIndex((chunk) => chunk.chunkIndex === chunkIndex))
+    return { document, chunks, images, selected }
   }
 
   async close(): Promise<void> {
@@ -410,6 +601,9 @@ export class AtlasIngestor {
         startedAt: stepStart,
       })
 
+      if (input.images && input.images.length > 0) {
+        await this.attachImages(input.filename, input.images)
+      }
       result.ok = true
     } catch (error) {
       const message = (error as Error).message
@@ -582,19 +776,27 @@ export class AtlasIngestor {
       ], { allowDiskUse: true })
       .toArray()
 
-    return rows.map((row) => ({
-      filename: String(row._id ?? ''),
-      documentId: String(row.documentId ?? ''),
-      chunks: Number(row.chunks ?? 0),
-      activeChunks: Number(row.activeChunks ?? 0),
-      characters: Number(row.characters ?? 0),
-      country: String(row.country ?? ''),
-      docType: String(row.docType ?? ''),
-      ...(row.namespace ? { namespace: String(row.namespace) } : {}),
-      ...(row.version ? { version: String(row.version) } : {}),
-      ...(row.sourceUrl ? { sourceUrl: String(row.sourceUrl) } : {}),
-      lastIngestedAt: iso(row.lastIngestedAt),
-    }))
+    const images = await this.imagesByFilename(rows.map((row) => String(row._id ?? '')))
+    const details = await this.documentDetails()
+    return rows.map((row) => {
+      const filename = String(row._id ?? '')
+      const figures = images.get(filename) ?? []
+      return {
+        ...details.get(filename),
+        filename,
+        documentId: String(row.documentId ?? ''),
+        chunks: Number(row.chunks ?? 0),
+        activeChunks: Number(row.activeChunks ?? 0),
+        characters: Number(row.characters ?? 0),
+        country: String(row.country ?? ''),
+        docType: String(row.docType ?? ''),
+        ...(row.namespace ? { namespace: String(row.namespace) } : {}),
+        ...(row.version ? { version: String(row.version) } : {}),
+        ...(row.sourceUrl ? { sourceUrl: String(row.sourceUrl) } : {}),
+        lastIngestedAt: iso(row.lastIngestedAt),
+        images: figures,
+      }
+    })
   }
 
   /** Soft-delete or restore every chunk of one document. */
@@ -604,6 +806,96 @@ export class AtlasIngestor {
       { $set: { isActive: active, ...(active ? {} : { retiredAt: new Date() }) } },
     )
     return result.modifiedCount
+  }
+
+  /** Document-level metadata the console edits (title, summary) and the chunk fields it propagates. */
+  async updateDocument(
+    filename: string,
+    patch: {
+      title?: string
+      summary?: string
+      country?: string
+      docType?: DocType
+      namespace?: string
+      version?: string
+      sourceUrl?: string
+    },
+  ): Promise<number> {
+    const db = await this.db()
+    const { title, summary, ...chunkFields } = patch
+    await db
+      .collection(DOCUMENT_COLLECTION)
+      .updateOne({ _id: filename as never }, { $set: { filename, title: title ?? '', summary: summary ?? '', updatedAt: new Date() } }, { upsert: true })
+    const set: Document = Object.fromEntries(Object.entries(chunkFields).filter(([, value]) => value !== undefined && value !== ''))
+    if (Object.keys(set).length === 0) return 0
+    const result = await (await this.chunks()).updateMany({ filename }, { $set: set })
+    return result.modifiedCount
+  }
+
+  /** Title and summary of every document, keyed by filename. */
+  async documentDetails(): Promise<Map<string, { title?: string; summary?: string }>> {
+    const rows = await (await this.db()).collection(DOCUMENT_COLLECTION).find({}).toArray()
+    return new Map(
+      rows.map((row) => [
+        String(row.filename ?? row._id),
+        { ...(row.title ? { title: String(row.title) } : {}), ...(row.summary ? { summary: String(row.summary) } : {}) },
+      ]),
+    )
+  }
+
+  /** Edit one passage. The vector is recomputed so retrieval matches the new text. */
+  async updateChunk(id: string, patch: { text?: string; active?: boolean }): Promise<boolean> {
+    const collection = await this.chunks()
+    const update: Document = {}
+    if (typeof patch.active === 'boolean') {
+      update.isActive = patch.active
+      update.retiredAt = patch.active ? null : new Date()
+    }
+    if (typeof patch.text === 'string') {
+      const text = patch.text.trim()
+      if (text.length < 24) throw new Error('A passage must keep at least 24 characters.')
+      const [vector] = await this.voyage.embed([text], 'document')
+      if (!vector) throw new Error('Voyage returned no vector for the edited passage.')
+      update.text = text
+      update.embedding = vector
+      update.metadata = { chunkChars: text.length, editedAt: new Date() }
+    }
+    if (Object.keys(update).length === 0) return false
+    const result = await collection.updateOne({ _id: id }, { $set: update })
+    return result.matchedCount > 0
+  }
+
+  /** Edit a figure's metadata (caption, alt, tags, dimension). The bytes are untouched. */
+  async updateImage(
+    id: string,
+    patch: { caption?: string; alt?: string; tags?: string[]; dimension?: ReadinessDimension | null },
+  ): Promise<boolean> {
+    const set: Document = {}
+    if (patch.caption !== undefined) set.caption = patch.caption
+    if (patch.alt !== undefined) set.alt = patch.alt
+    if (patch.tags !== undefined) set.tags = patch.tags
+    if (patch.dimension !== undefined) set.dimension = patch.dimension ?? null
+    if (Object.keys(set).length === 0) return false
+    const result = await (await this.imageCollection()).updateOne({ _id: id }, { $set: set })
+    return result.matchedCount > 0
+  }
+
+  async deleteImage(id: string): Promise<boolean> {
+    const result = await (await this.imageCollection()).deleteOne({ _id: id })
+    return result.deletedCount > 0
+  }
+
+  /** Read one document's chunks (all, retired included) for the editor. */
+  async chunksOf(filename: string): Promise<Array<{ id: string; chunkIndex: number; text: string; isActive: boolean; headingPath?: string; articleNumber?: string }>> {
+    const rows = await (await this.chunks()).find({ filename }).sort({ chunkIndex: 1 }).limit(400).toArray()
+    return rows.map((row) => ({
+      id: String(row._id),
+      chunkIndex: Number(row.chunkIndex ?? 0),
+      text: String(row.text ?? ''),
+      isActive: row.isActive !== false,
+      ...(row.headingPath ? { headingPath: String(row.headingPath) } : {}),
+      ...(row.articleNumber ? { articleNumber: String(row.articleNumber) } : {}),
+    }))
   }
 
   async explore(query: RetrievalQuery): Promise<RetrievalExploration> {
