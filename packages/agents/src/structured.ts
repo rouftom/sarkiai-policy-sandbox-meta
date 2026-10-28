@@ -27,6 +27,12 @@ export interface StructuredRequest<S extends ZodType> {
   /** Human-readable shape of the expected JSON object, shown to the model. */
   shape: string
   attempts?: number
+  /**
+   * Reasoning depth. Reasoning tokens count against `maxOutputTokens`: a deep
+   * setting can use the whole budget and leave the visible reply empty, so
+   * structured output defaults to a light pass.
+   */
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
   maxOutputTokens?: number
 }
 
@@ -121,7 +127,12 @@ export async function generateStructured<S extends ZodType>(request: StructuredR
       model: request.model,
       system: `${request.system}\n\nReply with ONLY one JSON object, no prose and no code fence. Shape:\n${request.shape}`,
       prompt: `${request.prompt}${feedback}`,
-      maxOutputTokens: request.maxOutputTokens ?? 4096,
+      maxOutputTokens: request.maxOutputTokens ?? 8192,
+      // The provider reads its own option name ("meta" on Meta's API); the generic one is kept for compatible hosts.
+      providerOptions: {
+        meta: { reasoningEffort: request.reasoningEffort ?? 'low' },
+        'openai-compatible': { reasoningEffort: request.reasoningEffort ?? 'low' },
+      },
     })
 
     // Some models answer in the reasoning channel only: read it when the answer is empty.

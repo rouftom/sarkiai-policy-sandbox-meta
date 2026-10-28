@@ -161,7 +161,7 @@ export interface JointReportDto {
   agreements: string[]
   conflicts: MandateConflictDto[]
   openQuestions: string[]
-  assessments: AssessmentDto[]
+  assessments: Array<AssessmentDto & { durationMs?: number }>
 }
 
 /** One incident fact, released per chunk, visible to a subset of the agents. */

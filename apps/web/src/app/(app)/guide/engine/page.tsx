@@ -1,6 +1,6 @@
 'use client'
 
-import { Cpu, Database, Flag, ShieldCheck, Waypoints } from 'lucide-react'
+import { Cpu, Database, Flag, Gauge, ShieldCheck, Waypoints } from 'lucide-react'
 import {
   GuideBanner,
   GuideChecklist,
@@ -9,6 +9,23 @@ import {
   GuideTable,
 } from '@/components/guide-shell'
 import { useI18n } from '@/lib/i18n'
+
+/** The 13 readiness dimensions, explained for the guide (names match the scoring engine). */
+const READINESS_EXPLAINED = [
+  { id: 1, en: 'Data/Model Marketplace', fr: 'Marché des données et des modèles', whatEn: 'Access to usable, licensed datasets and models for public and private actors.', whatFr: 'Accès à des données et modèles exploitables, sous licence claire, pour les acteurs publics et privés.' },
+  { id: 2, en: 'Generated Content Marketplace', fr: 'Marché des contenus générés', whatEn: 'Rules and channels for AI-generated content: ownership, labelling, distribution.', whatFr: 'Règles et circuits pour les contenus générés par IA : propriété, étiquetage, diffusion.' },
+  { id: 3, en: 'Cross-Domain Correlation Analysis', fr: 'Analyse croisée entre domaines', whatEn: 'Ability to link data across sectors (health, education, finance) without losing control.', whatFr: 'Capacité à relier des données entre secteurs (santé, éducation, finance) sans perdre le contrôle.' },
+  { id: 4, en: 'Contextualization and Regional Impact', fr: 'Contextualisation et impact régional', whatEn: 'Whether AI is adapted to local languages, realities and regional effects.', whatFr: 'Adaptation de l’IA aux langues, réalités et effets régionaux locaux.' },
+  { id: 5, en: 'Level of Integration of AI in Workflows', fr: 'Intégration de l’IA dans les processus', whatEn: 'How far AI is embedded in real administrative and service workflows.', whatFr: 'Niveau d’intégration de l’IA dans les processus administratifs et de service réels.' },
+  { id: 6, en: 'Human Interface', fr: 'Interface humaine', whatEn: 'Usability and human oversight: how people see, question and correct AI outputs.', whatFr: 'Ergonomie et supervision humaine : comment les personnes voient, contestent et corrigent les sorties de l’IA.' },
+  { id: 7, en: 'Strategy Alignment', fr: 'Alignement stratégique', whatEn: 'Coherence between the national AI strategy, budgets and sector plans.', whatFr: 'Cohérence entre la stratégie nationale d’IA, les budgets et les plans sectoriels.' },
+  { id: 8, en: 'Collaboration with AI', fr: 'Collaboration avec l’IA', whatEn: 'Working practices where people and AI systems share tasks and accountability.', whatFr: 'Pratiques de travail où personnes et systèmes d’IA partagent les tâches et les responsabilités.' },
+  { id: 9, en: 'Impacts of Humans in AI Integration', fr: 'Impact humain de l’intégration', whatEn: 'Effects on jobs, skills and training, and how they are anticipated.', whatFr: 'Effets sur l’emploi, les compétences et la formation, et manière dont ils sont anticipés.' },
+  { id: 10, en: 'AI & Policies', fr: 'IA et politiques publiques', whatEn: 'Existence and enforcement of AI rules: liability, audit, redress.', whatFr: 'Existence et application des règles sur l’IA : responsabilité, audit, recours.' },
+  { id: 11, en: 'AI for Inclusion', fr: 'IA pour l’inclusion', whatEn: 'Whether AI services reach women, rural citizens, people with disabilities and other excluded groups.', whatFr: 'Atteinte par les services d’IA des femmes, des populations rurales, des personnes handicapées et autres groupes exclus.' },
+  { id: 12, en: 'Granular Priorities', fr: 'Priorités opérationnelles', whatEn: 'Concrete, costed priorities with owners and dates, not only general intentions.', whatFr: 'Priorités concrètes, chiffrées, avec responsables et échéances, et non seulement des intentions générales.' },
+  { id: 13, en: 'Digital Infrastructure', fr: 'Infrastructure numérique', whatEn: 'Connectivity, compute, data centres and public cloud able to host AI workloads.', whatFr: 'Connectivité, calcul, centres de données et cloud public capables d’accueillir des charges d’IA.' },
+]
 
 export default function GuideEnginePage() {
   const { t, locale } = useI18n()
@@ -60,6 +77,22 @@ export default function GuideEnginePage() {
               c: fr ? 'Revue de direction' : 'Executive review',
             },
           ]}
+        />
+      </GuideSection>
+
+      <GuideSection title={fr ? 'Les 13 dimensions de maturité IA' : 'The 13 AI-readiness dimensions'} icon={Gauge}>
+        <p>
+          {fr
+            ? 'Chaque dimension reçoit une note de 0 à 5 (0 non commencé, 3 établi, 5 leader). La note s’appuie sur les textes du pays, comparés aux bonnes pratiques mondiales, et sur une recherche web en direct quand elle est disponible. Les dimensions sont regroupées en six facteurs : données, open source, standards, recherche, déploiement et bac à sable.'
+            : 'Each dimension gets a score from 0 to 5 (0 not started, 3 established, 5 leading). The score rests on the country’s texts, compared with global best practice, and on a live web search when it is available. The dimensions group into six factors: data, open source, standards, research, deployment and sandbox.'}
+        </p>
+        <GuideTable
+          headers={['#', fr ? 'Dimension' : 'Dimension', fr ? 'Ce qu’elle mesure' : 'What it measures']}
+          rows={READINESS_EXPLAINED.map((entry) => ({
+            a: String(entry.id),
+            b: fr ? entry.fr : entry.en,
+            c: fr ? entry.whatFr : entry.whatEn,
+          }))}
         />
       </GuideSection>
 

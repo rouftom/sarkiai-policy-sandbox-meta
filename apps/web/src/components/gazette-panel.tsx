@@ -13,9 +13,9 @@
  */
 
 import * as React from 'react'
-import { FileScan, Plus } from 'lucide-react'
+import { Check, FileScan, Plus, X } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@sps/ui'
-import { api, type GazetteBoxDto, type GazetteIngestDto, type GazettePageDto } from '@/lib/api'
+import { api, type GazetteBoxDto, type GazettePageDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { ProcessingBar } from '@/components/processing-bar'
 
@@ -64,12 +64,17 @@ export function GazettePanel({ country }: { country: string }) {
   const [page, setPage] = React.useState<GazettePageDto | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [ingesting, setIngesting] = React.useState(false)
-  const [ingested, setIngested] = React.useState<GazetteIngestDto | null>(null)
+  const [toast, setToast] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 4500)
+    return () => window.clearTimeout(timer)
+  }, [toast])
 
   const reset = () => {
     setPage(null)
-    setIngested(null)
     setError(null)
   }
 
@@ -98,7 +103,6 @@ export function GazettePanel({ country }: { country: string }) {
     if (!source) return
     setBusy(true)
     setError(null)
-    setIngested(null)
     try {
       const result = await api.analyzeGazette({
         filename: source.filename,
@@ -120,15 +124,17 @@ export function GazettePanel({ country }: { country: string }) {
     setIngesting(true)
     setError(null)
     try {
-      setIngested(
-        await api.ingestGazette({
-          page,
-          country,
-          jurisdiction: 'national',
-          docType: 'regulation',
-          namespace: 'gazette',
-        }),
-      )
+      const result = await api.ingestGazette({
+        page,
+        country,
+        jurisdiction: 'national',
+        docType: 'regulation',
+        namespace: 'gazette',
+      })
+      setToast(t('gazette.ingested', { zones: result.zones, chunks: result.chunksInserted, page: result.page }))
+      // Done: the next page starts from an empty panel.
+      setSource(null)
+      reset()
     } catch (cause) {
       setError((cause as Error).message)
     } finally {
@@ -183,14 +189,17 @@ export function GazettePanel({ country }: { country: string }) {
 
         {error && <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-2 text-xs text-rose-500">{error}</p>}
 
-        {ingested && (
-          <p className="rounded-xl border border-primary/40 bg-primary/5 p-2 text-xs">
-            {t('gazette.ingested', {
-              zones: ingested.zones,
-              chunks: ingested.chunksInserted,
-              page: ingested.page,
-            })}
-          </p>
+        {toast && (
+          <div
+            role="status"
+            className="fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-2 rounded-xl border border-emerald-500/40 bg-card px-4 py-3 text-xs shadow-lg"
+          >
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+            <span className="min-w-0 flex-1">{toast}</span>
+            <button type="button" onClick={() => setToast(null)} className="text-muted-foreground hover:text-foreground" aria-label={t('common.close')}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
 
         {(source || page) && (

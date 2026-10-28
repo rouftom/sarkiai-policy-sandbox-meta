@@ -124,7 +124,8 @@ export class ReadinessEngine {
         shape:
           '{"score": number 0-5, "confidence": number 0-1, "evidence": string[], "gaps": [{"description": string, "severity": "low"|"medium"|"high"|"critical", "globalBestPractice": string}]}',
         attempts: 3,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
+        reasoningEffort: 'low',
         system: `You assess country "${input.country}" AI readiness on the dimension "${def.name}" (factors: ${def.factors.join(', ')}), domain "${input.domain}".
 Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNTRY provisions to GLOBAL best practice. Identify concrete gaps: unclear responsibilities, missing standards, legislative gaps, coordination problems, conflicts between objectives. Ground every claim in the passages. Do not analyse specific geographies; focus on domain-specific gaps and relevant global examples.`,
         prompt: `COUNTRY PROVISIONS:\n${countryChunks.map((c) => c.text).join('\n---\n') || '(none)'}\n\nGLOBAL BEST PRACTICE:\n${globalChunks.map((c) => c.text).join('\n---\n') || '(none)'}${live?.text ? `\n\nLIVE WEB (recent, not legal sources; say when a point comes from the web):\n${live.text.slice(0, 3000)}` : ''}`,

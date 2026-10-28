@@ -1,6 +1,6 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { providerApiKey, describeProvider, referenceImage } from '@sps/agents'
+import { providerAccess, providerApiKey, describeProvider, referenceImage } from '@sps/agents'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -145,9 +145,12 @@ const GAZETTE_MAX_BYTES = 12 * 1024 * 1024
  */
 function gazetteSam(): SamClient | undefined {
   if (engine.provider.mode !== 'cloud' || !engine.provider.models.segmentation) return undefined
+  const access = providerAccess(engine.provider)
+  if (!access.apiKey) return undefined
   return new SamClient({
     baseUrl: engine.provider.baseURL,
-    apiKey: providerApiKey(engine.provider),
+    apiKey: access.apiKey,
+    headers: access.headers,
     model: engine.provider.models.segmentation,
   })
 }
@@ -188,7 +191,7 @@ async function selectBootModel(app: FastifyInstance): Promise<void> {
  */
 function isPublicRoute(method: string, path: string): boolean {
   if (method === 'OPTIONS') return true
-  if (path === '/health') return true
+  if (path === '/health' || path === '/health/egress') return true
   if (path === '/v1/whatsapp/webhook') return true
   if (path.startsWith('/v1/whatsapp/approvals/')) return true
   if (path.startsWith('/v1/kb/images/') && method === 'GET') return true
@@ -221,15 +224,10 @@ function operatorOf(request: FastifyRequest) {
 export async function seedReferenceImages(log: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }) {
   const docs = await knowledge.listDocuments({ limit: 200 })
   if (docs.length === 0) return { generated: 0, skipped: 0, documents: 0, source: 'none' as const }
-  // Through the egress relay the relay holds the Meta key: the shared secret is enough.
-  const relayKey = process.env.MODEL_RELAY_KEY?.trim()
+  const access = providerAccess(engine.provider)
   const imageOptions =
-    engine.provider.mode === 'cloud' && (providerApiKey(engine.provider) || relayKey)
-      ? {
-          baseURL: engine.provider.baseURL,
-          apiKey: providerApiKey(engine.provider) || 'relay',
-          ...(relayKey ? { headers: { 'x-sps-relay-key': relayKey } } : {}),
-        }
+    engine.provider.mode === 'cloud' && access.apiKey
+      ? { baseURL: engine.provider.baseURL, apiKey: access.apiKey, headers: access.headers }
       : null
 
   let generated = 0
@@ -350,6 +348,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     service: 'sps-api',
     provider: { mode: engine.provider.mode, model: engine.provider.models.reasoning },
   }))
+
+  /**
+   * Egress probe: can this host reach Meta directly? Returns only the status
+   * and the time taken, never a secret. Temporary: removed once the answer is known.
+   */
+  app.get('/health/egress', async () => {
+    const started = Date.now()
+    try {
+      const response = await fetch('https://api.meta.ai/v1/models', {
+        headers: { Authorization: `Bearer ${providerApiKey(engine.provider)}` },
+        signal: AbortSignal.timeout(15_000),
+      })
+      return { reachable: true, status: response.status, ms: Date.now() - started }
+    } catch (error) {
+      return { reachable: false, error: (error as Error).name, ms: Date.now() - started }
+    }
+  })
 
   // ── Active provider (secret-free: what answers, and where) ────────────────
   app.get('/v1/provider', async () => engine.provider)
@@ -1311,7 +1326,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       engine.provider.mode === 'cloud' && engine.provider.models.transcription
         ? new MetaAsrClient({
             baseUrl: engine.provider.baseURL,
-            apiKey: providerApiKey(engine.provider),
+            apiKey: providerAccess(engine.provider).apiKey,
+            headers: providerAccess(engine.provider).headers,
             model: engine.provider.models.transcription,
           })
         : new LocalAsrClient({

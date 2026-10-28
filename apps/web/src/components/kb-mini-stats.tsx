@@ -3,11 +3,14 @@
 import * as React from 'react'
 import { cn } from '@sps/ui'
 import { useI18n } from '@/lib/i18n'
+import { formatSize } from '@/lib/format'
 
 /** What the knowledge base holds, in one compact line: documents, chunks, last ingestion. */
 export interface KbSummary {
   documents: number
   chunks: number
+  /** Total characters of the active corpus. */
+  characters?: number
   lastIngestedAt?: string | null
 }
 
@@ -34,6 +37,12 @@ export function KbMiniStats({ summary, className }: { summary: KbSummary; classN
       <span className="h-3 w-px shrink-0 bg-border" />
       <span className="font-mono text-foreground">{fmt(summary.chunks)}</span>
       <span className="truncate">{t('knowledge.chunks').toLowerCase()}</span>
+      {summary.characters !== undefined && (
+        <>
+          <span className="h-3 w-px shrink-0 bg-border" />
+          <span className="font-mono text-foreground">{formatSize(summary.characters)}</span>
+        </>
+      )}
     </div>
   )
 }

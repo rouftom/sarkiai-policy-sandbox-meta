@@ -93,15 +93,18 @@ export class MultiAgentCoordinator {
         const visible = input.history.filter(
           (e) => e.releaseChunk <= input.tick && e.visibleTo.includes(institution.id),
         )
-        return this.deps.orchestrator.runAgent({
-          institution,
-          question: this.buildQuestion(institution, visible),
-          country: input.country,
-          domain: input.domain,
-          lens: input.lens,
-          runId: input.runId,
-          ...(input.userId ? { userId: input.userId } : {}),
-        })
+        const started = Date.now()
+        return this.deps.orchestrator
+          .runAgent({
+            institution,
+            question: this.buildQuestion(institution, visible),
+            country: input.country,
+            domain: input.domain,
+            lens: input.lens,
+            runId: input.runId,
+            ...(input.userId ? { userId: input.userId } : {}),
+          })
+          .then((assessment) => ({ ...assessment, durationMs: Date.now() - started }))
       }),
     )
     return assessments

@@ -83,9 +83,43 @@ function TickReport({ tick }: { tick: JointReportDto }) {
         </div>
       )}
 
-      <p className="mt-2 text-[10px] font-semibold text-muted-foreground">
-        {t('scenario.assessments', { count: tick.assessments.length })}
+      <AgentTimings assessments={tick.assessments} />
+    </div>
+  )
+}
+
+/**
+ * How many agents took part in this batch and how long each one took. The
+ * agents run in parallel, so the batch lasts as long as the slowest one.
+ */
+function AgentTimings({ assessments }: { assessments: Array<{ agentId: string; role: string; durationMs?: number }> }) {
+  const { t } = useI18n()
+  const timed = assessments.filter((assessment) => assessment.durationMs !== undefined)
+  const slowest = Math.max(0, ...timed.map((assessment) => assessment.durationMs ?? 0))
+  return (
+    <div className="mt-2 space-y-1.5">
+      <p className="text-[10px] font-semibold text-muted-foreground">
+        {t('scenario.assessments', { count: assessments.length })}
+        {slowest > 0 && <> · {t('process.batchDuration', { seconds: (slowest / 1000).toFixed(1) })}</>}
       </p>
+      {timed.length > 0 && (
+        <ul className="space-y-1">
+          {timed.map((assessment) => (
+            <li key={assessment.agentId} className="flex items-center gap-2 text-[11px]">
+              <span className="min-w-0 flex-1 truncate">{assessment.agentId}</span>
+              <span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-secondary">
+                <span
+                  className="block h-full rounded-full bg-brand-primary dark:bg-brand-primary-light"
+                  style={{ width: `${((assessment.durationMs ?? 0) / slowest) * 100}%` }}
+                />
+              </span>
+              <span className="w-14 shrink-0 text-right font-mono text-muted-foreground">
+                {((assessment.durationMs ?? 0) / 1000).toFixed(1)} s
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

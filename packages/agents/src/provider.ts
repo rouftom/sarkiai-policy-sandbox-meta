@@ -175,6 +175,17 @@ export function relayHeaders(source: Env): Record<string, string> {
   return relayKey ? { 'x-sps-relay-key': relayKey } : {}
 }
 
+/**
+ * How to call the provider from this process: the key, and the relay secret
+ * when calls go through our egress relay. Through the relay the relay holds the
+ * Meta key, so the shared secret alone is enough.
+ */
+export function providerAccess(descriptor: ProviderDescriptor, source: Env = process.env): { apiKey: string; headers: Record<string, string> } {
+  const headers = relayHeaders(source)
+  const apiKey = providerApiKey(descriptor, source) || (Object.keys(headers).length > 0 ? 'relay' : '')
+  return { apiKey, headers }
+}
+
 /** Build the chat model for a descriptor (lazy: no network call happens here). */
 export function createProviderModel(descriptor: ProviderDescriptor, source: Env = process.env): LanguageModel {
   const headers = relayHeaders(source)

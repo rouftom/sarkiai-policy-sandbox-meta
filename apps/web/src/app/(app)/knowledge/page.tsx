@@ -122,6 +122,7 @@ export default function KnowledgePage() {
               summary={{
                 documents: corpus?.documents ?? 0,
                 chunks: corpus?.activeChunks ?? 0,
+                characters: corpus?.characters,
                 lastIngestedAt: corpus?.lastIngestedAt,
               }}
             />

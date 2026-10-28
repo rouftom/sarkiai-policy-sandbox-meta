@@ -11,7 +11,7 @@
  * a legal claim (see the citation validator). Web results are labelled as such.
  */
 
-import { providerApiKey, relayHeaders } from './provider'
+import { providerAccess } from './provider'
 import type { ProviderDescriptor } from '@sps/shared'
 
 export interface WebSource {
@@ -127,9 +127,7 @@ export async function searchWeb(query: string, options: WebSearchOptions): Promi
  */
 export function webSearchFor(descriptor: ProviderDescriptor, source: Record<string, string | undefined> = process.env): WebSearch | undefined {
   if (descriptor.mode !== 'cloud') return undefined
-  const headers = relayHeaders(source)
-  // Through the egress relay the relay holds the Meta key: the shared secret is enough to call it.
-  const apiKey = providerApiKey(descriptor, source) || (Object.keys(headers).length > 0 ? 'relay' : '')
+  const { apiKey, headers } = providerAccess(descriptor, source)
   const model = descriptor.models.reasoning
   if (!apiKey || !model) return undefined
   return (query) =>

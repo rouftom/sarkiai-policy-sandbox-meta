@@ -41,6 +41,7 @@ import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { TableActionItem } from '@/components/ui/table-actions'
 import { assetUrl, knowledgeApi, type KbChunkDto, type KbDocumentDto, type KbImageDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { formatSize } from '@/lib/format'
 
 const DOC_TYPES = ['law', 'policy', 'regulation', 'strategy', 'report', 'guidance']
 const COUNTRIES = [
@@ -95,15 +96,20 @@ function DocumentEditor() {
 
   const title = document?.title || filename
   const subtitle = document
-    ? [document.country.toUpperCase(), document.docType, `${document.activeChunks} ${t('knowledge.chunks').toLowerCase()}`, `${document.images?.length ?? 0} ${t('kbdoc.figures').toLowerCase()}`].join(' · ')
+    ? [document.country.toUpperCase(), document.docType, formatSize(document.characters), `${document.activeChunks} ${t('knowledge.chunks').toLowerCase()}`, `${document.images?.length ?? 0} ${t('kbdoc.figures').toLowerCase()}`].join(' · ')
     : filename
 
   return (
     <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
-      <PageIntro title={title} subtitle={subtitle}>
-        <Button variant="ghost" size="sm" className="h-8" onClick={() => history.back()}>
-          <ArrowLeft className="h-3.5 w-3.5" /> {t('kbdoc.back')}
-        </Button>
+      <PageIntro
+        title={title}
+        subtitle={subtitle}
+        leading={
+          <Button variant="ghost" size="icon-sm" className="h-8 w-8 shrink-0 rounded-lg" aria-label={t('kbdoc.back')} title={t('kbdoc.back')} onClick={() => history.back()}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        }
+      >
         <AnimatedTabsList items={tabs} value={tab} onValueChange={(value) => setTab(value as Tab)} dense />
       </PageIntro>
 

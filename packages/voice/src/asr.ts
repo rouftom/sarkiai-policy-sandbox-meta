@@ -55,6 +55,8 @@ export interface VoiceRequest {
 export interface MetaAsrOptions {
   baseUrl: string
   apiKey: string
+  /** Extra headers, e.g. the egress relay secret. */
+  headers?: Record<string, string>
   model?: string
   fetchImpl?: typeof fetch
 }
@@ -94,12 +96,14 @@ function audioBlob(audio: Uint8Array): Blob {
 export class MetaAsrClient {
   private readonly baseUrl: string
   private readonly apiKey: string
+  private readonly headers: Record<string, string>
   private readonly model: string
   private readonly fetchImpl: typeof fetch
 
   constructor(options: MetaAsrOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '')
     this.apiKey = options.apiKey
+    this.headers = options.headers ?? {}
     this.model = options.model ?? 'muse-voice-transcribe-1.0'
     this.fetchImpl = options.fetchImpl ?? fetch
   }
@@ -128,7 +132,7 @@ export class MetaAsrClient {
       `${this.baseUrl}/asr/transcribe?sessionId=${encodeURIComponent(sessionId)}`,
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${this.apiKey}` },
+        headers: { Authorization: `Bearer ${this.apiKey}`, ...this.headers },
         body: form,
         signal: request.signal,
       },

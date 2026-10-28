@@ -217,6 +217,8 @@ export interface Gap {
 
 export interface AgentAssessment {
   agentId: string
+  /** Wall-clock time this agent took to answer, measured by the coordinator. */
+  durationMs?: number
   role: AgentRole
   mandate: string
   domain: Domain

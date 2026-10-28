@@ -20,6 +20,7 @@ import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } fr
 import { useI18n } from '@/lib/i18n'
 import { MediaUploader, UploadFailure, type UploadOutcome } from '@/components/media-uploader'
 import { KbMiniStats, type KbSummary } from '@/components/kb-mini-stats'
+import { formatSize } from '@/lib/format'
 
 const ACCEPT = '.pdf,.txt,.md,.markdown,.csv,.json'
 const ACCEPT_PATTERN = /\.(pdf|txt|md|markdown|csv|json)$/i
@@ -188,6 +189,7 @@ export function KbDocuments({
                 <TableRow className="hover:bg-transparent">
                   <TableHead>{t('knowledge.corpus.file')}</TableHead>
                   <TableHead>{t('knowledge.corpus.type')}</TableHead>
+                  <TableHead className="text-right">{t('knowledge.corpus.size')}</TableHead>
                   <TableHead className="text-right">{t('knowledge.corpus.chunks')}</TableHead>
                   <TableHead className="text-right">{t('knowledge.corpus.action')}</TableHead>
                 </TableRow>
@@ -207,6 +209,7 @@ export function KbDocuments({
                         </p>
                       </TableCell>
                       <TableCell className="text-[12px]">{document.docType}</TableCell>
+                      <TableCell className="text-right font-mono text-[12px]">{formatSize(document.characters)}</TableCell>
                       <TableCell className="text-right font-mono text-[12px]">
                         {document.activeChunks.toLocaleString('en-US')}
                       </TableCell>

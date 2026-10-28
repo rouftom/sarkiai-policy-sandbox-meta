@@ -18,6 +18,8 @@ export interface SamOptions {
   /** Model API root, e.g. https://api.meta.ai/v1 */
   baseUrl: string
   apiKey: string
+  /** Extra headers, e.g. the egress relay secret. */
+  headers?: Record<string, string>
   model?: string
   fetchImpl?: typeof fetch
 }
@@ -144,12 +146,14 @@ export function samText(stream: string): string {
 export class SamClient {
   private readonly baseUrl: string
   private readonly apiKey: string
+  private readonly headers: Record<string, string>
   private readonly model: string
   private readonly fetchImpl: typeof fetch
 
   constructor(options: SamOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '')
     this.apiKey = options.apiKey
+    this.headers = options.headers ?? {}
     this.model = options.model ?? 'sam-3.1'
     this.fetchImpl = options.fetchImpl ?? fetch
   }
@@ -165,6 +169,7 @@ export class SamClient {
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
+        ...this.headers,
       },
       signal: request.signal,
       body: JSON.stringify({
