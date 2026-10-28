@@ -184,9 +184,25 @@ export async function startRealtimeTranscription(handlers: RealtimeHandlers): Pr
 
   const socket = new WebSocket(realtimeUrl(token))
   socket.binaryType = 'arraybuffer'
+  // The service acknowledges the session with a `sessionId` frame. Without it within 12 s the
+  // stream is treated as unavailable, so the caller can fall back to clips.
   await new Promise<void>((resolve, reject) => {
-    socket.onopen = () => resolve()
-    socket.onerror = () => reject(new Error('The voice service did not answer.'))
+    const timer = setTimeout(() => {
+      socket.close()
+      reject(new Error('The voice service did not answer in time.'))
+    }, 12_000)
+    const fail = () => {
+      clearTimeout(timer)
+      reject(new Error('The voice service did not answer.'))
+    }
+    socket.onerror = fail
+    socket.onclose = fail
+    socket.onmessage = (event) => {
+      if (typeof event.data === 'string' && event.data.includes('sessionId')) {
+        clearTimeout(timer)
+        resolve()
+      }
+    }
   })
 
   const stream = await navigator.mediaDevices.getUserMedia({

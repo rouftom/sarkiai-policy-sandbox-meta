@@ -140,6 +140,30 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
     [transcribeSegment],
   )
 
+  /** The live session, or null when the service does not answer: the caller then records segments. */
+  const openLive = useCallback(async (): Promise<RealtimeSession | null> => {
+    try {
+      return await startRealtimeTranscription({
+        onPartial(text) {
+          partial.current = text
+          callbacks.current.onTranscript([committed.current, text].filter(Boolean).join(' '), false)
+        },
+        onFinal(text) {
+          committed.current = [committed.current, text].filter(Boolean).join(' ')
+          partial.current = ''
+          callbacks.current.onTranscript(committed.current, false)
+        },
+        onError(message) {
+          session.current = null
+          fail(message)
+        },
+      })
+    } catch (error) {
+      console.warn('Live dictation unavailable, recording segments instead:', error)
+      return null
+    }
+  }, [fail])
+
   const startRecording = useCallback(async () => {
     committed.current = ''
     partial.current = ''
@@ -147,25 +171,11 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
     setIsRecording(true)
     void controls.start('recording')
     try {
-      if (supportsRealtimeVoice()) {
-        // Live: words appear as they are spoken (Muse Voice Transcribe over our WebSocket).
-        const started = await startRealtimeTranscription({
-          onPartial(text) {
-            partial.current = text
-            callbacks.current.onTranscript([committed.current, text].filter(Boolean).join(' '), false)
-          },
-          onFinal(text) {
-            committed.current = [committed.current, text].filter(Boolean).join(' ')
-            partial.current = ''
-            callbacks.current.onTranscript(committed.current, false)
-          },
-          onError(message) {
-            session.current = null
-            fail(message)
-          },
-        })
-        if (stopRequested.current) started.stop()
-        else session.current = started
+      // Live: words appear as they are spoken. When the live stream is not available, short segments are used.
+      const live = supportsRealtimeVoice() ? await openLive() : null
+      if (live) {
+        if (stopRequested.current) live.stop()
+        else session.current = live
         return
       }
 
