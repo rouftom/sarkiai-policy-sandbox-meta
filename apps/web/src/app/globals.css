@@ -378,3 +378,9 @@ html[data-radius='square']
   background-size: 200% 100%;
   animation: sps-shimmer 1.4s ease-in-out infinite;
 }
+
+/* Active edges of the process graph: a moving dash while the step runs. */
+@keyframes dash {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -20; }
+}

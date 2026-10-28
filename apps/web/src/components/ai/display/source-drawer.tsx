@@ -43,7 +43,7 @@ export function SourceDrawer({ source, onClose }: { source: WebSourceView | null
   }, [source, onClose])
 
   if (!source) return null
-  const date = (value?: string) => (value ? new Date(value).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—')
+  const date = (value?: string) => (value ? new Date(value).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A')
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={source.title}>

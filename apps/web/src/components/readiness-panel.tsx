@@ -1,18 +1,18 @@
 'use client'
 
 import * as React from 'react'
-import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Circle, FileCheck2, Gauge, History, Loader, Waypoints } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Circle, FileCheck2, History, Loader, Waypoints } from 'lucide-react'
 import {
   Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   Input,
   Select,
   cn,
@@ -29,6 +29,7 @@ import {
   type WhatIfResultDto,
 } from '@/lib/api'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
+import { ProcessGraph, type ProcessGraphStep, type ProcessState } from '@/components/workflow/process-graph'
 
 type StepStatus = 'pending' | 'running' | 'done' | 'error'
 
@@ -52,7 +53,6 @@ interface RunMeta {
   id: string
   createdAt: string
   runBy: string
-  durationMs?: number
 }
 
 /** Seconds since `since`, updated while the run is live. */
@@ -70,21 +70,37 @@ function seconds(ms: number | undefined): string {
   return ms === undefined ? '—' : `${(ms / 1000).toFixed(1)} s`
 }
 
-export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) {
+/** The steps of a finished run, rebuilt from its report (no timings are stored per step). */
+function stepsFromReport(report: ReadinessReportDto): Step[] {
+  return report.scores.map((score) => ({
+    dimension: score.dimension,
+    dimensionId: score.dimensionId,
+    name: score.dimensionName,
+    status: 'done',
+    webSources: score.webSources ?? [],
+    score,
+    reasoning: '',
+  }))
+}
+
+export function ReadinessPanel({ showStages = true, runId }: { showStages?: boolean; runId?: string }) {
   const { t, locale } = useI18n()
+  const router = useRouter()
   const { country, domain, lens } = useWorkspace()
   const [report, setReport] = React.useState<ReadinessReportDto | null>(null)
   const [meta, setMeta] = React.useState<RunMeta | null>(null)
   const [steps, setSteps] = React.useState<Step[]>([])
   const [running, setRunning] = React.useState(false)
-  const [startedAt, setStartedAt] = React.useState<number | null>(null)
   const [totalMs, setTotalMs] = React.useState<number | undefined>(undefined)
+  const [startedAt, setStartedAt] = React.useState<number | null>(null)
   const now = useNow(running)
   const [failure, setFailure] = React.useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = React.useState(false)
   const [history, setHistory] = React.useState<ReadinessRunSummaryDto[] | null>(null)
   const [whatIf, setWhatIf] = React.useState<WhatIfResultDto | null>(null)
   const [change, setChange] = React.useState<{ dimension: string; delta: number }>({ dimension: 'digital_infrastructure', delta: 1 })
   const [source, setSource] = React.useState<WebSourceView | null>(null)
+  const [openIds, setOpenIds] = React.useState<Set<string>>(new Set())
 
   const profile = WORKFLOW_PROFILES[lens]
   const formatDate = (iso: string) =>
@@ -132,12 +148,17 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
     setReport(null)
     setMeta(null)
     setSteps([])
+    setOpenIds(new Set())
     const started = Date.now()
     setStartedAt(started)
     try {
       const saved = await api.readinessStream({ country, domain, globalCountry: 'global' }, onEvent)
       setTotalMs(Date.now() - started)
-      if (saved) setMeta({ id: saved.id, createdAt: saved.createdAt, runBy: saved.runBy, durationMs: Date.now() - started })
+      if (saved) {
+        setMeta({ id: saved.id, createdAt: saved.createdAt, runBy: saved.runBy })
+        // The run has its own address: it can be reopened, shared or bookmarked.
+        router.replace(`/readiness/${saved.id}`)
+      }
       setHistory(null)
     } catch (caught) {
       setFailure(caught instanceof Error ? caught.message : String(caught))
@@ -146,20 +167,31 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
     }
   }
 
-  const openRun = async (id: string) => {
-    try {
-      const run = await api.readinessRun(id)
-      setReport(run.report)
-      setMeta({ id: run.id, createdAt: run.createdAt, runBy: run.runBy })
-      setSteps([])
-      setTotalMs(undefined)
-      setWhatIf(null)
-    } catch (caught) {
-      setFailure(caught instanceof Error ? caught.message : String(caught))
+  // An evaluation opened from its address (or from the history).
+  React.useEffect(() => {
+    if (!runId) return
+    let cancelled = false
+    api
+      .readinessRun(runId)
+      .then((run) => {
+        if (cancelled) return
+        setReport(run.report)
+        setMeta({ id: run.id, createdAt: run.createdAt, runBy: run.runBy })
+        setSteps(stepsFromReport(run.report))
+        setTotalMs(undefined)
+        setWhatIf(null)
+      })
+      .catch((caught) => {
+        if (!cancelled) setFailure(caught instanceof Error ? caught.message : String(caught))
+      })
+    return () => {
+      cancelled = true
     }
-  }
+  }, [runId])
 
-  const loadHistory = async () => {
+  const openHistory = async () => {
+    setHistoryOpen(true)
+    if (history !== null) return
     try {
       setHistory((await api.readinessRuns()).runs)
     } catch {
@@ -176,9 +208,50 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
     }
   }
 
+  const toggleStep = (id: string) =>
+    setOpenIds((previous) => {
+      const next = new Set(previous)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
   const liveTotal = startedAt !== null && running ? now - startedAt : totalMs
   const doneSteps = steps.filter((step) => step.status === 'done' || step.status === 'error')
-  const agentsCount = steps.length
+
+  // The process graph: start → web → one agent per dimension → synthesis → saved.
+  const graphSteps: ProcessGraphStep[] = React.useMemo(() => {
+    if (steps.length === 0) return []
+    const agentIds = steps.map((step) => `agent:${step.dimension}`)
+    const webSources = steps.reduce((sum, step) => sum + step.webSources.length, 0)
+    const everyAgentDone = steps.every((step) => step.status === 'done')
+    const anyFailed = steps.some((step) => step.status === 'error')
+    const anyRunning = steps.some((step) => step.status === 'running')
+    const webState: ProcessState = steps.some((step) => step.webSources.length > 0) ? 'success' : running ? 'running' : 'idle'
+    const synthesisState: ProcessState = report ? 'success' : anyFailed ? 'failed' : everyAgentDone ? 'running' : 'idle'
+    return [
+      { id: 'start', kind: 'start', label: t('readiness.process.start'), state: running || report ? 'success' : 'idle', detail: `${country.toUpperCase()} · ${steps.length} dimensions` },
+      { id: 'web', kind: 'web', label: t('readiness.process.webNode'), state: webState, detail: `${webSources} ${t('readiness.process.sourcesCount')}`, from: ['start'] },
+      ...steps.map((step) => ({
+        id: `agent:${step.dimension}`,
+        kind: 'agent' as const,
+        label: step.name,
+        state: (step.status === 'done' ? 'success' : step.status === 'error' ? 'failed' : step.status === 'running' ? 'running' : 'idle') as ProcessState,
+        detail: step.score ? `${step.score.score}/5` : step.status === 'pending' ? t('readiness.process.waiting') : undefined,
+        duration: step.durationMs !== undefined ? seconds(step.durationMs) : step.status === 'running' && step.startedAt ? seconds(now - step.startedAt) : undefined,
+        from: ['web'],
+      })),
+      { id: 'synthesis', kind: 'synthesis', label: t('readiness.process.synthesis'), state: synthesisState, detail: report ? `${report.scenario?.composite ?? '—'}/5` : undefined, from: agentIds },
+      { id: 'saved', kind: 'saved', label: t('readiness.process.saved'), state: meta ? 'success' : 'idle', detail: meta ? formatDate(meta.createdAt) : undefined, from: ['synthesis'] },
+    ]
+  }, [steps, report, meta, running, now, country, t])
+
+  const selectNode = (id: string) => {
+    if (!id.startsWith('agent:')) return
+    const dimension = id.slice('agent:'.length)
+    setOpenIds((previous) => new Set(previous).add(dimension))
+    document.getElementById(`step-${dimension}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -204,44 +277,29 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
       )}
 
       <Card className={showStages ? 'lg:col-span-2' : 'lg:col-span-3'}>
-        <CardHeader>
-          <FileCheck2 className="h-4 w-4 text-brand-primary dark:text-brand-primary-light" />
-          <CardTitle>{t('readiness.title')}</CardTitle>
-          <DropdownMenu onOpenChange={(open) => open && void loadHistory()}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="h-7 w-7 rounded-lg" aria-label={t('readiness.history')} title={t('readiness.history')}>
-                <History className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-80">
-              <DropdownMenuLabel>{t('readiness.history')}</DropdownMenuLabel>
-              {history === null && <DropdownMenuItem disabled>{t('readiness.historyLoading')}</DropdownMenuItem>}
-              {history?.length === 0 && <DropdownMenuItem disabled>{t('readiness.historyEmpty')}</DropdownMenuItem>}
-              {history?.map((entry) => (
-                <DropdownMenuItem key={entry.id} onSelect={() => void openRun(entry.id)} className="flex-col items-start gap-0.5">
-                  <span className="text-[11px] font-medium">
-                    {formatDate(entry.createdAt)} · {entry.country.toUpperCase()}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {entry.runBy} · {t('readiness.composite')} {entry.composite ?? '—'}/5
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={run} disabled={running} size="sm" className="ml-auto">
-            {running ? <Loader className="h-3.5 w-3.5 animate-spin" /> : null}
-            {running ? t('readiness.running') : t('readiness.run')}
-          </Button>
+        <CardHeader className="flex-wrap">
+          <FileCheck2 className="h-4 w-4 shrink-0 text-brand-primary dark:text-brand-primary-light" />
+          <div className="min-w-0 flex-1">
+            <CardTitle>{t('readiness.title')}</CardTitle>
+            <p className="truncate text-[11px] text-muted-foreground">{t('readiness.subtitle')}</p>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Button variant="ghost" size="icon-sm" className="h-8 w-8 rounded-lg" aria-label={t('readiness.history')} title={t('readiness.history')} onClick={() => void openHistory()}>
+              <History className="h-4 w-4" />
+            </Button>
+            <Button onClick={run} disabled={running} size="sm">
+              {running ? <Loader className="h-3.5 w-3.5 animate-spin" /> : null}
+              {running ? t('readiness.running') : t('readiness.run')}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Live process: every evaluating agent, its state and its duration */}
-          {steps.length > 0 && (
-            <section className="space-y-2">
+          {graphSteps.length > 0 && (
+            <section className="space-y-3">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                <span>{t('readiness.process.agents', { count: agentsCount })}</span>
+                <span>{t('readiness.process.agents', { count: steps.length })}</span>
                 <span>·</span>
-                <span>{t('readiness.process.progress', { done: doneSteps.length, total: agentsCount })}</span>
+                <span>{t('readiness.process.progress', { done: doneSteps.length, total: steps.length })}</span>
                 {liveTotal !== undefined && (
                   <>
                     <span>·</span>
@@ -249,15 +307,22 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
                   </>
                 )}
               </div>
+              <ProcessGraph steps={graphSteps} onSelect={selectNode} />
               <ol className="space-y-1">
                 {steps.map((step) => (
-                  <StepRow key={step.dimension} step={step} now={now} onOpenSource={setSource} />
+                  <StepRow
+                    key={step.dimension}
+                    step={step}
+                    now={now}
+                    open={openIds.has(step.dimension)}
+                    onToggle={() => toggleStep(step.dimension)}
+                    onOpenSource={setSource}
+                  />
                 ))}
               </ol>
             </section>
           )}
 
-          {/* Result: when, who ran it, the scores and the recommendations */}
           {report && (
             <section className="space-y-3">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
@@ -357,27 +422,70 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
             </section>
           )}
 
-          {!report && steps.length === 0 && (
-            <div className="flex flex-col items-center gap-2 py-8 text-center">
-              <Gauge className="h-6 w-6 text-muted-foreground/50" />
-              <p className="max-w-md text-xs text-muted-foreground">{t('readiness.empty')}</p>
-            </div>
-          )}
+          {!report && steps.length === 0 && <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">{t('readiness.empty')}</p>}
         </CardContent>
       </Card>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-lg gap-0 overflow-hidden rounded-3xl p-0">
+          <DialogHeader className="border-b border-border px-5 py-3">
+            <DialogTitle className="text-sm font-semibold">{t('readiness.history')}</DialogTitle>
+          </DialogHeader>
+          <div className="custom-scrollbar max-h-[60vh] space-y-1 overflow-y-auto p-3">
+            {history === null && <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">{t('readiness.historyLoading')}</p>}
+            {history?.length === 0 && <p className="px-2 py-6 text-center text-[11px] text-muted-foreground">{t('readiness.historyEmpty')}</p>}
+            {history?.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                aria-current={entry.id === runId ? 'true' : undefined}
+                onClick={() => {
+                  setHistoryOpen(false)
+                  router.push(`/readiness/${entry.id}`)
+                }}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-brand-primary/5',
+                  entry.id === runId && 'bg-brand-primary/10',
+                )}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-medium text-foreground">
+                    {formatDate(entry.createdAt)} · {entry.country.toUpperCase()}
+                  </span>
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {entry.runBy} · {t('readiness.composite')} {entry.composite ?? '—'}/5 · {entry.dimensions} {t('readiness.dimensionsWord')}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <SourceDrawer source={source} onClose={() => setSource(null)} />
     </div>
   )
 }
 
-function StepRow({ step, now, onOpenSource }: { step: Step; now: number; onOpenSource: (source: WebSourceView) => void }) {
+function StepRow({
+  step,
+  now,
+  open,
+  onToggle,
+  onOpenSource,
+}: {
+  step: Step
+  now: number
+  open: boolean
+  onToggle: () => void
+  onOpenSource: (source: WebSourceView) => void
+}) {
   const { t } = useI18n()
   const elapsed = step.status === 'running' && step.startedAt ? now - step.startedAt : step.durationMs
   const Icon = step.status === 'done' ? CheckCircle2 : step.status === 'error' ? AlertTriangle : step.status === 'running' ? Loader : Circle
   return (
-    <li className="rounded-xl bg-secondary/40 text-[11px]">
-      <details className="group">
+    <li id={`step-${step.dimension}`} className="rounded-xl bg-secondary/40 text-[11px]">
+      <details open={open} onToggle={(event) => { if (event.currentTarget.open !== open) onToggle() }} className="group">
         <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2">
           <Icon
             className={cn(
@@ -409,11 +517,7 @@ function StepRow({ step, now, onOpenSource }: { step: Step; now: number; onOpenS
               <ul className="space-y-0.5">
                 {step.webSources.map((source) => (
                   <li key={source.url} className="truncate">
-                    <button
-                      type="button"
-                      className="truncate text-left text-brand-primary-dark hover:underline dark:text-brand-primary-light"
-                      onClick={() => onOpenSource({ ...source, snippet: undefined })}
-                    >
+                    <button type="button" className="truncate text-left text-brand-primary-dark hover:underline dark:text-brand-primary-light" onClick={() => onOpenSource({ ...source })}>
                       {source.title}
                     </button>
                   </li>
@@ -433,9 +537,9 @@ function StepRow({ step, now, onOpenSource }: { step: Step; now: number; onOpenS
               <p>
                 {step.score.score}/5 · {step.score.maturity}
               </p>
-              {step.score.evidence?.length > 0 && (
+              {step.score.recommendations?.length > 0 && (
                 <ul className="list-disc space-y-0.5 pl-4">
-                  {step.score.evidence.slice(0, 5).map((item, index) => (
+                  {step.score.recommendations.slice(0, 5).map((item, index) => (
                     <li key={index}>{item}</li>
                   ))}
                 </ul>
