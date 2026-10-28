@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { ArrowRight, Check, Copy, Download, KeyRound, Loader, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { Button, Input, Label } from '@sps/ui'
 import { BrandMark } from '@/components/layout/brand-mark'
-import { AuthLayout, AuthProgress, ErrorNote, StepIntro, messageFor, type ProgressStage } from '@/components/auth/auth-frame'
+import { AuthLayout, ErrorNote, StepIntro, messageFor } from '@/components/auth/auth-frame'
 import { OtpField, formatBackupCode } from '@/components/auth/otp-field'
 import { PasswordInput } from '@/components/auth/password-input'
 import { authApi } from '@/lib/api'
@@ -255,17 +255,6 @@ export default function LoginPage() {
     )
   }
 
-  const progress: ProgressStage | null =
-    step === 'verify'
-      ? 'email'
-      : step === 'password'
-        ? 'password'
-        : step === 'enroll' || step === 'mfa'
-          ? 'mfa'
-          : step === 'recovery'
-            ? 'access'
-            : null
-
   const rootError =
     credentialsForm.formState.errors.root?.message ??
     passwordForm.formState.errors.root?.message ??
@@ -273,8 +262,6 @@ export default function LoginPage() {
 
   return (
     <AuthLayout>
-      {progress && <AuthProgress current={progress} />}
-
       {step === 'verify' && verificationEmail && (
         <>
           <StepIntro title={t('verify.title')} subtitle={t('verify.subtitle', { email: verificationEmail })} />
@@ -447,7 +434,6 @@ export default function LoginPage() {
                 noValidate
               >
                 <div className="space-y-2">
-                  <Label htmlFor="otp-totp">{t('login.code')}</Label>
                   <OtpField
                     value={code}
                     onChange={setCode}

@@ -932,30 +932,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   /**
-   * Correction of a dictated text by the chat model, against a glossary of the
-   * institutions, readiness dimensions and corpus titles. Falls back to the
-   * original text, so a dictation is never lost.
+   * Correction of a dictated text by the chat model, from the sentence itself.
+   * Falls back to the original text, so a dictation is never lost.
    */
   app.post('/v1/voice/correct', async (request, reply) => {
-    const body = z
-      .object({ text: z.string().min(1).max(4000), domain: z.string().optional() })
-      .safeParse(request.body)
+    const body = z.object({ text: z.string().min(1).max(4000) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
-    const domain = (body.data.domain ?? 'health') as Domain
-    const glossary = [
-      ...institutionsForDomain(domain).map((institution) => institution.name),
-      ...READINESS_DIMENSIONS.map((dimension) => dimension.name),
-    ]
-    if (engine.retrievalBackend === 'atlas') {
-      try {
-        const documents = await knowledge.listDocuments({ limit: 80 })
-        glossary.push(...documents.map((document) => document.title || document.filename.replace(/\.[^.]+$/, '')))
-      } catch {
-        /* the glossary is a help, not a requirement */
-      }
-    }
-    const result = await correctTranscript(body.data.text, { model: engine.model, glossary: [...new Set(glossary)] })
-    return result
+    return correctTranscript(body.data.text, { model: engine.model })
   })
 
   /**

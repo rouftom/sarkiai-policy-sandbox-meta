@@ -8,7 +8,6 @@ import {
   FileCheck2,
   Gauge,
   LayoutDashboard,
-  Loader,
   Network,
   Newspaper,
   ScrollText,
@@ -50,6 +49,16 @@ function lastSevenDays(events: AuditEventDto[]): Array<{ key: string; day: Date;
   return days
 }
 
+/** Loading placeholder for a KPI card: two shimmering lines. */
+function KpiShimmer() {
+  return (
+    <div className="space-y-2 py-0.5" aria-hidden="true">
+      <Skeleton className="h-4 w-28" />
+      <Skeleton className="h-2.5 w-20" />
+    </div>
+  )
+}
+
 function Bars({
   rows,
   tone = 'bg-brand-primary dark:bg-brand-primary-light',
@@ -84,6 +93,9 @@ export default function OverviewPage() {
   const [events, setEvents] = React.useState<AuditEventDto[]>([])
   const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string } | null>(null)
   const [auditState, setAuditState] = React.useState<'loading' | 'ready' | 'unavailable'>('loading')
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => setMounted(true), [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -150,60 +162,76 @@ export default function OverviewPage() {
         <Card>
           <CardContent className="space-y-1 py-4">
             <p className="text-[9px] font-medium text-muted-foreground">{t('overview.kpi.corpus')}</p>
-            <p className="truncate font-display text-base font-bold text-foreground">
-              {corpus ? corpus.documents.toLocaleString('en-US') : '—'} {t('knowledge.documents').toLowerCase()}
-            </p>
-            <p className="truncate text-[10px] text-muted-foreground">
-              {corpus ? `${corpus.activeChunks.toLocaleString('en-US')} ${t('knowledge.chunks').toLowerCase()} · ${figures} ${t('kbdoc.figures').toLowerCase()}` : '…'}
-            </p>
+            {corpus ? (
+              <>
+                <p className="truncate font-display text-base font-bold text-foreground">
+                  {corpus.documents.toLocaleString('en-US')} {t('knowledge.documents').toLowerCase()}
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {`${corpus.activeChunks.toLocaleString('en-US')} ${t('knowledge.chunks').toLowerCase()} · ${figures} ${t('kbdoc.figures').toLowerCase()}`}
+                </p>
+              </>
+            ) : (
+              <KpiShimmer />
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="space-y-1 py-4">
             <p className="text-[9px] font-medium text-muted-foreground">{t('overview.kpi.chain')}</p>
-            <p className="flex items-center gap-1.5 font-display text-base font-bold">
-              {auditState === 'loading' ? (
-                <Loader className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : auditState === 'unavailable' ? (
-                <span className="text-muted-foreground">—</span>
-              ) : (
-                <>
+            {auditState === 'loading' ? (
+              <KpiShimmer />
+            ) : auditState === 'unavailable' ? (
+              <p className="font-display text-base font-bold text-muted-foreground">{t('audit.unavailable')}</p>
+            ) : (
+              <>
+                <p className="flex items-center gap-1.5 font-display text-base font-bold">
                   <ShieldCheck
                     className={chain?.valid ? 'h-4 w-4 text-brand-primary dark:text-brand-primary-light' : 'h-4 w-4 text-destructive'}
                   />
                   {chain?.valid ? t('overview.chainOk') : t('overview.chainBroken')}
-                </>
-              )}
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              {t('overview.kpi.records')}: {events.length}
-            </p>
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {t('overview.kpi.records')}: {events.length}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="space-y-1 py-4">
             <p className="text-[9px] font-medium text-muted-foreground">{t('overview.kpi.mfa')}</p>
-            <p className="flex items-center gap-1.5 font-display text-base font-bold">
-              <ShieldCheck
-                className={operator?.mfaEnrolled ? 'h-4 w-4 text-brand-primary dark:text-brand-primary-light' : 'h-4 w-4 text-destructive'}
-              />
-              {operator?.mfaEnrolled ? t('security.mfaOn') : t('security.mfaOff')}
-            </p>
-            <p className="truncate text-[10px] text-muted-foreground">{operator?.email}</p>
+            {operator ? (
+              <>
+                <p className="flex items-center gap-1.5 font-display text-base font-bold">
+                  <ShieldCheck
+                    className={operator.mfaEnrolled ? 'h-4 w-4 text-brand-primary dark:text-brand-primary-light' : 'h-4 w-4 text-destructive'}
+                  />
+                  {operator.mfaEnrolled ? t('security.mfaOn') : t('security.mfaOff')}
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground">{operator.email}</p>
+              </>
+            ) : (
+              <KpiShimmer />
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="space-y-1 py-4">
             <p className="text-[9px] font-medium text-muted-foreground">{t('overview.kpi.workspace')}</p>
-            <p className="flex items-center gap-1.5 truncate font-display text-base font-bold">
-              <Waypoints className="h-4 w-4 shrink-0 text-brand-accent" />
-              <span className="truncate">
-                {country.toUpperCase()} · {t(`domain.${domain}` as 'domain.health')}
-              </span>
-            </p>
+            {mounted ? (
+              <p className="flex items-center gap-1.5 truncate font-display text-base font-bold">
+                <Waypoints className="h-4 w-4 shrink-0 text-brand-accent" />
+                <span className="truncate">
+                  {country.toUpperCase()} · {t(`domain.${domain}` as 'domain.health')}
+                </span>
+              </p>
+            ) : (
+              <KpiShimmer />
+            )}
           </CardContent>
         </Card>
       </div>

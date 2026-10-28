@@ -142,51 +142,6 @@ export function CopyButton({ value, label }: { value: string; label: { copy: str
   )
 }
 
-export type ProgressStage = 'password' | 'email' | 'mfa' | 'access'
-
-const PROGRESS_ORDER: ProgressStage[] = ['password', 'email', 'mfa', 'access']
-
-/**
- * Stepper shown in place of the sign-in form while an account is part way
- * through its sign-up or first sign-in: password, confirmation e-mail, second
- * factor, then access.
- */
-export function AuthProgress({ current }: { current: ProgressStage }) {
-  const { t } = useI18n()
-  const index = PROGRESS_ORDER.indexOf(current)
-  const labels: Record<ProgressStage, MessageKey> = {
-    password: 'progress.password',
-    email: 'progress.email',
-    mfa: 'progress.mfa',
-    access: 'progress.access',
-  }
-  return (
-    <ol aria-label={t('progress.label')} className="mb-6 grid grid-cols-4 gap-2">
-      {PROGRESS_ORDER.map((stage, position) => {
-        const state = position < index ? 'done' : position === index ? 'current' : 'todo'
-        return (
-          <li key={stage} className="flex flex-col gap-1.5" aria-current={state === 'current' ? 'step' : undefined}>
-            <span
-              className={cn(
-                'h-1 rounded-full',
-                state === 'todo' ? 'bg-border' : 'bg-brand-primary dark:bg-brand-primary-light',
-              )}
-            />
-            <span
-              className={cn(
-                'text-[10px] font-medium',
-                state === 'current' ? 'text-foreground' : state === 'done' ? 'text-brand-primary-dark dark:text-brand-primary-light' : 'text-muted-foreground',
-              )}
-            >
-              {t(labels[stage])}
-            </span>
-          </li>
-        )
-      })}
-    </ol>
-  )
-}
-
 /** Default left column: what the console is. */
 export function BrandContent() {
   const { t } = useI18n()

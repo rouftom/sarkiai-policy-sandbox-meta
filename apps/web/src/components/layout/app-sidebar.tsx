@@ -159,7 +159,15 @@ export function AdminSidebar() {
   return (
     <TooltipProvider delayDuration={200}>
       <aside
-        onClick={collapsed ? toggle : undefined}
+        onClick={
+          collapsed
+            ? (event) => {
+                // A menu link navigates and keeps the rail collapsed; the rest of the body opens it.
+                if ((event.target as HTMLElement).closest('a[href]')) return
+                toggle()
+              }
+            : undefined
+        }
         className={cn(
           'hidden h-screen flex-col bg-white text-sidebar-foreground transition-all duration-300 md:flex dark:bg-brand-ink',
           collapsed ? 'w-14 cursor-ew-resize' : 'w-60 md:w-56',

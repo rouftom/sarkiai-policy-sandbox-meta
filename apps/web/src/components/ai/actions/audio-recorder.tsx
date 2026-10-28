@@ -7,7 +7,6 @@ import { motion, useAnimationControls } from 'framer-motion'
 import { useI18n } from '@/lib/i18n'
 import { startRealtimeTranscription, supportsRealtimeVoice, transcribeClip, type RealtimeSession } from '@/lib/voice'
 import { api } from '@/lib/api'
-import { useWorkspace } from '@/lib/workspace'
 
 interface AudioRecorderProps {
   /**
@@ -37,7 +36,6 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [isCorrecting, setIsCorrecting] = useState(false)
-  const { domain } = useWorkspace()
 
   const mediaStream = useRef<MediaStream | null>(null)
   const session = useRef<RealtimeSession | null>(null)
@@ -92,9 +90,8 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
   )
 
   /**
-   * The last words of a dictation, corrected by the chat model against the glossary
-   * (institutions, dimensions, corpus titles) before they reach the composer. The
-   * correction keeps the original when it looks unsafe, so a dictation is never lost.
+   * The last words of a dictation, repaired by the chat model from the sentence before
+   * they reach the composer. The original is kept when the repair looks unsafe.
    */
   const finalize = useCallback(
     async (raw: string) => {
@@ -104,14 +101,14 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
       }
       setIsCorrecting(true)
       const corrected = await api
-        .correctVoice({ text: raw, domain })
+        .correctVoice({ text: raw })
         .then((result) => result.text)
         .catch(() => raw)
       committed.current = corrected
       setIsCorrecting(false)
       callbacks.current.onTranscript(corrected, true)
     },
-    [domain],
+    [],
   )
 
   /** Transcribe one finished segment and append it. Errors surface, the recording goes on. */
