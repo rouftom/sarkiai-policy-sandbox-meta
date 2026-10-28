@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, Skeleton, cn } from '@sps/ui'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
-import { api, authApi, knowledgeApi, type AuditEventDto, type KbDocumentDto, type KbStatusDto, type ProviderDto } from '@/lib/api'
+import { MODEL_CHANGED, api, authApi, knowledgeApi, type AuditEventDto, type KbDocumentDto, type KbStatusDto, type ProviderDto } from '@/lib/api'
 import { actionCategory, AUDIT_ACTION_KEYS, humaniseAction } from '@/lib/audit-labels'
 
 function relativeTime(value: string, locale: string): string {
@@ -94,6 +94,8 @@ export default function OverviewPage() {
   const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string } | null>(null)
   const [auditState, setAuditState] = React.useState<'loading' | 'ready' | 'unavailable'>('loading')
   const [provider, setProvider] = React.useState<ProviderDto | null>(null)
+  /** The operator's chat model: the one saved for this account, updated when it changes. */
+  const [model, setModel] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     let cancelled = false
@@ -101,8 +103,15 @@ export default function OverviewPage() {
       .provider()
       .then((value) => !cancelled && setProvider(value))
       .catch(() => {})
+    void api
+      .models()
+      .then((result) => !cancelled && setModel(result.selected))
+      .catch(() => {})
+    const onChange = (event: Event) => setModel((event as CustomEvent<string>).detail)
+    window.addEventListener(MODEL_CHANGED, onChange)
     return () => {
       cancelled = true
+      window.removeEventListener(MODEL_CHANGED, onChange)
     }
   }, [])
 
@@ -231,11 +240,11 @@ export default function OverviewPage() {
         <Card>
           <CardContent className="space-y-1 py-4">
             <p className="text-[9px] font-medium text-muted-foreground">{t('overview.kpi.model')}</p>
-            {provider ? (
+            {provider && model !== null ? (
               <>
                 <p className="flex items-center gap-1.5 truncate font-display text-base font-bold">
                   <Cpu className="h-4 w-4 shrink-0 text-brand-accent" />
-                  <span className="truncate">{provider.models.reasoning || '—'}</span>
+                  <span className="truncate">{model || '—'}</span>
                 </p>
                 <p className="truncate text-[10px] text-muted-foreground">{provider.label}</p>
               </>

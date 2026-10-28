@@ -4,6 +4,9 @@ import { readToken } from './session'
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
+/** Fired on the window after the operator chooses another chat model. The detail is the model id. */
+export const MODEL_CHANGED = 'sps:model-changed'
+
 /** HTTP failure with the status and the raw body kept apart, so panels can react. */
 export class ApiError extends Error {
   readonly status: number
@@ -630,8 +633,12 @@ export const api = {
   models: () => request<ModelsDto>('/v1/models'),
 
   /** Save the operator's chat model (the API checks it against the Meta list). */
-  selectModel: (model: string) =>
-    request<{ selected: string }>('/v1/models/selection', { method: 'PUT', body: JSON.stringify({ model }) }),
+  selectModel: async (model: string) => {
+    const result = await request<{ selected: string }>('/v1/models/selection', { method: 'PUT', body: JSON.stringify({ model }) })
+    // Every screen showing the active model (overview, assistant, console) follows this change.
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(MODEL_CHANGED, { detail: result.selected }))
+    return result
+  },
 
   ask: (body: {
     institutionId: string
