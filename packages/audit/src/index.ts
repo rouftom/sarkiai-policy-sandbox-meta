@@ -51,6 +51,16 @@ function legacyHash(record: Record<string, unknown>, prevHash: string | undefine
   return sha256(JSON.stringify(base) + (prevHash ?? ''))
 }
 
+export interface ChainVerdict {
+  valid: boolean
+  brokenAt?: string
+  /** Why the chain is broken: a record that does not hash, or a predecessor that is missing. */
+  reason?: 'hash_mismatch' | 'missing_predecessor'
+  /** Short fingerprints only (no content), to diagnose a break from the logs. */
+  detail?: Record<string, unknown>
+  forks: number
+}
+
 export class AuditService {
   private client: MongoClient | null = null
   private readonly auditCol: string
@@ -204,7 +214,7 @@ export class AuditService {
    * claim could fork, and those records are evidence, so they are reported and
    * not rewritten.
    */
-  async verifyChain(): Promise<{ valid: boolean; brokenAt?: string; forks: number }> {
+  async verifyChain(): Promise<ChainVerdict> {
     const { audit } = await this.db()
     const records = (await audit.find({}).toArray()) as unknown as Array<AuditRecord & { _id: unknown }>
     const hashes = new Set(records.map((record) => record.hash))
@@ -215,10 +225,25 @@ export class AuditService {
       const { _id: _ignored, hash, ...base } = record
       const prevHash = (record.prevHash ?? undefined) as string | undefined
       const recomputed = hashPayload(base as Omit<AuditRecord, 'hash'>, prevHash)
-      if (recomputed !== hash && legacyHash(record as unknown as Record<string, unknown>, prevHash) !== hash) {
-        return { valid: false, brokenAt: record.id, forks: 0 }
+      const legacy = legacyHash(record as unknown as Record<string, unknown>, prevHash)
+      if (recomputed !== hash && legacy !== hash) {
+        return {
+          valid: false,
+          brokenAt: record.id,
+          forks: 0,
+          reason: 'hash_mismatch',
+          detail: { ts: record.ts, action: record.action, stored: hash.slice(0, 12), recomputed: recomputed.slice(0, 12), legacy: legacy.slice(0, 12), hasPrevHash: Boolean(prevHash) },
+        }
       }
-      if (prevHash && !hashes.has(prevHash)) return { valid: false, brokenAt: record.id, forks: 0 }
+      if (prevHash && !hashes.has(prevHash)) {
+        return {
+          valid: false,
+          brokenAt: record.id,
+          forks: 0,
+          reason: 'missing_predecessor',
+          detail: { ts: record.ts, action: record.action, prevHash: prevHash.slice(0, 12) },
+        }
+      }
       if (prevHash) children.set(prevHash, (children.get(prevHash) ?? 0) + 1)
     }
     const forks = [...children.values()].filter((count) => count > 1).length
