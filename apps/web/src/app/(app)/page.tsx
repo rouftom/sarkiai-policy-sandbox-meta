@@ -12,13 +12,13 @@ import {
   Newspaper,
   ScrollText,
   ShieldCheck,
-  Waypoints,
+  Cpu,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, Skeleton, cn } from '@sps/ui'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
-import { authApi, knowledgeApi, type AuditEventDto, type KbDocumentDto, type KbStatusDto } from '@/lib/api'
+import { api, authApi, knowledgeApi, type AuditEventDto, type KbDocumentDto, type KbStatusDto, type ProviderDto } from '@/lib/api'
 import { actionCategory, AUDIT_ACTION_KEYS, humaniseAction } from '@/lib/audit-labels'
 
 function relativeTime(value: string, locale: string): string {
@@ -93,9 +93,18 @@ export default function OverviewPage() {
   const [events, setEvents] = React.useState<AuditEventDto[]>([])
   const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string } | null>(null)
   const [auditState, setAuditState] = React.useState<'loading' | 'ready' | 'unavailable'>('loading')
-  const [mounted, setMounted] = React.useState(false)
+  const [provider, setProvider] = React.useState<ProviderDto | null>(null)
 
-  React.useEffect(() => setMounted(true), [])
+  React.useEffect(() => {
+    let cancelled = false
+    void api
+      .provider()
+      .then((value) => !cancelled && setProvider(value))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -221,14 +230,15 @@ export default function OverviewPage() {
 
         <Card>
           <CardContent className="space-y-1 py-4">
-            <p className="text-[9px] font-medium text-muted-foreground">{t('overview.kpi.workspace')}</p>
-            {mounted ? (
-              <p className="flex items-center gap-1.5 truncate font-display text-base font-bold">
-                <Waypoints className="h-4 w-4 shrink-0 text-brand-accent" />
-                <span className="truncate">
-                  {country.toUpperCase()} · {t(`domain.${domain}` as 'domain.health')}
-                </span>
-              </p>
+            <p className="text-[9px] font-medium text-muted-foreground">{t('overview.kpi.model')}</p>
+            {provider ? (
+              <>
+                <p className="flex items-center gap-1.5 truncate font-display text-base font-bold">
+                  <Cpu className="h-4 w-4 shrink-0 text-brand-accent" />
+                  <span className="truncate">{provider.models.reasoning || '—'}</span>
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground">{provider.label}</p>
+              </>
             ) : (
               <KpiShimmer />
             )}
