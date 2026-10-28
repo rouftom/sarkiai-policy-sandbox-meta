@@ -110,8 +110,8 @@ export function AdminSidebar() {
           'flex h-9 items-center rounded-lg text-xs transition-colors',
           collapsed ? 'justify-center px-2' : 'px-3',
           active
-            ? 'bg-sidebar-accent font-medium text-sidebar-primary'
-            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+            ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:bg-brand-primary-dark/40 dark:text-brand-primary-light'
+            : 'text-sidebar-foreground/70 hover:bg-brand-primary/5 hover:text-sidebar-foreground',
         )}
       >
         <Icon className={cn('h-4 w-4 shrink-0', !collapsed && 'mr-2')} />
@@ -139,8 +139,8 @@ export function AdminSidebar() {
         className={cn(
           'flex h-8 items-center gap-2 rounded-lg px-2 text-[11px] transition-colors',
           active
-            ? 'bg-sidebar-accent font-medium text-sidebar-primary'
-            : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+            ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:bg-brand-primary-dark/40 dark:text-brand-primary-light'
+            : 'text-sidebar-foreground/60 hover:bg-brand-primary/5 hover:text-sidebar-foreground',
         )}
       >
         <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -161,7 +161,7 @@ export function AdminSidebar() {
       <aside
         onClick={collapsed ? toggle : undefined}
         className={cn(
-          'hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 md:flex',
+          'hidden h-screen flex-col bg-white text-sidebar-foreground transition-all duration-300 md:flex dark:bg-brand-ink',
           collapsed ? 'w-14 cursor-ew-resize' : 'w-60 md:w-56',
         )}
       >

@@ -171,12 +171,9 @@
    * lower ratio keeps the same tinted-panel idea in every pack.
    */
   .assistant-panel {
-    background: color-mix(in oklab, var(--charte-primary) 8%, var(--background));
+    background: var(--assistant-panel-bg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-  }
-  .dark .assistant-panel {
-    background: color-mix(in oklab, var(--charte-primary) 14%, var(--background));
   }
   .text-gradient-gold {
     background: linear-gradient(135deg, #f0d98a 0%, var(--charte-accent) 55%, #a8821f 100%);

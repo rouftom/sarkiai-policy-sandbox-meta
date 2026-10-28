@@ -72,7 +72,7 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-md sm:px-6 md:border-0">
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 bg-white/80 px-4 backdrop-blur-md dark:bg-brand-ink sm:px-6">
         <button
           type="button"
           onClick={() => setMenuOpen(true)}
@@ -113,7 +113,7 @@ export function AppHeader() {
             onClick={() => setMenuOpen(false)}
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
           />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-sidebar text-sidebar-foreground shadow-2xl">
+          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white text-sidebar-foreground shadow-2xl dark:bg-brand-ink">
             <div className="flex h-14 items-center justify-between border-b border-border px-3">
               <Link href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-2">
                 <BrandMark className="h-9 w-9" />
