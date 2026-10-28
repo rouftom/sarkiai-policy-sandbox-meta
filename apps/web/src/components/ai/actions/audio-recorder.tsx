@@ -39,7 +39,6 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
 
   const mediaStream = useRef<MediaStream | null>(null)
   const session = useRef<RealtimeSession | null>(null)
-  const partial = useRef('')
   const recorder = useRef<MediaRecorder | null>(null)
   const segmentTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const stopRequested = useRef(false)
@@ -81,12 +80,14 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
     },
   }
 
+  /** Any end of a recording (error, refusal, a closed connection) brings the microphone back to rest. */
   const fail = useCallback(
     (message?: string) => {
       setIsRecording(false)
+      void controls.start('completed')
       callbacks.current.onError?.(message || t('voice.error'))
     },
-    [t],
+    [controls, t],
   )
 
   /**
@@ -170,14 +171,17 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
   const openLive = useCallback(async (): Promise<RealtimeSession | null> => {
     try {
       return await startRealtimeTranscription({
-        onPartial(text) {
-          partial.current = text
-          callbacks.current.onTranscript([committed.current, text].filter(Boolean).join(' '), false)
+        // The service sends the whole transcript so far: it replaces what is shown.
+        onUpdate(text) {
+          committed.current = text
+          callbacks.current.onTranscript(text, false)
         },
-        onFinal(text) {
-          committed.current = [committed.current, text].filter(Boolean).join(' ')
-          partial.current = ''
-          callbacks.current.onTranscript(committed.current, false)
+        // Called once the service has delivered its last words, after stop or on a closed connection.
+        onFinished(text) {
+          session.current = null
+          setIsRecording(false)
+          void controls.start('completed')
+          void finalize(text || committed.current)
         },
         onError(message) {
           session.current = null
@@ -188,11 +192,10 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
       console.warn('Live dictation unavailable, recording segments instead:', error)
       return null
     }
-  }, [fail])
+  }, [controls, fail, finalize])
 
   const startRecording = useCallback(async () => {
     committed.current = ''
-    partial.current = ''
     stopRequested.current = false
     setIsRecording(true)
     void controls.start('recording')
@@ -221,13 +224,8 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
   const stopRecording = useCallback(() => {
     stopRequested.current = true
     if (session.current) {
-      // The server flushes the last words after the stream ends; the final text follows its `final` event.
+      // Input stops now; the text is finalised in onFinished, once the service has sent its last utterance.
       session.current.stop()
-      session.current = null
-      const text = [committed.current, partial.current].filter(Boolean).join(' ')
-      partial.current = ''
-      committed.current = text
-      void finalize(text)
       return
     }
     if (segmentTimer.current) clearTimeout(segmentTimer.current)

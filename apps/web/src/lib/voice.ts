@@ -10,14 +10,15 @@
 
 import { API_URL, api } from './api'
 import { readToken } from './session'
+import { TurnBook } from './turn-book'
 
 const TARGET_RATE = 16000
 
 export interface RealtimeHandlers {
-  /** Current utterance, cumulative: replaces the previous partial text. */
-  onPartial(text: string): void
-  /** One utterance is complete. */
-  onFinal(text: string): void
+  /** The whole transcript so far: finished utterances in order, then the one in progress. */
+  onUpdate(text: string): void
+  /** The session has ended (after stop, or an error): the complete transcript. */
+  onFinished(text: string): void
   onError(message: string): void
 }
 
@@ -178,15 +179,32 @@ const CLOSE_REASONS: Record<number, string> = {
  * Live dictation. Resolves once the socket is open and the microphone is
  * streaming; `stop()` ends the stream and waits for the last utterance.
  */
+/**
+ * Live dictation. The microphone starts at once and its frames wait in a queue
+ * until the service has acknowledged the session, so the first words are kept.
+ */
 export async function startRealtimeTranscription(handlers: RealtimeHandlers): Promise<RealtimeSession> {
   const token = readToken()
   if (!token) throw new Error('Sign in to use voice dictation.')
 
   const socket = new WebSocket(realtimeUrl(token))
   socket.binaryType = 'arraybuffer'
-  // The service acknowledges the session with a `sessionId` frame. Without it within 12 s the
-  // stream is treated as unavailable, so the caller can fall back to clips.
-  await new Promise<void>((resolve, reject) => {
+  const book = new TurnBook()
+  const queue: ArrayBuffer[] = []
+  let acknowledged = false
+  let stopping = false
+  let finished = false
+  let closeTimer: ReturnType<typeof setTimeout> | undefined
+
+  const finish = () => {
+    if (finished) return
+    finished = true
+    clearTimeout(closeTimer)
+    handlers.onFinished(book.text())
+  }
+
+  // The service acknowledges the session with a `sessionId` frame.
+  const acknowledge = new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
       socket.close()
       reject(new Error('The voice service did not answer in time.'))
@@ -213,8 +231,6 @@ export async function startRealtimeTranscription(handlers: RealtimeHandlers): Pr
   let source: MediaStreamAudioSourceNode | null = null
   let worklet: AudioWorkletNode | null = null
   let mute: GainNode | null = null
-  let closeTimer: ReturnType<typeof setTimeout> | undefined
-  let stopping = false
   let released = false
 
   const releaseMicrophone = () => {
@@ -242,46 +258,69 @@ export async function startRealtimeTranscription(handlers: RealtimeHandlers): Pr
   mute = context.createGain()
   mute.gain.value = 0
   worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-    if (socket.readyState !== WebSocket.OPEN) return
-    const pcm = floatToPcm16(resampleLinear(event.data, context.sampleRate, TARGET_RATE))
-    socket.send(pcm.buffer)
+    const pcm = floatToPcm16(resampleLinear(event.data, context.sampleRate, TARGET_RATE)).buffer as ArrayBuffer
+    if (!acknowledged) {
+      queue.push(pcm)
+      return
+    }
+    if (socket.readyState === WebSocket.OPEN) socket.send(pcm)
   }
   source.connect(worklet)
   worklet.connect(mute)
   mute.connect(context.destination)
 
+  try {
+    await acknowledge
+  } catch (error) {
+    releaseMicrophone()
+    throw error
+  }
+  acknowledged = true
+  // The words spoken while the session was opening go out first, in order.
+  for (const frame of queue.splice(0)) socket.send(frame)
+
   socket.onmessage = (event) => {
     if (typeof event.data !== 'string') return
-    let message: { type?: string; transcript?: string; message?: string }
+    let message: { type?: string; transcript?: string; turnId?: number; message?: string }
     try {
       message = JSON.parse(event.data)
     } catch {
       return
     }
-    const text = (message.transcript ?? '').trim()
-    if (message.type === 'transcript' && text) handlers.onPartial(text)
-    else if (message.type === 'speechComplete' && text) handlers.onFinal(text)
-    else if (message.type === 'error') handlers.onError(message.message ?? 'The transcription service failed.')
+    if (message.type === 'speechStart' && typeof message.turnId === 'number') {
+      book.start(message.turnId)
+      return
+    }
+    if (message.type === 'transcript' && message.transcript) {
+      book.partial(message.transcript.trim())
+      handlers.onUpdate(book.text())
+    } else if (message.type === 'speechComplete' && typeof message.turnId === 'number') {
+      book.complete(message.turnId, message.transcript ?? '')
+      handlers.onUpdate(book.text())
+    } else if (message.type === 'error') {
+      handlers.onError(message.message ?? 'The transcription service failed.')
+    }
   }
 
   socket.onclose = (event) => {
-    clearTimeout(closeTimer)
     releaseMicrophone()
     if (!stopping && event.code !== 1000) {
       handlers.onError(CLOSE_REASONS[event.code] ?? 'The voice connection closed.')
     }
+    finish()
   }
 
   return {
     stop() {
       if (stopping) return
       stopping = true
+      // Input ends now; the service delivers what it still holds, then closes.
       releaseMicrophone()
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: 'endStream' }))
-        // The server closes with 1000 once the last utterance is delivered.
-        closeTimer = setTimeout(() => socket.close(1000), 5000)
+        closeTimer = setTimeout(() => socket.close(1000), 4000)
       } else {
+        finish()
         socket.close(1000)
       }
     },
