@@ -130,37 +130,23 @@ export default function KnowledgePage() {
         )
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-xl border border-border bg-card px-3 py-2">
-            <Stat label={t('knowledge.documents')} value={fmt(corpus?.documents ?? 0)} hint={`${fmt(corpus?.activeChunks ?? 0)} ${t('knowledge.chunks').toLowerCase()}`} />
-            <Stat
-              label={t('knowledge.dimensions')}
-              value={status.embedding.dimensions ? `${status.embedding.dimensions}` : '—'}
-              hint={status.embedding.model}
-            />
-            <Stat
-              label={t('knowledge.lastIngest')}
-              value={corpus?.lastIngestedAt ? new Date(corpus.lastIngestedAt).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' }) : t('knowledge.never')}
-            />
-            <div className="ml-auto flex items-center gap-2 text-[12px]">
-              {pending.length === 0 ? (
-                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                  <Check className="h-3.5 w-3.5" />
-                  {t('knowledge.indexes.allReady')}
-                </span>
-              ) : (
-                <span className="text-amber-600 dark:text-amber-400">{t('knowledge.indexes.pending', { count: pending.length })}</span>
-              )}
-              {pending.length > 0 && (
-                <Button variant="outline" size="sm" onClick={() => void repairIndexes()} disabled={repairing}>
-                  {repairing ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-                  {t('knowledge.indexes.repair')}
-                </Button>
-              )}
-            </div>
-          </div>
-
           <TabsContent value="documents" className="pt-2">
-            <KbDocuments documents={documents} loading={loading} onChanged={load} onToggle={toggleDocument} />
+            <KbDocuments
+              documents={documents}
+              loading={loading}
+              onChanged={load}
+              onToggle={toggleDocument}
+              summary={{
+                documents: corpus?.documents ?? 0,
+                chunks: corpus?.activeChunks ?? 0,
+                dimensions: status.embedding.dimensions || undefined,
+                model: status.embedding.model,
+                lastIngestedAt: corpus?.lastIngestedAt,
+                pendingIndexes: pending.length,
+              }}
+              repairing={repairing}
+              onRepair={pending.length > 0 ? () => void repairIndexes() : undefined}
+            />
           </TabsContent>
           <TabsContent value="retrieval" className="pt-2">
             <RetrievalPanel hasCorpus={(corpus?.activeChunks ?? 0) > 0} />

@@ -15,6 +15,7 @@ import { Badge, Button, DataTablePagination, Input, Select, Table, TableBody, Ta
 import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { MediaUploader, UploadFailure, type UploadOutcome } from '@/components/media-uploader'
+import { KbMiniStats, type KbSummary } from '@/components/kb-mini-stats'
 
 const ACCEPT = '.pdf,.txt,.md,.markdown,.csv,.json'
 const ACCEPT_PATTERN = /\.(pdf|txt|md|markdown|csv|json)$/i
@@ -45,11 +46,17 @@ export function KbDocuments({
   loading,
   onChanged,
   onToggle,
+  summary,
+  repairing,
+  onRepair,
 }: {
   documents: KbDocumentDto[]
   loading: boolean
   onChanged: () => Promise<void>
   onToggle: (document: KbDocumentDto, active: boolean) => Promise<void>
+  summary?: KbSummary
+  repairing?: boolean
+  onRepair?: () => void
 }) {
   const { t, locale } = useI18n()
   const [country, setCountry] = React.useState('cm')
@@ -148,9 +155,11 @@ export function KbDocuments({
               className="h-8 pl-8 text-[12px]"
             />
           </div>
-          <span className="ml-auto text-[11px] text-muted-foreground">
-            {t('media.count', { count: documents.length })}
-          </span>
+          {summary && (
+            <div className="ml-auto">
+              <KbMiniStats summary={summary} repairing={repairing} onRepair={onRepair} />
+            </div>
+          )}
           <Button
             variant="outline"
             size="icon"
@@ -199,7 +208,6 @@ export function KbDocuments({
                       <TableCell className="text-right">
                         <RowActionMenu
                           overlay
-                          menuLabel={document.filename}
                           inline={
                             <div className="flex items-center justify-end gap-1.5">
                               {retired && <Badge tone="warning">{t('knowledge.corpus.retired')}</Badge>}

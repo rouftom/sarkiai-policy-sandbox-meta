@@ -10,7 +10,6 @@ import { CommunicationsPanel } from '@/components/communications-panel'
 import { ExercisePanel } from '@/components/exercise-panel'
 import { GazettePanel } from '@/components/gazette-panel'
 import { ModelSelect } from '@/components/model-select'
-import { ProviderBadge } from '@/components/provider-badge'
 import { ReadinessPanel } from '@/components/readiness-panel'
 import { ScenarioConsole } from '@/components/scenario-console'
 import { WorkspaceControls } from '@/components/workspace-bar'
@@ -72,7 +71,6 @@ export default function ConsolePage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ModelSelect />
-          <ProviderBadge />
         </div>
       </section>
 

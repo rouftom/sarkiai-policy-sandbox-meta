@@ -174,7 +174,6 @@ export default function AuditPage() {
                         <TableCell>
                           <RowActionMenu
                             overlay
-                            menuLabel={event.action}
                             inline={
                               <Button
                                 variant="ghost"

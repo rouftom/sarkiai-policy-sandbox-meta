@@ -34,7 +34,7 @@ export function TableFooter({ className, ...props }: React.ComponentProps<'tfoot
 export function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
   return (
     <tr
-      className={cn('border-border transition-colors hover:bg-brand-primary/5', className)}
+      className={cn('group/row border-border transition-colors hover:bg-brand-primary/5', className)}
       {...props}
     />
   )

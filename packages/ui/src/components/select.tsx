@@ -22,6 +22,8 @@ export interface SelectProps {
   /** `sm` for toolbars, `md` for forms. */
   size?: 'sm' | 'md'
   className?: string
+  /** Classes for the trigger button itself (the box the user clicks). */
+  triggerClassName?: string
   align?: 'start' | 'end'
 }
 
@@ -40,6 +42,7 @@ export function Select({
   disabled = false,
   size = 'sm',
   className,
+  triggerClassName,
   align = 'start',
 }: SelectProps) {
   const [open, setOpen] = React.useState(false)
@@ -127,6 +130,7 @@ export function Select({
           'hover:border-brand-primary/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25',
           'disabled:cursor-not-allowed disabled:opacity-50',
           size === 'sm' ? 'h-8 px-2 text-[11px]' : 'h-9 px-2.5 text-xs',
+          triggerClassName,
         )}
       >
         <span className={cn('min-w-0 truncate', !selected && 'text-muted-foreground')}>
