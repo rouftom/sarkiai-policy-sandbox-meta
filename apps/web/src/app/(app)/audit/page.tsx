@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { AlertTriangle, Loader, RefreshCw, ScrollText, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Copy, Loader, RefreshCw, ScrollText, ShieldCheck } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -21,6 +21,9 @@ import {
 import { authApi, type AuditEventDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { PageIntro } from '@/components/page-intro'
+import { RowActionMenu } from '@/components/ui/row-action-menu'
+import { TableActionItem } from '@/components/ui/table-actions'
+import { Skeleton } from '@sps/ui'
 
 /** The API caps a page at 500 records; the table pages through them locally. */
 const FETCH_SIZE = 500
@@ -118,9 +121,10 @@ export default function AuditPage() {
 
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
           {loading && events.length === 0 && (
-            <div className="flex items-center gap-2 px-4 py-8 text-xs text-muted-foreground">
-              <Loader className="h-4 w-4 animate-spin" />
-              {t('audit.loading')}
+            <div className="space-y-2 p-4" aria-label={t('audit.loading')}>
+              {[0, 1, 2, 3, 4].map((row) => (
+                <Skeleton key={row} className="h-8 w-full" />
+              ))}
             </div>
           )}
 
@@ -138,7 +142,7 @@ export default function AuditPage() {
           {visible.length > 0 && (
             <>
               <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
-                <Table className="min-w-[720px]">
+                <Table className="min-w-[720px] table-actions-overlay">
                   <TableHeader>
                     <TableRow className="border-b border-slate-200 hover:bg-transparent dark:border-brand-primary-dark/30">
                       <TableHead>{t('audit.time')}</TableHead>
@@ -146,6 +150,7 @@ export default function AuditPage() {
                       <TableHead>{t('audit.action')}</TableHead>
                       <TableHead>{t('audit.target')}</TableHead>
                       <TableHead>{t('audit.hash')}</TableHead>
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -165,6 +170,26 @@ export default function AuditPage() {
                         </TableCell>
                         <TableCell className="font-mono text-[10px] text-muted-foreground">
                           {event.hash.slice(0, 12)}…
+                        </TableCell>
+                        <TableCell>
+                          <RowActionMenu
+                            overlay
+                            menuLabel={event.action}
+                            inline={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={t('audit.copyHash')}
+                                onClick={() => void navigator.clipboard?.writeText(event.hash)}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            }
+                          >
+                            <TableActionItem icon={Copy} onClick={() => void navigator.clipboard?.writeText(event.hash)}>
+                              {t('audit.copyHash')}
+                            </TableActionItem>
+                          </RowActionMenu>
                         </TableCell>
                       </TableRow>
                     ))}

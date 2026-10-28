@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useState, useEffect } from 'react'
-import { TabsList as PrimitiveTabsList, TabsTrigger } from './tabs'
+import { Tabs as TabsRoot, TabsList as PrimitiveTabsList, TabsTrigger } from './tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip'
 import { Button } from './button'
 import { cn } from '../lib/cn'
@@ -52,7 +52,7 @@ export function AnimatedTabsList({
   containerBreakpoint = "@xl",
   activeBorderColor,
   showTooltips,
-  surfaceClassName = "bg-white/50 dark:bg-slate-900/50 border border-neutral-300 dark:border-neutral-800",
+  surfaceClassName,
   dense = false,
 }: AnimatedTabsListProps) {
   const radius = dense ? "rounded-xl" : "rounded-3xl"
@@ -169,17 +169,16 @@ export function AnimatedTabsList({
             containerBreakpoint === "@sm" ? "@sm:px-6" :
               "@xs:px-6"
 
+  const surface = surfaceClassName ?? (dense ? "bg-secondary" : "bg-white/50 dark:bg-slate-900/50 border border-neutral-300 dark:border-neutral-800")
+  const frameProps = dense
+    ? { className: cn(radius, "w-full") }
+    : { as: "div", speed: "2s", thickness: 2, isAnimate: isSaving, className: cn(radius, "w-full"), color: borderColor as any }
+  const Frame: any = dense ? "div" : StarBorder
   return (
+    <TabsRoot value={value}>
     <div className={cn("relative flex items-center", fullWidth ? "w-full" : maxWidth, className)}>
-      <StarBorder
-        as="div"
-        speed="2s"
-        thickness={2}
-        isAnimate={isSaving}
-        className={cn(radius, "w-full")}
-        color={borderColor as any}
-      >
-        <div className={cn("relative flex items-center w-full overflow-hidden backdrop-blur-sm", radius, surfaceClassName)}>
+      <Frame {...frameProps}>
+        <div className={cn("relative flex items-center w-full overflow-hidden backdrop-blur-sm", radius, surface)}>
           {showScrollButtons && showLeftArrow && (
             <Button
               variant="ghost"
@@ -209,10 +208,11 @@ export function AnimatedTabsList({
                       disabled={tab.disabled}
                       onClick={() => { onValueChange?.(tab.id) }}
                       className={cn(
-                        "relative flex-1 rounded-none font-black text-[10px] tracking-widest py-3.5 px-3 !bg-transparent data-[state=active]:!bg-transparent dark:data-[state=active]:!bg-transparent data-[state=active]:!shadow-none transition-all !text-slate-500 hover:!text-slate-700 dark:hover:!text-slate-200 !border-none shrink-0 whitespace-nowrap",
+                        "relative flex-1 rounded-none font-black text-[10px] tracking-widest py-3.5 px-3 !bg-transparent data-[state=active]:!bg-transparent dark:data-[state=active]:!bg-transparent data-[state=active]:!shadow-none transition-all !border-none shrink-0 whitespace-nowrap",
                         dense ? "!py-1.5 !px-2.5 !text-[11px] !font-medium !tracking-normal" : paddingBpClass,
                         tab.colorCls,
-                        value === tab.id ? "font-bold" : "",
+                        dense ? "!text-muted-foreground hover:!text-foreground" : "!text-slate-500 hover:!text-slate-700 dark:hover:!text-slate-200",
+                        value === tab.id ? (dense ? "font-semibold !text-brand-primary-dark dark:!text-brand-primary-light" : "font-bold") : "",
                         tab.disabled && "opacity-40 cursor-not-allowed"
                       )}
                     >
@@ -225,7 +225,7 @@ export function AnimatedTabsList({
                         <motion.div
                           layoutId={`activeTabIndicator-${className}`}
                           transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                          className={cn("absolute bottom-[-1px] left-0 right-0 h-[3px] rounded-full z-10", tab.indicatorBg || "bg-indigo-500")}
+                          className={cn("absolute bottom-[-1px] left-0 right-0 h-[3px] rounded-full z-10", tab.indicatorBg || (dense ? "bg-brand-primary" : "bg-indigo-500"))}
                         />
                       )}
                     </TabsTrigger>
@@ -252,7 +252,8 @@ export function AnimatedTabsList({
             </Button>
           )}
         </div>
-      </StarBorder>
+      </Frame>
     </div>
+    </TabsRoot>
   )
 }

@@ -8,6 +8,8 @@
  */
 
 import * as React from 'react'
+import { RowActionMenu } from '@/components/ui/row-action-menu'
+import { TableActionItem } from '@/components/ui/table-actions'
 import { RotateCcw, Search, Upload, X } from 'lucide-react'
 import { Badge, Button, DataTablePagination, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Dialog, DialogContent, DialogHeader, DialogTitle } from '@sps/ui'
 import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } from '@/lib/api'
@@ -136,16 +138,6 @@ export function KbDocuments({
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={t('knowledge.upload')}
-            title={t('knowledge.upload')}
-            onClick={() => setUploadOpen(true)}
-            className="h-8 w-8 rounded-lg"
-          >
-            <Upload className="h-3.5 w-3.5" />
-          </Button>
           <div className="relative w-full max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -159,6 +151,16 @@ export function KbDocuments({
           <span className="ml-auto text-[11px] text-muted-foreground">
             {t('media.count', { count: documents.length })}
           </span>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t('knowledge.upload')}
+            title={t('knowledge.upload')}
+            onClick={() => setUploadOpen(true)}
+            className="h-8 w-8 rounded-lg"
+          >
+            <Upload className="h-3.5 w-3.5" />
+          </Button>
         </div>
 
         {visible.length === 0 ? (
@@ -167,7 +169,7 @@ export function KbDocuments({
           </p>
         ) : (
           <div className="border border-border">
-            <Table>
+            <Table className="table-actions-overlay">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>{t('knowledge.corpus.file')}</TableHead>
@@ -195,13 +197,28 @@ export function KbDocuments({
                         {document.activeChunks.toLocaleString('en-US')}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {retired && <Badge tone="warning">{t('knowledge.corpus.retired')}</Badge>}
-                          <Button variant="ghost" size="sm" disabled={loading} onClick={() => void onToggle(document, retired)}>
-                            {retired ? <RotateCcw className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                        <RowActionMenu
+                          overlay
+                          menuLabel={document.filename}
+                          inline={
+                            <div className="flex items-center justify-end gap-1.5">
+                              {retired && <Badge tone="warning">{t('knowledge.corpus.retired')}</Badge>}
+                              <Button variant="ghost" size="sm" disabled={loading} onClick={() => void onToggle(document, retired)}>
+                                {retired ? <RotateCcw className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                                {retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
+                              </Button>
+                            </div>
+                          }
+                        >
+                          <TableActionItem
+                            icon={retired ? RotateCcw : X}
+                            variant={retired ? 'default' : 'danger'}
+                            disabled={loading}
+                            onClick={() => void onToggle(document, retired)}
+                          >
                             {retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
-                          </Button>
-                        </div>
+                          </TableActionItem>
+                        </RowActionMenu>
                       </TableCell>
                     </TableRow>
                   )

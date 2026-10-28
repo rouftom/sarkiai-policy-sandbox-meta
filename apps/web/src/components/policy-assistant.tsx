@@ -622,7 +622,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         )}
       </div>
 
-      <div className="shrink-0 space-y-2 p-3">
+      <div className="shrink-0 space-y-1 px-3 pb-2 pt-3">
         {actionsOpen && (
           <div className="custom-scrollbar max-h-72 overflow-y-auto rounded-2xl bg-card p-2 shadow-lg">
             <ActionCenter
@@ -677,7 +677,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           }}
         />
 
-        <p className="mt-1 px-2 text-center text-[8px] leading-relaxed text-muted-foreground/70">
+        <p className="px-2 text-center text-[8px] leading-relaxed text-muted-foreground/70">
           {t('assistant.disclaimer')}
         </p>
       </div>

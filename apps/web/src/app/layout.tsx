@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Montserrat } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
+import { ServiceWorkerRegister } from '@/components/service-worker-register'
 import { I18nProvider } from '@/lib/i18n'
 import { AuthProvider } from '@/lib/auth'
 import {
@@ -27,6 +28,17 @@ export const metadata: Metadata = {
   title: 'SarkiAI Policy Sandbox',
   description:
     'Policy-grounded multi-agent engine: error-scenario simulation and AI-readiness assessment. Runs on Meta models, or on open weights on-premise.',
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '16x16 32x32 48x48' },
+      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/favicon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
+  },
+  appleWebApp: { capable: true, title: 'SPS', statusBarStyle: 'default' },
 }
 
 export const viewport: Viewport = {
@@ -64,6 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <I18nProvider>
             <AuthProvider>{children}</AuthProvider>
           </I18nProvider>
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>

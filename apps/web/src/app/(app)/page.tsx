@@ -6,18 +6,15 @@ import {
   ArrowUpRight,
   FileCheck2,
   Gauge,
-  Languages,
   LayoutDashboard,
   Loader,
   Network,
   Newspaper,
   ScrollText,
   ShieldCheck,
-  Siren,
-  SlidersHorizontal,
   Waypoints,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sps/ui'
+import { Card, CardContent, CardHeader, CardTitle, Skeleton } from '@sps/ui'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
@@ -66,16 +63,6 @@ export default function OverviewPage() {
       cancelled = true
     }
   }, [])
-
-  const modules = [
-    { href: '/console', icon: SlidersHorizontal, title: t('nav.console'), body: t('app.tagline') },
-    { href: '/readiness', icon: Gauge, title: t('nav.readiness'), body: t('readiness.pageSubtitle') },
-    { href: '/scenarios', icon: Network, title: t('nav.scenarios'), body: t('scenarios.pageSubtitle') },
-    { href: '/gazette', icon: Newspaper, title: t('nav.gazette'), body: t('gazette.pageSubtitle') },
-    { href: '/exercise', icon: Siren, title: t('nav.exercise'), body: t('exercise.pageSubtitle') },
-    { href: '/communications', icon: Languages, title: t('nav.communication'), body: t('communication.pageSubtitle') },
-    { href: '/audit', icon: ScrollText, title: t('nav.audit'), body: t('audit.pageSubtitle') },
-  ]
 
   const quick = [
     { href: '/readiness', icon: Gauge, title: t('overview.quick.readiness'), body: t('overview.quick.readinessBody') },
@@ -174,8 +161,10 @@ export default function OverviewPage() {
           </CardHeader>
           <CardContent className="p-0">
             {auditState === 'loading' && (
-              <div className="flex items-center gap-2 px-4 py-8 text-xs text-muted-foreground">
-                <Loader className="h-4 w-4 animate-spin" /> {t('audit.loading')}
+              <div className="space-y-2 p-4" aria-label={t('audit.loading')}>
+                {[0, 1, 2, 3].map((row) => (
+                  <Skeleton key={row} className="h-7 w-full" />
+                ))}
               </div>
             )}
             {auditState === 'unavailable' && (
@@ -231,30 +220,6 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      <section className="mt-6">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-display text-sm font-bold text-foreground">{t('overview.modules')}</h3>
-          <span className="text-[10px] text-muted-foreground">{t('overview.modules.count', { count: modules.length })}</span>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {modules.map(({ href, icon: Icon, title, body }) => (
-            <Link
-              key={href}
-              href={href}
-              className="group rounded-xl bg-card p-3 transition-colors hover:bg-brand-primary/5"
-            >
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary dark:bg-brand-primary-dark/40 dark:text-brand-primary-light">
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-xs font-semibold text-foreground">{title}</span>
-                <ArrowUpRight className="ml-auto h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-              </div>
-              <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">{body}</p>
-            </Link>
-          ))}
-        </div>
-      </section>
     </>
   )
 }

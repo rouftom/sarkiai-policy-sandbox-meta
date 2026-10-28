@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { AlertTriangle, Check, Database, Loader, Play, RotateCcw, Search } from 'lucide-react'
-import { AnimatedTabsList, Button, Input, Select, Tabs, TabsContent, cn, type TabItem } from '@sps/ui'
+import { AnimatedTabsList, Button, Input, Select, Skeleton, Tabs, TabsContent, cn, type TabItem } from '@sps/ui'
 import { knowledgeApi, type KbDocumentDto, type KbExplorationDto, type KbStageItemDto, type KbStatusDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { PageIntro } from '@/components/page-intro'
@@ -32,9 +32,9 @@ function score(value?: number): string {
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="truncate text-[15px] font-semibold text-foreground">{value}</p>
-      {hint && <p className="truncate text-[10px] text-muted-foreground">{hint}</p>}
+      <p className="text-[10px] leading-tight text-muted-foreground">{label}</p>
+      <p className="truncate text-[13px] font-semibold leading-tight text-foreground">{value}</p>
+      {hint && <p className="truncate text-[10px] leading-tight text-muted-foreground">{hint}</p>}
     </div>
   )
 }
@@ -119,12 +119,18 @@ export default function KnowledgePage() {
       )}
 
       {!status ? (
-        <p className="py-16 text-center text-[12px] text-muted-foreground">
-          {loading ? t('knowledge.loading') : t('knowledge.unavailable')}
-        </p>
+        loading ? (
+          <div className="space-y-3" aria-label={t('knowledge.loading')}>
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-9 w-72" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        ) : (
+          <p className="py-16 text-center text-[12px] text-muted-foreground">{t('knowledge.unavailable')}</p>
+        )
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl border border-border bg-card px-4 py-2.5">
+          <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1.5 rounded-xl border border-border bg-card px-3 py-2">
             <Stat label={t('knowledge.documents')} value={fmt(corpus?.documents ?? 0)} hint={`${fmt(corpus?.activeChunks ?? 0)} ${t('knowledge.chunks').toLowerCase()}`} />
             <Stat
               label={t('knowledge.dimensions')}
