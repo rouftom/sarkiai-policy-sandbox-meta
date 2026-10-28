@@ -11,10 +11,13 @@ import * as React from 'react'
 import {
   Background,
   BaseEdge,
+  Controls,
   Handle,
   MarkerType,
+  Panel,
   Position,
   ReactFlow,
+  useReactFlow,
   getBezierPath,
   type Edge,
   type EdgeProps,
@@ -22,7 +25,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { AlertTriangle, CheckCircle2, Circle, Globe, Loader, Play, Rocket, Scale, Search, Sparkles } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Circle, Globe, Loader, Play, Rocket, Scale, Sparkles } from 'lucide-react'
 import { cn } from '@sps/ui'
 
 export type ProcessState = 'idle' | 'running' | 'success' | 'failed'
@@ -61,17 +64,17 @@ function ProcessNodeComponent({ id, data, selected }: NodeProps<ProcessFlowNode>
     <div
       onClick={() => data.onSelect?.(id)}
       className={cn(
-        'flex w-52 cursor-pointer items-center gap-2 rounded-xl border-2 bg-white px-2.5 py-2 text-left shadow-sm transition-colors dark:bg-brand-ink',
+        'flex w-64 cursor-pointer items-center gap-3 rounded-2xl border-2 bg-white px-3.5 py-3 text-left shadow-sm transition-colors hover:shadow-md dark:bg-brand-ink',
         STATE_RING[data.state],
         selected && 'ring-2 ring-brand-primary/40',
       )}
     >
       <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0" style={{ background: KIND_ACCENT[data.kind] }} />
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg" style={{ backgroundColor: `${KIND_ACCENT[data.kind]}22`, color: KIND_ACCENT[data.kind] }}>
-        <Icon className="h-3.5 w-3.5" />
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ backgroundColor: `${KIND_ACCENT[data.kind]}22`, color: KIND_ACCENT[data.kind] }}>
+        <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[11px] font-semibold text-foreground">{data.label}</span>
+        <span className="block truncate text-[12px] font-semibold text-foreground">{data.label}</span>
         {data.detail && <span className="block truncate text-[10px] text-muted-foreground">{data.detail}</span>}
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">
@@ -114,11 +117,11 @@ function layout(steps: ProcessGraphStep[], onSelect: (id: string) => void): { no
     const column = step.kind === 'start' ? 0 : step.kind === 'web' ? 1 : step.kind === 'agent' ? 2 : step.kind === 'synthesis' ? 3 : 4
     const row = step.kind === 'agent' ? agents.indexOf(step) : 0
     const centre = (agents.length - 1) / 2
-    const y = step.kind === 'agent' ? (row - centre) * 62 : 0
+    const y = step.kind === 'agent' ? (row - centre) * 96 : 0
     return {
       id: step.id,
       type: 'process',
-      position: { x: column * 230, y },
+      position: { x: column * 340, y },
       data: { kind: step.kind, label: step.label, state: step.state, detail: step.detail, duration: step.duration, onSelect },
       draggable: false,
       selectable: true,
@@ -143,11 +146,27 @@ function layout(steps: ProcessGraphStep[], onSelect: (id: string) => void): { no
   return { nodes, edges }
 }
 
+/** Puts the whole process back in view: the automatic layout, fitted to the canvas. */
+function ResetView() {
+  const { fitView } = useReactFlow()
+  return (
+    <Panel position="top-right">
+      <button
+        type="button"
+        onClick={() => void fitView({ padding: 0.2, duration: 300 })}
+        className="rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-sm transition-colors hover:bg-white dark:bg-brand-ink/90"
+      >
+        Réorganiser
+      </button>
+    </Panel>
+  )
+}
+
 export function ProcessGraph({ steps, onSelect, className }: { steps: ProcessGraphStep[]; onSelect?: (id: string) => void; className?: string }) {
   const handle = React.useCallback((id: string) => onSelect?.(id), [onSelect])
   const { nodes, edges } = React.useMemo(() => layout(steps, handle), [steps, handle])
   return (
-    <div className={cn('h-[300px] w-full overflow-hidden rounded-2xl bg-secondary/40', className)}>
+    <div className={cn('h-[520px] w-full overflow-hidden rounded-2xl bg-secondary/40', className)}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -163,6 +182,8 @@ export function ProcessGraph({ steps, onSelect, className }: { steps: ProcessGra
         maxZoom={1.4}
       >
         <Background gap={18} size={1} color="#94a3b855" />
+        <Controls showInteractive={false} position="bottom-left" className="!shadow-sm" />
+        <ResetView />
       </ReactFlow>
     </div>
   )

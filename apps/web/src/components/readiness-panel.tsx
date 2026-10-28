@@ -1,9 +1,28 @@
 'use client'
 
 import * as React from 'react'
-import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Circle, History, Loader, Waypoints } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select, cn } from '@sps/ui'
-import { WORKFLOW_PROFILES } from '@sps/shared'
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Circle, Download, FileCheck2, History, ListChecks, Loader, Settings2, Waypoints, Workflow } from 'lucide-react'
+import {
+  AnimatedTabsList,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Select,
+  Switch,
+  Tabs,
+  TabsContent,
+  cn,
+  type TabItem,
+} from '@sps/ui'
+import { READINESS_DIMENSIONS, WORKFLOW_PROFILES } from '@sps/shared'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
@@ -15,7 +34,7 @@ function seconds(ms: number | undefined): string {
   return ms === undefined ? '—' : `${(ms / 1000).toFixed(1)} s`
 }
 
-/** The page-title actions: the history toggle and the assessment button. */
+/** The page-title actions: the history toggle (pressed while it is shown) and the assessment button. */
 export function ReadinessActions() {
   const { t } = useI18n()
   const { view, running, run, showHistory, showAssessment } = useReadiness()
@@ -23,13 +42,17 @@ export function ReadinessActions() {
   return (
     <div className="flex items-center gap-2">
       <Button
-        variant={inHistory ? 'secondary' : 'ghost'}
         size="icon-sm"
-        className="h-8 w-8 rounded-lg"
         aria-label={t('readiness.history')}
         aria-pressed={inHistory}
         title={t('readiness.history')}
         onClick={() => (inHistory ? showAssessment() : showHistory())}
+        className={cn(
+          'h-8 w-8 rounded-lg transition-colors',
+          inHistory
+            ? 'bg-brand-primary text-white shadow-sm hover:bg-brand-primary/90'
+            : 'bg-transparent text-muted-foreground hover:bg-brand-primary/10 hover:text-brand-primary dark:hover:text-brand-primary-light',
+        )}
       >
         <History className="h-4 w-4" />
       </Button>
@@ -41,11 +64,26 @@ export function ReadinessActions() {
   )
 }
 
-/** The assessment content: live process, result, what-if. The history replaces it when open. */
+type Tab = 'process' | 'steps' | 'result' | 'settings'
+
+/** Details of one node of the process, shown in a popup when the node is clicked. */
+interface NodeInfo {
+  id: string
+  kind: ProcessGraphStep['kind']
+  label: string
+  state: ProcessState
+  detail?: string
+  duration?: string
+  step?: Step
+}
+
+const NODE_KINDS: ProcessGraphStep['kind'][] = ['start', 'web', 'agent', 'synthesis', 'saved']
+
 export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) {
   const { t, locale } = useI18n()
   const { lens, country } = useWorkspace()
   const r = useReadiness()
+  const [tab, setTab] = React.useState<Tab>('process')
   const profile = WORKFLOW_PROFILES[lens]
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })
@@ -78,45 +116,69 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [r.steps, r.report, r.meta, r.running, r.now, country, t])
 
-  const selectNode = (id: string) => {
-    if (id.startsWith('agent:')) r.openAgent(id.slice('agent:'.length))
+  const nodeInfo = (id: string | null): NodeInfo | null => {
+    if (!id) return null
+    const node = graphSteps.find((entry) => entry.id === id)
+    if (!node) return null
+    const step = node.kind === 'agent' ? r.steps.find((entry) => `agent:${entry.dimension}` === id) : undefined
+    return { id, kind: node.kind, label: node.label, state: node.state, detail: node.detail, duration: node.duration, step }
   }
+  const info = nodeInfo(r.selectedNode)
+
+  const selectNode = (id: string) => r.setSelectedNode(id)
 
   const content = (
     <div className="space-y-6">
       {r.failure && <p className="text-[11px] text-destructive">{r.failure}</p>}
+      {!r.report && r.steps.length === 0 && <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">{t('readiness.empty')}</p>}
+    </div>
+  )
 
-      {graphSteps.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-            <span>{t('readiness.process.agents', { count: r.steps.length })}</span>
+  const processTab = (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        <span>{t('readiness.process.agents', { count: r.steps.length })}</span>
+        <span>·</span>
+        <span>{t('readiness.process.progress', { done: doneSteps.length, total: r.steps.length })}</span>
+        {liveTotal !== undefined && (
+          <>
             <span>·</span>
-            <span>{t('readiness.process.progress', { done: doneSteps.length, total: r.steps.length })}</span>
-            {liveTotal !== undefined && (
-              <>
-                <span>·</span>
-                <span className="font-mono">{seconds(liveTotal)}</span>
-              </>
-            )}
-          </div>
-          <ProcessGraph steps={graphSteps} onSelect={selectNode} />
-          <ol className="space-y-1">
-            {r.steps.map((step) => (
-              <StepRow
-                key={step.dimension}
-                step={step}
-                now={r.now}
-                open={r.openIds.has(step.dimension)}
-                onToggle={() => r.toggleStep(step.dimension)}
-                onOpenSource={r.setSource}
-              />
-            ))}
-          </ol>
-        </section>
+            <span className="font-mono">{seconds(liveTotal)}</span>
+          </>
+        )}
+      </div>
+      {graphSteps.length > 0 ? (
+        <ProcessGraph steps={graphSteps} onSelect={selectNode} />
+      ) : (
+        <p className="py-16 text-center text-[11px] text-muted-foreground">{t('readiness.empty')}</p>
       )}
+    </section>
+  )
 
-      {r.report && (
-        <section className="space-y-3">
+  const stepsTab = (
+    <section className="space-y-2">
+      {r.steps.length === 0 && <p className="py-16 text-center text-[11px] text-muted-foreground">{t('readiness.empty')}</p>}
+      <ol className="space-y-1">
+        {r.steps.map((step) => (
+          <StepRow
+            key={step.dimension}
+            step={step}
+            now={r.now}
+            open={r.openIds.has(step.dimension)}
+            onToggle={() => r.toggleStep(step.dimension)}
+            onOpenSource={r.setSource}
+          />
+        ))}
+      </ol>
+    </section>
+  )
+
+  const resultTab = (
+    <section className="space-y-4">
+      {!r.report ? (
+        <p className="py-16 text-center text-[11px] text-muted-foreground">{t('readiness.empty')}</p>
+      ) : (
+        <>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
             {r.meta && <span>{formatDate(r.meta.createdAt)}</span>}
             {r.meta?.runBy && (
@@ -181,6 +243,31 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
             ))}
           </div>
 
+          <div className="rounded-xl bg-secondary/40 p-3">
+            <p className="text-[12px] font-semibold text-foreground">{t('readiness.report.title')}</p>
+            <p className="mb-3 text-[11px] text-muted-foreground">{t('readiness.report.hint')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={() => void r.generateReport('html')} disabled={r.reportBusy}>
+                {r.reportBusy ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                {t('readiness.report.generate')} · HTML
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => void r.generateReport('markdown')} disabled={r.reportBusy}>
+                <Download className="h-3.5 w-3.5" /> Markdown
+              </Button>
+            </div>
+            {r.reportFile && (
+              <ul className="mt-3 space-y-1 text-[11px]">
+                {r.reportFile.assets.map((asset) => (
+                  <li key={asset.kind} className="flex flex-wrap items-center gap-2">
+                    <Badge tone={asset.status === 'included' ? 'success' : asset.status === 'fallback' ? 'warning' : 'neutral'}>{asset.status}</Badge>
+                    <span className="font-medium">{t(`readiness.report.asset.${asset.kind}` as 'readiness.report.asset.chart')}</span>
+                    <span className="text-muted-foreground">{asset.tool ? `${asset.tool} · ` : ''}{asset.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <div className="rounded-lg border border-border bg-secondary/40 p-3">
             <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
               <Waypoints className="h-3.5 w-3.5" /> {t('readiness.whatIf')}
@@ -211,17 +298,47 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
               </div>
             )}
           </div>
-        </section>
+        </>
       )}
+    </section>
+  )
 
-      {!r.report && r.steps.length === 0 && <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">{t('readiness.empty')}</p>}
-    </div>
+  const settingsTab = <SettingsTab />
+
+  const tabs: TabItem[] = [
+    { id: 'process', label: t('readiness.tab.process'), icon: Workflow },
+    { id: 'steps', label: t('readiness.tab.steps'), icon: ListChecks },
+    { id: 'result', label: t('readiness.tab.result'), icon: FileCheck2 },
+    { id: 'settings', label: t('readiness.tab.settings'), icon: Settings2 },
+  ]
+
+  const assessment = (
+    <>
+      {r.failure && <p className="mb-3 text-[11px] text-destructive">{r.failure}</p>}
+      {graphSteps.length === 0 && !r.report && content}
+      {(graphSteps.length > 0 || r.report) && (
+        <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="space-y-4">
+          <AnimatedTabsList items={tabs} value={tab} onValueChange={(value) => setTab(value as Tab)} dense />
+          <TabsContent value="process">{processTab}</TabsContent>
+          <TabsContent value="steps">{stepsTab}</TabsContent>
+          <TabsContent value="result">{resultTab}</TabsContent>
+          <TabsContent value="settings">{settingsTab}</TabsContent>
+        </Tabs>
+      )}
+      {graphSteps.length === 0 && !r.report && (
+        <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="space-y-4">
+          <AnimatedTabsList items={tabs} value={tab} onValueChange={(value) => setTab(value as Tab)} dense />
+          <TabsContent value="settings">{settingsTab}</TabsContent>
+          <TabsContent value="process">{processTab}</TabsContent>
+        </Tabs>
+      )}
+    </>
   )
 
   return (
     <>
       {r.view === 'history' ? (
-        <ReadinessHistory runs={r.history} activeId={r.runId} onOpen={r.openSaved} onBack={r.showAssessment} />
+        <ReadinessHistory runs={r.history} activeId={r.runId} onOpen={r.openSaved} />
       ) : showStages ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <Card>
@@ -240,13 +357,221 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
               ))}
             </CardContent>
           </Card>
-          <div className="min-w-0 lg:col-span-2">{content}</div>
+          <div className="min-w-0 lg:col-span-2">{assessment}</div>
         </div>
       ) : (
-        content
+        assessment
       )}
+
+      <NodePopup info={info} onClose={() => r.setSelectedNode(null)} onOpenSteps={() => { r.setSelectedNode(null); setTab('steps') }} />
       <SourceDrawer source={r.source} onClose={() => r.setSource(null)} />
     </>
+  )
+}
+
+/** The popup of one node: its state, the model it runs on, and what it does. */
+function NodePopup({ info, onClose, onOpenSteps }: { info: NodeInfo | null; onClose: () => void; onOpenSteps: () => void }) {
+  const { t } = useI18n()
+  const r = useReadiness()
+  const step = info?.step
+  const stateLabel = info
+    ? info.state === 'success'
+      ? t('readiness.process.finished')
+      : info.state === 'running'
+        ? t('readiness.process.running')
+        : info.state === 'failed'
+          ? t('readiness.process.failed')
+          : t('readiness.process.waiting')
+    : ''
+  return (
+    <Dialog open={info !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg gap-0 overflow-hidden rounded-3xl p-0">
+        {info && (
+          <>
+            <DialogHeader className="border-b border-border px-5 py-3">
+              <DialogTitle className="text-sm font-semibold">{info.label}</DialogTitle>
+              <p className="text-[11px] text-muted-foreground">{t(`readiness.node.kind.${info.kind}` as 'readiness.node.kind.start')}</p>
+            </DialogHeader>
+            <div className="custom-scrollbar max-h-[70vh] space-y-4 overflow-y-auto p-5 text-[12px]">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-xl bg-secondary/60 p-3 text-[11px]">
+                <dt className="text-muted-foreground">{t('readiness.node.state')}</dt>
+                <dd className="font-medium">{stateLabel}</dd>
+                {info.duration && (
+                  <>
+                    <dt className="text-muted-foreground">{t('readiness.node.duration')}</dt>
+                    <dd className="font-mono">{info.duration}</dd>
+                  </>
+                )}
+                {info.detail && (
+                  <>
+                    <dt className="text-muted-foreground">{t('readiness.node.result')}</dt>
+                    <dd>{info.detail}</dd>
+                  </>
+                )}
+                {info.kind !== 'start' && info.kind !== 'saved' && (
+                  <>
+                    <dt className="text-muted-foreground">{t('readiness.node.model')}</dt>
+                    <dd className="truncate font-mono text-[10px]">{r.model || '—'}</dd>
+                  </>
+                )}
+              </dl>
+
+              <section className="space-y-1">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('readiness.node.doesTitle')}</h3>
+                <p className="leading-relaxed text-foreground/90">{t(`readiness.node.does.${info.kind}` as 'readiness.node.does.start')}</p>
+              </section>
+
+              {step && (
+                <section className="space-y-1">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('readiness.node.inputs')}</h3>
+                  <p className="text-muted-foreground">
+                    {step.passages ? t('readiness.process.passages', { country: step.passages.country, global: step.passages.global }) : '—'}
+                    {step.webSources.length > 0 ? ` · ${step.webSources.length} ${t('readiness.process.sourcesCount')}` : ''}
+                  </p>
+                  <p className="text-muted-foreground">{t('readiness.node.settingsLine', { k: r.settings.perDimensionK, effort: r.settings.reasoningEffort, web: r.settings.useWeb ? 'on' : 'off' })}</p>
+                </section>
+              )}
+
+              {step?.score && (
+                <section className="space-y-1">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('readiness.node.outputs')}</h3>
+                  <p>
+                    {step.score.score}/5 · {step.score.maturity} · {Math.round(step.score.confidence * 100)} %
+                  </p>
+                  {step.score.recommendations?.length > 0 && (
+                    <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground">
+                      {step.score.recommendations.slice(0, 4).map((item, index) => (
+                        <li key={index}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )}
+
+              {step && step.reasoning && (
+                <section className="space-y-1">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('readiness.process.reasoning')}</h3>
+                  <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-secondary/60 p-2 font-sans text-[11px] leading-relaxed">{step.reasoning}</pre>
+                </section>
+              )}
+
+              {step && (
+                <div className="flex justify-end">
+                  <Button variant="secondary" size="sm" onClick={onOpenSteps}>
+                    {t('readiness.node.openSteps')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Choices for the next assessment: the agents and their settings, the dimensions, the search. */
+function SettingsTab() {
+  const { t } = useI18n()
+  const r = useReadiness()
+  const allSelected = r.settings.dimensions.length === READINESS_DIMENSIONS.length
+  const toggleDimension = (id: string) => {
+    const has = r.settings.dimensions.includes(id)
+    if (has && r.settings.dimensions.length === 1) return
+    const next = has ? r.settings.dimensions.filter((entry) => entry !== id) : [...r.settings.dimensions, id]
+    r.setSettings({ dimensions: READINESS_DIMENSIONS.map((dimension) => dimension.shortName).filter((entry) => next.includes(entry)) })
+  }
+  const rows: Array<{ task: string; agent: string; model: string }> = [
+    { task: t('readiness.settings.task.corpus'), agent: t('readiness.settings.agent.corpus'), model: 'Atlas · voyage-4' },
+    { task: t('readiness.settings.task.web'), agent: t('readiness.settings.agent.web'), model: r.model || '—' },
+    { task: t('readiness.settings.task.evaluate'), agent: t('readiness.settings.agent.evaluate'), model: r.model || '—' },
+    { task: t('readiness.settings.task.synthesis'), agent: t('readiness.settings.agent.synthesis'), model: r.model || '—' },
+    { task: t('readiness.settings.task.report'), agent: t('readiness.settings.agent.report'), model: 'MCP charts · excalidraw · muse-image-1.0' },
+  ]
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <section className="space-y-3 rounded-xl bg-secondary/40 p-4">
+        <h3 className="text-[12px] font-semibold text-foreground">{t('readiness.settings.agents')}</h3>
+        <p className="text-[11px] text-muted-foreground">{t('readiness.settings.agentsHint')}</p>
+        <ul className="space-y-2 text-[11px]">
+          {rows.map((row) => (
+            <li key={row.task} className="rounded-lg bg-card p-2.5">
+              <p className="font-medium text-foreground">{row.task}</p>
+              <p className="text-muted-foreground">{row.agent}</p>
+              <p className="truncate font-mono text-[10px] text-muted-foreground">{row.model}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="space-y-4 rounded-xl bg-secondary/40 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[12px] font-semibold text-foreground">{t('readiness.settings.web')}</p>
+            <p className="text-[11px] text-muted-foreground">{t('readiness.settings.webHint')}</p>
+          </div>
+          <Switch checked={r.settings.useWeb} onCheckedChange={(checked) => r.setSettings({ useWeb: checked })} aria-label={t('readiness.settings.web')} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-[11px]">
+            <span className="text-muted-foreground">{t('readiness.settings.passages')}</span>
+            <Select
+              ariaLabel={t('readiness.settings.passages')}
+              value={String(r.settings.perDimensionK)}
+              onValueChange={(value) => r.setSettings({ perDimensionK: Number(value) })}
+              options={[3, 5, 8].map((value) => ({ value: String(value), label: String(value) }))}
+              size="md"
+              className="w-full"
+            />
+          </label>
+          <label className="space-y-1 text-[11px]">
+            <span className="text-muted-foreground">{t('readiness.settings.effort')}</span>
+            <Select
+              ariaLabel={t('readiness.settings.effort')}
+              value={r.settings.reasoningEffort}
+              onValueChange={(value) => r.setSettings({ reasoningEffort: value as 'low' | 'medium' | 'high' })}
+              options={[
+                { value: 'low', label: 'low' },
+                { value: 'medium', label: 'medium' },
+                { value: 'high', label: 'high' },
+              ]}
+              size="md"
+              className="w-full"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-xl bg-secondary/40 p-4 lg:col-span-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-[12px] font-semibold text-foreground">{t('readiness.settings.dimensions')}</h3>
+          <button
+            type="button"
+            className="text-[11px] font-semibold text-brand-primary hover:underline dark:text-brand-primary-light"
+            onClick={() => r.setSettings({ dimensions: READINESS_DIMENSIONS.map((dimension) => dimension.shortName) })}
+            disabled={allSelected}
+          >
+            {t('readiness.settings.all')}
+          </button>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {READINESS_DIMENSIONS.map((dimension) => (
+            <label key={dimension.shortName} className="flex cursor-pointer items-center gap-2 rounded-lg bg-card px-3 py-2 text-[11px]">
+              <input
+                type="checkbox"
+                checked={r.settings.dimensions.includes(dimension.shortName)}
+                onChange={() => toggleDimension(dimension.shortName)}
+                className="h-3.5 w-3.5 accent-brand-primary"
+              />
+              <span className="min-w-0 flex-1 truncate">
+                D{dimension.id} · {dimension.name}
+              </span>
+            </label>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground">{t('readiness.settings.atLeastOne')}</p>
+      </section>
+    </div>
   )
 }
 

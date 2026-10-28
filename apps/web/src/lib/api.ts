@@ -656,9 +656,24 @@ async function streamAgentAnswer(
   return assessment
 }
 
+/** The settings of one assessment, as the operator chose them. */
+export interface ReadinessSettingsDto {
+  dimensions?: string[]
+  perDimensionK?: number
+  useWeb?: boolean
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
+}
+
+export interface ReadinessReportFileDto {
+  filename: string
+  mime: string
+  content: string
+  assets: Array<{ kind: 'chart' | 'diagram' | 'cover'; status: 'included' | 'unavailable' | 'fallback'; tool?: string; message: string }>
+}
+
 /** Reads a Server-Sent Events body frame by frame. */
 async function streamReadiness(
-  body: { country: string; domain: string; globalCountry?: string },
+  body: { country: string; domain: string; globalCountry?: string } & ReadinessSettingsDto,
   onEvent: (event: ReadinessEventDto) => void,
 ): Promise<ReadinessRunSummaryDto | null> {
   const token = readToken()
@@ -734,11 +749,18 @@ export const api = {
 
   /** Live assessment: `onEvent` receives each step; resolves with the saved run. */
   readinessStream: (
-    body: { country: string; domain: string; globalCountry?: string },
+    body: { country: string; domain: string; globalCountry?: string } & ReadinessSettingsDto,
     onEvent: (event: ReadinessEventDto) => void,
   ) => streamReadiness(body, onEvent),
 
   readinessRuns: () => request<{ runs: ReadinessRunSummaryDto[] }>('/v1/readiness/runs'),
+
+  /** A report of a saved assessment, as a file the browser can download. */
+  readinessReport: (id: string, format: 'markdown' | 'html') =>
+    request<ReadinessReportFileDto>(`/v1/readiness/runs/${encodeURIComponent(id)}/report`, {
+      method: 'POST',
+      body: JSON.stringify({ format }),
+    }),
 
   readinessRun: (id: string) => request<ReadinessRunSummaryDto & { report: ReadinessReportDto & { generatedAt?: string } }>(`/v1/readiness/runs/${encodeURIComponent(id)}`),
 

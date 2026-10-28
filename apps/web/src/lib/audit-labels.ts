@@ -23,6 +23,7 @@ export const AUDIT_ACTION_KEYS: Record<string, string> = {
   'readiness.assessed': 'audit.action.readinessAssessed',
   'readiness.opened': 'audit.action.readinessOpened',
   'readiness.history.viewed': 'audit.action.readinessHistoryViewed',
+  'readiness.report.generated': 'audit.action.readinessReportGenerated',
 }
 
 /** `gap_recorded` → `Gap recorded`: the fallback for an action without a translation. */

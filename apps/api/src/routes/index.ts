@@ -47,6 +47,7 @@ import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
 import { McpGateway } from '../mcp.js'
 import { ChatSessionStore } from '../chat-sessions.js'
 import { ReadinessRunStore } from '../readiness-runs.js'
+import { buildReadinessReport } from '../readiness-report.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
@@ -1176,6 +1177,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         country: z.string().length(2),
         domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
         globalCountry: z.string().default('global'),
+        dimensions: z.array(z.string().max(60)).min(1).max(13).optional(),
+        perDimensionK: z.number().int().min(2).max(10).optional(),
+        useWeb: z.boolean().optional(),
+        reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
       })
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -1201,8 +1206,18 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }, 15_000)
 
     try {
+      const known = new Set(READINESS_DIMENSIONS.map((dimension) => dimension.shortName))
+      const dimensions = body.data.dimensions?.filter((id) => known.has(id as ReadinessDimension)) as ReadinessDimension[] | undefined
       const report = await engine.readiness.assess(
-        { country: body.data.country, domain: body.data.domain as Domain, globalCountry: body.data.globalCountry },
+        {
+          country: body.data.country,
+          domain: body.data.domain as Domain,
+          globalCountry: body.data.globalCountry,
+          ...(dimensions?.length ? { dimensions } : {}),
+          ...(body.data.perDimensionK ? { perDimensionK: body.data.perDimensionK } : {}),
+          ...(body.data.useWeb !== undefined ? { useWeb: body.data.useWeb } : {}),
+          ...(body.data.reasoningEffort ? { reasoningEffort: body.data.reasoningEffort } : {}),
+        },
         (event) => send(event),
       )
       const saved = await readinessRuns.save({ userId: operator.email, runBy: operator.email, report })
@@ -1252,6 +1267,31 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       userId: operator.email,
     })
     return run
+  })
+
+  /** A report of a saved assessment: Markdown or HTML, with the charts, diagram and cover it could produce. */
+  app.post('/v1/readiness/runs/:id/report', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = z.object({ format: z.enum(['markdown', 'html']) }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    const operator = operatorOf(request)
+    const run = await readinessRuns.get(id, operator.email)
+    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    const access = providerAccess(engine.provider)
+    const report = await buildReadinessReport(run, {
+      format: body.data.format,
+      mcp: mcpGateway,
+      image: engine.provider.mode === 'cloud' && access.apiKey ? { baseURL: engine.provider.baseURL, apiKey: access.apiKey, headers: access.headers } : null,
+    })
+    await engine.audit.logAction({
+      actor: operator.email,
+      action: 'readiness.report.generated',
+      target: `${body.data.format} · ${report.assets.map((asset) => `${asset.kind}:${asset.status}`).join(' ')}`,
+      lens: 'readiness',
+      runId: run.id,
+      userId: operator.email,
+    })
+    return report
   })
 
   // ── Readiness what-if (causal propagation across dimensions) ──────────────

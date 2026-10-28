@@ -9,15 +9,42 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { useWorkspace } from '@/lib/workspace'
+import { READINESS_DIMENSIONS } from '@sps/shared'
 import {
   api,
   type DimensionScoreDto,
   type ReadinessEventDto,
   type ReadinessReportDto,
+  type ReadinessReportFileDto,
   type ReadinessRunSummaryDto,
+  type ReadinessSettingsDto,
   type WhatIfResultDto,
 } from '@/lib/api'
 import type { WebSourceView } from '@/components/ai/display/source-drawer'
+
+/** What the operator chose for the next assessment (kept on this device). */
+export interface ReadinessSettings {
+  dimensions: string[]
+  perDimensionK: number
+  useWeb: boolean
+  reasoningEffort: 'low' | 'medium' | 'high'
+}
+
+const SETTINGS_KEY = 'sps.readiness.settings'
+const ALL_DIMENSIONS = READINESS_DIMENSIONS.map((dimension) => dimension.shortName)
+const DEFAULT_SETTINGS: ReadinessSettings = { dimensions: ALL_DIMENSIONS, perDimensionK: 5, useWeb: true, reasoningEffort: 'low' }
+
+function downloadFile(file: ReadinessReportFileDto) {
+  const blob = new Blob([file.content], { type: file.mime })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = file.filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
 
 export type StepStatus = 'pending' | 'running' | 'done' | 'error'
 
@@ -70,6 +97,16 @@ interface ReadinessState {
   simulate: () => Promise<void>
   toggleStep: (id: string) => void
   openAgent: (dimension: string) => void
+  settings: ReadinessSettings
+  setSettings: (patch: Partial<ReadinessSettings>) => void
+  /** The chat model the operator selected: what the agents reason with. */
+  model: string
+  /** The node whose details are open in the popup. */
+  selectedNode: string | null
+  setSelectedNode: (id: string | null) => void
+  reportBusy: boolean
+  reportFile: ReadinessReportFileDto | null
+  generateReport: (format: 'markdown' | 'html') => Promise<void>
 }
 
 const ReadinessContext = React.createContext<ReadinessState | null>(null)
@@ -115,6 +152,47 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   const [change, setChange] = React.useState<{ dimension: string; delta: number }>({ dimension: 'digital_infrastructure', delta: 1 })
   const [source, setSource] = React.useState<WebSourceView | null>(null)
   const [openIds, setOpenIds] = React.useState<Set<string>>(new Set())
+  const [settings, setSettingsState] = React.useState<ReadinessSettings>(DEFAULT_SETTINGS)
+  const [model, setModel] = React.useState('')
+  const [selectedNode, setSelectedNode] = React.useState<string | null>(null)
+  const [reportBusy, setReportBusy] = React.useState(false)
+  const [reportFile, setReportFile] = React.useState<ReadinessReportFileDto | null>(null)
+
+  React.useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SETTINGS_KEY)
+      if (stored) setSettingsState({ ...DEFAULT_SETTINGS, ...(JSON.parse(stored) as Partial<ReadinessSettings>) })
+    } catch {
+      /* malformed: keep the defaults */
+    }
+    api
+      .models()
+      .then((result) => setModel(result.selected))
+      .catch(() => {})
+  }, [])
+
+  const setSettings = (patch: Partial<ReadinessSettings>) =>
+    setSettingsState((current) => {
+      const next = { ...current, ...patch }
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+      return next
+    })
+
+  const generateReport = async (format: 'markdown' | 'html') => {
+    const id = meta?.id ?? runId
+    if (!id) return
+    setReportBusy(true)
+    setFailure(null)
+    try {
+      const file = await api.readinessReport(id, format)
+      setReportFile(file)
+      downloadFile(file)
+    } catch (caught) {
+      setFailure(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setReportBusy(false)
+    }
+  }
 
   const patchStep = (dimension: string, patch: Partial<Step>) =>
     setSteps((previous) => previous.map((step) => (step.dimension === dimension ? { ...step, ...patch } : step)))
@@ -163,7 +241,18 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     const started = Date.now()
     setStartedAt(started)
     try {
-      const saved = await api.readinessStream({ country, domain, globalCountry: 'global' }, onEvent)
+      const saved = await api.readinessStream(
+        {
+          country,
+          domain,
+          globalCountry: 'global',
+          dimensions: settings.dimensions.length === ALL_DIMENSIONS.length ? undefined : settings.dimensions,
+          perDimensionK: settings.perDimensionK,
+          useWeb: settings.useWeb,
+          reasoningEffort: settings.reasoningEffort,
+        } satisfies { country: string; domain: string; globalCountry: string } & ReadinessSettingsDto,
+        onEvent,
+      )
       setTotalMs(Date.now() - started)
       if (saved) {
         setMeta({ id: saved.id, createdAt: saved.createdAt, runBy: saved.runBy })
@@ -267,6 +356,14 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     simulate,
     toggleStep,
     openAgent,
+    settings,
+    setSettings,
+    model,
+    selectedNode,
+    setSelectedNode,
+    reportBusy,
+    reportFile,
+    generateReport,
   }
   return <ReadinessContext.Provider value={value}>{children}</ReadinessContext.Provider>
 }
