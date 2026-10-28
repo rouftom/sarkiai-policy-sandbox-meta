@@ -9,13 +9,22 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Loader, RefreshCw, Search, X } from 'lucide-react'
-import { Badge, Button, Card, Input } from '@sps/ui'
+import { AlertTriangle, CheckCircle2, Clock, ListChecks, Loader, Play, RefreshCw, Search, X, XCircle } from 'lucide-react'
+import { AnimatedTabsList, Badge, Button, Card, Input, type TabItem } from '@sps/ui'
 import { useI18n } from '@/lib/i18n'
 import type { ActionRecord, ActionStatus } from '@/lib/agent-ui'
 import { ACTION_KIND_KEY, ACTION_RISK_KEY, ACTION_RISK_TONE, ACTION_STATUS_KEY } from './approval-card'
 
 const STATUS_FILTERS: ActionStatus[] = ['pending', 'approved', 'rejected', 'executed', 'failed']
+
+const STATUS_ICON: Record<ActionStatus | 'all', TabItem['icon']> = {
+  all: ListChecks,
+  pending: Clock,
+  approved: CheckCircle2,
+  rejected: XCircle,
+  executed: Play,
+  failed: AlertTriangle,
+}
 
 const STATUS_TONE: Record<ActionStatus, 'warning' | 'success' | 'danger'> = {
   pending: 'warning',
@@ -33,9 +42,11 @@ export interface ActionCenterProps {
   onDecide: (id: string, decision: 'approve' | 'reject') => void
   /** Shows a refresh button when provided. */
   onRefresh?: () => void
+  /** Shows a close button when provided. */
+  onClose?: () => void
 }
 
-export function ActionCenter({ actions, loading = false, onDecide, onRefresh }: ActionCenterProps) {
+export function ActionCenter({ actions, loading = false, onDecide, onRefresh, onClose }: ActionCenterProps) {
   const { t, locale } = useI18n()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ActionStatus | 'all'>('all')
@@ -103,26 +114,33 @@ export function ActionCenter({ actions, loading = false, onDecide, onRefresh }: 
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         )}
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label={t('agentui.action.close')}
+            className="rounded-lg"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-1 px-1" role="group" aria-label={t('agentui.action.title')}>
-        {(['all', ...STATUS_FILTERS] as const).map((value) => (
-          <Button
-            key={value}
-            variant="ghost"
-            size="sm"
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-            className={`h-6 rounded-lg px-2 text-[10px] font-medium tracking-widest ${
-              filter === value
-                ? 'bg-brand-primary/10 text-brand-primary dark:text-brand-primary-light'
-                : 'text-muted-foreground'
-            }`}
-          >
-            {t(value === 'all' ? 'agentui.action.filter.all' : ACTION_STATUS_KEY[value])}
-          </Button>
-        ))}
-      </div>
+      <AnimatedTabsList
+        items={(['all', ...STATUS_FILTERS] as const).map((value) => ({
+          id: value,
+          icon: STATUS_ICON[value],
+          label: t(value === 'all' ? 'agentui.action.filter.all' : ACTION_STATUS_KEY[value]),
+        }))}
+        value={filter}
+        onValueChange={(value) => setFilter(value as ActionStatus | 'all')}
+        dense
+        fullWidth
+        showScrollButtons
+        containerBreakpoint="@xs"
+        className="px-1"
+      />
 
       <div className="flex-1 overflow-y-auto p-1 space-y-2">
         {loading && actions.length === 0 && (

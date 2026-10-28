@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import { History, ImagePlus, ListChecks, Plus, RotateCcw, Scale, Shield, X } from 'lucide-react'
+import { History, ImagePlus, ListChecks, Plus, Scale, Shield, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -516,10 +516,6 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
           {t('assistant.attach')}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={newConversation}>
-          <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
-          {t('assistant.newChat')}
-        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => setActionsOpen((open) => !open)}>
           <ListChecks className="h-3.5 w-3.5 text-muted-foreground" />
           {t('assistant.actions')}
@@ -628,12 +624,13 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
       <div className="shrink-0 space-y-2 p-3">
         {actionsOpen && (
-          <div className="custom-scrollbar max-h-72 overflow-y-auto rounded-lg border border-border bg-card p-2">
+          <div className="custom-scrollbar max-h-72 overflow-y-auto rounded-2xl bg-card p-2 shadow-lg">
             <ActionCenter
               actions={actionRecords}
               loading={actionsLoading}
               onDecide={(id, decision) => void decideFromCenter(id, decision)}
               onRefresh={() => void loadActions()}
+              onClose={() => setActionsOpen(false)}
             />
           </div>
         )}

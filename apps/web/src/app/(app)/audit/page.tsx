@@ -37,7 +37,7 @@ function formatTime(value: string, locale: string): string {
 export default function AuditPage() {
   const { t, locale } = useI18n()
   const [events, setEvents] = React.useState<AuditEventDto[]>([])
-  const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string } | null>(null)
+  const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string; forks?: number } | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [unreachable, setUnreachable] = React.useState(false)
   const [query, setQuery] = React.useState('')
@@ -85,15 +85,9 @@ export default function AuditPage() {
       <PageIntro title={t('audit.title')} subtitle={t('audit.pageSubtitle')} />
 
       <Card className="flex min-h-[420px] flex-col">
-        <CardHeader className="flex-wrap gap-2">
+        <CardHeader className="h-auto flex-wrap gap-x-3 gap-y-2 py-2">
           <ScrollText className="h-4 w-4 text-brand-primary dark:text-brand-primary-light" />
           <CardTitle>{t('audit.title')}</CardTitle>
-          {chain && (
-            <Badge tone={chain.valid ? 'success' : 'danger'} className="ml-2">
-              {chain.valid ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-              {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? '—' })}
-            </Badge>
-          )}
           <span className="text-[10px] text-muted-foreground">{t('audit.count', { count: filtered.length })}</span>
           <div className="ml-auto flex items-center gap-2">
             <Input
@@ -101,7 +95,7 @@ export default function AuditPage() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('audit.filter')}
               aria-label={t('audit.filter')}
-              className="h-8 w-40 text-[11px] sm:w-64"
+              className="h-8 w-40 text-[11px] sm:w-56"
             />
             <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
               {loading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -109,6 +103,18 @@ export default function AuditPage() {
             </Button>
           </div>
         </CardHeader>
+
+        {chain && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+            <Badge tone={chain.valid ? 'success' : 'danger'} className="max-w-full whitespace-nowrap">
+              {chain.valid ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+              {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? '—' })}
+            </Badge>
+            {chain.valid && (chain.forks ?? 0) > 0 && (
+              <span className="text-[10px] text-muted-foreground">{t('audit.forks', { count: chain.forks ?? 0 })}</span>
+            )}
+          </div>
+        )}
 
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
           {loading && events.length === 0 && (

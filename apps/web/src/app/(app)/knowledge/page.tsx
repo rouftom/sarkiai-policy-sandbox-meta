@@ -95,8 +95,18 @@ export default function KnowledgePage() {
   const corpus = status?.totals
 
   return (
-    <>
-      <PageIntro title={t('knowledge.pageTitle')} subtitle={t('knowledge.pageSubtitle')} />
+    <Tabs value={tab} onValueChange={setTab}>
+      <PageIntro title={t('knowledge.pageTitle')} subtitle={t('knowledge.pageSubtitle')}>
+        <AnimatedTabsList
+          items={KB_TABS.map((entry) => ({
+            ...entry,
+            label: entry.id === 'documents' ? t('knowledge.tab.documents') : t('knowledge.tab.retrieval'),
+          }))}
+          value={tab}
+          onValueChange={setTab}
+          dense
+        />
+      </PageIntro>
 
       {error && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
@@ -114,7 +124,7 @@ export default function KnowledgePage() {
         </p>
       ) : (
         <>
-          <div className="mb-4 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl border border-border bg-card px-4 py-3">
+          <div className="mb-3 flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl border border-border bg-card px-4 py-2.5">
             <Stat label={t('knowledge.documents')} value={fmt(corpus?.documents ?? 0)} hint={`${fmt(corpus?.activeChunks ?? 0)} ${t('knowledge.chunks').toLowerCase()}`} />
             <Stat
               label={t('knowledge.dimensions')}
@@ -143,27 +153,15 @@ export default function KnowledgePage() {
             </div>
           </div>
 
-          <Tabs value={tab} onValueChange={setTab}>
-            <AnimatedTabsList
-              items={KB_TABS.map((entry) => ({
-                ...entry,
-                label: entry.id === 'documents' ? t('knowledge.tab.documents') : t('knowledge.tab.retrieval'),
-              }))}
-              value={tab}
-              onValueChange={setTab}
-              fullWidth
-              maxWidth="max-w-md"
-            />
-            <TabsContent value="documents" className="pt-4">
-              <KbDocuments documents={documents} loading={loading} onChanged={load} onToggle={toggleDocument} />
-            </TabsContent>
-            <TabsContent value="retrieval" className="pt-4">
-              <RetrievalPanel hasCorpus={(corpus?.activeChunks ?? 0) > 0} />
-            </TabsContent>
-          </Tabs>
+          <TabsContent value="documents" className="pt-2">
+            <KbDocuments documents={documents} loading={loading} onChanged={load} onToggle={toggleDocument} />
+          </TabsContent>
+          <TabsContent value="retrieval" className="pt-2">
+            <RetrievalPanel hasCorpus={(corpus?.activeChunks ?? 0) > 0} />
+          </TabsContent>
         </>
       )}
-    </>
+    </Tabs>
   )
 }
 

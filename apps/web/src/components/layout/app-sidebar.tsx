@@ -24,7 +24,7 @@ import {
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react'
-import { cn } from '@sps/ui'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, cn } from '@sps/ui'
 import { BrandMark, BrandWordmark } from './brand-mark'
 import { OperatorMenu } from './operator-menu'
 import { useI18n, type MessageKey } from '@/lib/i18n'
@@ -102,11 +102,10 @@ export function AdminSidebar() {
   const renderItem = (entry: NavEntry) => {
     const active = isActive(entry.href)
     const Icon = entry.icon
-    return (
+    const link = (
       <Link
         key={entry.href}
         href={entry.href}
-        title={collapsed ? t(entry.labelKey) : undefined}
         className={cn(
           'flex h-9 items-center rounded-lg text-xs transition-colors',
           collapsed ? 'justify-center px-2' : 'px-3',
@@ -118,6 +117,15 @@ export function AdminSidebar() {
         <Icon className={cn('h-4 w-4 shrink-0', !collapsed && 'mr-2')} />
         {!collapsed && <span className="truncate">{t(entry.labelKey)}</span>}
       </Link>
+    )
+    if (!collapsed) return link
+    return (
+      <Tooltip key={entry.href}>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent side="right" className="border-0 bg-primary text-primary-foreground">
+          {t(entry.labelKey)}
+        </TooltipContent>
+      </Tooltip>
     )
   }
 
@@ -149,99 +157,101 @@ export function AdminSidebar() {
     )
 
   return (
-    <aside
-      onClick={collapsed ? toggle : undefined}
-      className={cn(
-        'hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 md:flex',
-        collapsed ? 'w-14 cursor-ew-resize' : 'w-60 md:w-56',
-      )}
-    >
-      <div
+    <TooltipProvider delayDuration={200}>
+      <aside
+        onClick={collapsed ? toggle : undefined}
         className={cn(
-          'relative z-10 flex h-14 items-center justify-between pl-3 pr-2',
-          collapsed && 'justify-center px-0',
+          'hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 md:flex',
+          collapsed ? 'w-14 cursor-ew-resize' : 'w-60 md:w-56',
         )}
       >
-        {!collapsed ? (
-          <Link href="/" className="flex min-w-0 items-center gap-2">
-            <BrandMark className="h-9 w-9 shrink-0" />
-            <BrandWordmark short={t('app.shortName')} />
-          </Link>
-        ) : (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              toggle()
-            }}
-            aria-label={t('nav.expand')}
-            className="group mx-auto flex h-9 w-9 items-center justify-center rounded-xl hover:bg-sidebar-accent"
-          >
-            <BrandMark className="h-9 w-9 group-hover:hidden" />
-            <PanelLeftOpen className="hidden h-4 w-4 group-hover:block" />
-          </button>
-        )}
-        {!collapsed && (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={t('nav.collapse')}
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+        <div
+          className={cn(
+            'relative z-10 flex h-14 items-center justify-between pl-3 pr-2',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          {!collapsed ? (
+            <Link href="/" className="flex min-w-0 items-center gap-2">
+              <BrandMark className="h-9 w-9 shrink-0" />
+              <BrandWordmark short={t('app.shortName')} />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                toggle()
+              }}
+              aria-label={t('nav.expand')}
+              className="group mx-auto flex h-9 w-9 items-center justify-center rounded-xl hover:bg-sidebar-accent"
+            >
+              <BrandMark className="h-9 w-9 group-hover:hidden" />
+              <PanelLeftOpen className="hidden h-4 w-4 group-hover:block" />
+            </button>
+          )}
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={t('nav.collapse')}
+              className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
-      <div className="custom-scrollbar relative z-10 flex-1 overflow-y-auto py-3">
-        <nav className="grid gap-1 px-2">
-          {groupLabel('nav.group_guide')}
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-0.5">
-              <div className="min-w-0 flex-1">
-                {renderItem({ href: '/guide', labelKey: 'nav.guide', icon: Compass })}
+        <div className="custom-scrollbar relative z-10 flex-1 overflow-y-auto py-3">
+          <nav className="grid gap-1 px-2">
+            {groupLabel('nav.group_guide')}
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-0.5">
+                <div className="min-w-0 flex-1">
+                  {renderItem({ href: '/guide', labelKey: 'nav.guide', icon: Compass })}
+                </div>
+                {!collapsed && (
+                  <button
+                    type="button"
+                    onClick={toggleGuide}
+                    aria-expanded={guideOpen}
+                    aria-label={t('nav.guide_toggle')}
+                    className="flex h-9 w-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  >
+                    <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !guideOpen && '-rotate-90')} />
+                  </button>
+                )}
               </div>
-              {!collapsed && (
-                <button
-                  type="button"
-                  onClick={toggleGuide}
-                  aria-expanded={guideOpen}
-                  aria-label={t('nav.guide_toggle')}
-                  className="flex h-9 w-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                >
-                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !guideOpen && '-rotate-90')} />
-                </button>
+              {!collapsed && guideOpen && (
+                <div className="ml-5 grid gap-0.5 border-l border-sidebar-border pl-2">
+                  {GUIDE_NAV.map(renderChild)}
+                </div>
               )}
             </div>
-            {!collapsed && guideOpen && (
-              <div className="ml-5 grid gap-0.5 border-l border-sidebar-border pl-2">
-                {GUIDE_NAV.map(renderChild)}
-              </div>
-            )}
-          </div>
 
-          <div className="my-1 border-t border-sidebar-border" />
-          {groupLabel('nav.group_general')}
-          {GENERAL_NAV.map(renderItem)}
+            <div className="my-1 border-t border-sidebar-border" />
+            {groupLabel('nav.group_general')}
+            {GENERAL_NAV.map(renderItem)}
 
-          {groupLabel('nav.group_operations')}
-          {OPERATIONS_NAV.map(renderItem)}
+            {groupLabel('nav.group_operations')}
+            {OPERATIONS_NAV.map(renderItem)}
 
-          <div className="my-1 border-t border-sidebar-border" />
-          {groupLabel('nav.group_settings')}
-          {SETTINGS_NAV.map(renderItem)}
-        </nav>
-      </div>
+            <div className="my-1 border-t border-sidebar-border" />
+            {groupLabel('nav.group_settings')}
+            {SETTINGS_NAV.map(renderItem)}
+          </nav>
+        </div>
 
-      <div
-        className="relative z-10 mb-3 px-2 py-2"
-        onClick={(event) => {
-          if (collapsed) event.stopPropagation()
-        }}
-      >
-        <OperatorMenu compact={collapsed} side="top" />
-      </div>
-    </aside>
+        <div
+          className="relative z-10 mb-3 px-2 py-2"
+          onClick={(event) => {
+            if (collapsed) event.stopPropagation()
+          }}
+        >
+          <OperatorMenu compact={collapsed} side="top" />
+        </div>
+      </aside>
+    </TooltipProvider>
   )
 }
 

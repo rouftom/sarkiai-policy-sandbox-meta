@@ -11,6 +11,7 @@ import { cn, Select } from '@sps/ui'
 import { BrandMark, BrandWordmark } from './brand-mark'
 import { ThemeSwitcher } from './theme-switcher'
 import { useI18n, type Locale, type MessageKey } from '@/lib/i18n'
+import { useAuth } from '@/lib/auth'
 
 const TITLES: Array<{ href: string; labelKey: MessageKey }> = [
   { href: '/guide/start', labelKey: 'nav.guide_start' },
@@ -57,7 +58,14 @@ const MOBILE_NAV: Array<{ href: string; labelKey: MessageKey; icon: React.Compon
 export function AppHeader() {
   const pathname = usePathname()
   const { t, locale, setLocale } = useI18n()
+  const { savePreferences } = useAuth()
   const [menuOpen, setMenuOpen] = React.useState(false)
+
+  // The header is the place where the language is chosen: it is saved to the profile so it survives a reload and a new sign-in.
+  const chooseLocale = (value: Locale) => {
+    setLocale(value)
+    void savePreferences({ locale: value }).catch(() => undefined)
+  }
 
   const titleKey = TITLES.find((entry) => entry.href === pathname)?.labelKey ?? 'app.name'
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
@@ -84,7 +92,7 @@ export function AppHeader() {
             <Select
               ariaLabel={t('app.language')}
               value={locale}
-              onValueChange={(value) => setLocale(value as Locale)}
+              onValueChange={(value) => chooseLocale(value as Locale)}
               options={[
                 { value: 'en', label: 'EN' },
                 { value: 'fr', label: 'FR' },

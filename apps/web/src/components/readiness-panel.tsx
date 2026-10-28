@@ -16,6 +16,7 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
   const [report, setReport] = React.useState<ReadinessReportDto | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [whatIf, setWhatIf] = React.useState<WhatIfResultDto | null>(null)
+  const [failure, setFailure] = React.useState<string | null>(null)
   const [change, setChange] = React.useState<{ dimension: string; delta: number }>({
     dimension: 'digital_infrastructure',
     delta: 1,
@@ -26,8 +27,11 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
   const run = async () => {
     setBusy(true)
     setWhatIf(null)
+    setFailure(null)
     try {
       setReport(await api.readiness({ country, domain, globalCountry: 'global' }))
+    } catch (caught) {
+      setFailure(caught instanceof Error ? caught.message : String(caught))
     } finally {
       setBusy(false)
     }
@@ -45,6 +49,8 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
           scores: report.scores,
         }),
       )
+    } catch (caught) {
+      setFailure(caught instanceof Error ? caught.message : String(caught))
     } finally {
       setBusy(false)
     }
@@ -52,6 +58,7 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
+      {failure && <p className="text-[11px] text-destructive lg:col-span-3">{failure}</p>}
       {showStages && (
         <Card>
           <CardHeader>

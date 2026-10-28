@@ -35,6 +35,8 @@ export interface AnimatedTabsListProps {
   activeBorderColor?: string
   showTooltips?: boolean
   surfaceClassName?: string
+  /** Compact strip: smaller type, tighter padding, small radius. */
+  dense?: boolean
 }
 
 export function AnimatedTabsList({
@@ -51,7 +53,9 @@ export function AnimatedTabsList({
   activeBorderColor,
   showTooltips,
   surfaceClassName = "bg-white/50 dark:bg-slate-900/50 border border-neutral-300 dark:border-neutral-800",
+  dense = false,
 }: AnimatedTabsListProps) {
+  const radius = dense ? "rounded-xl" : "rounded-3xl"
   const tabsListRef = useRef<HTMLDivElement>(null)
   const [showLeftArrow, setShowLeftArrow] = useState(false)
   const [showRightArrow, setShowRightArrow] = useState(false)
@@ -172,10 +176,10 @@ export function AnimatedTabsList({
         speed="2s"
         thickness={2}
         isAnimate={isSaving}
-        className="rounded-3xl w-full"
+        className={cn(radius, "w-full")}
         color={borderColor as any}
       >
-        <div className={cn("relative flex items-center w-full rounded-3xl overflow-hidden backdrop-blur-sm", surfaceClassName)}>
+        <div className={cn("relative flex items-center w-full overflow-hidden backdrop-blur-sm", radius, surfaceClassName)}>
           {showScrollButtons && showLeftArrow && (
             <Button
               variant="ghost"
@@ -191,7 +195,7 @@ export function AnimatedTabsList({
             ref={tabsListRef}
             onScroll={checkScroll}
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            className="bg-transparent p-0 flex h-9 items-center justify-start gap-1 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden w-full scroll-smooth rounded-3xl"
+            className={cn("bg-transparent p-0 flex items-center justify-start gap-1 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden w-full scroll-smooth", dense ? "h-8 rounded-xl" : "h-9 rounded-3xl")}
           >
             <TooltipProvider delayDuration={0}>
               {items.map((tab) => (
@@ -206,7 +210,7 @@ export function AnimatedTabsList({
                       onClick={() => { onValueChange?.(tab.id) }}
                       className={cn(
                         "relative flex-1 rounded-none font-black text-[10px] tracking-widest py-3.5 px-3 !bg-transparent data-[state=active]:!bg-transparent dark:data-[state=active]:!bg-transparent data-[state=active]:!shadow-none transition-all !text-slate-500 hover:!text-slate-700 dark:hover:!text-slate-200 !border-none shrink-0 whitespace-nowrap",
-                        paddingBpClass,
+                        dense ? "!py-1.5 !px-2.5 !text-[11px] !font-medium !tracking-normal" : paddingBpClass,
                         tab.colorCls,
                         value === tab.id ? "font-bold" : "",
                         tab.disabled && "opacity-40 cursor-not-allowed"

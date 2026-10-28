@@ -8,20 +8,8 @@
  */
 
 import * as React from 'react'
-import { RotateCcw, Search, X } from 'lucide-react'
-import {
-  Badge,
-  Button,
-  DataTablePagination,
-  Input,
-  Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@sps/ui'
+import { RotateCcw, Search, Upload, X } from 'lucide-react'
+import { Badge, Button, DataTablePagination, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Dialog, DialogContent, DialogHeader, DialogTitle } from '@sps/ui'
 import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { MediaUploader, UploadFailure, type UploadOutcome } from '@/components/media-uploader'
@@ -105,38 +93,59 @@ export function KbDocuments({
   const currentPage = Math.min(page, totalPages)
   const rows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
+  const [uploadOpen, setUploadOpen] = React.useState(false)
+
   return (
-    <div className="space-y-5">
-      <MediaUploader
-        accept={ACCEPT}
-        acceptPattern={ACCEPT_PATTERN}
-        maxBytes={MAX_BYTES}
-        upload={upload}
-        onBatchDone={() => void onChanged()}
-        controls={
-          <>
-            <Select
-              value={country}
-              onValueChange={setCountry}
-              options={COUNTRY_OPTIONS}
-              ariaLabel={t('knowledge.vectorise.country')}
-              size="sm"
-              className="w-40"
+    <div className="space-y-3">
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="max-w-2xl gap-0 overflow-hidden rounded-3xl p-0">
+          <DialogHeader className="border-b border-border px-5 py-3">
+            <DialogTitle className="text-sm font-semibold">{t('knowledge.uploadTitle')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 p-4">
+            <MediaUploader
+              accept={ACCEPT}
+              acceptPattern={ACCEPT_PATTERN}
+              maxBytes={MAX_BYTES}
+              upload={upload}
+              onBatchDone={() => void onChanged()}
+              controls={
+                <>
+                  <Select
+                    value={country}
+                    onValueChange={setCountry}
+                    options={COUNTRY_OPTIONS}
+                    ariaLabel={t('knowledge.vectorise.country')}
+                    size="sm"
+                    className="w-40"
+                  />
+                  <Select
+                    value={docType}
+                    onValueChange={setDocType}
+                    options={DOC_TYPES.map((value) => ({ value, label: value }))}
+                    ariaLabel={t('knowledge.vectorise.docType')}
+                    size="sm"
+                    className="w-36"
+                  />
+                </>
+              }
             />
-            <Select
-              value={docType}
-              onValueChange={setDocType}
-              options={DOC_TYPES.map((value) => ({ value, label: value }))}
-              ariaLabel={t('knowledge.vectorise.docType')}
-              size="sm"
-              className="w-36"
-            />
-          </>
-        }
-      />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t('knowledge.upload')}
+            title={t('knowledge.upload')}
+            onClick={() => setUploadOpen(true)}
+            className="h-8 w-8 rounded-lg"
+          >
+            <Upload className="h-3.5 w-3.5" />
+          </Button>
           <div className="relative w-full max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input

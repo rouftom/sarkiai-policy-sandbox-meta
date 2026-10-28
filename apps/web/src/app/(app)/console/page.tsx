@@ -3,20 +3,19 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, Gauge, Languages, Network, Newspaper, ScrollText, ShieldCheck, Siren, SlidersHorizontal } from 'lucide-react'
-import { AnimatedTabsList, Card, CardContent, Tabs, TabsContent, Select, type TabItem } from '@sps/ui'
-import { WORKFLOW_PROFILES, type Domain } from '@sps/shared'
+import { AnimatedTabsList, Card, CardContent, Tabs, TabsContent, type TabItem } from '@sps/ui'
+import { WORKFLOW_PROFILES } from '@sps/shared'
 import { AuditPanel } from '@/components/audit-panel'
 import { CommunicationsPanel } from '@/components/communications-panel'
 import { ExercisePanel } from '@/components/exercise-panel'
 import { GazettePanel } from '@/components/gazette-panel'
-import { LensSelector } from '@/components/lens-selector'
+import { ModelSelect } from '@/components/model-select'
 import { ProviderBadge } from '@/components/provider-badge'
 import { ReadinessPanel } from '@/components/readiness-panel'
 import { ScenarioConsole } from '@/components/scenario-console'
+import { WorkspaceControls } from '@/components/workspace-bar'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
-
-const DOMAINS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
 
 /**
  * Console = the working surface, not a dump of every panel. Lens, country and
@@ -26,7 +25,7 @@ const DOMAINS: Domain[] = ['health', 'education', 'telecom', 'public_services', 
  */
 export default function ConsolePage() {
   const { t } = useI18n()
-  const { country, setCountry, domain, setDomain, lens, setLens } = useWorkspace()
+  const { country, domain, lens } = useWorkspace()
   const [runId, setRunId] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState('simulation')
   const profile = WORKFLOW_PROFILES[lens]
@@ -66,51 +65,25 @@ export default function ConsolePage() {
 
   return (
     <>
-      <section className="flex flex-wrap items-end justify-between gap-4 pb-5 pt-2">
+      <section className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pb-3 pt-1">
         <div className="min-w-0">
-          <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            {t('app.name')}
-          </h2>
-          <p className="mt-1 max-w-2xl text-xs text-muted-foreground sm:text-sm">{t('app.tagline')}</p>
+          <h2 className="font-display text-lg font-bold tracking-tight text-foreground sm:text-xl">{t('console.title')}</h2>
+          <p className="text-[11px] text-muted-foreground">{t('app.tagline')}</p>
         </div>
-        <ProviderBadge />
+        <div className="flex flex-wrap items-center gap-2">
+          <ModelSelect />
+          <ProviderBadge />
+        </div>
       </section>
 
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-center gap-3 py-3">
-          <LensSelector value={lens} onChange={setLens} />
-          <span className="hidden h-5 w-px bg-border sm:block" />
-          <label className="flex items-center gap-2 text-[10px] font-medium text-muted-foreground">
-            {t('app.country')}
-            <Select
-              ariaLabel={t('app.country')}
-              value={country}
-              onValueChange={setCountry}
-              options={[
-                { value: 'cm', label: t('country.cm') },
-                { value: 'ae', label: t('country.ae') },
-              ]}
-              className="w-36"
-            />
-          </label>
-          <label className="flex items-center gap-2 text-[10px] font-medium text-muted-foreground">
-            {t('app.domain')}
-            <Select
-              ariaLabel={t('app.domain')}
-              value={domain}
-              onValueChange={(value) => setDomain(value as Domain)}
-              options={DOMAINS.map((value) => ({ value, label: t(`domain.${value}` as 'domain.health') }))}
-              className="w-40"
-            />
-          </label>
-          <p className="w-full text-[11px] leading-relaxed text-muted-foreground lg:w-auto lg:flex-1 lg:text-right">
-            {t(`lens.${lens}.description` as 'lens.hybrid.description')}
-          </p>
+      <Card className="mb-3">
+        <CardContent className="flex flex-wrap items-center gap-2 py-2">
+          <WorkspaceControls lens />
         </CardContent>
       </Card>
 
       <Tabs value={tab} onValueChange={setTab} className="gap-3">
-        <AnimatedTabsList items={tabs} value={tab} onValueChange={setTab} />
+        <AnimatedTabsList items={tabs} value={tab} onValueChange={setTab} dense />
 
         <TabsContent value="simulation" className="mt-3">
           {profile.stages.scenario ? (

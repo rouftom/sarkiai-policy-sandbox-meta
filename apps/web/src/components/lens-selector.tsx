@@ -1,33 +1,34 @@
 'use client'
 
-import { Button, cn } from '@sps/ui'
+import { Gauge, Network, Waypoints } from 'lucide-react'
+import { AnimatedTabsList, type TabItem } from '@sps/ui'
 import type { WorkflowLens } from '@sps/shared'
 import { useI18n } from '@/lib/i18n'
 
-const LENSES: WorkflowLens[] = ['simulation', 'readiness', 'hybrid']
+const LENSES: Array<{ id: WorkflowLens; icon: TabItem['icon'] }> = [
+  { id: 'simulation', icon: Network },
+  { id: 'readiness', icon: Gauge },
+  { id: 'hybrid', icon: Waypoints },
+]
 
 export function LensSelector({ value, onChange }: { value: WorkflowLens; onChange: (lens: WorkflowLens) => void }) {
   const { t } = useI18n()
+  const items: TabItem[] = LENSES.map(({ id, icon }) => ({
+    id,
+    icon,
+    label: t(`lens.${id}.label` as 'lens.hybrid.label'),
+    tooltip: t(`lens.${id}.description` as 'lens.hybrid.description'),
+  }))
   return (
-    <div
-      className="inline-flex items-center gap-1 rounded-xl bg-secondary p-1"
-      role="tablist"
-      aria-label={t('lens.aria')}
-    >
-      {LENSES.map((lens) => (
-        <Button
-          key={lens}
-          role="tab"
-          aria-selected={value === lens}
-          variant={value === lens ? 'primary' : 'ghost'}
-          size="md"
-          title={t(`lens.${lens}.description` as 'lens.hybrid.description')}
-          onClick={() => onChange(lens)}
-          className={cn('border-none', value === lens && 'shadow-sm')}
-        >
-          {t(`lens.${lens}.label` as 'lens.hybrid.label')}
-        </Button>
-      ))}
-    </div>
+    <AnimatedTabsList
+      items={items}
+      value={value}
+      onValueChange={(id) => onChange(id as WorkflowLens)}
+      dense
+      showLabels
+      containerBreakpoint="@md"
+      maxWidth="max-w-fit"
+      className="shrink-0"
+    />
   )
 }

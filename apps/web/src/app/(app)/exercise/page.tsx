@@ -2,7 +2,7 @@
 
 import { ExercisePanel } from '@/components/exercise-panel'
 import { PageIntro } from '@/components/page-intro'
-import { WorkspaceBar } from '@/components/workspace-bar'
+import { WorkspaceControls } from '@/components/workspace-bar'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 
@@ -11,8 +11,9 @@ export default function ExercisePage() {
   const { country, domain } = useWorkspace()
   return (
     <>
-      <PageIntro title={t('exercise.pageTitle')} subtitle={t('exercise.pageSubtitle')} />
-      <WorkspaceBar />
+      <PageIntro title={t('exercise.pageTitle')} subtitle={t('exercise.pageSubtitle')}>
+        <WorkspaceControls />
+      </PageIntro>
       <ExercisePanel country={country} domain={domain} />
     </>
   )

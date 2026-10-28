@@ -2,7 +2,7 @@
 
 import { CommunicationsPanel } from '@/components/communications-panel'
 import { PageIntro } from '@/components/page-intro'
-import { WorkspaceBar } from '@/components/workspace-bar'
+import { WorkspaceControls } from '@/components/workspace-bar'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 
@@ -11,8 +11,9 @@ export default function CommunicationsPage() {
   const { country } = useWorkspace()
   return (
     <>
-      <PageIntro title={t('communication.pageTitle')} subtitle={t('communication.pageSubtitle')} />
-      <WorkspaceBar />
+      <PageIntro title={t('communication.pageTitle')} subtitle={t('communication.pageSubtitle')}>
+        <WorkspaceControls />
+      </PageIntro>
       <CommunicationsPanel country={country} />
     </>
   )

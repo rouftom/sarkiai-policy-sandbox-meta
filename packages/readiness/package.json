@@ -19,7 +19,8 @@
     "@sps/retrieval": "workspace:*",
     "@sps/citations": "workspace:*",
     "ai": "^6.0.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@sps/agents": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.0"

@@ -651,7 +651,7 @@ export const api = {
   whatIf: (body: { country: string; domain: string; changes: Record<string, number>; scores?: DimensionScoreDto[] }) =>
     request<WhatIfResultDto>('/v1/readiness/whatif', { method: 'POST', body: JSON.stringify(body) }),
 
-  auditChain: () => request<{ valid: boolean; brokenAt?: string }>('/v1/audit/chain'),
+  auditChain: () => request<{ valid: boolean; brokenAt?: string; forks?: number }>('/v1/audit/chain'),
 
   auditTrace: (runId: string) => request<{ runId: string; trace: CoTTraceDto[] }>(`/v1/audit/trace/${runId}`),
 
@@ -833,7 +833,7 @@ export interface AuditEventDto {
 
 export interface AuditFeedDto {
   events: AuditEventDto[]
-  chain: { valid: boolean; brokenAt?: string }
+  chain: { valid: boolean; brokenAt?: string; forks?: number }
 }
 
 export const authApi = {

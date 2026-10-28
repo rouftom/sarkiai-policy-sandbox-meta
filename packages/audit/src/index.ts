@@ -68,13 +68,17 @@ export class AuditService {
     this.cotCol = config.cotCollection ?? 'cot_traces'
   }
 
-  private async db(): Promise<{ audit: Collection<Document>; cot: Collection<Document> }> {
+  private async db(): Promise<{ audit: Collection<Document>; cot: Collection<Document>; head: Collection<Document> }> {
     if (!this.client) {
       this.client = new MongoClient(this.config.mongodbUri)
       await this.client.connect()
     }
     const db = this.client.db(this.config.dbName)
-    return { audit: db.collection(this.auditCol), cot: db.collection(this.cotCol) }
+    return {
+      audit: db.collection(this.auditCol),
+      cot: db.collection(this.cotCol),
+      head: db.collection(`${this.auditCol}_head`),
+    }
   }
 
   /**
@@ -96,6 +100,12 @@ export class AuditService {
     return append
   }
 
+  /**
+   * The chain head is a single document in Mongo. An append claims the head
+   * with a compare-and-swap (`hash` must still be the one it read); if another
+   * instance moved it first, the append rereads the head and tries again. This
+   * holds across processes, where the in-process queue above cannot.
+   */
   private async appendAction(input: {
     actor: string
     action: string
@@ -105,24 +115,38 @@ export class AuditService {
     runId?: string
     userId?: string
   }): Promise<AuditRecord> {
-    const { audit } = await this.db()
-    const previous = await audit.find({}).sort({ ts: -1, _id: -1 }).limit(1).next()
-    const prevHash = previous?.hash as string | undefined
+    const { audit, head } = await this.db()
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      let current = await head.findOne({ _id: 'head' as never })
+      if (!current) {
+        const latest = await audit.find({}).sort({ ts: -1, _id: -1 }).limit(1).next()
+        await head.insertOne({ _id: 'head' as never, hash: (latest?.hash as string | undefined) ?? null }).catch(() => undefined)
+        current = await head.findOne({ _id: 'head' as never })
+      }
+      const prevHash = (current?.hash as string | null | undefined) ?? undefined
 
-    const base: Omit<AuditRecord, 'hash'> = {
-      id: sha256(`${input.actor}:${input.action}:${Date.now()}`).slice(0, 24),
-      runId: input.runId,
-      userId: input.userId,
-      ts: new Date().toISOString(),
-      actor: input.actor,
-      action: input.action,
-      target: input.target,
-      lens: input.lens,
-      citations: input.citations ?? [],
+      const base: Omit<AuditRecord, 'hash'> = {
+        id: sha256(`${input.actor}:${input.action}:${Date.now()}:${attempt}`).slice(0, 24),
+        runId: input.runId,
+        userId: input.userId,
+        ts: new Date().toISOString(),
+        actor: input.actor,
+        action: input.action,
+        target: input.target,
+        lens: input.lens,
+        citations: input.citations ?? [],
+      }
+      const record: AuditRecord = { ...base, prevHash, hash: hashPayload(base, prevHash) }
+      const claimed = await head.updateOne(
+        { _id: 'head' as never, hash: prevHash ?? null },
+        { $set: { hash: record.hash } },
+      )
+      if (claimed.matchedCount === 1) {
+        await audit.insertOne({ ...record })
+        return record
+      }
     }
-    const record: AuditRecord = { ...base, prevHash, hash: hashPayload(base, prevHash) }
-    await audit.insertOne({ ...record })
-    return record
+    throw new Error('Audit chain is contended: could not claim the head after 50 attempts.')
   }
 
   /** Persist one chain-of-thought step for a given agent run. */
@@ -172,25 +196,33 @@ export class AuditService {
     return docs as unknown as AuditRecord[]
   }
 
-  /** Verify the hash chain end-to-end; returns the first broken record, if any. */
-  async verifyChain(): Promise<{ valid: boolean; brokenAt?: string }> {
+  /**
+   * Verify the chain end-to-end. Each record must hash correctly from its own
+   * fields and point at a record that exists. Records are linked by hash, not by
+   * time, so the order of arrival does not matter. `forks` counts predecessors
+   * that more than one record claims: the history written before the head
+   * claim could fork, and those records are evidence, so they are reported and
+   * not rewritten.
+   */
+  async verifyChain(): Promise<{ valid: boolean; brokenAt?: string; forks: number }> {
     const { audit } = await this.db()
-    const records = (await audit
-      .find({})
-      .sort({ ts: 1, _id: 1 })
-      .toArray()) as unknown as Array<AuditRecord & { _id: unknown }>
-    let prevHash: string | undefined
+    const records = (await audit.find({}).toArray()) as unknown as Array<AuditRecord & { _id: unknown }>
+    const hashes = new Set(records.map((record) => record.hash))
+    const children = new Map<string, number>()
     for (const record of records) {
       // `_id` is added by MongoDB after the hash was computed: strip it before
       // recomputing, otherwise every record looks tampered with.
       const { _id: _ignored, hash, ...base } = record
+      const prevHash = (record.prevHash ?? undefined) as string | undefined
       const recomputed = hashPayload(base as Omit<AuditRecord, 'hash'>, prevHash)
       if (recomputed !== hash && legacyHash(record as unknown as Record<string, unknown>, prevHash) !== hash) {
-        return { valid: false, brokenAt: record.id }
+        return { valid: false, brokenAt: record.id, forks: 0 }
       }
-      prevHash = hash
+      if (prevHash && !hashes.has(prevHash)) return { valid: false, brokenAt: record.id, forks: 0 }
+      if (prevHash) children.set(prevHash, (children.get(prevHash) ?? 0) + 1)
     }
-    return { valid: true }
+    const forks = [...children.values()].filter((count) => count > 1).length
+    return { valid: true, forks }
   }
 
   async close(): Promise<void> {

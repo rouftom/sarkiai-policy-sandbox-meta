@@ -5,7 +5,7 @@ import { Network } from 'lucide-react'
 import { ScenarioConsole } from '@/components/scenario-console'
 import { AuditPanel } from '@/components/audit-panel'
 import { PageIntro } from '@/components/page-intro'
-import { WorkspaceBar } from '@/components/workspace-bar'
+import { WorkspaceControls } from '@/components/workspace-bar'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 
@@ -16,8 +16,9 @@ export default function ScenariosPage() {
 
   return (
     <>
-      <PageIntro title={t('scenarios.pageTitle')} subtitle={t('scenarios.pageSubtitle')} />
-      <WorkspaceBar lens />
+      <PageIntro title={t('scenarios.pageTitle')} subtitle={t('scenarios.pageSubtitle')}>
+        <WorkspaceControls lens />
+      </PageIntro>
 
       <ScenarioConsole country={country} domain={domain} onRunId={setRunId} />
 
