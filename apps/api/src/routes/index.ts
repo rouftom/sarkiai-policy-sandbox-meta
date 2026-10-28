@@ -48,6 +48,7 @@ import { McpGateway } from '../mcp.js'
 import { ChatSessionStore } from '../chat-sessions.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
+import { registerVoiceRoutes } from '../voice-routes.js'
 
 const engine = createEngine()
 const ingestion = new IngestionClient({ baseUrl: config.ingestion.baseUrl, apiKey: config.ingestion.apiKey })
@@ -191,7 +192,8 @@ async function selectBootModel(app: FastifyInstance): Promise<void> {
  */
 function isPublicRoute(method: string, path: string): boolean {
   if (method === 'OPTIONS') return true
-  if (path === '/health' || path === '/health/egress') return true
+  if (path === '/health') return true
+  if (path === '/v1/voice/realtime') return true
   if (path === '/v1/whatsapp/webhook') return true
   if (path.startsWith('/v1/whatsapp/approvals/')) return true
   if (path.startsWith('/v1/kb/images/') && method === 'GET') return true
@@ -271,6 +273,13 @@ export async function seedReferenceImages(log: { info: (...args: unknown[]) => v
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthRoutes(app, engine.audit)
+  // Live dictation goes straight to Meta: Render reaches api.meta.ai (checked by /health/egress),
+  // and a WebSocket cannot pass the serverless relay. Realtime authenticates with `?token=`.
+  await registerVoiceRoutes(app, {
+    auth,
+    apiKey: providerApiKey(engine.provider),
+    baseURL: 'https://api.meta.ai/v1',
+  })
 
   // One guard for the whole API surface. Auth, health, the Meta webhook and
   // signed approval links are public; everything that spends Meta/Hugging Face
@@ -348,23 +357,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     service: 'sps-api',
     provider: { mode: engine.provider.mode, model: engine.provider.models.reasoning },
   }))
-
-  /**
-   * Egress probe: can this host reach Meta directly? Returns only the status
-   * and the time taken, never a secret. Temporary: removed once the answer is known.
-   */
-  app.get('/health/egress', async () => {
-    const started = Date.now()
-    try {
-      const response = await fetch('https://api.meta.ai/v1/models', {
-        headers: { Authorization: `Bearer ${providerApiKey(engine.provider)}` },
-        signal: AbortSignal.timeout(15_000),
-      })
-      return { reachable: true, status: response.status, ms: Date.now() - started }
-    } catch (error) {
-      return { reachable: false, error: (error as Error).name, ms: Date.now() - started }
-    }
-  })
 
   // ── Active provider (secret-free: what answers, and where) ────────────────
   app.get('/v1/provider', async () => engine.provider)

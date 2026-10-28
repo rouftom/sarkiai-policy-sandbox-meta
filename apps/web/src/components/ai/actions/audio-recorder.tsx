@@ -5,7 +5,7 @@ import { Button, cn } from '@sps/ui'
 import { Mic } from 'lucide-react'
 import { motion, useAnimationControls } from 'framer-motion'
 import { useI18n } from '@/lib/i18n'
-import { transcribeClip } from '@/lib/voice'
+import { startRealtimeTranscription, supportsRealtimeVoice, transcribeClip, type RealtimeSession } from '@/lib/voice'
 
 interface AudioRecorderProps {
   /**
@@ -34,6 +34,8 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
   const [isTranscribing, setIsTranscribing] = useState(false)
 
   const mediaStream = useRef<MediaStream | null>(null)
+  const session = useRef<RealtimeSession | null>(null)
+  const partial = useRef('')
   const recorder = useRef<MediaRecorder | null>(null)
   const segmentTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const stopRequested = useRef(false)
@@ -49,6 +51,7 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
 
   useEffect(() => {
     return () => {
+      session.current?.stop()
       if (segmentTimer.current) clearTimeout(segmentTimer.current)
       if (recorder.current?.state === 'recording') recorder.current.stop()
       mediaStream.current?.getTracks().forEach((track) => track.stop())
@@ -139,10 +142,33 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
 
   const startRecording = useCallback(async () => {
     committed.current = ''
+    partial.current = ''
     stopRequested.current = false
     setIsRecording(true)
     void controls.start('recording')
     try {
+      if (supportsRealtimeVoice()) {
+        // Live: words appear as they are spoken (Muse Voice Transcribe over our WebSocket).
+        const started = await startRealtimeTranscription({
+          onPartial(text) {
+            partial.current = text
+            callbacks.current.onTranscript([committed.current, text].filter(Boolean).join(' '), false)
+          },
+          onFinal(text) {
+            committed.current = [committed.current, text].filter(Boolean).join(' ')
+            partial.current = ''
+            callbacks.current.onTranscript(committed.current, false)
+          },
+          onError(message) {
+            session.current = null
+            fail(message)
+          },
+        })
+        if (stopRequested.current) started.stop()
+        else session.current = started
+        return
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       if (stopRequested.current) {
         stream.getTracks().forEach((track) => track.stop())
@@ -158,6 +184,16 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
 
   const stopRecording = useCallback(() => {
     stopRequested.current = true
+    if (session.current) {
+      // The server flushes the last words after the stream ends; the final text follows its `final` event.
+      session.current.stop()
+      session.current = null
+      const text = [committed.current, partial.current].filter(Boolean).join(' ')
+      partial.current = ''
+      committed.current = text
+      callbacks.current.onTranscript(text, true)
+      return
+    }
     if (segmentTimer.current) clearTimeout(segmentTimer.current)
     // Stopping the current segment ends the recording: its last audio is transcribed, then the final text is sent.
     if (recorder.current && recorder.current.state === 'recording') {

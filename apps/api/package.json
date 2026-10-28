@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
+    "@fastify/websocket": "^11",
     "@sps/agents": "workspace:*",
     "@sps/audit": "workspace:*",
     "@sps/auth": "workspace:*",
