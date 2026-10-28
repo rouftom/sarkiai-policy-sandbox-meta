@@ -1,6 +1,6 @@
 /** Fastify bootstrap. */
 
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
@@ -9,6 +9,7 @@ import { prepareCloudStores } from './engine.js'
 import { auth } from './auth.js'
 import { config } from './config.js'
 import { resetDemoState } from './demo-reset.js'
+import { maintainAuditChain } from './audit-maintenance.js'
 import type { PublicOperator } from '@sps/auth'
 
 declare module 'fastify' {
@@ -95,8 +96,28 @@ async function maybeResetOnBoot(app: FastifyInstance): Promise<void> {
   }
 }
 
+/**
+ * Audit chain hatch, same mechanism as the demo reset. Committing
+ * `apps/api/scripts/audit-chain.flag` with `check` logs the chain verdict at the
+ * next boot; with `purge` it archives the chain and starts a new one. Delete
+ * the flag and deploy again once done.
+ */
+async function maybeMaintainAuditChain(app: FastifyInstance): Promise<void> {
+  const flag = new URL('../scripts/audit-chain.flag', import.meta.url)
+  if (!existsSync(flag)) return
+  const mode = readFileSync(flag, 'utf8').trim()
+  if (mode !== 'check' && mode !== 'purge') return
+  try {
+    const result = await maintainAuditChain({ uri: config.mongodb.uri, dbName: config.mongodb.dbName, mode })
+    app.log.warn({ mode, before: result.before, after: result.after, archive: result.archive }, 'audit chain maintenance at boot')
+  } catch (error) {
+    app.log.error({ message: error instanceof Error ? error.message : 'unknown error' }, 'audit chain maintenance at boot failed')
+  }
+}
+
 async function main(): Promise<void> {
   const app = await buildServer()
+  await maybeMaintainAuditChain(app)
 
   // Before `auth.isEmpty()`: the console must see the store freshly emptied.
   await maybeResetOnBoot(app)
