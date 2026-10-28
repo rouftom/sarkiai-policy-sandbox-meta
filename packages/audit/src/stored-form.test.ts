@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { hashPayload, storedForm, type AuditRecord } from './index'
+import { hashPayload, storedForm } from './index'
+
+type AuditRecord = Parameters<typeof hashPayload>[0] & { prevHash?: string; hash: string }
 
 describe('audit hash survives a Mongo round trip', () => {
   test('an unset optional field inside a citation hashes the same once stored', () => {
@@ -18,6 +20,6 @@ describe('audit hash survives a Mongo round trip', () => {
   })
 
   test('storedForm turns undefined into null, keeps everything else', () => {
-    expect(storedForm([{ a: undefined, b: 1, c: 'x' }])).toEqual([{ a: null, b: 1, c: 'x' }])
+    expect(storedForm([{ a: undefined, b: 1, c: 'x' }] as unknown[])).toEqual([{ a: null, b: 1, c: 'x' }])
   })
 })
