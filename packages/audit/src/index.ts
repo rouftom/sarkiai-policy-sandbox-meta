@@ -25,7 +25,16 @@ function sha256(value: string): string {
  * the API and read back from the collection hash to the same string. The key
  * order is part of the contract — do not reorder.
  */
-function hashPayload(base: Omit<AuditRecord, 'hash'>, prevHash?: string): string {
+/**
+ * MongoDB stores an absent property as `null`, while `JSON.stringify` drops it.
+ * Hashing the stored form keeps a record verifiable after the round trip (an
+ * optional field left unset inside a citation broke the chain otherwise).
+ */
+export function storedForm<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value, (_key, item) => (item === undefined ? null : item))) as T
+}
+
+export function hashPayload(base: Omit<AuditRecord, 'hash'>, prevHash?: string): string {
   const canonical = JSON.stringify({
     id: base.id,
     runId: base.runId ?? undefined,
@@ -35,7 +44,7 @@ function hashPayload(base: Omit<AuditRecord, 'hash'>, prevHash?: string): string
     action: base.action,
     target: base.target ?? undefined,
     lens: base.lens,
-    citations: base.citations ?? [],
+    citations: storedForm(base.citations ?? []),
   })
   return sha256(canonical + (prevHash ?? ''))
 }
