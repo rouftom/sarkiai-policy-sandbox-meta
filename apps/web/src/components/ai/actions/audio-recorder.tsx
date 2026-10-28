@@ -16,6 +16,8 @@ interface AudioRecorderProps {
   onTranscript: (text: string, final: boolean) => void
   onError?: (message: string) => void
   disabled?: boolean
+  /** The institution's colour: the microphone takes it. */
+  accent?: string
 }
 
 /**
@@ -26,7 +28,7 @@ const SEGMENT_MS = 6000
 
 const join = (...parts: string[]) => parts.filter(Boolean).join(' ')
 
-export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorderProps) => {
+export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: AudioRecorderProps) => {
   const { t } = useI18n()
   const controls = useAnimationControls()
 
@@ -233,11 +235,11 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
         size="icon"
         onClick={handleToggleRecording}
         disabled={disabled || isTranscribing}
+        style={accent ? (isRecording ? { backgroundColor: accent, color: '#fff' } : { color: accent }) : undefined}
         className={cn(
           'h-8 w-8 sm:h-8 sm:w-8 rounded-full shrink-0 transition-colors',
-          isRecording
-            ? 'bg-brand-primary hover:bg-brand-primary text-white'
-            : 'text-brand-primary hover:text-brand-primary/80',
+          !accent && (isRecording ? 'bg-brand-primary hover:bg-brand-primary text-white' : 'text-brand-primary hover:text-brand-primary/80'),
+          accent && 'hover:opacity-80',
         )}
         aria-label={isRecording ? t('voice.stop') : t('voice.start')}
         aria-pressed={isRecording}

@@ -774,23 +774,45 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
     lens: lensSchema.default('hybrid'),
     runId: z.string().optional(),
-    // Untrusted user images (context only, never citable).
+    // Untrusted user files (context only, never citable): images, or documents read as reference text.
     attachments: z
-      .array(z.object({ mime: z.string(), dataBase64: z.string() }))
+      .array(z.object({ mime: z.string(), dataBase64: z.string(), name: z.string().max(200).optional() }))
       .max(3)
       .optional(),
   })
 
   /** Persist attachments (content-addressed, best-effort: works without MinIO). */
-  async function storeAttachments(attachments: Array<{ mime: string; dataBase64: string }> | undefined) {
+  /** Documents the operator may attach as reference text (PDF is read, the others are plain text). */
+  const DOCUMENT_MIMES = new Set(['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json'])
+  const REFERENCE_CHARS = 40_000
+
+  async function storeAttachments(
+    attachments: Array<{ mime: string; dataBase64: string; name?: string }> | undefined,
+  ) {
     const meta: Array<{ sha256: string; mime: string; size: number; key: string }> = []
+    const references: Array<{ name: string; text: string }> = []
     for (const attachment of attachments ?? []) {
-      if (!attachment.mime.startsWith('image/')) {
+      const isImage = attachment.mime.startsWith('image/')
+      const isDocument = DOCUMENT_MIMES.has(attachment.mime)
+      if (!isImage && !isDocument) {
         return { ok: false as const, status: 415, message: `Unsupported attachment type: ${attachment.mime}` }
       }
       const data = Buffer.from(attachment.dataBase64, 'base64')
-      if (data.byteLength > 5 * 1024 * 1024) {
-        return { ok: false as const, status: 413, message: 'Attachment too large (max 5 MB).' }
+      if (data.byteLength > 10 * 1024 * 1024) {
+        return { ok: false as const, status: 413, message: 'Attachment too large (max 10 MB).' }
+      }
+      if (isDocument) {
+        try {
+          const text =
+            attachment.mime === 'application/pdf'
+              ? String(
+                  (await (await import('unpdf')).extractText(await (await import('unpdf')).getDocumentProxy(new Uint8Array(data)), { mergePages: true })).text ?? '',
+                )
+              : data.toString('utf8')
+          references.push({ name: attachment.name ?? 'document', text: text.slice(0, REFERENCE_CHARS) })
+        } catch {
+          return { ok: false as const, status: 422, message: `Could not read the document ${attachment.name ?? ''}.`.trim() }
+        }
       }
       try {
         const stored = await engine.storage.putContentAddressed(data, attachment.mime)
@@ -799,7 +821,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         meta.push({ sha256: sha256Hex(data), mime: attachment.mime, size: data.byteLength, key: '' })
       }
     }
-    return { ok: true as const, meta }
+    return { ok: true as const, meta, references, images: (attachments ?? []).filter((a) => a.mime.startsWith('image/')) }
   }
 
   app.post('/v1/agents/ask', async (request, reply) => {
@@ -819,8 +841,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       domain: body.data.domain as Domain,
       lens: body.data.lens as WorkflowLens,
       runId: body.data.runId,
-      attachments: body.data.attachments,
+      attachments: stored.images,
       attachmentMeta: stored.meta,
+      references: stored.references,
       userId: operatorOf(request).email,
     })
   })
@@ -883,8 +906,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           domain: body.data.domain as Domain,
           lens: body.data.lens as WorkflowLens,
           runId: body.data.runId,
-          attachments: body.data.attachments,
+          attachments: stored.images,
           attachmentMeta: stored.meta,
+          references: stored.references,
           userId: operatorOf(request).email,
           withTools: true,
           actions: actionStore,

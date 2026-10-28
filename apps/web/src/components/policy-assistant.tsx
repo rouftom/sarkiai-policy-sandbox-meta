@@ -50,8 +50,14 @@ import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 interface Attachment {
   mime: string
   dataBase64: string
+  /** Preview for images; documents have none. */
   url: string
+  name: string
 }
+
+const DOCUMENT_TYPES = ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json']
+const ACCEPTED_FILES = ['image/*', '.pdf', '.txt', '.md', '.csv', '.json'].join(',')
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting'] as const
 
@@ -144,7 +150,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     if (!files) return
     const room = 3 - attachments.length
     const picked = Array.from(files)
-      .filter((file) => file.type.startsWith('image/'))
+      .filter((file) => file.type.startsWith('image/') || DOCUMENT_TYPES.includes(file.type) || /\.(pdf|txt|md|csv|json)$/i.test(file.name))
+      .filter((file) => file.size <= MAX_ATTACHMENT_BYTES)
       .slice(0, Math.max(0, room))
     const next: Attachment[] = []
     for (const file of picked) {
@@ -156,11 +163,13 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       })
       const commaIndex = dataUrl.indexOf(',')
       if (commaIndex < 0) continue
-      const meta = dataUrl.slice(0, commaIndex)
+      const header = dataUrl.slice(0, commaIndex)
+      const mime = file.type || header.slice(header.indexOf(':') + 1, header.indexOf(';'))
       next.push({
-        mime: meta.slice(meta.indexOf(':') + 1, meta.indexOf(';')),
+        mime,
         dataBase64: dataUrl.slice(commaIndex + 1),
-        url: dataUrl,
+        url: mime.startsWith('image/') ? dataUrl : '',
+        name: file.name,
       })
     }
     setAttachments((previous) => [...previous, ...next].slice(0, 3))
@@ -182,7 +191,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     setInput('')
     dictation.current = { base: null, last: '' }
     setBusy(true)
-    const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64 }))
+    const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64, name: attachment.name }))
+    // The files belong to this message: the next question starts without them.
+    setAttachments([])
 
     // Auto: the router picks the institution(s) first; the first one answers.
     let target = pinned ?? institutions[0]!
@@ -330,7 +341,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       })
       const commaIndex = dataUrl.indexOf(',')
       setAttachments((previous) =>
-        [...previous, { mime: file.type, dataBase64: dataUrl.slice(commaIndex + 1), url: dataUrl }].slice(0, 3),
+        [...previous, { mime: file.type, dataBase64: dataUrl.slice(commaIndex + 1), url: dataUrl, name: file.name }].slice(0, 3),
       )
       answerCard(turnId, card.id, `${card.label}: ${file.name}`)
       return
@@ -556,7 +567,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept={ACCEPTED_FILES}
         multiple
         hidden
         onChange={(event) => {
@@ -678,8 +689,14 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           <div className="flex gap-1.5">
             {attachments.map((attachment, index) => (
               <div key={index} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={attachment.url} alt="" className="h-11 w-11 rounded-lg border border-border object-cover" />
+                {attachment.url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={attachment.url} alt="" className="h-11 w-11 rounded-lg border border-border object-cover" />
+                ) : (
+                  <span className="flex h-11 max-w-[9rem] items-center truncate rounded-lg border border-border bg-card px-2 text-[10px] font-medium" title={attachment.name}>
+                    <span className="truncate">{attachment.name}</span>
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => setAttachments((previous) => previous.filter((_, i) => i !== index))}

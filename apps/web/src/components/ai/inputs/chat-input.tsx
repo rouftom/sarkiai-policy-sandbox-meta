@@ -37,7 +37,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
       <>
         <form onSubmit={handleSubmit} className="relative">
           <div
-            style={accent ? { backgroundColor: `${accent}1a`, boxShadow: `0 0 0 1px ${accent}88, 0 10px 30px -12px ${accent}66` } : undefined}
+            style={accent ? { backgroundColor: `${accent}1f` } : undefined}
             className={cn(
             "rounded-3xl overflow-hidden shadow-2xl transition-all flex box-border",
             !accent && "bg-white dark:bg-brand-ink",
@@ -82,7 +82,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                 {isMultiline && optionsMenu}
               </div>
 
-              {onTranscript && <AudioRecorder onTranscript={onTranscript} disabled={isStreaming} />}
+              {onTranscript && <AudioRecorder onTranscript={onTranscript} disabled={isStreaming} accent={accent} />}
 
               <Button
                 type={isStreaming ? 'button' : 'submit'}
@@ -94,7 +94,11 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                     stop?.()
                   }
                 }}
-                className="h-7 w-7 rounded-lg bg-primary hover:bg-primary/90 shadow-lg shrink-0 flex items-center justify-center border-0"
+                className={cn(
+                  "h-7 w-7 rounded-lg shadow-lg shrink-0 flex items-center justify-center border-0",
+                  !accent && "bg-primary hover:bg-primary/90",
+                )}
+                style={accent ? { backgroundColor: accent } : undefined}
                 aria-label={isStreaming ? t('assistant.stop') : t('assistant.send')}
               >
                 {isStreaming ? (

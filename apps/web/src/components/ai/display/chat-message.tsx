@@ -230,7 +230,7 @@ function CitationStrip({ citations, onOpen }: { citations: CitationItem[]; onOpe
       key={index}
       type="button"
       onClick={() => onOpen(citation)}
-      className="group block h-full w-full rounded-xl border border-border/70 bg-card px-3 py-2 text-left shadow-sm transition-colors hover:border-brand-primary/50 hover:bg-brand-primary/5"
+      className="group block w-full rounded-xl bg-card px-3 py-2 text-left shadow-sm transition-colors hover:bg-brand-primary/5"
     >
       <span className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-primary-dark group-hover:underline dark:text-brand-primary-light">
         <span className="truncate">{label(citation)}</span>
@@ -277,7 +277,7 @@ function CitationStrip({ citations, onOpen }: { citations: CitationItem[]; onOpe
           ))}
         </ul>
       ) : (
-        <div ref={track} className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div ref={track} className="flex snap-x snap-mandatory items-start gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {citations.map((citation, index) => (
             <div key={index} className="w-[85%] shrink-0 snap-start sm:w-[60%]">
               {card(citation, index)}
