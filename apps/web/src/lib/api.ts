@@ -106,6 +106,37 @@ export interface ReadinessReportDto {
   scenario: { overall: number; composite: number }
 }
 
+/** One step of a live assessment, as the API streams it. */
+export type ReadinessEventDto =
+  | { type: 'start'; country: string; domain: string; dimensions: Array<{ dimension: string; dimensionId: number; name: string }> }
+  | { type: 'web'; dimension: string; durationMs: number; sources: Array<{ title: string; url: string }> }
+  | { type: 'running'; dimension: string; dimensionId: number; name: string }
+  | {
+      type: 'result'
+      dimension: string
+      dimensionId: number
+      durationMs: number
+      score: DimensionScoreDto
+      reasoning: string
+      attempts: number
+      countryPassages: number
+      globalPassages: number
+    }
+  | { type: 'error'; dimension: string; dimensionId: number; durationMs: number; message: string }
+  | { type: 'done'; report: ReadinessReportDto & { generatedAt?: string } }
+  | { type: 'saved'; run: ReadinessRunSummaryDto }
+  | { type: 'failed'; message: string }
+
+export interface ReadinessRunSummaryDto {
+  id: string
+  country: string
+  domain: string
+  createdAt: string
+  runBy: string
+  composite: number | null
+  dimensions: number
+}
+
 export interface WhatIfResultDto {
   country: string
   domain: string
@@ -625,6 +656,48 @@ async function streamAgentAnswer(
   return assessment
 }
 
+/** Reads a Server-Sent Events body frame by frame. */
+async function streamReadiness(
+  body: { country: string; domain: string; globalCountry?: string },
+  onEvent: (event: ReadinessEventDto) => void,
+): Promise<ReadinessRunSummaryDto | null> {
+  const token = readToken()
+  const response = await fetch(`${API_URL}/v1/readiness/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) throw new ApiError(response.status, await response.text())
+  if (!response.body) throw new Error('This browser cannot read a streamed response.')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let saved: ReadinessRunSummaryDto | null = null
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary >= 0) {
+      const frame = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      const data = frame
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n')
+      if (data) {
+        const event = JSON.parse(data) as ReadinessEventDto
+        if (event.type === 'saved') saved = event.run
+        if (event.type === 'failed') throw new Error(event.message)
+        onEvent(event)
+      }
+      boundary = buffer.indexOf('\n\n')
+    }
+  }
+  return saved
+}
+
 export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
@@ -658,6 +731,16 @@ export const api = {
   /** Auto mode: the institution a question belongs to (one, or several). */
   routeQuestion: (body: { question: string; domain: string }) =>
     request<{ primary: string; others: string[]; reason: string }>('/v1/agents/route', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** Live assessment: `onEvent` receives each step; resolves with the saved run. */
+  readinessStream: (
+    body: { country: string; domain: string; globalCountry?: string },
+    onEvent: (event: ReadinessEventDto) => void,
+  ) => streamReadiness(body, onEvent),
+
+  readinessRuns: () => request<{ runs: ReadinessRunSummaryDto[] }>('/v1/readiness/runs'),
+
+  readinessRun: (id: string) => request<ReadinessRunSummaryDto & { report: ReadinessReportDto & { generatedAt?: string } }>(`/v1/readiness/runs/${encodeURIComponent(id)}`),
 
   readiness: (body: { country: string; domain: string; globalCountry?: string }) =>
     request<ReadinessReportDto>('/v1/readiness/report', { method: 'POST', body: JSON.stringify(body) }),

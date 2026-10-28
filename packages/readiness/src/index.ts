@@ -40,6 +40,31 @@ export interface ReadinessInput {
   weights?: Partial<Record<ReadinessDimension, number>>
 }
 
+/** Progress of one assessment, in the order it happens. */
+export type ReadinessEvent =
+  | {
+      type: 'start'
+      country: string
+      domain: Domain
+      dimensions: Array<{ dimension: ReadinessDimension; dimensionId: number; name: string }>
+    }
+  | { type: 'web'; dimension: ReadinessDimension; durationMs: number; sources: Array<{ title: string; url: string }> }
+  | { type: 'running'; dimension: ReadinessDimension; dimensionId: number; name: string }
+  | {
+      type: 'result'
+      dimension: ReadinessDimension
+      dimensionId: number
+      durationMs: number
+      score: DimensionScore
+      /** The model's reasoning for this dimension (summary-level, may be empty). */
+      reasoning: string
+      attempts: number
+      countryPassages: number
+      globalPassages: number
+    }
+  | { type: 'error'; dimension: ReadinessDimension; dimensionId: number; durationMs: number; message: string }
+  | { type: 'done'; report: ReadinessReport }
+
 export interface ReadinessReport {
   country: string
   domain: Domain
@@ -87,13 +112,28 @@ export class ReadinessEngine {
     private readonly deps: { model: LanguageModel; retriever: Retriever; webSearch?: WebSearch },
   ) {}
 
-  async assess(input: ReadinessInput): Promise<ReadinessReport> {
+  /**
+   * Scores every dimension. `emit` receives progress as it happens (one event per
+   * step), so a caller can show the process live; the returned report is the same
+   * with or without it.
+   */
+  async assess(input: ReadinessInput, emit?: (event: ReadinessEvent) => void): Promise<ReadinessReport> {
     const dimensions = input.dimensions ?? READINESS_DIMENSION_IDS
     const globalCountry = input.globalCountry ?? 'global'
     const perDimensionK = input.perDimensionK ?? 5
 
     const results: ReadinessReport['dimensions'] = []
     const scores: DimensionScore[] = []
+    emit?.({
+      type: 'start',
+      country: input.country,
+      domain: input.domain,
+      dimensions: dimensions.map((dimension) => ({
+        dimension,
+        dimensionId: dimensionMeta(dimension).id,
+        name: dimensionMeta(dimension).name,
+      })),
+    })
 
     // Live web evidence for every dimension, gathered first and in parallel: a
     // failed search leaves the dimension to the corpus alone, it never fails the report.
@@ -101,9 +141,16 @@ export class ReadinessEngine {
       await Promise.all(
         dimensions.map(async (dimension) => {
           const search = this.deps.webSearch
-          if (!search) return [dimension, null] as const
           const def = dimensionMeta(dimension)
+          if (!search) return [dimension, null] as const
+          const started = Date.now()
           const answer = await search(`${def.name} national AI readiness policy ${countryName(input.country)} ${new Date().getFullYear()}`).catch(() => null)
+          emit?.({
+            type: 'web',
+            dimension,
+            durationMs: Date.now() - started,
+            sources: answer?.sources.slice(0, 6).map(({ title, url }) => ({ title, url })) ?? [],
+          })
           return [dimension, answer] as const
         }),
       ),
@@ -111,55 +158,75 @@ export class ReadinessEngine {
 
     for (const dimension of dimensions) {
       const def = dimensionMeta(dimension)
-      const query = def.name
       const live = web.get(dimension) ?? null
-      const [countryChunks, globalChunks] = await Promise.all([
-        this.deps.retriever.search({ text: query, country: input.country, topK: perDimensionK }),
-        this.deps.retriever.search({ text: query, country: globalCountry, topK: perDimensionK }),
-      ])
+      const started = Date.now()
+      emit?.({ type: 'running', dimension, dimensionId: def.id, name: def.name })
+      try {
+        const [countryChunks, globalChunks] = await Promise.all([
+          this.deps.retriever.search({ text: def.name, country: input.country, topK: perDimensionK }),
+          this.deps.retriever.search({ text: def.name, country: globalCountry, topK: perDimensionK }),
+        ])
+        const attempts: Array<{ attempt: number; reasoning: string; valid: boolean }> = []
 
-      const object = await generateStructured({
-        model: this.deps.model,
-        schema: dimensionSchema,
-        shape:
-          '{"score": number 0-5, "confidence": number 0-1, "evidence": string[], "gaps": [{"description": string, "severity": "low"|"medium"|"high"|"critical", "globalBestPractice": string}]}',
-        attempts: 3,
-        maxOutputTokens: 8192,
-        reasoningEffort: 'low',
-        system: `You assess country "${input.country}" AI readiness on the dimension "${def.name}" (factors: ${def.factors.join(', ')}), domain "${input.domain}".
+        const object = await generateStructured({
+          model: this.deps.model,
+          schema: dimensionSchema,
+          shape:
+            '{"score": number 0-5, "confidence": number 0-1, "evidence": string[], "gaps": [{"description": string, "severity": "low"|"medium"|"high"|"critical", "globalBestPractice": string}], "recommendations": string[]}',
+          attempts: 3,
+          maxOutputTokens: 8192,
+          reasoningEffort: 'low',
+          onAttempt: (info) => attempts.push({ attempt: info.attempt, reasoning: info.reasoning, valid: info.valid }),
+          system: `You assess country "${input.country}" AI readiness on the dimension "${def.name}" (factors: ${def.factors.join(', ')}), domain "${input.domain}".
 Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNTRY provisions to GLOBAL best practice. Identify concrete gaps: unclear responsibilities, missing standards, legislative gaps, coordination problems, conflicts between objectives. Ground every claim in the passages. Do not analyse specific geographies; focus on domain-specific gaps and relevant global examples.`,
-        prompt: `COUNTRY PROVISIONS:\n${countryChunks.map((c) => c.text).join('\n---\n') || '(none)'}\n\nGLOBAL BEST PRACTICE:\n${globalChunks.map((c) => c.text).join('\n---\n') || '(none)'}${live?.text ? `\n\nLIVE WEB (recent, not legal sources; say when a point comes from the web):\n${live.text.slice(0, 3000)}` : ''}`,
-      })
+          prompt: `COUNTRY PROVISIONS:\n${countryChunks.map((c) => c.text).join('\n---\n') || '(none)'}\n\nGLOBAL BEST PRACTICE:\n${globalChunks.map((c) => c.text).join('\n---\n') || '(none)'}${live?.text ? `\n\nLIVE WEB (recent, not legal sources; say when a point comes from the web):\n${live.text.slice(0, 3000)}` : ''}`,
+        })
 
-      const gaps: Gap[] = object.gaps.map((gap, i) => ({
-        id: `${dimension}-${i}`,
-        domain: input.domain,
-        dimension,
-        description: gap.description,
-        severity: gap.severity,
-        countryRef: countryChunks[0] ? citationFromChunk(countryChunks[0]) : undefined,
-        globalBestPractice: gap.globalBestPractice,
-        globalRef: globalChunks[0] ? citationFromChunk(globalChunks[0]) : undefined,
-      }))
-
-      results.push({ dimension, dimensionId: def.id, gaps, countryChunks, globalChunks })
-      scores.push({
-        dimension,
-        dimensionId: def.id,
-        dimensionName: def.name,
-        score: Number(object.score.toFixed(2)),
-        maturity: maturityLabel(object.score),
-        evidence: object.evidence,
-        gaps: gaps.map((g) => g.description),
-        recommendations: object.recommendations,
-        confidence: object.confidence,
-        ...(live && live.sources.length > 0 ? { webSources: live.sources.slice(0, 6).map(({ title, url }) => ({ title, url })) } : {}),
-      })
+        const gaps: Gap[] = object.gaps.map((gap, i) => ({
+          id: `${dimension}-${i}`,
+          domain: input.domain,
+          dimension,
+          description: gap.description,
+          severity: gap.severity,
+          countryRef: countryChunks[0] ? citationFromChunk(countryChunks[0]) : undefined,
+          globalBestPractice: gap.globalBestPractice,
+          globalRef: globalChunks[0] ? citationFromChunk(globalChunks[0]) : undefined,
+        }))
+        const webSources = live && live.sources.length > 0 ? live.sources.slice(0, 6).map(({ title, url }) => ({ title, url })) : undefined
+        const score: DimensionScore = {
+          dimension,
+          dimensionId: def.id,
+          dimensionName: def.name,
+          score: Number(object.score.toFixed(2)),
+          maturity: maturityLabel(object.score),
+          evidence: object.evidence,
+          gaps: gaps.map((g) => g.description),
+          recommendations: object.recommendations,
+          confidence: object.confidence,
+          ...(webSources ? { webSources } : {}),
+        }
+        results.push({ dimension, dimensionId: def.id, gaps, countryChunks, globalChunks })
+        scores.push(score)
+        emit?.({
+          type: 'result',
+          dimension,
+          dimensionId: def.id,
+          durationMs: Date.now() - started,
+          score,
+          reasoning: attempts.map((attempt) => attempt.reasoning).filter(Boolean).join('\n\n'),
+          attempts: attempts.length,
+          countryPassages: countryChunks.length,
+          globalPassages: globalChunks.length,
+        })
+      } catch (error) {
+        emit?.({ type: 'error', dimension, dimensionId: def.id, durationMs: Date.now() - started, message: (error as Error).message })
+        throw error
+      }
     }
 
     const scenario = buildScenario(input.country, input.domain, scores, input.weights)
     const totalGaps = results.reduce((sum, r) => sum + r.gaps.length, 0)
-    return {
+    const report: ReadinessReport = {
       country: input.country,
       domain: input.domain,
       generatedAt: scenario.generatedAt,
@@ -168,6 +235,8 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
       scenario,
       summary: `Scored ${dimensions.length} dimensions for ${input.country.toUpperCase()} (composite ${scenario.composite}/5); found ${totalGaps} gaps.`,
     }
+    emit?.({ type: 'done', report })
+    return report
   }
 }
 

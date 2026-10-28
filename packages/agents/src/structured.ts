@@ -27,6 +27,8 @@ export interface StructuredRequest<S extends ZodType> {
   /** Human-readable shape of the expected JSON object, shown to the model. */
   shape: string
   attempts?: number
+  /** Called after each attempt with the model's reply and its reasoning: for progress and audit. */
+  onAttempt?: (attempt: { attempt: number; reply: string; reasoning: string; valid: boolean }) => void
   /**
    * Reasoning depth. Reasoning tokens count against `maxOutputTokens`: a deep
    * setting can use the whole budget and leave the visible reply empty, so
@@ -138,6 +140,12 @@ export async function generateStructured<S extends ZodType>(request: StructuredR
     // Some models answer in the reasoning channel only: read it when the answer is empty.
     const reply = stripThinking(result.text || result.reasoningText || '')
     const candidate = extractJsonObject(reply)
+    request.onAttempt?.({
+      attempt,
+      reply,
+      reasoning: result.reasoningText ?? '',
+      valid: candidate !== null && request.schema.safeParse(candidate).success,
+    })
     if (candidate === null) {
       if (!reply.trim()) reason = 'the reply was empty'
       else if (!hasJsonObject(reply)) reason = 'the reply contained no JSON object'

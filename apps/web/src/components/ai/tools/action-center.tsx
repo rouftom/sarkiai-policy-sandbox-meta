@@ -206,9 +206,23 @@ export function ActionCenter({ actions, loading = false, onDecide, onRefresh, on
         ))}
 
         {!loading && visible.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 opacity-50">
-            <Search className="h-8 w-8 mb-2" aria-hidden="true" />
-            <p className="text-xs font-medium">{t('agentui.action.empty')}</p>
+          <div className="space-y-3 px-2 py-6">
+            <div className="flex items-center gap-2 text-foreground">
+              <Search className="h-4 w-4 shrink-0 text-brand-primary dark:text-brand-primary-light" aria-hidden="true" />
+              <p className="text-xs font-semibold">{t('agentui.action.empty')}</p>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">{t('agentui.action.explain')}</p>
+            <ul className="space-y-1.5 text-[11px]">
+              {(Object.keys(ACTION_KIND_KEY) as Array<keyof typeof ACTION_KIND_KEY>).map((kind) => (
+                <li key={kind} className="flex items-start gap-2">
+                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-brand-primary dark:bg-brand-primary-light" />
+                  <span>
+                    <span className="font-medium text-foreground">{t(ACTION_KIND_KEY[kind])}</span>
+                    <span className="text-muted-foreground"> · {t(`agentui.kind.${kind}.hint` as 'agentui.kind.whatsapp_approval')}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

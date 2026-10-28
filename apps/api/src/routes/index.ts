@@ -46,6 +46,7 @@ import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
 import { McpGateway } from '../mcp.js'
 import { ChatSessionStore } from '../chat-sessions.js'
+import { ReadinessRunStore } from '../readiness-runs.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
@@ -106,6 +107,7 @@ async function executeAction(record: ActionRecord): Promise<string> {
 const mcpGateway = new McpGateway(process.env.SEA_MCP_API_KEY)
 
 const chatSessions = new ChatSessionStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
+const readinessRuns = new ReadinessRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 
 const actionStore = new ActionStore({
   mongodbUri: config.mongodb.uri,
@@ -1161,6 +1163,67 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       domain: body.data.domain as Domain,
       globalCountry: body.data.globalCountry,
     })
+  })
+
+  /**
+   * Live assessment (Server-Sent Events): every step is sent as it happens, so the
+   * console shows the process rather than a spinner. The finished run is saved to
+   * the operator's history and announced with its id.
+   */
+  app.post('/v1/readiness/stream', async (request, reply) => {
+    const body = z
+      .object({
+        country: z.string().length(2),
+        domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
+        globalCountry: z.string().default('global'),
+      })
+      .safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    const operator = operatorOf(request)
+
+    reply.hijack()
+    const raw = reply.raw
+    raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': request.headers.origin ?? '*',
+      Vary: 'Origin',
+    })
+    raw.flushHeaders?.()
+    const send = (payload: unknown) => {
+      if (raw.writableEnded || raw.destroyed) return
+      raw.write(`data: ${JSON.stringify(payload)}\n\n`)
+    }
+    const heartbeat = setInterval(() => {
+      if (!raw.writableEnded && !raw.destroyed) raw.write(': ping\n\n')
+    }, 15_000)
+
+    try {
+      const report = await engine.readiness.assess(
+        { country: body.data.country, domain: body.data.domain as Domain, globalCountry: body.data.globalCountry },
+        (event) => send(event),
+      )
+      const saved = await readinessRuns.save({ userId: operator.email, runBy: operator.email, report })
+      send({ type: 'saved', run: saved })
+    } catch (error) {
+      request.log.error(error)
+      send({ type: 'failed', message: (error as Error).message })
+    } finally {
+      clearInterval(heartbeat)
+      if (!raw.writableEnded) raw.end()
+    }
+  })
+
+  /** Past assessments of this operator, newest first. */
+  app.get('/v1/readiness/runs', async (request) => ({ runs: await readinessRuns.list(operatorOf(request).email) }))
+
+  app.get('/v1/readiness/runs/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const run = await readinessRuns.get(id, operatorOf(request).email)
+    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    return run
   })
 
   // ── Readiness what-if (causal propagation across dimensions) ──────────────

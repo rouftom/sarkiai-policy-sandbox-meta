@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import { History, ImagePlus, ListChecks, Plus, Scale, Shield, Sparkles, X } from 'lucide-react'
+import { ChevronDown, History, ImagePlus, ListChecks, Plus, Scale, Shield, Sparkles, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -500,31 +500,6 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <Scale className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">{t('assistant.institution')}</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuLabel>{t('assistant.institution')}</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={institutionId} onValueChange={setInstitutionId}>
-              <DropdownMenuRadioItem value="auto">
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate">{t('assistant.institution.auto')}</span>
-              </DropdownMenuRadioItem>
-              {institutions.map((institution) => {
-                const Icon = institution.role === 'legal_advisor' ? Scale : Shield
-                return (
-                  <DropdownMenuRadioItem key={institution.id} value={institution.id}>
-                    <Icon className={cn('h-3.5 w-3.5 shrink-0', institution.color)} />
-                    <span className="truncate">{institution.name}</span>
-                  </DropdownMenuRadioItem>
-                )
-              })}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
             <span className="min-w-0 flex-1 truncate">{t('assistant.model')}</span>
             <span className="max-w-[6rem] truncate font-mono text-[10px] text-muted-foreground">{model || '—'}</span>
           </DropdownMenuSubTrigger>
@@ -579,17 +554,45 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <p className="shrink-0 text-[12px] font-semibold text-foreground">{t('assistant.title')}</p>
-          {pinned ? (
-            <span
-              className="flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              style={{ backgroundColor: `${institutionAccent(pinned.color)}33`, color: institutionInk(pinned.color) }}
-            >
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: institutionAccent(pinned.color) }} />
-              <span className="truncate">{pinned.name}</span>
-            </span>
-          ) : (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{t('assistant.institution.auto')}</span>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors hover:opacity-80',
+                  !pinned && 'bg-muted text-muted-foreground',
+                )}
+                style={
+                  pinned
+                    ? { backgroundColor: `${institutionAccent(pinned.color)}33`, color: institutionInk(pinned.color) }
+                    : undefined
+                }
+                aria-label={t('assistant.institution')}
+              >
+                {pinned && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: institutionAccent(pinned.color) }} />}
+                <span className="truncate">{pinned ? pinned.name : t('assistant.institution.auto')}</span>
+                <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuLabel>{t('assistant.institution')}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={institutionId} onValueChange={setInstitutionId}>
+                <DropdownMenuRadioItem value="auto">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{t('assistant.institution.auto')}</span>
+                </DropdownMenuRadioItem>
+                {institutions.map((institution) => {
+                  const Icon = institution.role === 'legal_advisor' ? Scale : Shield
+                  return (
+                    <DropdownMenuRadioItem key={institution.id} value={institution.id}>
+                      <Icon className={cn('h-3.5 w-3.5 shrink-0', institution.color)} />
+                      <span className="truncate">{institution.name}</span>
+                    </DropdownMenuRadioItem>
+                  )
+                })}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <TooltipProvider>
           <Tooltip>

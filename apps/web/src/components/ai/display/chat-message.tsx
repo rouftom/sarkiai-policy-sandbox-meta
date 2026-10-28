@@ -18,6 +18,7 @@ import { useI18n } from '@/lib/i18n'
 import type { AssessmentDto } from '@/lib/api'
 import { CitationDialog, type CitationView } from '@/components/ai/display/citation-dialog'
 import { StreamIndicator } from '@/components/ai/display/stream-indicator'
+import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 
 export interface ChatTurn {
   id: string
@@ -53,6 +54,7 @@ export function ChatMessage({
   const { t } = useI18n()
   const [copied, setCopied] = React.useState(false)
   const [openCitation, setOpenCitation] = React.useState<CitationView | null>(null)
+  const [openSource, setOpenSource] = React.useState<WebSourceView | null>(null)
 
   const copy = () => {
     void navigator.clipboard?.writeText(turn.content).then(() => {
@@ -152,6 +154,7 @@ export function ChatMessage({
             <CitationStrip citations={turn.citations.slice(0, 6)} onOpen={(citation) => setOpenCitation(citation)} />
           )}
           <CitationDialog citation={openCitation} onClose={() => setOpenCitation(null)} />
+          <SourceDrawer source={openSource} onClose={() => setOpenSource(null)} />
 
           {turn.webSources && turn.webSources.length > 0 && !turn.active && (
             <div className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[10px]">
@@ -159,9 +162,13 @@ export function ChatMessage({
               <ul className="space-y-0.5">
                 {turn.webSources.slice(0, 6).map((source) => (
                   <li key={source.url} className="truncate">
-                    <a href={source.url} target="_blank" rel="noreferrer" className="text-brand-primary-dark hover:underline dark:text-brand-primary-light">
+                    <button
+                      type="button"
+                      onClick={() => setOpenSource({ ...source, searchedAt: turn.startedAt ? new Date(turn.startedAt).toISOString() : undefined })}
+                      className="truncate text-left text-brand-primary-dark hover:underline dark:text-brand-primary-light"
+                    >
                       {source.title}
-                    </a>
+                    </button>
                   </li>
                 ))}
               </ul>
