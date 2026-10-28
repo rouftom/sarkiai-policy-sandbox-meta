@@ -170,7 +170,7 @@ export function providerApiKey(descriptor: ProviderDescriptor, source: Env = pro
  * directly, so `META_BASE_URL` points at our own relay and the shared secret
  * travels in a header. The key itself never leaves the server.
  */
-function relayHeaders(source: Env): Record<string, string> {
+export function relayHeaders(source: Env): Record<string, string> {
   const relayKey = env(source, 'MODEL_RELAY_KEY')
   return relayKey ? { 'x-sps-relay-key': relayKey } : {}
 }

@@ -22,7 +22,7 @@ import {
 } from '@sps/shared'
 import type { Retriever } from '@sps/retrieval'
 import { citationFromChunk } from '@sps/citations'
-import { generateStructured } from '@sps/agents'
+import { generateStructured, type WebAnswer, type WebSearch } from '@sps/agents'
 import type { KbChunk } from '@sps/shared'
 import { applyPropagation } from './causal'
 import { buildScenario, maturityLabel } from './scoring'
@@ -84,7 +84,7 @@ function dimensionMeta(dimension: ReadinessDimension) {
 
 export class ReadinessEngine {
   constructor(
-    private readonly deps: { model: LanguageModel; retriever: Retriever },
+    private readonly deps: { model: LanguageModel; retriever: Retriever; webSearch?: WebSearch },
   ) {}
 
   async assess(input: ReadinessInput): Promise<ReadinessReport> {
@@ -95,9 +95,24 @@ export class ReadinessEngine {
     const results: ReadinessReport['dimensions'] = []
     const scores: DimensionScore[] = []
 
+    // Live web evidence for every dimension, gathered first and in parallel: a
+    // failed search leaves the dimension to the corpus alone, it never fails the report.
+    const web = new Map<ReadinessDimension, WebAnswer | null>(
+      await Promise.all(
+        dimensions.map(async (dimension) => {
+          const search = this.deps.webSearch
+          if (!search) return [dimension, null] as const
+          const def = dimensionMeta(dimension)
+          const answer = await search(`${def.name} national AI readiness policy ${countryName(input.country)} ${new Date().getFullYear()}`).catch(() => null)
+          return [dimension, answer] as const
+        }),
+      ),
+    )
+
     for (const dimension of dimensions) {
       const def = dimensionMeta(dimension)
       const query = def.name
+      const live = web.get(dimension) ?? null
       const [countryChunks, globalChunks] = await Promise.all([
         this.deps.retriever.search({ text: query, country: input.country, topK: perDimensionK }),
         this.deps.retriever.search({ text: query, country: globalCountry, topK: perDimensionK }),
@@ -112,7 +127,7 @@ export class ReadinessEngine {
         maxOutputTokens: 2048,
         system: `You assess country "${input.country}" AI readiness on the dimension "${def.name}" (factors: ${def.factors.join(', ')}), domain "${input.domain}".
 Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNTRY provisions to GLOBAL best practice. Identify concrete gaps: unclear responsibilities, missing standards, legislative gaps, coordination problems, conflicts between objectives. Ground every claim in the passages. Do not analyse specific geographies; focus on domain-specific gaps and relevant global examples.`,
-        prompt: `COUNTRY PROVISIONS:\n${countryChunks.map((c) => c.text).join('\n---\n') || '(none)'}\n\nGLOBAL BEST PRACTICE:\n${globalChunks.map((c) => c.text).join('\n---\n') || '(none)'}`,
+        prompt: `COUNTRY PROVISIONS:\n${countryChunks.map((c) => c.text).join('\n---\n') || '(none)'}\n\nGLOBAL BEST PRACTICE:\n${globalChunks.map((c) => c.text).join('\n---\n') || '(none)'}${live?.text ? `\n\nLIVE WEB (recent, not legal sources; say when a point comes from the web):\n${live.text.slice(0, 3000)}` : ''}`,
       })
 
       const gaps: Gap[] = object.gaps.map((gap, i) => ({
@@ -137,6 +152,7 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
         gaps: gaps.map((g) => g.description),
         recommendations: object.recommendations,
         confidence: object.confidence,
+        ...(live && live.sources.length > 0 ? { webSources: live.sources.slice(0, 6).map(({ title, url }) => ({ title, url })) } : {}),
       })
     }
 
@@ -152,6 +168,10 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
       summary: `Scored ${dimensions.length} dimensions for ${input.country.toUpperCase()} (composite ${scenario.composite}/5); found ${totalGaps} gaps.`,
     }
   }
+}
+
+function countryName(code: string): string {
+  return code === 'cm' ? 'Cameroon' : code.toUpperCase()
 }
 
 /** Project the causal effect of a policy change across interdependent dimensions. */

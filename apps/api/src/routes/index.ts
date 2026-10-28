@@ -44,10 +44,8 @@ import { healthDataBreach } from '../scenarios.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
-import { auth as operatorAuth } from '../auth.js'
 import { McpGateway } from '../mcp.js'
 import { ChatSessionStore } from '../chat-sessions.js'
-import { registerVoiceRoutes } from '../voice-routes.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
 
@@ -193,7 +191,6 @@ function isPublicRoute(method: string, path: string): boolean {
   if (path === '/health') return true
   if (path === '/v1/whatsapp/webhook') return true
   if (path.startsWith('/v1/whatsapp/approvals/')) return true
-  if (path === '/v1/voice/realtime') return true
   if (path.startsWith('/v1/kb/images/') && method === 'GET') return true
   if (path === '/v1/auth/setup') return true
   if (path === '/v1/auth/signup') return true
@@ -224,12 +221,14 @@ function operatorOf(request: FastifyRequest) {
 export async function seedReferenceImages(log: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }) {
   const docs = await knowledge.listDocuments({ limit: 200 })
   if (docs.length === 0) return { generated: 0, skipped: 0, documents: 0, source: 'none' as const }
+  // Through the egress relay the relay holds the Meta key: the shared secret is enough.
+  const relayKey = process.env.MODEL_RELAY_KEY?.trim()
   const imageOptions =
-    engine.provider.mode === 'cloud' && providerApiKey(engine.provider)
+    engine.provider.mode === 'cloud' && (providerApiKey(engine.provider) || relayKey)
       ? {
           baseURL: engine.provider.baseURL,
-          apiKey: providerApiKey(engine.provider),
-          ...(process.env.MODEL_RELAY_KEY ? { headers: { 'x-sps-relay-key': process.env.MODEL_RELAY_KEY } } : {}),
+          apiKey: providerApiKey(engine.provider) || 'relay',
+          ...(relayKey ? { headers: { 'x-sps-relay-key': relayKey } } : {}),
         }
       : null
 
@@ -274,12 +273,6 @@ export async function seedReferenceImages(log: { info: (...args: unknown[]) => v
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthRoutes(app, engine.audit)
-  // Realtime voice authenticates with `?token=` in the handler (browsers cannot set headers on a WebSocket).
-  await registerVoiceRoutes(app, {
-    auth: operatorAuth,
-    apiKey: providerApiKey(engine.provider),
-    baseURL: engine.provider.baseURL,
-  })
 
   // One guard for the whole API surface. Auth, health, the Meta webhook and
   // signed approval links are public; everything that spends Meta/Hugging Face

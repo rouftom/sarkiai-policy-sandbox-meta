@@ -25,6 +25,7 @@ export interface ChatTurn {
   content: string
   reasoning?: string
   citations?: AssessmentDto['citations']
+  webSources?: AssessmentDto['webSources']
   validation?: AssessmentDto['validation']
   agentName?: string
   steps?: TrailStepView[]
@@ -166,6 +167,21 @@ export function ChatMessage({
             </ul>
           )}
           <CitationDialog citation={openCitation} onClose={() => setOpenCitation(null)} />
+
+          {turn.webSources && turn.webSources.length > 0 && !turn.active && (
+            <div className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[10px]">
+              <p className="font-semibold text-muted-foreground">{t('assistant.webSources')}</p>
+              <ul className="space-y-0.5">
+                {turn.webSources.slice(0, 6).map((source) => (
+                  <li key={source.url} className="truncate">
+                    <a href={source.url} target="_blank" rel="noreferrer" className="text-brand-primary-dark hover:underline dark:text-brand-primary-light">
+                      {source.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {hasText && !turn.active && (
             <div className="mt-2 flex items-center gap-1">

@@ -12,6 +12,7 @@ import { z } from 'zod'
 import type { AuditService } from '@sps/audit'
 import type { Retriever } from '@sps/retrieval'
 import type { KbChunk } from '@sps/shared'
+import type { WebAnswer, WebSearch } from './web-search'
 
 export type AgentActionKind = 'whatsapp_approval' | 'publish_communication' | 'record_gap' | 'request_tool'
 export type AgentActionRisk = 'low' | 'medium' | 'high'
@@ -57,6 +58,10 @@ export interface AgentToolContext {
   audit?: AuditService
   actions?: ActionSink
   mcp?: McpPort
+  /** Live web search (Meta's `web_search`); absent when the provider offers none. */
+  webSearch?: WebSearch
+  /** Receives every web answer, so the assessment can carry its sources. */
+  onWebAnswer?: (answer: WebAnswer) => void
   emit: (event: AgentToolEvent) => void
 }
 
@@ -102,6 +107,25 @@ export function createAgentTools(ctx: AgentToolContext): ToolSet {
         return { count: chunks.length, provisions: chunks.map(provisionOf) }
       },
     }),
+
+    ...(ctx.webSearch
+      ? {
+          search_web: tool({
+            description:
+              'Search the live web for information that may have changed: recent announcements, current rules, dates, figures. Use it only when the corpus cannot answer or may be out of date. Web results are NOT legal sources: say they come from the web and give the URL; never quote them as the law.',
+            inputSchema: z.object({ query: z.string().min(3).max(300) }),
+            execute: async ({ query }) => {
+              const answer = await ctx.webSearch!(query)
+              ctx.onWebAnswer?.(answer)
+              return {
+                source: 'web',
+                text: answer.text.slice(0, RESULT_CHARS),
+                sources: answer.sources.slice(0, 8).map((source) => ({ title: source.title, url: source.url })),
+              }
+            },
+          }),
+        }
+      : {}),
 
     record_gap: tool({
       description:

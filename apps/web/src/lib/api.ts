@@ -90,6 +90,8 @@ export interface DimensionScoreDto {
   recommendations: string[]
   confidence: number
   causalEffect?: number
+  /** Live web sources consulted for this dimension. */
+  webSources?: Array<{ title: string; url: string }>
 }
 
 export interface ReadinessReportDto {
@@ -140,6 +142,8 @@ export interface AssessmentDto {
   confidence: number
   /** Citation-validator verdict (N2). */
   validation?: { ok: boolean; attempts: number; rejected: string[]; used: unknown[] }
+  /** Live web sources the agent consulted; they are not legal sources. */
+  webSources?: Array<{ title: string; url: string; snippet?: string }>
 }
 
 export interface MandateConflictDto {

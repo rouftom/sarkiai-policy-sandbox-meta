@@ -120,6 +120,8 @@ export interface DimensionScore {
   confidence: number // 0..1
   /** Set when the value moved due to causal propagation. */
   causalEffect?: number
+  /** Live web sources consulted for this dimension (readiness only). */
+  webSources?: Array<{ title: string; url: string }>
 }
 
 export interface ReadinessScenario {
@@ -225,6 +227,8 @@ export interface AgentAssessment {
   cotTraceId: string
   /** Citation-validator verdict (N2); absent when validation was skipped. */
   validation?: CitationValidation
+  /** Live web sources the agent consulted (not legal sources). */
+  webSources?: Array<{ title: string; url: string; snippet?: string }>
 }
 
 /** A scenario event is released progressively, never all at once. */

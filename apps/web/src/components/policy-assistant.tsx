@@ -272,6 +272,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         content: result.findings.join('\n\n'),
         citations: result.citations,
         validation: result.validation,
+        webSources: result.webSources,
         active: false,
         endedAt: Date.now(),
         steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'complete' } : step)),

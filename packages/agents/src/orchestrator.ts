@@ -22,6 +22,7 @@ import type { AuditService } from '@sps/audit'
 import { attachmentGuardrail, buildSystemPrompt, citationDirective } from './prompt'
 import { describeProvider } from './provider'
 import { createAgentTools, summarizeToolInput, type ActionSink, type AgentToolEvent, type McpPort } from './tools'
+import type { WebAnswer, WebSearch } from './web-search'
 
 export interface Attachment {
   mime: string
@@ -88,6 +89,8 @@ export interface AgentStreamHandlers {
 export interface OrchestratorDeps {
   model: LanguageModel
   retriever: Retriever
+  /** Live web search for up-to-date answers; absent when the provider offers none. */
+  webSearch?: WebSearch
   audit?: AuditService
   /** Where proposed side effects are stored until the operator decides. */
   actions?: ActionSink
@@ -187,6 +190,7 @@ export class PolicyOrchestrator {
     // Validate against the full chunk text, not the truncated display excerpt.
     const corpus = chunks.map((chunk) => chunk.text).join('\n')
     let validation: CitationValidation = validateCitations('', citations, { attempts: 0, corpus })
+    const webAnswers: WebAnswer[] = []
 
     /** One generation, buffered or streamed depending on the caller. */
     const generateOnce = async (prompt: string): Promise<{ text: string; reasoning: string }> => {
@@ -201,6 +205,7 @@ export class PolicyOrchestrator {
             ...(this.deps.audit ? { audit: this.deps.audit } : {}),
             ...((input.actions ?? this.deps.actions) ? { actions: input.actions ?? this.deps.actions } : {}),
             ...(input.mcp ? { mcp: input.mcp } : {}),
+            ...(this.deps.webSearch ? { webSearch: this.deps.webSearch, onWebAnswer: (answer: WebAnswer) => webAnswers.push(answer) } : {}),
             emit: (event) => {
               if (event.type === 'ui') handlers?.onUi?.(event.ui)
               else handlers?.onTool?.(event)
@@ -342,6 +347,9 @@ export class PolicyOrchestrator {
       confidence: grounded ? 0.85 : 0.4,
       cotTraceId: `${runId}:${institution.id}`,
       validation,
+      ...(webAnswers.length > 0
+        ? { webSources: [...new Map(webAnswers.flatMap((answer) => answer.sources).map((source) => [source.url, source])).values()] }
+        : {}),
     }
   }
 }

@@ -5,22 +5,24 @@ import { Button, cn } from '@sps/ui'
 import { Mic } from 'lucide-react'
 import { motion, useAnimationControls } from 'framer-motion'
 import { useI18n } from '@/lib/i18n'
-import {
-  startRealtimeTranscription,
-  supportsRealtimeVoice,
-  transcribeClip,
-  type RealtimeSession,
-} from '@/lib/voice'
+import { transcribeClip } from '@/lib/voice'
 
 interface AudioRecorderProps {
   /**
    * `text` is the whole dictation of the current recording so far. `final` is
-   * false while an utterance is still in progress and true once it is complete.
+   * false while segments are still being transcribed and true once the last one
+   * is in.
    */
   onTranscript: (text: string, final: boolean) => void
   onError?: (message: string) => void
   disabled?: boolean
 }
+
+/**
+ * Length of one dictation segment. Each segment is a complete recording, so it
+ * can be decoded and sent on its own: the text appears while the speaker goes on.
+ */
+const SEGMENT_MS = 6000
 
 const join = (...parts: string[]) => parts.filter(Boolean).join(' ')
 
@@ -31,13 +33,14 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
   const [isRecording, setIsRecording] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
 
-  const session = useRef<RealtimeSession | null>(null)
-  const stopRequested = useRef(false)
   const mediaStream = useRef<MediaStream | null>(null)
-  const mediaRecorder = useRef<MediaRecorder | null>(null)
-  const chunks = useRef<BlobPart[]>([])
+  const recorder = useRef<MediaRecorder | null>(null)
+  const segmentTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const stopRequested = useRef(false)
   const committed = useRef('')
-  const partial = useRef('')
+  /** Segments are transcribed one after the other, so the text keeps its order. */
+  const queue = useRef<Promise<void>>(Promise.resolve())
+  const pending = useRef(0)
   const callbacks = useRef({ onTranscript, onError })
 
   useEffect(() => {
@@ -46,8 +49,8 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
 
   useEffect(() => {
     return () => {
-      session.current?.stop()
-      if (mediaRecorder.current?.state === 'recording') mediaRecorder.current.stop()
+      if (segmentTimer.current) clearTimeout(segmentTimer.current)
+      if (recorder.current?.state === 'recording') recorder.current.stop()
       mediaStream.current?.getTracks().forEach((track) => track.stop())
     }
   }, [])
@@ -58,16 +61,16 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
       transition: {
         repeat: Infinity,
         duration: 0.8,
-        repeatType: "reverse" as const,
-      }
+        repeatType: 'reverse' as const,
+      },
     },
     completed: {
       scale: 1,
       transition: {
         damping: 20,
-        type: "spring" as const,
+        type: 'spring' as const,
         stiffness: 260,
-      }
+      },
     },
   }
 
@@ -79,96 +82,92 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
     [t],
   )
 
-  const emitRealtime = useCallback((final: boolean) => {
-    const text = final ? committed.current : join(committed.current, partial.current)
-    callbacks.current.onTranscript(text, final)
-  }, [])
+  /** Transcribe one finished segment and append it. Errors surface, the recording goes on. */
+  const transcribeSegment = useCallback(
+    (blob: Blob, last: boolean) => {
+      pending.current += 1
+      setIsTranscribing(true)
+      queue.current = queue.current.then(async () => {
+        try {
+          if (blob.size > 0) {
+            const text = await transcribeClip(blob)
+            if (text) {
+              committed.current = join(committed.current, text)
+              callbacks.current.onTranscript(committed.current, false)
+            }
+          }
+        } catch (error) {
+          console.error('Voice transcription failed:', error)
+          callbacks.current.onError?.(error instanceof Error && error.message ? error.message : t('voice.error'))
+        } finally {
+          pending.current -= 1
+          if (pending.current === 0) setIsTranscribing(false)
+          if (last) callbacks.current.onTranscript(committed.current, true)
+        }
+      })
+    },
+    [t],
+  )
 
-  const finishClip = useCallback(async () => {
-    const blob = new Blob(chunks.current, { type: mediaRecorder.current?.mimeType || 'audio/webm' })
-    chunks.current = []
-    mediaRecorder.current = null
-    if (blob.size === 0) return
-    setIsTranscribing(true)
-    try {
-      const text = await transcribeClip(blob)
-      if (text) {
-        committed.current = join(committed.current, text)
-        callbacks.current.onTranscript(committed.current, true)
+  const startSegment = useCallback(
+    (stream: MediaStream) => {
+      const chunks: BlobPart[] = []
+      const segment = new MediaRecorder(stream)
+      recorder.current = segment
+      segment.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data)
       }
-    } catch (error) {
-      console.error('Voice transcription failed:', error)
-      callbacks.current.onError?.(error instanceof Error && error.message ? error.message : t('voice.error'))
-    } finally {
-      setIsTranscribing(false)
-    }
-  }, [t])
+      segment.onstop = () => {
+        const blob = new Blob(chunks, { type: segment.mimeType || 'audio/webm' })
+        const finished = stopRequested.current
+        transcribeSegment(blob, finished)
+        if (finished) {
+          mediaStream.current?.getTracks().forEach((track) => track.stop())
+          mediaStream.current = null
+          recorder.current = null
+        } else {
+          startSegment(stream)
+        }
+      }
+      segment.start()
+      segmentTimer.current = setTimeout(() => {
+        if (segment.state === 'recording') segment.stop()
+      }, SEGMENT_MS)
+    },
+    [transcribeSegment],
+  )
 
   const startRecording = useCallback(async () => {
     committed.current = ''
-    partial.current = ''
     stopRequested.current = false
     setIsRecording(true)
-    void controls.start("recording")
+    void controls.start('recording')
     try {
-      if (supportsRealtimeVoice()) {
-        const started = await startRealtimeTranscription({
-          onPartial(text) {
-            partial.current = text
-            emitRealtime(false)
-          },
-          onFinal(text) {
-            committed.current = join(committed.current, text)
-            partial.current = ''
-            emitRealtime(true)
-          },
-          onError(message) {
-            session.current = null
-            fail(message)
-          },
-        })
-        if (stopRequested.current) {
-          started.stop()
-        } else {
-          session.current = started
-        }
-        return
-      }
-
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       if (stopRequested.current) {
         stream.getTracks().forEach((track) => track.stop())
         return
       }
       mediaStream.current = stream
-      mediaRecorder.current = new MediaRecorder(stream)
-      chunks.current = []
-      mediaRecorder.current.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.current.push(e.data)
-      }
-      mediaRecorder.current.onstop = () => {
-        mediaStream.current?.getTracks().forEach((track) => track.stop())
-        mediaStream.current = null
-        void finishClip()
-      }
-      mediaRecorder.current.start()
+      startSegment(stream)
     } catch (error) {
       console.error('Error accessing microphone:', error)
       fail(error instanceof Error && error.message ? error.message : undefined)
     }
-  }, [controls, emitRealtime, fail, finishClip])
+  }, [controls, fail, startSegment])
 
   const stopRecording = useCallback(() => {
     stopRequested.current = true
-    if (session.current) {
-      session.current.stop()
-      session.current = null
+    if (segmentTimer.current) clearTimeout(segmentTimer.current)
+    // Stopping the current segment ends the recording: its last audio is transcribed, then the final text is sent.
+    if (recorder.current && recorder.current.state === 'recording') {
+      recorder.current.stop()
+    } else {
+      mediaStream.current?.getTracks().forEach((track) => track.stop())
+      mediaStream.current = null
+      transcribeSegment(new Blob(), true)
     }
-    if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
-      mediaRecorder.current.stop()
-    }
-    mediaStream.current?.getTracks().forEach((track) => track.stop())
-  }, [])
+  }, [transcribeSegment])
 
   const handleToggleRecording = useCallback(async () => {
     if (!isRecording) {
@@ -176,16 +175,12 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
     } else {
       setIsRecording(false)
       stopRecording()
-      await controls.start("completed")
+      await controls.start('completed')
     }
   }, [isRecording, controls, startRecording, stopRecording])
 
   return (
-    <motion.div
-      initial={false}
-      animate={controls}
-      variants={motionVariants}
-    >
+    <motion.div initial={false} animate={controls} variants={motionVariants}>
       <Button
         type="button"
         variant="ghost"
@@ -193,10 +188,10 @@ export const AudioRecorder = ({ onTranscript, onError, disabled }: AudioRecorder
         onClick={handleToggleRecording}
         disabled={disabled || isTranscribing}
         className={cn(
-          "h-8 w-8 sm:h-8 sm:w-8 rounded-full shrink-0 transition-colors",
+          'h-8 w-8 sm:h-8 sm:w-8 rounded-full shrink-0 transition-colors',
           isRecording
-            ? "bg-brand-primary hover:bg-brand-primary text-white"
-            : "text-brand-primary hover:text-brand-primary/80"
+            ? 'bg-brand-primary hover:bg-brand-primary text-white'
+            : 'text-brand-primary hover:text-brand-primary/80',
         )}
         aria-label={isRecording ? t('voice.stop') : t('voice.start')}
         aria-pressed={isRecording}

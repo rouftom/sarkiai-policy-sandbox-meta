@@ -6,6 +6,7 @@ import {
   resolveProvider,
   PolicyOrchestrator,
   MultiAgentCoordinator,
+  webSearchFor,
 } from '@sps/agents'
 import {
   AtlasRetriever,
@@ -48,15 +49,17 @@ function buildModelStack(
       ? { ...provider, models: { ...provider.models, reasoning: modelId, vision: modelId } }
       : provider
   const model = createModel({ provider: active })
+  const webSearch = webSearchFor(active)
   const orchestrator = new PolicyOrchestrator({
     model,
     retriever,
     audit,
     provider: active,
+    ...(webSearch ? { webSearch } : {}),
     maxOutputTokens: Number(process.env.AGENT_MAX_OUTPUT_TOKENS ?? 4096) || 4096,
   })
   const coordinator = new MultiAgentCoordinator({ model, orchestrator, audit })
-  const readiness = new ReadinessEngine({ model, retriever })
+  const readiness = new ReadinessEngine({ model, retriever, ...(webSearch ? { webSearch } : {}) })
   return { provider: active, model, orchestrator, coordinator, readiness }
 }
 

@@ -128,6 +128,27 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
                     </span>
                   </div>
                 ))}
+                {report.scores?.some((score) => score.webSources?.length) && (
+                  <details className="rounded-lg border border-border p-2 text-[11px]">
+                    <summary className="cursor-pointer font-semibold">{t('readiness.webSources')}</summary>
+                    <ul className="mt-2 space-y-2">
+                      {report.scores.filter((score) => score.webSources?.length).map((score) => (
+                        <li key={score.dimension}>
+                          <p className="text-muted-foreground">{score.dimensionName}</p>
+                          <ul className="ml-3 list-disc space-y-0.5">
+                            {score.webSources?.map((source) => (
+                              <li key={source.url} className="truncate">
+                                <a href={source.url} target="_blank" rel="noreferrer" className="text-brand-primary-dark hover:underline dark:text-brand-primary-light">
+                                  {source.title}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </div>
 
               <div className="rounded-lg border border-border bg-secondary/40 p-3">

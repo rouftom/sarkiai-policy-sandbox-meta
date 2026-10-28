@@ -1,28 +1,16 @@
 /**
  * Voice dictation for the console.
  *
- * Two paths, both relayed by our API (the Meta key never reaches the browser):
- *   - clip:     one recording, decoded and encoded as 16 kHz mono WAV, sent to
- *               POST /v1/voice/transcribe;
- *   - realtime: PCM16 frames streamed over WebSocket to /v1/voice/realtime.
+ * A recording is decoded in the browser and re-encoded as 16 kHz mono WAV (the
+ * only container Muse Voice Transcribe takes), then sent to POST
+ * /v1/voice/transcribe. The API relays it to Meta: the key never reaches the
+ * browser. Live dictation is built from short segments of this same path (see
+ * the audio recorder), because a WebSocket cannot pass the serverless relay.
  */
 
-import { API_URL, api } from './api'
-import { readToken } from './session'
+import { api } from './api'
 
 const TARGET_RATE = 16000
-
-export interface RealtimeHandlers {
-  /** Current utterance, cumulative: replaces the previous partial text. */
-  onPartial(text: string): void
-  /** One utterance is complete. */
-  onFinal(text: string): void
-  onError(message: string): void
-}
-
-export interface RealtimeSession {
-  stop(): void
-}
 
 /** Linear resampling; good enough for speech recognition input. */
 export function resampleLinear(samples: Float32Array, inputRate: number, outputRate = TARGET_RATE): Float32Array {
@@ -54,7 +42,7 @@ function writeAscii(view: DataView, offset: number, text: string): void {
   for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i))
 }
 
-/** RIFF/WAVE, mono, 16-bit PCM, 16 kHz: the only container Muse Voice Transcribe takes. */
+/** RIFF/WAVE, mono, 16-bit PCM, 16 kHz. */
 export function encodeWav16k(samples: Float32Array, inputRate: number): Blob {
   const pcm = floatToPcm16(resampleLinear(samples, inputRate, TARGET_RATE))
   const dataBytes = pcm.length * 2
@@ -107,166 +95,13 @@ async function toWav16k(blob: Blob): Promise<Blob> {
   }
 }
 
-/** Transcribe one recorded clip through the API. Resolves with the transcript. */
+/** Transcribe one recorded segment through the API. Resolves with the transcript. */
 export async function transcribeClip(blob: Blob): Promise<string> {
   const wav = await toWav16k(blob)
   const result = await api.transcribeVoice({
     audioBase64: await blobToBase64(wav),
     filename: 'clip.wav',
-    mode: 'ENDPOINTING',
+    mode: 'PUSH_TO_TALK',
   })
   return result.transcript.trim()
-}
-
-/** AudioWorklet and WebSocket exist, and the page can reach the microphone. */
-export function supportsRealtimeVoice(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.isSecureContext &&
-    typeof AudioWorkletNode !== 'undefined' &&
-    typeof WebSocket !== 'undefined' &&
-    typeof navigator !== 'undefined' &&
-    Boolean(navigator.mediaDevices?.getUserMedia)
-  )
-}
-
-/** Capture processor: batches ~4096 samples per message, sent to the main thread. */
-const WORKLET_SOURCE = `
-class PcmCapture extends AudioWorkletProcessor {
-  constructor() {
-    super()
-    this.parts = []
-    this.size = 0
-  }
-  process(inputs) {
-    const channel = inputs[0] && inputs[0][0]
-    if (channel) {
-      this.parts.push(channel.slice(0))
-      this.size += channel.length
-      if (this.size >= 4096) {
-        const out = new Float32Array(this.size)
-        let offset = 0
-        for (const part of this.parts) {
-          out.set(part, offset)
-          offset += part.length
-        }
-        this.port.postMessage(out, [out.buffer])
-        this.parts = []
-        this.size = 0
-      }
-    }
-    return true
-  }
-}
-registerProcessor('pcm-capture', PcmCapture)
-`
-
-function realtimeUrl(token: string): string {
-  const base = API_URL.replace(/\/+$/, '').replace(/^https:/, 'wss:').replace(/^http:/, 'ws:')
-  return `${base}/v1/voice/realtime?token=${encodeURIComponent(token)}`
-}
-
-const CLOSE_REASONS: Record<number, string> = {
-  1008: 'The voice request was rejected.',
-  1011: 'The transcription service failed.',
-  1013: 'Too many voice requests, try again shortly.',
-  4401: 'Sign in again to use voice dictation.',
-}
-
-/**
- * Live dictation. Resolves once the socket is open and the microphone is
- * streaming; `stop()` ends the stream and waits for the last utterance.
- */
-export async function startRealtimeTranscription(handlers: RealtimeHandlers): Promise<RealtimeSession> {
-  const token = readToken()
-  if (!token) throw new Error('Sign in to use voice dictation.')
-
-  const socket = new WebSocket(realtimeUrl(token))
-  socket.binaryType = 'arraybuffer'
-  await new Promise<void>((resolve, reject) => {
-    socket.onopen = () => resolve()
-    socket.onerror = () => reject(new Error('The voice service did not answer.'))
-  })
-
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-  })
-  const context = new AudioContext()
-  const workletUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'application/javascript' }))
-  let source: MediaStreamAudioSourceNode | null = null
-  let worklet: AudioWorkletNode | null = null
-  let mute: GainNode | null = null
-  let closeTimer: ReturnType<typeof setTimeout> | undefined
-  let stopping = false
-  let released = false
-
-  const releaseMicrophone = () => {
-    if (released) return
-    released = true
-    stream.getTracks().forEach((track) => track.stop())
-    source?.disconnect()
-    worklet?.disconnect()
-    mute?.disconnect()
-    void context.close()
-  }
-
-  try {
-    await context.audioWorklet.addModule(workletUrl)
-  } catch (error) {
-    releaseMicrophone()
-    socket.close(1000)
-    throw error
-  } finally {
-    URL.revokeObjectURL(workletUrl)
-  }
-
-  source = context.createMediaStreamSource(stream)
-  worklet = new AudioWorkletNode(context, 'pcm-capture')
-  mute = context.createGain()
-  mute.gain.value = 0
-  worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-    if (socket.readyState !== WebSocket.OPEN) return
-    const pcm = floatToPcm16(resampleLinear(event.data, context.sampleRate, TARGET_RATE))
-    socket.send(pcm.buffer)
-  }
-  source.connect(worklet)
-  worklet.connect(mute)
-  mute.connect(context.destination)
-
-  socket.onmessage = (event) => {
-    if (typeof event.data !== 'string') return
-    let message: { type?: string; transcript?: string; message?: string }
-    try {
-      message = JSON.parse(event.data)
-    } catch {
-      return
-    }
-    const text = (message.transcript ?? '').trim()
-    if (message.type === 'transcript' && text) handlers.onPartial(text)
-    else if (message.type === 'speechComplete' && text) handlers.onFinal(text)
-    else if (message.type === 'error') handlers.onError(message.message ?? 'The transcription service failed.')
-  }
-
-  socket.onclose = (event) => {
-    clearTimeout(closeTimer)
-    releaseMicrophone()
-    if (!stopping && event.code !== 1000) {
-      handlers.onError(CLOSE_REASONS[event.code] ?? 'The voice connection closed.')
-    }
-  }
-
-  return {
-    stop() {
-      if (stopping) return
-      stopping = true
-      releaseMicrophone()
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'endStream' }))
-        // The server closes with 1000 once the last utterance is delivered.
-        closeTimer = setTimeout(() => socket.close(1000), 5000)
-      } else {
-        socket.close(1000)
-      }
-    },
-  }
 }
