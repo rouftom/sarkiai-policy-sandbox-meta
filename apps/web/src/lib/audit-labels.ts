@@ -20,6 +20,9 @@ export const AUDIT_ACTION_KEYS: Record<string, string> = {
   whatsapp_approval: 'audit.action.whatsappApproval',
   'whatsapp.approval': 'audit.action.whatsappApproval',
   ministry_health: 'audit.action.ministryHealth',
+  'readiness.assessed': 'audit.action.readinessAssessed',
+  'readiness.opened': 'audit.action.readinessOpened',
+  'readiness.history.viewed': 'audit.action.readinessHistoryViewed',
 }
 
 /** `gap_recorded` → `Gap recorded`: the fallback for an action without a translation. */

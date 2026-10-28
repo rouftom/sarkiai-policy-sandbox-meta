@@ -1206,6 +1206,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         (event) => send(event),
       )
       const saved = await readinessRuns.save({ userId: operator.email, runBy: operator.email, report })
+      await engine.audit.logAction({
+        actor: operator.email,
+        action: 'readiness.assessed',
+        target: `${report.country.toUpperCase()} · ${report.domain} · composite ${report.scenario?.composite ?? '—'}/5`,
+        lens: 'readiness',
+        runId: saved.id,
+        userId: operator.email,
+      })
       send({ type: 'saved', run: saved })
     } catch (error) {
       request.log.error(error)
@@ -1217,12 +1225,32 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   /** Past assessments of this operator, newest first. */
-  app.get('/v1/readiness/runs', async (request) => ({ runs: await readinessRuns.list(operatorOf(request).email) }))
+  app.get('/v1/readiness/runs', async (request) => {
+    const operator = operatorOf(request)
+    const runs = await readinessRuns.list(operator.email)
+    await engine.audit.logAction({
+      actor: operator.email,
+      action: 'readiness.history.viewed',
+      target: `${runs.length} assessment(s) listed`,
+      lens: 'readiness',
+      userId: operator.email,
+    })
+    return { runs }
+  })
 
   app.get('/v1/readiness/runs/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const run = await readinessRuns.get(id, operatorOf(request).email)
+    const operator = operatorOf(request)
+    const run = await readinessRuns.get(id, operator.email)
     if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    await engine.audit.logAction({
+      actor: operator.email,
+      action: 'readiness.opened',
+      target: `${run.country.toUpperCase()} · ${run.domain} · ${run.createdAt}`,
+      lens: 'readiness',
+      runId: run.id,
+      userId: operator.email,
+    })
     return run
   })
 

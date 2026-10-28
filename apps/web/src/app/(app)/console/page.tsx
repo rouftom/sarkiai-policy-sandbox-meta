@@ -10,7 +10,8 @@ import { CommunicationsPanel } from '@/components/communications-panel'
 import { ExercisePanel } from '@/components/exercise-panel'
 import { GazettePanel } from '@/components/gazette-panel'
 import { ModelSelect } from '@/components/model-select'
-import { ReadinessPanel } from '@/components/readiness-panel'
+import { ReadinessActions, ReadinessPanel } from '@/components/readiness-panel'
+import { ReadinessProvider } from '@/components/readiness-context'
 import { ScenarioConsole } from '@/components/scenario-console'
 import { WorkspaceControls } from '@/components/workspace-bar'
 import { PageIntro } from '@/components/page-intro'
@@ -94,7 +95,12 @@ export default function ConsolePage() {
         </TabsContent>
 
         <TabsContent value="readiness" className="mt-3">
-          <ReadinessPanel />
+          <ReadinessProvider>
+            <div className="mb-4 flex justify-end">
+              <ReadinessActions />
+            </div>
+            <ReadinessPanel />
+          </ReadinessProvider>
         </TabsContent>
 
         <TabsContent value="gazette" className="mt-3">
