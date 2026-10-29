@@ -18,6 +18,7 @@ import {
   Position,
   ReactFlow,
   useReactFlow,
+  useStore,
   getBezierPath,
   type Edge,
   type EdgeProps,
@@ -26,7 +27,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { AlertTriangle, CheckCircle2, Circle, Globe, Loader, Play, Rocket, Scale, Sparkles } from 'lucide-react'
-import { cn } from '@sps/ui'
+import { Select, cn } from '@sps/ui'
 
 export type ProcessState = 'idle' | 'running' | 'success' | 'failed'
 export type ProcessKind = 'start' | 'web' | 'agent' | 'synthesis' | 'saved'
@@ -163,44 +164,145 @@ function layout(steps: ProcessGraphStep[], onSelect: (id: string) => void): { no
   return { nodes, edges }
 }
 
+/** Whether two renders describe the same node (same place, same content). */
+function sameNode(a: ProcessFlowNode, b: ProcessFlowNode): boolean {
+  return (
+    a.position.x === b.position.x &&
+    a.position.y === b.position.y &&
+    a.data.kind === b.data.kind &&
+    a.data.label === b.data.label &&
+    a.data.state === b.data.state &&
+    a.data.detail === b.data.detail &&
+    a.data.duration === b.data.duration &&
+    a.data.onSelect === b.data.onSelect
+  )
+}
+
 /**
- * Keeps the whole process in view when the canvas changes size (the tab it sits in
- * opens, the window resizes, the layout settles): without it the canvas can stay
- * empty until the view is reset.
+ * The view selector, "Réorganiser", and the only place that frames the canvas: once the
+ * nodes are measured, when the view changes, when the node set changes, and when the
+ * canvas resizes.
+ *
+ * A `fitView` called before the nodes have a size computes the viewport from empty
+ * bounds: the result is an off-screen (or infinite) transform that leaves the canvas
+ * blank until something frames it again. Every call here is therefore gated on the
+ * nodes being measured and on the canvas having a real size, and the view filter is
+ * reduced to the nodes that exist so it can never be empty.
  */
-function FitOnResize({ target }: { target: React.RefObject<HTMLDivElement | null> }) {
-  const { fitView } = useReactFlow()
+function ViewportControls({
+  target,
+  views,
+  view,
+  onView,
+  viewLabel,
+  stepIds,
+}: {
+  target: React.RefObject<HTMLDivElement | null>
+  views?: ProcessGraphView[]
+  view: string
+  onView: (id: string) => void
+  viewLabel?: string
+  /** The ids of the nodes on the canvas, `|`-joined so the effects only rerun on a real change. */
+  stepIds: string
+}) {
+  const { fitView, getViewport, setViewport } = useReactFlow()
+  /**
+   * `useNodesInitialized` only flips when the node set is written again, so a canvas
+   * whose nodes never change identity (as ours, cached) never reports itself measured
+   * and never gets framed. Reading the measured sizes straight from the store follows
+   * every measurement pass instead.
+   */
+  const measured = useStore((state) => {
+    const nodes = Array.from(state.nodeLookup.values())
+    return nodes.length > 0 && nodes.every((node) => Boolean(node.measured?.width && node.measured?.height))
+  })
+  const viewKey = (views?.find((entry) => entry.id === view)?.nodes ?? []).join('|')
+  // Nothing is fitted until the nodes are measured (there is nothing to fit yet).
+  const ready = React.useRef(false)
+
+  const frame = React.useCallback(
+    async (duration = 300) => {
+      const element = target.current
+      if (!ready.current || !element || element.clientWidth < 8 || element.clientHeight < 8) return
+      const known = new Set(stepIds.split('|'))
+      const wanted = viewKey ? viewKey.split('|').filter((id) => known.has(id)) : []
+      await fitView({ padding: 0.2, duration, ...(wanted.length > 0 ? { nodes: wanted.map((id) => ({ id })) } : {}) })
+      // A viewport computed on nothing is not finite (or sits at zoom zero): put the canvas back on a sane frame.
+      const { x, y, zoom } = getViewport()
+      if (![x, y, zoom].every(Number.isFinite) || zoom <= 0) {
+        void setViewport({ x: 24, y: 24, zoom: 0.7 })
+      }
+    },
+    [fitView, getViewport, setViewport, stepIds, target, viewKey],
+  )
+
+  /**
+   * Frames the canvas the first time the nodes are measured, then again on a view change
+   * or when the node set changes (a lane appears, a dimension is added). The signature
+   * keeps progress ticks from reframing, and waiting for `measured` means a node that has
+   * just joined the canvas is framed with the others instead of being left out.
+   */
+  const signature = `${viewKey}#${stepIds}`
+  const framed = React.useRef(false)
+  const lastSignature = React.useRef(signature)
+  React.useEffect(() => {
+    if (!measured) return
+    ready.current = true
+    if (framed.current && lastSignature.current === signature) return
+    framed.current = true
+    lastSignature.current = signature
+    void frame()
+  }, [frame, measured, signature])
+
+  // The tab opens, the window resizes: frame again once the canvas has its new size.
+  const lastSize = React.useRef('')
   React.useEffect(() => {
     const element = target.current
     if (!element || typeof ResizeObserver === 'undefined') return
-    let frame = 0
+    let timer = 0
     const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => void fitView({ padding: 0.2, duration: 200 }))
+      const size = `${element.clientWidth}x${element.clientHeight}`
+      if (size === lastSize.current) return
+      lastSize.current = size
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => void frame(200), 120)
     })
     observer.observe(element)
     return () => {
       observer.disconnect()
-      cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
     }
-  }, [target, fitView])
-  return null
-}
+  }, [frame, target])
 
-/** Puts the whole process back in view: the automatic layout, fitted to the canvas. */
-function ResetView() {
-  const { fitView } = useReactFlow()
   return (
-    <Panel position="top-right">
+    <Panel position="top-right" className="flex items-center gap-2">
+      {views && views.length > 0 && (
+        <Select
+          ariaLabel={viewLabel ?? 'View'}
+          value={view}
+          onValueChange={onView}
+          options={views.map((entry) => ({ value: entry.id, label: entry.label }))}
+          size="sm"
+          triggerClassName="!h-7 text-[10px]"
+          className="w-44"
+        />
+      )}
       <button
         type="button"
-        onClick={() => void fitView({ padding: 0.2, duration: 300 })}
-        className="rounded-lg border border-border bg-card/90 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-sm transition-colors hover:bg-secondary"
+        onClick={() => void frame()}
+        className="h-7 rounded-lg border border-border bg-card/90 px-2.5 text-[10px] font-semibold text-foreground shadow-sm transition-colors hover:bg-secondary"
       >
         Réorganiser
       </button>
     </Panel>
   )
+}
+
+/** A group of nodes the selector can frame. Without `nodes`, the whole process. */
+export interface ProcessGraphView {
+  id: string
+  label: string
+  nodes?: string[]
 }
 
 const POPOVER_WIDTH = 320
@@ -215,17 +317,46 @@ export function ProcessGraph({
   onSelect,
   renderPopover,
   className,
+  views,
+  viewLabel,
+  summary,
 }: {
   steps: ProcessGraphStep[]
   onSelect?: (id: string) => void
   renderPopover?: (id: string, close: () => void) => React.ReactNode
   className?: string
+  views?: ProcessGraphView[]
+  viewLabel?: string
+  /** Plain text in the bottom right corner of the canvas. */
+  summary?: React.ReactNode
 }) {
   const container = React.useRef<HTMLDivElement>(null)
+  const [view, setView] = React.useState<string>(views?.[0]?.id ?? '')
+  const stepIds = steps.map((step) => step.id).join('|')
   const [anchor, setAnchor] = React.useState<{ id: string; x: number; y: number } | null>(null)
   const close = React.useCallback(() => setAnchor(null), [])
   const handle = React.useCallback((id: string) => onSelect?.(id), [onSelect])
-  const { nodes, edges } = React.useMemo(() => layout(steps, handle), [steps, handle])
+  /**
+   * React Flow compares nodes by object identity: a node given again as a new object is
+   * adopted from scratch, which drops its measured size and hides it until it is measured
+   * again. Rebuilding every node on every progress tick therefore blinks the whole canvas.
+   * The cache hands back the previous object while a node's content is unchanged.
+   */
+  const nodeCache = React.useRef(new Map<string, ProcessFlowNode>())
+  const { nodes, edges } = React.useMemo(() => {
+    const next = layout(steps, handle)
+    const cache = nodeCache.current
+    const seen = new Set<string>()
+    const nodes = next.nodes.map((node) => {
+      seen.add(node.id)
+      const previous = cache.get(node.id)
+      const stable = previous && sameNode(previous, node) ? previous : node
+      cache.set(node.id, stable)
+      return stable
+    })
+    for (const id of cache.keys()) if (!seen.has(id)) cache.delete(id)
+    return { nodes, edges: next.edges }
+  }, [steps, handle])
 
   React.useEffect(() => {
     if (!anchor) return
@@ -261,20 +392,22 @@ export function ProcessGraph({
         }}
         onPaneClick={close}
         onMoveStart={close}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
         proOptions={{ hideAttribution: true }}
-        minZoom={0.4}
+        minZoom={0.2}
         maxZoom={1.4}
       >
         <Background gap={18} size={1} color="#94a3b855" />
         <Controls showInteractive={false} position="bottom-left" className="!shadow-sm" />
-        <ResetView />
-        <FitOnResize target={container} />
+        <ViewportControls target={container} views={views} view={view} onView={setView} viewLabel={viewLabel} stepIds={stepIds} />
       </ReactFlow>
+      {summary && (
+        <div className="pointer-events-none absolute bottom-3 right-3 z-10 flex items-center gap-2 text-[11px] text-muted-foreground">
+          {summary}
+        </div>
+      )}
       {anchor && renderPopover && (
         <div
           role="dialog"
