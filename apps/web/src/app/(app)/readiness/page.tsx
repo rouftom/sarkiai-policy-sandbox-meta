@@ -12,7 +12,7 @@ export default function ReadinessPage() {
       <PageIntro title={t('readiness.title')} subtitle={t('readiness.subtitle')}>
         <ReadinessActions />
       </PageIntro>
-      <ReadinessPanel showStages={false} />
+      <ReadinessPanel />
     </ReadinessProvider>
   )
 }

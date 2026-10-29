@@ -2,11 +2,19 @@
 
 import type { InstitutionSpec, KbChunk } from '@sps/shared'
 
+/** The language an agent writes its answer in: the language of the operator's console. */
+export type AnswerLanguage = 'fr' | 'en'
+
+export function languageName(language: AnswerLanguage): string {
+  return language === 'fr' ? 'French' : 'English'
+}
+
 export interface PromptContext {
   institution: InstitutionSpec
   country: string
   domain: string
   chunks: KbChunk[]
+  language?: AnswerLanguage
 }
 
 export function buildKnowledgeBlock(chunks: KbChunk[]): string {
@@ -26,6 +34,7 @@ export function buildKnowledgeBlock(chunks: KbChunk[]): string {
 
 export function buildSystemPrompt(ctx: PromptContext): string {
   const { institution, country, domain, chunks } = ctx
+  const language = languageName(ctx.language ?? 'en')
   const sources =
     chunks
       .map((c) =>
@@ -42,6 +51,8 @@ ${institution.mandate}
 
 LEGAL BOUNDARIES (never act outside these):
 ${(institution.mustNot ?? ['n/a']).map((m) => `- ${m}`).join('\n')}
+
+ANSWER LANGUAGE (mandatory): write every sentence of your answer in ${language}. Keep quotations of provisions in their original language, and name the provision as it is written in the sources.
 
 GROUNDING RULES (mandatory):
 - Base every legal assertion on the CONTEXT provisions below. Never invent a law, article, or number.

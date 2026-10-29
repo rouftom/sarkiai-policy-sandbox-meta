@@ -9,7 +9,7 @@
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { useWorkspace } from '@/lib/workspace'
-import { READINESS_DIMENSIONS } from '@sps/shared'
+import { READINESS_DIMENSIONS, type Domain } from '@sps/shared'
 import {
   api,
   type DimensionScoreDto,
@@ -39,11 +39,17 @@ export interface ReadinessSettings {
   reasoningEffort: 'low' | 'medium' | 'high'
   /** The chat model per task; an empty value means the operator's default model. */
   models: { webSearch?: string; evaluate?: string; synthesis?: string; report?: string }
+  /** The dimensions are evaluated at the same time (default) or one after another. */
+  concurrency: 'parallel' | 'sequential' | 'orchestrated'
+  /** Orchestrated mode: the most decisions the lead agent may take. */
+  maxDecisions: number
+  /** The most sectors one assessment may cover (one assessment per sector). */
+  maxDomains: number
 }
 
 const SETTINGS_KEY = 'sps.readiness.settings'
 const ALL_DIMENSIONS = READINESS_DIMENSIONS.map((dimension) => dimension.shortName)
-const DEFAULT_SETTINGS: ReadinessSettings = { dimensions: ALL_DIMENSIONS, perDimensionK: 5, useWeb: true, reasoningEffort: 'low', models: {} }
+const DEFAULT_SETTINGS: ReadinessSettings = { dimensions: ALL_DIMENSIONS, perDimensionK: 5, useWeb: true, reasoningEffort: 'low', models: {}, concurrency: 'parallel', maxDecisions: 20, maxDomains: 5 }
 
 function downloadFile(file: ReadinessReportFileDto) {
   const bytes =
@@ -77,6 +83,8 @@ export interface Step {
   attempts?: number
   passages?: { country: number; global: number }
   error?: string
+  /** Why the lead agent chose this step (orchestrated mode). */
+  decision?: string
 }
 
 export interface RunMeta {
@@ -86,6 +94,24 @@ export interface RunMeta {
 }
 
 export type ReadinessView = 'assessment' | 'history'
+
+/** The comparison line of one saved assessment of a series. */
+function sectorResultOf(run: { id: string; domain: string; report: ReadinessReportDto }): SectorResult {
+  return {
+    runId: run.id,
+    domain: run.domain as Domain,
+    scores: run.report.scores,
+    composite: run.report.scenario?.composite ?? null,
+  }
+}
+
+/** One sector of the current series, once its assessment is saved. */
+export interface SectorResult {
+  runId: string
+  domain: Domain
+  scores: DimensionScoreDto[]
+  composite: number | null
+}
 
 /** An interrupted assessment that can be resumed where it stopped. */
 export interface Resumable {
@@ -163,6 +189,15 @@ interface ReadinessState {
   /** The dialog for the settings of a new assessment is open. */
   creating: boolean
   setCreating: (open: boolean) => void
+  /** Opens the dialog with the sectors of the workspace selected. */
+  openCreate: () => void
+  /** The sectors the next assessment covers: one assessment per sector, run one after another. */
+  startDomains: Domain[]
+  setStartDomains: (domains: Domain[]) => void
+  /** The sector being assessed while several are run. */
+  sectorProgress: { index: number; total: number; domain: Domain } | null
+  /** The sectors of the current series, finished so far (for the comparison). */
+  batch: SectorResult[]
   deleteRun: (id: string) => Promise<void>
   /** A language is being added to a saved assessment. */
   localizing: boolean
@@ -196,7 +231,7 @@ function stepsFromReport(report: ReadinessReportDto): Step[] {
 
 export function ReadinessProvider({ runId, children }: { runId?: string; children: React.ReactNode }) {
   const router = useRouter()
-  const { country, domain } = useWorkspace()
+  const { country, domain, domains: workspaceDomains } = useWorkspace()
   const [report, setReport] = React.useState<ReadinessReportDto | null>(null)
   const [meta, setMeta] = React.useState<RunMeta | null>(null)
   const [steps, setSteps] = React.useState<Step[]>([])
@@ -221,6 +256,11 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   const [localizing, setLocalizing] = React.useState(false)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
   const [creating, setCreating] = React.useState(false)
+  const [startDomains, setStartDomains] = React.useState<Domain[]>([])
+  const [sectorProgress, setSectorProgress] = React.useState<{ index: number; total: number; domain: Domain } | null>(null)
+  const [batch, setBatch] = React.useState<SectorResult[]>([])
+  /** The report the last `done` event carried, read when the sector is saved. */
+  const doneReport = React.useRef<ReadinessReportDto | null>(null)
   const [resumable, setResumable] = React.useState<Resumable | null>(null)
   const { locale } = useI18n()
   const lang: ReadinessLangDto = locale === 'fr' ? 'fr' : 'en'
@@ -300,6 +340,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       patchStep(event.dimension, { status: 'error', durationMs: event.durationMs, error: event.message })
     } else if (event.type === 'restored') {
       patchStep(event.dimension, { status: 'done', score: event.score, webSources: event.score.webSources ?? [], reasoning: '' })
+    } else if (event.type === 'decision') {
+      if (event.dimension) patchStep(event.dimension, { decision: event.hint ? `${event.reason} — ${event.hint}` : event.reason })
     } else if (event.type === 'failed') {
       if (event.runId) {
         setResumable({
@@ -311,11 +353,24 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       }
       setFailure(event.message)
     } else if (event.type === 'done') {
+      doneReport.current = event.report as ReadinessReportDto
       setReport(event.report as ReadinessReportDto)
     }
   }
 
+  /** The dialog opens with the workspace sectors, within the maximum the settings allow. */
+  const openCreate = () => {
+    setStartDomains(workspaceDomains.slice(0, Math.max(1, settings.maxDomains)))
+    setCreating(true)
+  }
+
+  /**
+   * One assessment per chosen sector, one after another: each is saved on its own
+   * and listed in the history. A failure stops the list; the run that failed can be resumed.
+   */
   const run = async () => {
+    const sectors = startDomains.slice(0, Math.max(1, settings.maxDomains))
+    if (sectors.length === 0) return
     setRunning(true)
     setView('assessment')
     setWhatIf(null)
@@ -323,36 +378,58 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setReport(null)
     setMeta(null)
     setResumable(null)
-    setSteps(pendingSteps(settings.dimensions))
     setOpenIds(new Set())
-    const started = Date.now()
-    setStartedAt(started)
+    setBatch([])
+    // One series id for the sectors run together: their assessments are compared later.
+    const batchId = sectors.length > 1 ? crypto.randomUUID() : undefined
+    const saved: ReadinessRunSummaryDto[] = []
     try {
-      const saved = await api.readinessStream(
-        {
-          country,
-          domain,
-          globalCountry: 'global',
-          dimensions: settings.dimensions.length === ALL_DIMENSIONS.length ? undefined : settings.dimensions,
-          perDimensionK: settings.perDimensionK,
-          useWeb: settings.useWeb,
-          reasoningEffort: settings.reasoningEffort,
-          models: {
-            ...(settings.models.webSearch ? { webSearch: settings.models.webSearch } : {}),
-            ...(settings.models.evaluate ? { evaluate: settings.models.evaluate } : {}),
-          },
-        } satisfies { country: string; domain: string; globalCountry: string } & ReadinessSettingsDto,
-        onEvent,
-      )
-      setTotalMs(Date.now() - started)
-      if (saved) {
-        setMeta({ id: saved.id, createdAt: saved.createdAt, runBy: saved.runBy })
-        router.replace(`/readiness/${saved.id}`)
+      for (const [index, sector] of sectors.entries()) {
+        setSectorProgress({ index, total: sectors.length, domain: sector })
+        setReport(null)
+        setSteps(pendingSteps(settings.dimensions))
+        const started = Date.now()
+        setStartedAt(started)
+        doneReport.current = null
+        const finished = await api.readinessStream(
+          {
+            country,
+            domain: sector,
+            globalCountry: 'global',
+            dimensions: settings.dimensions.length === ALL_DIMENSIONS.length ? undefined : settings.dimensions,
+            perDimensionK: settings.perDimensionK,
+            useWeb: settings.useWeb,
+            reasoningEffort: settings.reasoningEffort,
+            concurrency: settings.concurrency,
+            ...(settings.concurrency === 'orchestrated' ? { maxDecisions: settings.maxDecisions, language: lang } : {}),
+            ...(batchId ? { batchId } : {}),
+            models: {
+              ...(settings.models.webSearch ? { webSearch: settings.models.webSearch } : {}),
+              ...(settings.models.evaluate ? { evaluate: settings.models.evaluate } : {}),
+            },
+          } satisfies { country: string; domain: string; globalCountry: string } & ReadinessSettingsDto,
+          onEvent,
+        )
+        setTotalMs(Date.now() - started)
+        if (!finished) break
+        saved.push(finished)
+        // Written by the stream callback, so read with its declared type.
+        const result = doneReport.current as ReadinessReportDto | null
+        if (result) {
+          setBatch((current) => [
+            ...current,
+            { runId: finished.id, domain: sector, scores: result.scores, composite: result.scenario?.composite ?? null },
+          ])
+        }
+        setMeta({ id: finished.id, createdAt: finished.createdAt, runBy: finished.runBy })
       }
       setHistory(null)
+      const last = saved[saved.length - 1]
+      if (last) router.replace(`/readiness/${last.id}`)
     } catch (caught) {
       setFailure(caught instanceof Error ? caught.message : String(caught))
     } finally {
+      setSectorProgress(null)
       setRunning(false)
     }
   }
@@ -368,6 +445,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setFailure(null)
     setReport(null)
     setMeta(null)
+    setBatch([])
     setSteps(stepsFromScores(kept, dimensions))
     setOpenIds(new Set())
     const started = Date.now()
@@ -398,6 +476,18 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       .then((saved) => {
         if (cancelled) return
         setReport(saved.report)
+        setBatch([])
+        // A run of a series brings the whole series, so its sectors can be compared.
+        if (saved.batchId) {
+          api
+            .readinessBatch(saved.batchId)
+            .then((series) => {
+              if (!cancelled) setBatch(series.runs.map(sectorResultOf))
+            })
+            .catch(() => {
+              /* the run stays on screen without the comparison */
+            })
+        }
         setMeta({ id: saved.id, createdAt: saved.createdAt, runBy: saved.runBy })
         setTotalMs(undefined)
         setWhatIf(null)
@@ -487,7 +577,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   const simulate = async () => {
     if (!report) return
     try {
-      setWhatIf(await api.whatIf({ country, domain, changes: { [change.dimension]: change.delta }, scores: report.scores }))
+      setWhatIf(await api.whatIf({ country, domain: report.domain || domain, changes: { [change.dimension]: change.delta }, scores: report.scores }))
     } catch (caught) {
       setFailure(caught instanceof Error ? caught.message : String(caught))
     }
@@ -548,6 +638,11 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     deleteRun,
     creating,
     setCreating,
+    openCreate,
+    startDomains,
+    setStartDomains,
+    sectorProgress,
+    batch,
   }
   return <ReadinessContext.Provider value={value}>{children}</ReadinessContext.Provider>
 }

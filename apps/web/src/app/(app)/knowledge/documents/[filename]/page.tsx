@@ -9,6 +9,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { documentHref } from '@/lib/kb-links'
 import { useParams, useSearchParams } from 'next/navigation'
 import { ArrowLeft, FileText, ImageIcon, ListOrdered, Loader, Pencil, RotateCcw, Save, Trash2, X } from 'lucide-react'
 import {
@@ -68,6 +69,8 @@ function DocumentEditor() {
     ? (search.get('tab') as Tab)
     : 'details'
   const [tab, setTab] = React.useState<Tab>(initialTab)
+  // `mode=view` shows the same screens read-only; the edit icon opens the editor.
+  const readOnly = search.get('mode') === 'view'
   const [document, setDocument] = React.useState<KbDocumentDto | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -110,7 +113,19 @@ function DocumentEditor() {
           </Button>
         }
       >
-        <AnimatedTabsList items={tabs} value={tab} onValueChange={(value) => setTab(value as Tab)} dense />
+        <div className="flex flex-wrap items-center gap-2">
+          {readOnly && (
+            <Link
+              href={documentHref(filename, tab, 'edit')}
+              aria-label={t('kb.action.edit')}
+              title={t('kb.action.edit')}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-brand-primary/10 hover:text-brand-primary dark:hover:text-brand-primary-light"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Link>
+          )}
+          <AnimatedTabsList items={tabs} value={tab} onValueChange={(value) => setTab(value as Tab)} dense />
+        </div>
       </PageIntro>
 
       {error && <p className="mb-3 text-[12px] text-destructive">{error}</p>}
@@ -125,7 +140,7 @@ function DocumentEditor() {
           </Link>
         </div>
       ) : (
-        <>
+        <fieldset disabled={readOnly} className={readOnly ? 'pointer-events-none min-w-0 opacity-90' : 'min-w-0'}>
           <TabsContent value="details" className="pt-2">
             <DetailsForm document={document} onSaved={load} />
           </TabsContent>
@@ -135,7 +150,7 @@ function DocumentEditor() {
           <TabsContent value="media" className="pt-2">
             <MediaGrid document={document} onChanged={load} />
           </TabsContent>
-        </>
+        </fieldset>
       )}
     </Tabs>
   )
@@ -413,7 +428,7 @@ function MediaGrid({ document, onChanged }: { document: KbDocumentDto; onChanged
 
   return (
     <div className="space-y-4">
-      <KbImageUploader filename={document.filename} onUploaded={() => void onChanged()} />
+      <KbImageUploader filenames={[document.filename]} onUploaded={() => void onChanged()} />
       {failure && <p className="text-[11px] text-destructive">{failure}</p>}
       {images.length === 0 ? (
         <p className="py-8 text-center text-[12px] text-muted-foreground">{t('kbdoc.media.empty')}</p>

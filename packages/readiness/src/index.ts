@@ -51,6 +51,70 @@ export interface ReadinessInput {
   models?: { webSearch?: string; evaluate?: string; synthesis?: string }
   /** Dimensions already scored by an interrupted run: they are kept, not evaluated again. */
   completed?: DimensionScore[]
+  /**
+   * Dimensions evaluated at the same time (default), one after another, or in the
+   * order a lead agent decides (`orchestrated`, see `lead`).
+   */
+  concurrency?: 'parallel' | 'sequential' | 'orchestrated'
+  /** Orchestrated mode: the most decisions the lead may take (default 20). */
+  maxDecisions?: number
+  /** Orchestrated mode: the lead agent's next decision, given what is scored so far. */
+  lead?: (state: LeadState) => Promise<LeadDecision | null>
+  /** The language of the lead's reasons and of the engine's messages (default English). */
+  language?: ReadinessLang
+}
+
+export interface LeadState {
+  country: string
+  domain: Domain
+  /** Dimensions not scored yet, in the default order. */
+  remaining: Array<{ dimension: ReadinessDimension; dimensionId: number; name: string }>
+  /** Dimensions already scored, with their score. */
+  done: Array<{ dimension: ReadinessDimension; dimensionId: number; name: string; score: number; confidence: number; gaps: number }>
+  decisionsLeft: number
+  language?: ReadinessLang
+}
+
+export type LeadDecision =
+  | { action: 'evaluate' | 'reevaluate'; dimension: ReadinessDimension; hint?: string; reason: string }
+  | { action: 'finish'; reason: string }
+
+export interface LeadStep {
+  action: 'evaluate' | 'reevaluate' | 'finish'
+  dimension?: ReadinessDimension
+  hint?: string
+  reason: string
+  /** The decision was not usable: the next pending dimension, in the default order, was taken instead. */
+  fallback: boolean
+}
+
+/**
+ * Checks the lead's decision against what is scored so far. An unusable decision
+ * (unknown dimension, re-scoring a dimension not yet scored, finishing early, no
+ * decision at all) falls back to the next pending dimension, so every dimension is
+ * still evaluated.
+ */
+export function resolveLeadStep(decision: LeadDecision | null, state: LeadState): LeadStep {
+  const next = state.remaining[0]
+  const fr = state.language === 'fr'
+  const fallback = (reason: string): LeadStep =>
+    next ? { action: 'evaluate', dimension: next.dimension, reason, fallback: true } : { action: 'finish', reason, fallback: true }
+  if (!decision) return fallback(fr ? 'Pas de décision exploitable : dimension suivante dans l’ordre.' : 'No usable decision: the next dimension in order.')
+  if (decision.action === 'finish') {
+    if (state.remaining.length === 0) return { action: 'finish', reason: decision.reason, fallback: false }
+    return fallback(fr ? 'Arrêt refusé : des dimensions restent à évaluer.' : 'Finish refused: dimensions are still pending.')
+  }
+  const again = decision.action === 'reevaluate'
+  const valid = again
+    ? state.done.some((entry) => entry.dimension === decision.dimension)
+    : state.remaining.some((entry) => entry.dimension === decision.dimension)
+  if (!valid)
+    return fallback(
+      again
+        ? fr ? 'Nouvelle évaluation d’une dimension non encore notée : dimension suivante dans l’ordre.' : 'Re-evaluation of a dimension not yet scored: the next dimension in order.'
+        : fr ? 'Dimension inconnue ou déjà notée : dimension suivante dans l’ordre.' : 'Unknown or already scored dimension: the next dimension in order.',
+    )
+  return { action: decision.action, dimension: decision.dimension, ...(decision.hint ? { hint: decision.hint } : {}), reason: decision.reason, fallback: false }
 }
 
 /** An assessment stopped by an error. `completed` holds the dimensions scored before it. */
@@ -102,6 +166,17 @@ export type ReadinessEvent =
     }
   | { type: 'error'; dimension: ReadinessDimension; dimensionId: number; durationMs: number; message: string }
   | { type: 'restored'; dimension: ReadinessDimension; dimensionId: number; score: DimensionScore }
+  | {
+      type: 'decision'
+      /** Decisions taken so far, this one included. */
+      index: number
+      action: LeadStep['action']
+      dimension?: ReadinessDimension
+      dimensionId?: number
+      reason: string
+      hint?: string
+      fallback: boolean
+    }
   | { type: 'done'; report: ReadinessReport }
 
 export interface ReadinessReport {
@@ -191,6 +266,7 @@ export class ReadinessEngine {
     const perDimensionK = input.perDimensionK ?? 5
     const kept = new Map((input.completed ?? []).map((score) => [score.dimension, score]))
     const pending = dimensions.filter((dimension) => !kept.has(dimension))
+    const maxDecisions = input.maxDecisions ?? 20
 
     const results: ReadinessReport['dimensions'] = []
     const scores: DimensionScore[] = []
@@ -205,38 +281,42 @@ export class ReadinessEngine {
       })),
     })
 
-    // Live web evidence for every dimension, gathered first and in parallel: a
-    // failed search leaves the dimension to the corpus alone, it never fails the report.
-    const web = new Map<ReadinessDimension, WebAnswer | null>(
-      await Promise.all(
-        pending.map(async (dimension) => {
-          const chosen = input.models?.webSearch && this.deps.webSearchFor ? this.deps.webSearchFor(input.models.webSearch) : undefined
-          const search = input.useWeb === false ? undefined : (chosen ?? this.deps.webSearch)
-          const def = dimensionMeta(dimension)
-          if (!search) return [dimension, null] as const
-          const started = Date.now()
-          const answer = await search(`${def.name} national AI readiness policy ${countryName(input.country)} ${new Date().getFullYear()}`).catch(() => null)
-          emit?.({
-            type: 'web',
-            dimension,
-            durationMs: Date.now() - started,
-            sources: answer?.sources.slice(0, 6).map(({ title, url }) => ({ title, url })) ?? [],
-          })
-          return [dimension, answer] as const
-        }),
-      ),
-    )
+    const web = new Map<ReadinessDimension, WebAnswer | null>()
+    /** Live web evidence for a dimension, searched once. A failed search leaves the dimension to the corpus alone. */
+    const searchOf = async (dimension: ReadinessDimension): Promise<WebAnswer | null> => {
+      if (web.has(dimension)) return web.get(dimension) ?? null
+      const chosen = input.models?.webSearch && this.deps.webSearchFor ? this.deps.webSearchFor(input.models.webSearch) : undefined
+      const search = input.useWeb === false ? undefined : (chosen ?? this.deps.webSearch)
+      const def = dimensionMeta(dimension)
+      if (!search) {
+        web.set(dimension, null)
+        return null
+      }
+      const started = Date.now()
+      const answer = await search(`${def.name} national AI readiness policy ${countryName(input.country)} ${new Date().getFullYear()}`).catch(() => null)
+      emit?.({
+        type: 'web',
+        dimension,
+        durationMs: Date.now() - started,
+        sources: answer?.sources.slice(0, 6).map(({ title, url }) => ({ title, url })) ?? [],
+      })
+      web.set(dimension, answer)
+      return answer
+    }
+    // Gathered first and in parallel, except in orchestrated mode: the lead reaches each dimension in its own order.
+    if (input.concurrency !== 'orchestrated') await Promise.all(pending.map(searchOf))
 
-    for (const dimension of dimensions) {
+    /** Evaluates one dimension: its score is pushed when it is done. Throws when it fails. */
+    const evaluateOne = async (dimension: ReadinessDimension, options: { again?: boolean; hint?: string } = {}): Promise<void> => {
       const def = dimensionMeta(dimension)
       const keptScore = kept.get(dimension)
-      if (keptScore) {
+      if (keptScore && !options.again) {
         scores.push(keptScore)
         results.push({ dimension, dimensionId: def.id, gaps: [], countryChunks: [], globalChunks: [] })
         emit?.({ type: 'restored', dimension, dimensionId: def.id, score: keptScore })
-        continue
+        return
       }
-      const live = web.get(dimension) ?? null
+      const live = await searchOf(dimension)
       const started = Date.now()
       emit?.({ type: 'running', dimension, dimensionId: def.id, name: def.name })
       try {
@@ -259,7 +339,7 @@ export class ReadinessEngine {
           onAttempt: (info) => attempts.push({ attempt: info.attempt, reasoning: info.reasoning, valid: info.valid }),
           system: `You assess country "${input.country}" AI readiness on the dimension "${def.name}" (factors: ${def.factors.join(', ')}), domain "${input.domain}".
 Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNTRY provisions to GLOBAL best practice. Identify concrete gaps: unclear responsibilities, missing standards, legislative gaps, coordination problems, conflicts between objectives. Ground every claim in the passages. Do not analyse specific geographies; focus on domain-specific gaps and relevant global examples. ${BILINGUAL_RULE}`,
-          prompt: `COUNTRY PROVISIONS:\n${countryChunks.map((c) => c.text).join('\n---\n') || '(none)'}\n\nGLOBAL BEST PRACTICE:\n${globalChunks.map((c) => c.text).join('\n---\n') || '(none)'}${live?.text ? `\n\nLIVE WEB (recent, not legal sources; say when a point comes from the web):\n${live.text.slice(0, 3000)}` : ''}`,
+          prompt: `COUNTRY PROVISIONS:\n${countryChunks.map((c) => c.text).join('\n---\n') || '(none)'}\n\nGLOBAL BEST PRACTICE:\n${globalChunks.map((c) => c.text).join('\n---\n') || '(none)'}${live?.text ? `\n\nLIVE WEB (recent, not legal sources; say when a point comes from the web):\n${live.text.slice(0, 3000)}` : ''}${options.hint ? `\n\nFOCUS FOR THIS PASS (set by the lead agent, who has read the other dimensions): ${options.hint}` : ''}`,
         })
 
         const base = object.en ?? object.fr
@@ -292,6 +372,11 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
           localized,
           ...(webSources ? { webSources } : {}),
         }
+        // A new pass on a dimension replaces its earlier score.
+        const staleScore = scores.findIndex((entry) => entry.dimension === dimension)
+        if (staleScore >= 0) scores.splice(staleScore, 1)
+        const staleResult = results.findIndex((entry) => entry.dimension === dimension)
+        if (staleResult >= 0) results.splice(staleResult, 1)
         results.push({ dimension, dimensionId: def.id, gaps, countryChunks, globalChunks })
         scores.push(score)
         emit?.({
@@ -307,8 +392,66 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
         })
       } catch (error) {
         emit?.({ type: 'error', dimension, dimensionId: def.id, durationMs: Date.now() - started, message: (error as Error).message })
+        throw error
+      }
+    }
+
+    if (input.concurrency === 'orchestrated') {
+      try {
+        for (const dimension of dimensions) {
+          if (kept.has(dimension)) await evaluateOne(dimension)
+        }
+        // The lead decides the next step from what is scored; each decision counts toward the maximum.
+        let used = 0
+        for (;;) {
+          const state: LeadState = {
+            country: input.country,
+            domain: input.domain,
+            remaining: dimensions
+              .filter((dimension) => !scores.some((entry) => entry.dimension === dimension))
+              .map((dimension) => ({ dimension, dimensionId: dimensionMeta(dimension).id, name: dimensionMeta(dimension).name })),
+            done: scores.map((entry) => ({
+              dimension: entry.dimension,
+              dimensionId: entry.dimensionId,
+              name: entry.dimensionName,
+              score: entry.score,
+              confidence: entry.confidence,
+              gaps: entry.gaps.length,
+            })),
+            decisionsLeft: Math.max(0, maxDecisions - used),
+            ...(input.language ? { language: input.language } : {}),
+          }
+          const decision = input.lead && used < maxDecisions ? await input.lead(state).catch(() => null) : null
+          used += 1
+          const step = resolveLeadStep(decision, state)
+          emit?.({
+            type: 'decision',
+            index: used,
+            action: step.action,
+            ...(step.dimension ? { dimension: step.dimension, dimensionId: dimensionMeta(step.dimension).id } : {}),
+            reason: step.reason,
+            ...(step.hint ? { hint: step.hint } : {}),
+            fallback: step.fallback,
+          })
+          if (step.action === 'finish' || !step.dimension) break
+          await evaluateOne(step.dimension, { again: step.action === 'reevaluate', ...(step.hint ? { hint: step.hint } : {}) })
+        }
+      } catch (error) {
         throw new ReadinessInterrupted((error as Error).message, [...scores])
       }
+    } else if (input.concurrency === 'sequential') {
+      for (const dimension of dimensions) {
+        try {
+          await evaluateOne(dimension)
+        } catch (error) {
+          throw new ReadinessInterrupted((error as Error).message, [...scores])
+        }
+      }
+    } else {
+      // In parallel, every dimension runs to its end: one failure does not discard the others.
+      const outcomes = await Promise.allSettled(dimensions.map((dimension) => evaluateOne(dimension)))
+      const failed = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
+      if (failed) throw new ReadinessInterrupted((failed.reason as Error).message, [...scores])
     }
     scores.sort((a, b) => a.dimensionId - b.dimensionId)
 

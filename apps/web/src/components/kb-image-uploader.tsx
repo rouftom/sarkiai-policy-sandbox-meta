@@ -1,20 +1,27 @@
 'use client'
 
 /**
- * Figures for a document: pick images (or drop them), give them a caption, an
- * optional readiness dimension, and attach them. Used by the upload modal (the
- * document is chosen here) and by a document's Media tab (the document is fixed).
+ * Figures for documents: pick images (or drop them), give them a caption and an
+ * optional readiness dimension, and attach them to every listed document. The
+ * documents are fixed by the caller: those added in the upload dialog, or the one
+ * open in a document's Media tab. The attached figures are shown as previews.
  */
 
 import * as React from 'react'
 import { ImagePlus, Loader } from 'lucide-react'
 import { Input, Select, cn } from '@sps/ui'
 import { READINESS_DIMENSIONS } from '@sps/shared'
-import { knowledgeApi, type KbDocumentDto } from '@/lib/api'
+import { knowledgeApi } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 
 const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml'
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+interface Preview {
+  id: string
+  url: string
+  caption: string
+}
 
 function toBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -29,31 +36,42 @@ function toBase64(file: File): Promise<string> {
 }
 
 export function KbImageUploader({
-  documents,
-  filename,
+  filenames = [],
   onUploaded,
 }: {
-  documents?: KbDocumentDto[]
-  /** When set, the figures go to this document and no document picker is shown. */
-  filename?: string
+  /** The documents the figures are attached to. Without one, nothing can be attached yet. */
+  filenames?: string[]
   onUploaded: () => void
 }) {
+  const key = filenames.join('\u0000')
+  const hasDocument = filenames.length > 0
   const { t } = useI18n()
-  const [target, setTarget] = React.useState(filename ?? documents?.[0]?.filename ?? '')
   const [caption, setCaption] = React.useState('')
   const [dimension, setDimension] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [dragging, setDragging] = React.useState(false)
+  const [previews, setPreviews] = React.useState<Preview[]>([])
   const [message, setMessage] = React.useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
+  const urls = React.useRef<string[]>([])
 
+  // Previews belong to the documents of this session: a new document starts with none.
   React.useEffect(() => {
-    if (filename) setTarget(filename)
-  }, [filename])
+    urls.current.forEach((url) => URL.revokeObjectURL(url))
+    urls.current = []
+    setPreviews([])
+  }, [key])
+
+  React.useEffect(
+    () => () => {
+      urls.current.forEach((url) => URL.revokeObjectURL(url))
+    },
+    [],
+  )
 
   const upload = async (files: FileList | File[] | null) => {
-    const list = Array.from(files ?? []).filter((file) => file.type.startsWith('image/'))
-    if (list.length === 0 || !target) return
+    const list = Array.from(files ?? []).filter((file) => file.type.startsWith('image/')).slice(0, 12)
+    if (list.length === 0 || !hasDocument) return
     const oversize = list.find((file) => file.size > MAX_IMAGE_BYTES)
     if (oversize) {
       setMessage({ tone: 'error', text: t('kb.image.tooLarge', { name: oversize.name }) })
@@ -63,14 +81,22 @@ export function KbImageUploader({
     setMessage(null)
     try {
       const images = await Promise.all(
-        list.slice(0, 12).map(async (file) => ({
+        list.map(async (file) => ({
           caption: caption.trim() || file.name.replace(/\.[^.]+$/, ''),
           mime: file.type,
           dataBase64: await toBase64(file),
           ...(dimension ? { dimension } : {}),
         })),
       )
-      await knowledgeApi.attachImages({ filename: target, images })
+      for (const filename of filenames) {
+        await knowledgeApi.attachImages({ filename, images })
+      }
+      const created = list.map((file, index) => {
+        const url = URL.createObjectURL(file)
+        urls.current.push(url)
+        return { id: `${file.name}-${index}-${Date.now()}`, url, caption: images[index]!.caption }
+      })
+      setPreviews((current) => [...created, ...current])
       setCaption('')
       setMessage({ tone: 'ok', text: t('kb.image.attached', { count: images.length }) })
       onUploaded()
@@ -82,19 +108,11 @@ export function KbImageUploader({
     }
   }
 
+  const disabled = busy || !hasDocument
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        {!filename && documents && (
-          <Select
-            value={target}
-            onValueChange={setTarget}
-            options={documents.map((document) => ({ value: document.filename, label: document.filename }))}
-            ariaLabel={t('kb.image.document')}
-            size="sm"
-            className="min-w-0 w-56 max-w-full"
-          />
-        )}
         <Input
           value={caption}
           onChange={(event) => setCaption(event.target.value)}
@@ -114,8 +132,9 @@ export function KbImageUploader({
 
       <div
         role="button"
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
         aria-busy={busy || undefined}
+        aria-disabled={disabled || undefined}
         onClick={() => inputRef.current?.click()}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') inputRef.current?.click()
@@ -133,7 +152,7 @@ export function KbImageUploader({
         className={cn(
           'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-4 py-6 text-center transition-colors hover:border-brand-primary/50 hover:bg-brand-primary/5',
           dragging && 'border-brand-primary bg-brand-primary/10',
-          (busy || !target) && 'pointer-events-none opacity-60',
+          disabled && 'pointer-events-none opacity-60',
         )}
       >
         {busy ? (
@@ -141,7 +160,7 @@ export function KbImageUploader({
         ) : (
           <ImagePlus className="h-5 w-5 text-brand-primary dark:text-brand-primary-light" />
         )}
-        <p className="text-[12px] font-medium text-foreground">{t('kb.image.drop')}</p>
+        <p className="text-[12px] font-medium text-foreground">{hasDocument ? t('kb.image.drop') : t('kb.image.needDocument')}</p>
         <p className="text-[10px] text-muted-foreground">{t('kb.image.hint')}</p>
         <input
           ref={inputRef}
@@ -157,6 +176,18 @@ export function KbImageUploader({
         <p className={cn('text-[11px]', message.tone === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')}>
           {message.text}
         </p>
+      )}
+
+      {previews.length > 0 && (
+        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {previews.map((preview) => (
+            <li key={preview.id} className="overflow-hidden rounded-lg border border-border bg-card">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={preview.url} alt={preview.caption} className="h-20 w-full object-contain bg-white" />
+              <p className="truncate px-1.5 py-1 text-[10px] text-muted-foreground">{preview.caption}</p>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )

@@ -19,11 +19,9 @@ const TITLES: Array<{ href: string; labelKey: MessageKey }> = [
   { href: '/guide/operations', labelKey: 'nav.guide_operations' },
   { href: '/guide/meta', labelKey: 'nav.guide_meta' },
   { href: '/guide', labelKey: 'nav.guide' },
-  { href: '/console', labelKey: 'nav.console' },
   { href: '/knowledge', labelKey: 'nav.knowledge' },
   { href: '/readiness', labelKey: 'nav.readiness' },
   { href: '/scenarios', labelKey: 'nav.scenarios' },
-  { href: '/gazette', labelKey: 'nav.gazette' },
   { href: '/exercise', labelKey: 'nav.exercise' },
   { href: '/communications', labelKey: 'nav.communication' },
   { href: '/audit', labelKey: 'nav.audit' },
@@ -34,11 +32,9 @@ const TITLES: Array<{ href: string; labelKey: MessageKey }> = [
 
 const MOBILE_NAV: Array<{ href: string; labelKey: MessageKey; icon: React.ComponentType<{ className?: string }> }> = [
   { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
-  { href: '/console', labelKey: 'nav.console', icon: SlidersHorizontal },
   { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
-  { href: '/gazette', labelKey: 'nav.gazette', icon: Newspaper },
   { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
   { href: '/communications', labelKey: 'nav.communication', icon: Languages },
   { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },

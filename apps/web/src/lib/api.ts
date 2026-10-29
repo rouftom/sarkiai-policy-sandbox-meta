@@ -143,6 +143,16 @@ export type ReadinessEventDto =
     }
   | { type: 'error'; dimension: string; dimensionId: number; durationMs: number; message: string }
   | { type: 'restored'; dimension: string; dimensionId: number; score: DimensionScoreDto }
+  | {
+      type: 'decision'
+      index: number
+      action: 'evaluate' | 'reevaluate' | 'finish'
+      dimension?: string
+      dimensionId?: number
+      reason: string
+      hint?: string
+      fallback: boolean
+    }
   | { type: 'done'; report: ReadinessReportDto & { generatedAt?: string } }
   | { type: 'saved'; run: ReadinessRunSummaryDto }
   | { type: 'failed'; message: string; runId?: string; completed?: number; total?: number }
@@ -155,6 +165,8 @@ export interface ReadinessRunSummaryDto {
   runBy: string
   composite: number | null
   dimensions: number
+  /** The series this assessment belongs to, when it was run with other sectors. */
+  batchId?: string
   /** An interrupted assessment can be resumed. */
   status: 'complete' | 'failed'
   failure?: string
@@ -257,6 +269,27 @@ export interface ScenarioStartDto {
   totalTicks: number
   agents: string[]
   agenda: ScenarioAgendaItem[]
+}
+
+/** A scenario run saved for the operator: its progress, its reports, and the reason it stopped if it did. */
+export interface ScenarioRunSummaryDto {
+  id: string
+  country: string
+  domain: string
+  lang: 'en' | 'fr'
+  title: string
+  createdAt: string
+  updatedAt: string
+  status: 'running' | 'complete' | 'failed'
+  failure?: string
+  released: number
+  total: number
+}
+
+export interface ScenarioRunDto extends ScenarioRunSummaryDto {
+  reports: JointReportDto[]
+  agents: string[]
+  events: Array<{ sequence: number; releaseChunk: number; title: string; payload: string; visibleTo: string[] }>
 }
 
 export interface TickResultDto {
@@ -619,7 +652,9 @@ async function streamAgentAnswer(
     question: string
     country: string
     domain: string
-    lens: string
+    lens?: string
+    /** The language of the answer (the console's). */
+    language?: 'fr' | 'en'
     attachments?: Array<{ mime: string; dataBase64: string }>
   },
   handlers: AgentStreamHandlers = {},
@@ -683,11 +718,18 @@ async function streamAgentAnswer(
 
 /** The settings of one assessment, as the operator chose them. */
 export interface ReadinessSettingsDto {
+  /** The series this assessment belongs to (one assessment per sector). */
+  batchId?: string
   dimensions?: string[]
   perDimensionK?: number
   useWeb?: boolean
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
   models?: { webSearch?: string; evaluate?: string; synthesis?: string }
+  concurrency?: 'parallel' | 'sequential' | 'orchestrated'
+  /** Orchestrated mode: the most decisions the lead agent may take. */
+  maxDecisions?: number
+  /** The language of the lead agent's reasons (the console's). */
+  language?: 'fr' | 'en'
 }
 
 export interface ReadinessReportFileDto {
@@ -769,7 +811,9 @@ export const api = {
     question: string
     country: string
     domain: string
-    lens: string
+    lens?: string
+    /** The language of the answer (the console's). */
+    language?: 'fr' | 'en'
     attachments?: Array<{ mime: string; dataBase64: string }>
   }) => request<AssessmentDto>('/v1/agents/ask', { method: 'POST', body: JSON.stringify(body) }),
 
@@ -780,7 +824,8 @@ export const api = {
     request<{ text: string; changed: boolean }>('/v1/voice/correct', { method: 'POST', body: JSON.stringify(body) }),
 
   /** Auto mode: the institution a question belongs to (one, or several). */
-  routeQuestion: (body: { question: string; domain: string }) =>
+  /** Picks the institutions for a question, among the given ones when some are chosen. */
+  routeQuestion: (body: { question: string; domains: string[]; institutionIds?: string[] }) =>
     request<{ primary: string; others: string[]; reason: string }>('/v1/agents/route', { method: 'POST', body: JSON.stringify(body) }),
 
   /** Live assessment: `onEvent` receives each step; resolves with the saved run. */
@@ -799,6 +844,10 @@ export const api = {
     }),
 
   readinessRun: (id: string) => request<ReadinessRunSummaryDto & { report: ReadinessReportDto & { generatedAt?: string } }>(`/v1/readiness/runs/${encodeURIComponent(id)}`),
+
+  /** The assessments of one series, oldest first. */
+  readinessBatch: (batchId: string) =>
+    request<{ runs: Array<ReadinessRunSummaryDto & { report: ReadinessReportDto }> }>(`/v1/readiness/batches/${encodeURIComponent(batchId)}`),
 
   /** Deletes a saved assessment of the operator. */
   readinessResume: (id: string, onEvent: (event: ReadinessEventDto) => void) =>
@@ -819,11 +868,20 @@ export const api = {
   runScenario: (body: { id?: string; country: string; domain: string }) =>
     request<RunResultDto>('/v1/scenarios/run', { method: 'POST', body: JSON.stringify(body) }),
 
-  startScenario: (body: { id?: string; country: string; domain: string }) =>
+  startScenario: (body: { id?: string; country: string; domain: string; lang?: 'en' | 'fr' }) =>
     request<ScenarioStartDto>('/v1/scenarios/start', { method: 'POST', body: JSON.stringify(body) }),
 
   nextTick: (runId: string) =>
     request<TickResultDto>(`/v1/scenarios/${runId}/next`, { method: 'POST' }),
+
+  /** The scenario runs of the operator, newest first. */
+  scenarioRuns: () => request<{ runs: ScenarioRunSummaryDto[] }>('/v1/scenarios/runs'),
+
+  scenarioRun: (runId: string) => request<ScenarioRunDto>(`/v1/scenarios/runs/${encodeURIComponent(runId)}`),
+
+  /** Resumes a failed run from its last released tick. */
+  resumeScenarioRun: (runId: string) =>
+    request<ScenarioStartDto & { released: number }>(`/v1/scenarios/runs/${encodeURIComponent(runId)}/resume`, { method: 'POST' }),
 
   whatIf: (body: { country: string; domain: string; changes: Record<string, number>; scores?: DimensionScoreDto[] }) =>
     request<WhatIfResultDto>('/v1/readiness/whatif', { method: 'POST', body: JSON.stringify(body) }),

@@ -36,4 +36,18 @@ describe('readiness runs', () => {
     expect(await store.get(saved.id, 'other')).toBeNull()
     expect(await store.updateRun(saved.id, 'other', { report: report(2), status: 'complete' })).toBeNull()
   })
+
+  test('the runs of one series are listed together, oldest first, for their operator only', async () => {
+    const store = new ReadinessRunStore({})
+    const input = { country: 'cm', domain: 'health', globalCountry: 'global', batchId: 'series-0001' }
+    const first = await store.save({ userId: 'op', runBy: 'op', report: report(3), input })
+    const second = await store.save({ userId: 'op', runBy: 'op', report: report(4), input: { ...input, domain: 'telecom' } })
+    await store.save({ userId: 'op', runBy: 'op', report: report(2) })
+
+    const series = await store.listBatch('op', 'series-0001')
+    expect(series.map((run) => run.id)).toEqual([first.id, second.id])
+    expect(series[0]!.report.scores).toHaveLength(3)
+    expect(await store.listBatch('other', 'series-0001')).toEqual([])
+    expect((await store.list('op')).find((entry) => entry.id === first.id)?.batchId).toBe('series-0001')
+  })
 })

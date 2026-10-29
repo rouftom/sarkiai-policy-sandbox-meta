@@ -67,7 +67,7 @@ export function ReadinessHistory({
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block text-[12px] font-medium text-foreground">
-                      {formatDate(entry.createdAt)} · {entry.country.toUpperCase()}
+                      {formatDate(entry.createdAt)} · {entry.country.toUpperCase()} · {t(`domain.${entry.domain}` as 'domain.health')}
                       {entry.status === 'failed' && (
                         <span className="ml-2 rounded-full bg-destructive/10 px-1.5 py-px text-[9px] font-semibold text-destructive">{t('readiness.status.failed')}</span>
                       )}

@@ -38,20 +38,11 @@ interface NavEntry {
   children?: NavEntry[]
 }
 
-const GUIDE_NAV: NavEntry[] = [
-  { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
-  { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
-  { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
-  { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Sparkles },
-]
-
 const GENERAL_NAV: NavEntry[] = [
   { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
-  { href: '/console', labelKey: 'nav.console', icon: SlidersHorizontal },
   { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
-  { href: '/gazette', labelKey: 'nav.gazette', icon: Newspaper },
 ]
 
 const OPERATIONS_NAV: NavEntry[] = [
@@ -74,11 +65,9 @@ export function AdminSidebar() {
   const pathname = usePathname()
   const { t } = useI18n()
   const [collapsed, setCollapsed] = React.useState(false)
-  const [guideOpen, setGuideOpen] = React.useState(false)
 
   React.useEffect(() => {
     setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === '1')
-    setGuideOpen(localStorage.getItem('sps-guide-open') === '1')
   }, [])
 
   const toggle = () => {
@@ -89,13 +78,6 @@ export function AdminSidebar() {
     })
   }
 
-  const toggleGuide = () => {
-    setGuideOpen((value) => {
-      const next = !value
-      localStorage.setItem('sps-guide-open', next ? '1' : '0')
-      return next
-    })
-  }
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
@@ -213,29 +195,7 @@ export function AdminSidebar() {
         <div className="custom-scrollbar relative z-10 flex-1 overflow-y-auto py-3">
           <nav className="grid gap-1 px-2">
             {groupLabel('nav.group_guide')}
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-0.5">
-                <div className="min-w-0 flex-1">
-                  {renderItem({ href: '/guide', labelKey: 'nav.guide', icon: Compass })}
-                </div>
-                {!collapsed && (
-                  <button
-                    type="button"
-                    onClick={toggleGuide}
-                    aria-expanded={guideOpen}
-                    aria-label={t('nav.guide_toggle')}
-                    className="flex h-9 w-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  >
-                    <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !guideOpen && '-rotate-90')} />
-                  </button>
-                )}
-              </div>
-              {!collapsed && guideOpen && (
-                <div className="ml-5 grid gap-0.5 border-l border-sidebar-border pl-2">
-                  {GUIDE_NAV.map(renderChild)}
-                </div>
-              )}
-            </div>
+            {renderItem({ href: '/guide', labelKey: 'nav.guide', icon: Compass })}
 
             <div className="my-1 border-t border-sidebar-border" />
             {groupLabel('nav.group_general')}

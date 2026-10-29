@@ -1,5 +1,12 @@
-/** Route of one document's editor; `tab` opens the Details, Passages or Media tab. */
-export function documentHref(filename: string, tab?: 'details' | 'passages' | 'media'): string {
+/**
+ * Route of one document. `tab` opens the Details, Passages or Media tab; `mode`
+ * `view` opens it read-only (the default is the editor).
+ */
+export function documentHref(filename: string, tab?: 'details' | 'passages' | 'media', mode?: 'view' | 'edit'): string {
   const base = `/knowledge/documents/${encodeURIComponent(filename)}`
-  return tab && tab !== 'details' ? `${base}?tab=${tab}` : base
+  const params = new URLSearchParams()
+  if (tab && tab !== 'details') params.set('tab', tab)
+  if (mode === 'view') params.set('mode', 'view')
+  const query = params.toString()
+  return query ? `${base}?${query}` : base
 }

@@ -19,7 +19,7 @@ import type {
 import type { Retriever } from '@sps/retrieval'
 import { citationFromChunk, citationRetryDirective, validateCitations } from '@sps/citations'
 import type { AuditService } from '@sps/audit'
-import { attachmentGuardrail, buildSystemPrompt, citationDirective } from './prompt'
+import { attachmentGuardrail, buildSystemPrompt, citationDirective, type AnswerLanguage } from './prompt'
 import { describeProvider } from './provider'
 import { createAgentTools, summarizeToolInput, type ActionSink, type AgentToolEvent, type McpPort } from './tools'
 import type { WebAnswer, WebSearch } from './web-search'
@@ -43,6 +43,8 @@ export interface AgentRunInput {
   jurisdiction?: 'national' | 'regional' | 'international'
   domain: Domain
   lens: WorkflowLens
+  /** The language of the answer (default English). */
+  language?: AnswerLanguage
   runId?: string
   /** Operator (e-mail) who launched the run: every trace/audit record is scoped to them. */
   userId?: string
@@ -131,6 +133,7 @@ export class PolicyOrchestrator {
 
   private async run(input: AgentRunInput, handlers?: AgentStreamHandlers): Promise<AgentAssessment> {
     const { institution, question, country, domain, lens } = input
+    const language = input.language ?? 'en'
     const runId = input.runId ?? `run-${Date.now()}`
 
     // 1. Retrieve country provisions (collection → retrieval stage).
@@ -170,7 +173,7 @@ export class PolicyOrchestrator {
         ].join('\n')
       : ''
     const system = [
-      buildSystemPrompt({ institution, country, domain, chunks }),
+      buildSystemPrompt({ institution, country, domain, chunks, language }),
       citationDirective(),
       hasAttachments ? attachmentGuardrail() : '',
       referenceBlock,

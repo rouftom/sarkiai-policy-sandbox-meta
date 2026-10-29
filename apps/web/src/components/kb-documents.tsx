@@ -11,7 +11,7 @@ import * as React from 'react'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { TableActionItem } from '@/components/ui/table-actions'
 import { RowActionButton } from '@/components/ui/row-action-button'
-import { ImageIcon, Pencil, RotateCcw, Search, Upload, X } from 'lucide-react'
+import { Eye, ImageIcon, Pencil, RotateCcw, Search, Upload, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { KbImageUploader } from '@/components/kb-image-uploader'
 import { documentHref } from '@/lib/kb-links'
@@ -61,6 +61,8 @@ export function KbDocuments({
   const { t, locale } = useI18n()
   const [country, setCountry] = React.useState('cm')
   const [docType, setDocType] = React.useState('policy')
+  /** The documents added in this dialog: the figures attach to each of them. */
+  const [addedFilenames, setAddedFilenames] = React.useState<string[]>([])
   const [query, setQuery] = React.useState('')
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE)
@@ -76,6 +78,7 @@ export function KbDocuments({
           docType,
           version: '2026',
         })
+        setAddedFilenames((current) => (current.includes(file.name) ? current : [...current, file.name]))
         return {
           summary: t('media.done', { chunks: result.chunks, inserted: result.inserted, unchanged: result.unchanged }),
           steps: result.steps,
@@ -132,7 +135,7 @@ export function KbDocuments({
                   <Select
                     value={docType}
                     onValueChange={setDocType}
-                    options={DOC_TYPES.map((value) => ({ value, label: value }))}
+                    options={DOC_TYPES.map((value) => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) }))}
                     ariaLabel={t('knowledge.vectorise.docType')}
                     size="sm"
                     className="w-36"
@@ -143,7 +146,7 @@ export function KbDocuments({
             <div className="space-y-2 border-t border-border pt-3">
               <p className="text-[12px] font-semibold text-foreground">{t('kb.image.sectionTitle')}</p>
               <p className="text-[10px] text-muted-foreground">{t('kb.image.sectionHint')}</p>
-              <KbImageUploader documents={documents} onUploaded={() => void onChanged()} />
+              <KbImageUploader filenames={addedFilenames} onUploaded={() => void onChanged()} />
             </div>
           </div>
         </DialogContent>
@@ -198,7 +201,11 @@ export function KbDocuments({
                 {rows.map((document) => {
                   const retired = document.activeChunks === 0
                   return (
-                    <TableRow key={document.filename}>
+                    <TableRow
+                      key={document.filename}
+                      className="cursor-pointer"
+                      onClick={() => router.push(documentHref(document.filename, undefined, 'view'))}
+                    >
                       <TableCell className="min-w-[220px]">
                         <p className="text-[12px] font-medium text-foreground">{document.filename}</p>
                         <p className="text-[10px] text-muted-foreground">
@@ -213,12 +220,15 @@ export function KbDocuments({
                       <TableCell className="text-right font-mono text-[12px]">
                         {document.activeChunks.toLocaleString('en-US')}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
                         <RowActionMenu
                           overlay
                           inline={
                             <div className="flex items-center justify-end gap-1">
-                              <RowActionButton label={t('kb.action.edit')} onClick={() => router.push(documentHref(document.filename))}>
+                              <RowActionButton label={t('kb.action.details')} onClick={() => router.push(documentHref(document.filename, undefined, 'view'))}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </RowActionButton>
+                              <RowActionButton label={t('kb.action.edit')} onClick={() => router.push(documentHref(document.filename, undefined, 'edit'))}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </RowActionButton>
                               <RowActionButton
@@ -238,7 +248,10 @@ export function KbDocuments({
                             </div>
                           }
                         >
-                          <TableActionItem icon={Pencil} onClick={() => router.push(documentHref(document.filename))}>
+                          <TableActionItem icon={Eye} onClick={() => router.push(documentHref(document.filename, undefined, 'view'))}>
+                            {t('kb.action.details')}
+                          </TableActionItem>
+                          <TableActionItem icon={Pencil} onClick={() => router.push(documentHref(document.filename, undefined, 'edit'))}>
                             {t('kb.action.edit')}
                           </TableActionItem>
                           <TableActionItem icon={ImageIcon} onClick={() => router.push(documentHref(document.filename, 'media'))}>

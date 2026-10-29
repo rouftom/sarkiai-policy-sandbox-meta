@@ -20,6 +20,7 @@ import {
   Switch,
   Tabs,
   TabsContent,
+  MultiSelect,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -27,14 +28,14 @@ import {
   cn,
   type TabItem,
 } from '@sps/ui'
-import { READINESS_DIMENSIONS, WORKFLOW_PROFILES, flagOf } from '@sps/shared'
+import { READINESS_DIMENSIONS, flagOf, type Domain } from '@sps/shared'
 import { type DimensionScoreDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 import { ProcessGraph, type ProcessGraphStep, type ProcessState } from '@/components/workflow/process-graph'
 import { ReadinessHistory } from '@/components/readiness-history'
-import { useReadiness, type Step } from '@/components/readiness-context'
+import { useReadiness, type SectorResult, type Step } from '@/components/readiness-context'
 
 function seconds(ms: number | undefined): string {
   return ms === undefined ? 'n/a' : `${(ms / 1000).toFixed(1)} s`
@@ -46,7 +47,8 @@ function seconds(ms: number | undefined): string {
  */
 export function ReadinessActions() {
   const { t } = useI18n()
-  const { view, running, run, showHistory, showAssessment, creating, setCreating, resumable, resume } = useReadiness()
+  const { view, running, run, showHistory, showAssessment, creating, setCreating, openCreate, startDomains, setStartDomains, settings, resumable, resume } = useReadiness()
+  const sectorOptions: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
   const inHistory = view === 'history'
   const start = () => {
     setCreating(false)
@@ -98,7 +100,7 @@ export function ReadinessActions() {
             size="icon-sm"
             aria-label={t('readiness.new')}
             disabled={running}
-            onClick={() => setCreating(true)}
+            onClick={openCreate}
             className="h-8 w-8 rounded-lg bg-brand-primary text-white shadow-sm hover:bg-brand-primary/90"
           >
             {running ? <Loader className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -117,13 +119,25 @@ export function ReadinessActions() {
             <DialogDescription className="text-[11px]">{t('readiness.newDescription')}</DialogDescription>
           </DialogHeader>
           <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="mb-4 space-y-1.5">
+              <p className="text-[12px] font-semibold text-foreground">{t('app.domains')}</p>
+              <p className="text-[10px] text-muted-foreground">{t('readiness.sectors.max', { max: settings.maxDomains })}</p>
+              <MultiSelect
+                ariaLabel={t('app.domains')}
+                values={startDomains}
+                onValuesChange={(values) => setStartDomains(values as Domain[])}
+                options={sectorOptions.map((value) => ({ value, label: t(`domain.${value}` as 'domain.health') }))}
+                maxSelected={settings.maxDomains}
+                className="w-full"
+              />
+            </div>
             <SettingsTab />
           </div>
           <div className="flex justify-end gap-2 border-t border-border px-5 py-3">
             <Button variant="ghost" onClick={() => setCreating(false)}>
               {t('readiness.history.cancel')}
             </Button>
-            <Button onClick={start} disabled={running}>
+            <Button onClick={start} disabled={running || startDomains.length === 0}>
               <Play className="h-3.5 w-3.5" /> {t('readiness.start')}
             </Button>
           </div>
@@ -172,15 +186,14 @@ function ShimmerLines({ rows = 4 }: { rows?: number }) {
   )
 }
 
-export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) {
+export function ReadinessPanel() {
   const { t, locale } = useI18n()
-  const { lens, country } = useWorkspace()
+  const { country } = useWorkspace()
   const r = useReadiness()
   const [tab, setTab] = React.useState<Tab>('process')
   const lang: 'fr' | 'en' = locale === 'fr' ? 'fr' : 'en'
   const busy = r.loading || r.localizing
   const situation = r.report?.situation?.[lang] ?? r.report?.situation?.en ?? r.report?.situation?.fr
-  const profile = WORKFLOW_PROFILES[lens]
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })
   const liveTotal = r.startedAt !== null && r.running ? r.now - r.startedAt : r.totalMs
@@ -220,7 +233,7 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
     return { id, kind: node.kind, label: node.label, state: node.state, detail: node.detail, duration: node.duration, step }
   }
 
-  const selectNode = (id: string) => r.setSelectedNode(id)
+  const selectNode = React.useCallback((id: string) => r.setSelectedNode(id), [r.setSelectedNode])
 
   // The tabs and their counters show only an assessment: running, finished, or opened by its id.
   const hasAssessment = r.running || r.steps.length > 0 || r.report !== null || r.runId !== undefined
@@ -229,6 +242,18 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         <span>{t('readiness.process.agents', { count: r.steps.length })}</span>
+        {r.sectorProgress && r.sectorProgress.total > 1 && (
+          <>
+            <span>·</span>
+            <span>
+              {t('readiness.sector.progress', {
+                n: r.sectorProgress.index + 1,
+                total: r.sectorProgress.total,
+                name: t(`domain.${r.sectorProgress.domain}` as 'domain.health'),
+              })}
+            </span>
+          </>
+        )}
         <span>·</span>
         <span>{t('readiness.process.progress', { done: doneSteps.length, total: r.steps.length })}</span>
         {liveTotal !== undefined && (
@@ -272,8 +297,11 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
 
   const resultTab = busy ? <ShimmerLines rows={6} /> : (
     <section className="space-y-4">
+      {r.batch.length > 1 && <SectorComparison batch={r.batch} />}
       {!r.report && r.steps.some((step) => step.score) ? (
         <LiveScores steps={r.steps} />
+      ) : !r.report && r.running ? (
+        <ProcessingState />
       ) : !r.report ? (
         <p className="py-16 text-center text-[11px] text-muted-foreground">{t('readiness.empty')}</p>
       ) : (
@@ -448,26 +476,6 @@ export function ReadinessPanel({ showStages = true }: { showStages?: boolean }) 
           {r.failure && <p className="mb-3 text-[11px] text-destructive">{r.failure}</p>}
           <ReadinessHistory runs={r.history} activeId={r.runId} onOpen={r.openSaved} onDelete={r.deleteRun} deletingId={r.deletingId} />
         </>
-      ) : showStages ? (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <Activity className="h-4 w-4 text-brand-primary dark:text-brand-primary-light" />
-              <CardTitle>{t('workflow.stages')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5 text-xs">
-              {Object.entries(profile.stages).map(([stage, enabled]) => (
-                <div key={stage} className="flex items-center justify-between">
-                  <span className="capitalize text-muted-foreground">{stage.replace(/_/g, ' ')}</span>
-                  <span className={enabled ? 'font-medium text-brand-primary dark:text-brand-primary-light' : 'text-muted-foreground/50'}>
-                    {enabled ? t('workflow.on') : t('workflow.off')}
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-          <div className="min-w-0 lg:col-span-2">{assessment}</div>
-        </div>
       ) : (
         assessment
       )}
@@ -484,9 +492,79 @@ function EmptyAssessment() {
   return (
     <div className="flex flex-col items-center gap-4 py-16 text-center">
       <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">{t('readiness.empty')}</p>
-      <Button size="sm" onClick={() => r.setCreating(true)}>
+      <Button size="sm" onClick={() => r.openCreate()}>
         <Plus className="h-3.5 w-3.5" /> {t('readiness.startNew')}
       </Button>
+    </div>
+  )
+}
+
+/** The sectors of the series side by side: one row per dimension, one column per sector. */
+function SectorComparison({ batch }: { batch: SectorResult[] }) {
+  const { t } = useI18n()
+  return (
+    <div className="space-y-2">
+      <p className="text-[12px] font-semibold text-foreground">{t('readiness.compare.title')}</p>
+      <div className="overflow-x-auto rounded-xl bg-secondary/40 p-2">
+        <table className="w-full min-w-[32rem] text-[11px]">
+          <thead>
+            <tr className="text-left text-muted-foreground">
+              <th className="px-2 py-1.5 font-medium">{t('readiness.compare.dimension')}</th>
+              {batch.map((sector) => (
+                <th key={sector.runId} className="px-2 py-1.5 font-medium">
+                  {t(`domain.${sector.domain}` as 'domain.health')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {READINESS_DIMENSIONS.map((dimension) => (
+              <tr key={dimension.shortName} className="border-t border-border/60">
+                <td className="px-2 py-1.5">
+                  <span className="mr-1.5 font-mono text-muted-foreground">D{dimension.id}</span>
+                  {dimension.name}
+                </td>
+                {batch.map((sector) => {
+                  const score = sector.scores.find((entry) => entry.dimension === dimension.shortName)
+                  return (
+                    <td key={sector.runId} className="px-2 py-1.5">
+                      {score ? (
+                        <span className="flex items-center gap-2">
+                          <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-secondary">
+                            <span className="block h-full rounded-full bg-brand-primary dark:bg-brand-primary-light" style={{ width: `${(score.score / 5) * 100}%` }} />
+                          </span>
+                          <span className="font-semibold">{score.score}/5</span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+            <tr className="border-t-2 border-border font-semibold">
+              <td className="px-2 py-1.5">{t('readiness.compare.composite')}</td>
+              {batch.map((sector) => (
+                <td key={sector.runId} className="px-2 py-1.5">
+                  {sector.composite === null ? '—' : `${sector.composite}/5`}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/** Waiting for the first result of a running assessment. */
+function ProcessingState() {
+  const { t } = useI18n()
+  return (
+    <div className="flex flex-col items-center gap-3 py-16 text-center text-[11px] text-muted-foreground">
+      <Loader className="h-6 w-6 animate-spin text-brand-primary dark:text-brand-primary-light" aria-hidden="true" />
+      <p>{t('readiness.processing')}</p>
     </div>
   )
 }
@@ -677,7 +755,18 @@ function SettingsTab() {
       control: <Select ariaLabel={t('readiness.settings.task.report')} value="muse-image-1.0" onValueChange={() => {}} options={[{ value: 'muse-image-1.0', label: 'muse-image-1.0 · cover · charts MCP · docx MCP' }]} disabled size="md" className="w-full" />,
     },
   ]
+  const locked = r.running
   return (
+    <fieldset
+      disabled={locked}
+      aria-describedby={locked ? 'readiness-settings-locked' : undefined}
+      className={cn('min-w-0 space-y-4', locked && 'pointer-events-none opacity-60')}
+    >
+      {locked && (
+        <p id="readiness-settings-locked" className="rounded-xl bg-secondary/60 px-3 py-2 text-[11px] text-muted-foreground">
+          {t('readiness.settings.locked')}
+        </p>
+      )}
     <div className="grid gap-4 lg:grid-cols-2">
       <section className="space-y-3 rounded-xl bg-secondary/40 p-4">
         <h3 className="text-[12px] font-semibold text-foreground">{t('readiness.settings.agents')}</h3>
@@ -731,6 +820,45 @@ function SettingsTab() {
                 className="w-full"
               />
             </label>
+            <label className="space-y-1 text-[11px] sm:col-span-2">
+              <span className="text-muted-foreground">{t('readiness.settings.concurrency')}</span>
+              <Select
+                ariaLabel={t('readiness.settings.concurrency')}
+                value={r.settings.concurrency}
+                onValueChange={(value) => r.setSettings({ concurrency: value as 'parallel' | 'sequential' | 'orchestrated' })}
+                options={[
+                  { value: 'parallel', label: t('readiness.settings.concurrency.parallel') },
+                  { value: 'sequential', label: t('readiness.settings.concurrency.sequential') },
+                  { value: 'orchestrated', label: t('readiness.settings.concurrency.orchestrated') },
+                ]}
+                size="md"
+                className="w-full"
+              />
+            </label>
+            {r.settings.concurrency === 'orchestrated' && (
+              <label className="space-y-1 text-[11px]">
+                <span className="text-muted-foreground">{t('readiness.settings.maxDecisions')}</span>
+                <Select
+                  ariaLabel={t('readiness.settings.maxDecisions')}
+                  value={String(r.settings.maxDecisions)}
+                  onValueChange={(value) => r.setSettings({ maxDecisions: Number(value) })}
+                  options={[5, 10, 20, 30, 50].map((value) => ({ value: String(value), label: String(value) }))}
+                  size="md"
+                  className="w-full"
+                />
+              </label>
+            )}
+            <label className="space-y-1 text-[11px]">
+              <span className="text-muted-foreground">{t('readiness.settings.maxDomains')}</span>
+              <Select
+                ariaLabel={t('readiness.settings.maxDomains')}
+                value={String(r.settings.maxDomains)}
+                onValueChange={(value) => r.setSettings({ maxDomains: Number(value) })}
+                options={[1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: String(value) }))}
+                size="md"
+                className="w-full"
+              />
+            </label>
           </div>
           <div className="space-y-3 border-t border-border/60 pt-4">
             <div className="flex items-center justify-between">
@@ -764,6 +892,7 @@ function SettingsTab() {
         </section>
       </div>
     </div>
+    </fieldset>
   )
 }
 
@@ -805,6 +934,11 @@ function StepRow({
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>
         <div className="space-y-2 px-3 pb-3 pl-8 text-muted-foreground">
+          {step.decision && (
+            <p>
+              <span className="font-semibold text-foreground">{t('readiness.process.lead')}:</span> {step.decision}
+            </p>
+          )}
           {step.passages && (
             <p>
               {t('readiness.process.passages', { country: step.passages.country, global: step.passages.global })}

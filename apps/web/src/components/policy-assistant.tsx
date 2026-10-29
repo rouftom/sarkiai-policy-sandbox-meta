@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronDown, History, ImagePlus, ListChecks, Plus, Scale, Shield, Sparkles, X } from 'lucide-react'
+import { Check, ChevronDown, History, ImagePlus, ListChecks, Plus, Scale, Shield, Sparkles, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
   cn,
 } from '@sps/ui'
-import { institutionsForDomain } from '@sps/shared'
+import { institutionsForDomains, type Domain } from '@sps/shared'
 import { api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
 import type { ActionRecord, ActionStatus, AgentUiRequest } from '@/lib/agent-ui'
 import { decideAction, listActions } from '@/lib/actions-client'
@@ -68,9 +68,11 @@ const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting']
  * their durations, reasoning and answer deltas are written as they arrive, and
  * the final assessment replaces the draft with its citations and validation.
  */
+const ASSISTANT_SECTORS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
+
 export function PolicyAssistant({ onClose }: { onClose: () => void }) {
-  const { t } = useI18n()
-  const { country, domain, lens } = useWorkspace()
+  const { t, locale } = useI18n()
+  const { country, domain, domains, setDomains } = useWorkspace()
   const [input, setInput] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [turns, setTurns] = React.useState<ChatTurn[]>([])
@@ -96,21 +98,24 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
-  const institutions = React.useMemo(() => institutionsForDomain(domain), [domain])
-  /** `auto` lets the router pick the institution per question; otherwise the operator's choice. */
-  const [institutionId, setInstitutionId] = React.useState<string>('auto')
-  const pinned = institutionId === 'auto' ? undefined : institutions.find((institution) => institution.id === institutionId)
+  // The institutions of every sector the operator works on (one list for the whole workspace).
+  const institutions = React.useMemo(() => institutionsForDomains(domains), [domains])
+  /** The institutions the operator chose. None: the router picks per question among all of them; one: it answers directly; several: the router picks among those. */
+  const [institutionIds, setInstitutionIds] = React.useState<string[]>([])
+  const pinned = institutionIds.length === 1 ? institutions.find((institution) => institution.id === institutionIds[0]) : undefined
+  const toggleInstitution = (id: string) =>
+    setInstitutionIds((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]))
 
   const [models, setModels] = React.useState<MetaModelDto[]>([])
   const [modelState, setModelState] = React.useState<'loading' | 'ready' | 'error'>('loading')
   const [model, setModel] = React.useState('')
   const [modelError, setModelError] = React.useState<string | null>(null)
 
+  // A sector change can remove a chosen institution: it is dropped from the choice.
   React.useEffect(() => {
-    if (institutionId !== 'auto' && !institutions.some((institution) => institution.id === institutionId)) {
-      setInstitutionId('auto')
-    }
-  }, [institutions, institutionId])
+    const kept = institutionIds.filter((id) => institutions.some((institution) => institution.id === id))
+    if (kept.length !== institutionIds.length) setInstitutionIds(kept)
+  }, [institutions, institutionIds])
 
   React.useEffect(() => {
     let cancelled = false
@@ -199,7 +204,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     let target = pinned ?? institutions[0]!
     let routedTo: string[] | undefined
     if (!pinned) {
-      const routed = await api.routeQuestion({ question, domain }).catch(() => null)
+      const routed = await api.routeQuestion({ question, domains, institutionIds }).catch(() => null)
       const primary = institutions.find((institution) => institution.id === routed?.primary) ?? institutions[0]!
       target = primary
       const others = (routed?.others ?? [])
@@ -248,12 +253,14 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       openStep = null
     }
 
+    // Each agent reasons with a sector it belongs to, among the sectors the operator chose.
+    const sectorOf = activeInstitution.domains.find((entry) => domains.includes(entry)) ?? domain
     const body = {
       institutionId: activeInstitution.id,
       question,
       country,
-      domain,
-      lens,
+      domain: sectorOf,
+      language: locale === 'fr' ? ('fr' as const) : ('en' as const),
       attachments: payload.length ? payload : undefined,
     }
     try {
@@ -488,6 +495,15 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     textareaRef.current?.focus()
   }
 
+  const toggleSector = (value: Domain) => {
+    const on = domains.includes(value)
+    if (on) {
+      if (domains.length > 1) setDomains(domains.filter((entry) => entry !== value))
+      return
+    }
+    setDomains([...domains, value])
+  }
+
   const suggestions = [t('assistant.suggest1'), t('assistant.suggest2'), t('assistant.suggest3')]
 
   const optionsMenu = (
@@ -524,6 +540,75 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         </DropdownMenuSub>
 
         <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="min-w-0 flex-1 truncate">{t('assistant.institution')}</span>
+            <span className="max-w-[6rem] truncate text-[10px] text-muted-foreground">
+              {pinned ? pinned.name : institutionIds.length > 1 ? String(institutionIds.length) : t('assistant.institution.auto')}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>{t('assistant.institution')}</DropdownMenuLabel>
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                setInstitutionIds([])
+              }}
+            >
+              <span className={cn('flex h-3.5 w-3.5 items-center justify-center rounded border', institutionIds.length === 0 ? 'border-brand-primary bg-brand-primary text-white' : 'border-border')}>
+                {institutionIds.length === 0 && <Check className="h-2.5 w-2.5" />}
+              </span>
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">{t('assistant.institution.auto')}</span>
+            </DropdownMenuItem>
+            {institutions.map((institution) => {
+              const Icon = institution.role === 'legal_advisor' ? Scale : Shield
+              const on = institutionIds.includes(institution.id)
+              return (
+                <DropdownMenuItem
+                  key={institution.id}
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    toggleInstitution(institution.id)
+                  }}
+                >
+                  <span className={cn('flex h-3.5 w-3.5 items-center justify-center rounded border', on ? 'border-brand-primary bg-brand-primary text-white' : 'border-border')}>
+                    {on && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <Icon className={cn('h-3.5 w-3.5 shrink-0', institution.color)} />
+                  <span className="truncate">{institution.name}</span>
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="min-w-0 flex-1 truncate">{t('app.domains')}</span>
+            <span className="rounded bg-muted px-1 font-mono text-[10px] text-muted-foreground">{domains.length}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>{t('app.domains')}</DropdownMenuLabel>
+            {ASSISTANT_SECTORS.map((value) => {
+              const on = domains.includes(value)
+              return (
+                <DropdownMenuItem
+                  key={value}
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    toggleSector(value)
+                  }}
+                >
+                  <span className={cn('flex h-3.5 w-3.5 items-center justify-center rounded border', on ? 'border-brand-primary bg-brand-primary text-white' : 'border-border')}>
+                    {on && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <span className="truncate">{t(`domain.${value}` as 'domain.health')}</span>
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => fileRef.current?.click()}>
           <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
           {t('assistant.attach')}
@@ -554,45 +639,6 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <p className="shrink-0 text-[12px] font-semibold text-foreground">{t('assistant.title')}</p>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  'flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors hover:opacity-80',
-                  !pinned && 'bg-muted text-muted-foreground',
-                )}
-                style={
-                  pinned
-                    ? { backgroundColor: `${institutionAccent(pinned.color)}33`, color: institutionInk(pinned.color) }
-                    : undefined
-                }
-                aria-label={t('assistant.institution')}
-              >
-                {pinned && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: institutionAccent(pinned.color) }} />}
-                <span className="truncate">{pinned ? pinned.name : t('assistant.institution.auto')}</span>
-                <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel>{t('assistant.institution')}</DropdownMenuLabel>
-              <DropdownMenuRadioGroup value={institutionId} onValueChange={setInstitutionId}>
-                <DropdownMenuRadioItem value="auto">
-                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{t('assistant.institution.auto')}</span>
-                </DropdownMenuRadioItem>
-                {institutions.map((institution) => {
-                  const Icon = institution.role === 'legal_advisor' ? Scale : Shield
-                  return (
-                    <DropdownMenuRadioItem key={institution.id} value={institution.id}>
-                      <Icon className={cn('h-3.5 w-3.5 shrink-0', institution.color)} />
-                      <span className="truncate">{institution.name}</span>
-                    </DropdownMenuRadioItem>
-                  )
-                })}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
         <TooltipProvider>
           <Tooltip>

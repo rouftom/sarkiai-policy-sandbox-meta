@@ -88,8 +88,46 @@ export const INSTITUTIONS: InstitutionSpec[] = [
     can: ['retrieve', 'assess', 'coordinate', 'escalate'],
     color: 'text-primary',
   },
+  {
+    id: 'education_ministry',
+    name: 'Ministry of Education',
+    role: 'institutional',
+    mandate:
+      "Safeguard learners' rights and continuity of schooling; own the sectoral response for schools and learning platforms within its statutory powers.",
+    domains: ['education'],
+    can: ['retrieve', 'assess', 'escalate'],
+    mustNot: ['Adjudicate data-protection complaints'],
+    color: 'text-orange-500',
+  },
+  {
+    id: 'public_services_agency',
+    name: 'Public Service Modernisation Agency',
+    role: 'institutional',
+    mandate:
+      'Own the national identity and benefit registers and the continuity of public services; decide on the suspension of benefit payments within its statutory powers.',
+    domains: ['public_services'],
+    can: ['retrieve', 'assess', 'escalate'],
+    mustNot: ['Adjudicate data-protection complaints'],
+    color: 'text-lime-600',
+  },
+  {
+    id: 'agriculture_ministry',
+    name: 'Ministry of Agriculture',
+    role: 'institutional',
+    mandate:
+      'Own the input-subsidy programmes and the farmer registers; decide on the freezing or resumption of a programme within its statutory powers.',
+    domains: ['agriculture'],
+    can: ['retrieve', 'assess', 'escalate'],
+    mustNot: ['Adjudicate data-protection complaints'],
+    color: 'text-indigo-500',
+  },
 ]
 
 export function institutionsForDomain(domain: Domain): InstitutionSpec[] {
   return INSTITUTIONS.filter((i) => i.domains.includes(domain))
+}
+
+/** The institutions of several sectors, each once, in catalogue order. */
+export function institutionsForDomains(domains: Domain[]): InstitutionSpec[] {
+  return INSTITUTIONS.filter((i) => i.domains.some((domain) => domains.includes(domain)))
 }

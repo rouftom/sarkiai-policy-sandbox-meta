@@ -106,7 +106,6 @@ export function ChatMessage({
         <div className="w-full">
           <AgentActivityTrail
             steps={turn.steps}
-            agents={turn.routedTo?.length ? turn.routedTo : turn.agentName ? [turn.agentName] : []}
             isStreaming={!!turn.active}
             startedAt={turn.startedAt}
             endedAt={turn.endedAt}

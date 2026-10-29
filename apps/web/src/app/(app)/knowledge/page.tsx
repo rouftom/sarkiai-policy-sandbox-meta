@@ -1,12 +1,14 @@
 'use client'
 
 import * as React from 'react'
-import { AlertTriangle, Check, Database, Loader, Play, RotateCcw, Search } from 'lucide-react'
+import { AlertTriangle, Check, Database, Loader, Newspaper, Play, RotateCcw, Search } from 'lucide-react'
 import { AnimatedTabsList, Button, Input, Select, Skeleton, Tabs, TabsContent, cn, type TabItem } from '@sps/ui'
 import { knowledgeApi, type KbDocumentDto, type KbExplorationDto, type KbStageItemDto, type KbStatusDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { PageIntro } from '@/components/page-intro'
 import { KbDocuments } from '@/components/kb-documents'
+import { GazettePanel } from '@/components/gazette-panel'
+import { useWorkspace } from '@/lib/workspace'
 
 const COUNTRY_OPTIONS = [
   { value: '', label: 'All countries' },
@@ -16,6 +18,7 @@ const COUNTRY_OPTIONS = [
 
 const KB_TABS: TabItem[] = [
   { id: 'documents', label: 'Documents', icon: Database },
+  { id: 'gazette', label: 'Scanned gazette', icon: Newspaper },
   { id: 'retrieval', label: 'Retrieval', icon: Search },
 ]
 
@@ -45,6 +48,13 @@ export default function KnowledgePage() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState('documents')
+  const { country } = useWorkspace()
+
+  // `?tab=gazette` (from the overview) opens that panel.
+  React.useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab')
+    if (requested && KB_TABS.some((entry) => entry.id === requested)) setTab(requested)
+  }, [])
 
   const load = React.useCallback(async () => {
     setError(null)
@@ -83,7 +93,12 @@ export default function KnowledgePage() {
         <AnimatedTabsList
           items={KB_TABS.map((entry) => ({
             ...entry,
-            label: entry.id === 'documents' ? t('knowledge.tab.documents') : t('knowledge.tab.retrieval'),
+            label:
+              entry.id === 'documents'
+                ? t('knowledge.tab.documents')
+                : entry.id === 'retrieval'
+                  ? t('knowledge.tab.retrieval')
+                  : t('nav.gazette'),
           }))}
           value={tab}
           onValueChange={setTab}
@@ -129,6 +144,9 @@ export default function KnowledgePage() {
           </TabsContent>
           <TabsContent value="retrieval" className="pt-2">
             <RetrievalPanel hasCorpus={(corpus?.activeChunks ?? 0) > 0} />
+          </TabsContent>
+          <TabsContent value="gazette" className="pt-2">
+            <GazettePanel country={country} />
           </TabsContent>
         </>
       )}
@@ -210,7 +228,13 @@ function RetrievalPanel({ hasCorpus }: { hasCorpus: boolean }) {
 
       {failure && <p className="text-[12px] text-destructive">{failure}</p>}
 
-      {!result ? (
+      {running ? (
+        <div className="space-y-2" aria-busy="true" aria-label={t('knowledge.retrieval.running')}>
+          {Array.from({ length: 4 }, (_, index) => (
+            <div key={index} className="shimmer h-16 rounded-xl bg-secondary" style={{ opacity: 1 - index * 0.15 }} />
+          ))}
+        </div>
+      ) : !result ? (
         <p className="rounded-xl border border-dashed border-border px-4 py-12 text-center text-[12px] text-muted-foreground">
           <Search className="mx-auto mb-2 h-4 w-4" />
           {hasCorpus ? t('knowledge.retrieval.empty') : t('knowledge.corpus.empty')}
@@ -274,7 +298,7 @@ function StageResult({ item }: { item: KbStageItemDto }) {
       <p className="mt-1 truncate text-[10px] text-muted-foreground">
         {t('knowledge.retrieval.chunk', { n: item.chunkIndex + 1 })}
         {item.headingPath ? ` · ${item.headingPath}` : ''}
-        {item.sourceUrl ? (
+        {item.sourceUrl && /^https?:\/\//.test(item.sourceUrl) ? (
           <>
             {' · '}
             <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="underline hover:text-foreground">

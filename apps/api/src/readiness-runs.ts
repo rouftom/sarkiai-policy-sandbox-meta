@@ -23,6 +23,13 @@ export interface ReadinessRunInput {
   useWeb?: boolean
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
   models?: { webSearch?: string; evaluate?: string; synthesis?: string }
+  concurrency?: 'parallel' | 'sequential' | 'orchestrated'
+  /** Orchestrated mode: the most decisions the lead agent may take. */
+  maxDecisions?: number
+  /** The language of the lead agent's reasons (the console's). */
+  language?: 'fr' | 'en'
+  /** The series this assessment belongs to: one assessment per sector, run together. */
+  batchId?: string
 }
 
 export interface ReadinessRunSummary {
@@ -36,6 +43,7 @@ export interface ReadinessRunSummary {
   status: ReadinessRunStatus
   /** Why a failed run stopped, in the provider's words. */
   failure?: string
+  batchId?: string
 }
 
 export interface ReadinessRun extends ReadinessRunSummary {
@@ -91,6 +99,7 @@ export class ReadinessRunStore {
       ...(input.failure ? { failure: input.failure } : {}),
       report: input.report,
       ...(input.input ? { input: input.input } : {}),
+      ...(input.input?.batchId ? { batchId: input.input.batchId } : {}),
     }
     this.memory.set(run.id, { ...run, userId: input.userId })
     const col = await this.col()
@@ -120,6 +129,7 @@ export class ReadinessRunStore {
           dimensions: Number(doc.dimensions ?? 0),
           status: doc.status === 'failed' ? 'failed' : 'complete',
           ...(typeof doc.failure === 'string' ? { failure: doc.failure } : {}),
+          ...(typeof doc.batchId === 'string' ? { batchId: doc.batchId } : {}),
         }))
       }
     }
@@ -128,6 +138,24 @@ export class ReadinessRunStore {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit)
       .map((run) => this.summary(run))
+  }
+
+  /** The runs of one series of this operator, oldest first, with their reports. */
+  async listBatch(userId: string, batchId: string): Promise<ReadinessRun[]> {
+    const col = await this.col()
+    if (col) {
+      const docs = await col.find({ userId, batchId }).sort({ createdAt: 1 }).toArray().catch(() => null)
+      if (docs) {
+        return docs.map((doc) => {
+          const { _id, userId: _owner, ...rest } = doc
+          return { id: String(_id), ...(rest as unknown as Omit<ReadinessRun, 'id'>), status: rest.status === 'failed' ? 'failed' : 'complete' }
+        })
+      }
+    }
+    return [...this.memory.values()]
+      .filter((run) => run.userId === userId && run.batchId === batchId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(({ userId: _owner, ...rest }) => rest)
   }
 
   /** Removes a saved run of this operator. False when it does not exist for them. */

@@ -149,9 +149,6 @@ export function GazettePanel({ country }: { country: string }) {
       <CardHeader>
         <FileScan className="h-4 w-4 text-primary" />
         <CardTitle>{t('gazette.title')}</CardTitle>
-        <span className="ml-auto text-[10px] font-semibold text-muted-foreground">
-          {t('gazette.subtitle')}
-        </span>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">{t('gazette.hint')}</p>

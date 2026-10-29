@@ -144,7 +144,7 @@ export default function OverviewPage() {
   const quick = [
     { href: '/readiness', icon: Gauge, title: t('overview.quick.readiness'), body: t('overview.quick.readinessBody') },
     { href: '/scenarios', icon: Network, title: t('overview.quick.scenario'), body: t('overview.quick.scenario.body') },
-    { href: '/gazette', icon: Newspaper, title: t('overview.quick.gazette'), body: t('overview.quick.gazette.body') },
+    { href: '/knowledge?tab=gazette', icon: Newspaper, title: t('overview.quick.gazette'), body: t('overview.quick.gazette.body') },
   ]
 
   const corpus = status?.totals

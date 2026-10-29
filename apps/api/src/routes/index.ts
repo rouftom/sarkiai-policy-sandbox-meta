@@ -16,7 +16,7 @@ import { evaluateExercise, writeAfterAction, type ExerciseDefinition } from '@sp
 import { analyzeImpact } from '@sps/impact'
 import { IngestionClient } from '@sps/kb'
 import type { AtlasIngestor } from '@sps/retrieval'
-import { ReadinessInterrupted, buildScenario, whatIf, type ReadinessReport } from '@sps/readiness'
+import { ReadinessInterrupted, buildScenario, whatIf, type LeadDecision, type LeadState, type ReadinessReport } from '@sps/readiness'
 import {
   WhatsAppClient,
   WHATSAPP_TEMPLATES,
@@ -27,7 +27,7 @@ import {
 import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
-import { hasLanguage, institutionsForDomain } from '@sps/shared'
+import { hasLanguage, institutionsForDomain, institutionsForDomains } from '@sps/shared'
 import {
   READINESS_DIMENSIONS,
   type DocType,
@@ -40,7 +40,8 @@ import {
 } from '@sps/shared'
 import { createEngine, createKnowledgeIngestor, createScenario, recordProviderSwitch } from '../engine.js'
 import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
-import { healthDataBreach } from '../scenarios.js'
+import { scenarioFor, type ScenarioLang } from '../scenarios.js'
+import { ScenarioRunStore } from '../scenario-runs.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
@@ -109,6 +110,7 @@ const mcpGateway = new McpGateway(process.env.SEA_MCP_API_KEY)
 
 const chatSessions = new ChatSessionStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const readinessRuns = new ReadinessRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
+const scenarioRuns = new ScenarioRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 
 const actionStore = new ActionStore({
   mongodbUri: config.mongodb.uri,
@@ -129,6 +131,8 @@ interface ScenarioSession {
   userId: string
   country: string
   domain: Domain
+  /** The language the agents answer in: the operator's. */
+  lang: ScenarioLang
   institutions: InstitutionSpec[]
   events: ScenarioEvent[]
   ticks: number[]
@@ -170,7 +174,7 @@ function gazettePricing() {
  * the model the operator saved last (if still eligible), otherwise the first
  * chat-capable model Meta lists for this key.
  */
-async function selectBootModel(app: FastifyInstance): Promise<void> {
+export async function selectBootModel(app: FastifyInstance): Promise<void> {
   if (engine.provider.mode !== 'cloud') return
   const saved = await auth.activeModel().catch(() => null)
   try {
@@ -776,6 +780,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     country: z.string().length(2),
     domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
     lens: lensSchema.default('hybrid'),
+    /** The language of the answer: the console's. */
+    language: z.enum(['fr', 'en']).default('en'),
     runId: z.string().optional(),
     // Untrusted user files (context only, never citable): images, or documents read as reference text.
     attachments: z
@@ -843,6 +849,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       country: body.data.country,
       domain: body.data.domain as Domain,
       lens: body.data.lens as WorkflowLens,
+      language: body.data.language,
       runId: body.data.runId,
       attachments: stored.images,
       attachmentMeta: stored.meta,
@@ -908,6 +915,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           country: body.data.country,
           domain: body.data.domain as Domain,
           lens: body.data.lens as WorkflowLens,
+          language: body.data.language,
           runId: body.data.runId,
           attachments: stored.images,
           attachmentMeta: stored.meta,
@@ -950,10 +958,18 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * then answers through the normal stream. Falls back to the first institution.
    */
   app.post('/v1/agents/route', async (request, reply) => {
-    const body = z.object({ question: z.string().min(3).max(2000), domain: z.string() }).safeParse(request.body)
+    const body = z
+      .object({
+        question: z.string().min(3).max(2000),
+        domains: z.array(z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture'])).min(1).max(5),
+        /** Chosen institutions: the router picks among them only. Empty or absent: every institution of the sectors. */
+        institutionIds: z.array(z.string().max(80)).max(10).optional(),
+      })
+      .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
-    const institutions = institutionsForDomain(body.data.domain as Domain)
-    if (institutions.length === 0) return reply.status(404).send({ error: 'No institution for this domain.' })
+    const chosen = new Set(body.data.institutionIds ?? [])
+    const institutions = institutionsForDomains(body.data.domains as Domain[]).filter((institution) => chosen.size === 0 || chosen.has(institution.id))
+    if (institutions.length === 0) return reply.status(404).send({ error: 'No institution for these sectors.' })
     const known = new Set(institutions.map((institution) => institution.id))
     const fallback = { primary: institutions[0]!.id, others: [] as string[], reason: '' }
     try {
@@ -984,13 +1000,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Scenarios: progressive release + multi-agent reconciliation ───────────
 
-  function buildSession(country: string, domain: Domain, userId: string): ScenarioSession {
-    const run = createScenario(healthDataBreach(country), 'simulation').toRun()
+  function buildSession(country: string, domain: Domain, userId: string, lang: ScenarioLang = 'en'): ScenarioSession {
+    const run = createScenario(scenarioFor(domain, country, lang), 'simulation').toRun()
     return {
-      runId: run.id,
+      runId: `${run.id}-${crypto.randomUUID()}`,
       userId,
       country,
       domain,
+      lang,
       institutions: institutionsForDomain(domain),
       events: run.events,
       ticks: [...new Set(run.events.map((e) => e.releaseChunk))].sort((a, b) => a - b),
@@ -1008,6 +1025,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     session.history.push(...events)
 
     const assessments = await engine.coordinator.runTick({
+      language: session.lang,
       runId: session.runId,
       userId: session.userId,
       tick,
@@ -1019,6 +1037,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       history: [...session.history],
     })
     const report = await engine.coordinator.reconcile({
+      language: session.lang,
       runId: session.runId,
       userId: session.userId,
       tick,
@@ -1029,7 +1048,35 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     session.reports.push(report)
     session.released += 1
     await engine.reports.saveReports(session.runId, session.reports, session.userId)
-    return { done: session.released >= session.ticks.length, tick, report }
+    const done = session.released >= session.ticks.length
+    await scenarioRuns.update(session.runId, session.userId, {
+      released: session.released,
+      reports: session.reports,
+      status: done ? 'complete' : 'running',
+    })
+    return { done, tick, report }
+  }
+
+  /** Saves a new run; its progress is then saved tick by tick. */
+  async function recordScenarioRun(session: ScenarioSession) {
+    const scenario = scenarioFor(session.domain, session.country, session.lang)
+    await scenarioRuns.create({
+      id: session.runId,
+      userId: session.userId,
+      country: session.country,
+      domain: session.domain,
+      lang: session.lang,
+      title: scenario.title,
+      released: session.released,
+      total: session.ticks.length,
+      reports: session.reports,
+      status: 'running',
+    })
+  }
+
+  /** A run that stops on an error is kept as failed, with the reason, and can be resumed. */
+  async function failScenarioRun(runId: string, userId: string, error: unknown) {
+    await scenarioRuns.update(runId, userId, { status: 'failed', failure: (error as Error).message.slice(0, 300) })
   }
 
   async function dossierFor(runId: string, reports: JointSituationReport[], userId: string) {
@@ -1045,7 +1092,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // SSE stream of all ticks (fixed delay) · for passive viewers.
   app.get('/v1/scenarios/:id/release', async (request, reply) => {
     const query = z.object({ country: z.string().default('cm') }).parse(request.query)
-    const scenario = createScenario(healthDataBreach(query.country), 'simulation')
+    const scenario = createScenario(scenarioFor('health', query.country), 'simulation')
     reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
     for await (const batch of scenario.release({ chunkDelayMs: 800 })) {
       reply.raw.write(`data: ${JSON.stringify(batch)}\n\n`)
@@ -1061,12 +1108,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         id: z.string().default('health-data-breach'),
         country: z.string().length(2).default('cm'),
         domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']).default('health'),
+        lang: z.enum(['fr', 'en']).default('en'),
       })
       .safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
-    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email)
+    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang)
     scenarioSessions.set(session.runId, session)
+    await recordScenarioRun(session)
     return {
       runId: session.runId,
       country: session.country,
@@ -1090,7 +1139,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
     }
 
-    const result = await releaseNext(session)
+    let result: Awaited<ReturnType<typeof releaseNext>>
+    try {
+      result = await releaseNext(session)
+    } catch (error) {
+      await failScenarioRun(runId, session.userId, error)
+      throw error
+    }
     return {
       runId,
       releasedTicks: session.released,
@@ -1100,6 +1155,53 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       // The facts released in this chunk, as the incident timeline shows them.
       events: result.tick === null ? [] : session.events.filter((e) => e.releaseChunk === result.tick),
       report: result.report,
+    }
+  })
+
+  /** The scenario runs of this operator, newest first. */
+  app.get('/v1/scenarios/runs', async (request) => {
+    return { runs: await scenarioRuns.list(operatorOf(request).email) }
+  })
+
+  /** One saved run: its status, what was released, the joint reports and the scenario's events. */
+  app.get('/v1/scenarios/runs/:runId', async (request, reply) => {
+    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const record = await scenarioRuns.get(runId, operatorOf(request).email)
+    if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
+    const scenario = scenarioFor(record.domain as Domain, record.country, record.lang)
+    return {
+      ...record,
+      agents: scenario.agents,
+      events: scenario.events,
+    }
+  })
+
+  /**
+   * Resumes a failed or interrupted run from the last tick that was released: the
+   * session is rebuilt from the saved progress, the released ticks are not replayed.
+   */
+  app.post('/v1/scenarios/runs/:runId/resume', async (request, reply) => {
+    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const userId = operatorOf(request).email
+    const record = await scenarioRuns.get(runId, userId)
+    if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
+    if (record.status === 'complete') return reply.status(409).send({ error: 'This run is already complete.' })
+
+    const session = buildSession(record.country, record.domain as Domain, userId, record.lang)
+    session.runId = record.id
+    session.released = record.released
+    session.reports = [...record.reports]
+    session.history = session.events.filter((event) => session.ticks.slice(0, record.released).includes(event.releaseChunk))
+    scenarioSessions.set(session.runId, session)
+    await scenarioRuns.update(record.id, userId, { status: 'running' })
+    return {
+      runId: session.runId,
+      country: session.country,
+      domain: session.domain,
+      released: session.released,
+      totalTicks: session.ticks.length,
+      agents: session.institutions.map((i) => i.id),
+      agenda: session.events.map((e) => ({ sequence: e.sequence, releaseChunk: e.releaseChunk, title: e.title, visibleTo: e.visibleTo })),
     }
   })
 
@@ -1128,14 +1230,21 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         id: z.string().default('health-data-breach'),
         country: z.string().length(2).default('cm'),
         domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']).default('health'),
+        lang: z.enum(['fr', 'en']).default('en'),
       })
       .safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
-    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email)
+    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang)
     scenarioSessions.set(session.runId, session)
+    await recordScenarioRun(session)
     while (session.released < session.ticks.length) {
-      await releaseNext(session)
+      try {
+        await releaseNext(session)
+      } catch (error) {
+        await failScenarioRun(session.runId, session.userId, error)
+        throw error
+      }
     }
     const dossier = await dossierFor(session.runId, session.reports, session.userId)
     return {
@@ -1213,6 +1322,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           ...(input.useWeb !== undefined ? { useWeb: input.useWeb } : {}),
           ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
           ...(input.models ? { models: input.models } : {}),
+          ...(input.concurrency ? { concurrency: input.concurrency } : {}),
+          ...(input.concurrency === 'orchestrated'
+            ? {
+                ...(input.maxDecisions ? { maxDecisions: input.maxDecisions } : {}),
+                ...(input.language ? { language: input.language } : {}),
+                lead: (state: LeadState) =>
+                  engine.coordinator.decideReadinessStep({ ...state, userId: operator.email }) as Promise<LeadDecision>,
+              }
+            : {}),
           ...(resume ? { completed: resume.report.scores } : {}),
         },
         (event) => send(event),
@@ -1282,6 +1400,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
             synthesis: z.string().min(1).max(80).optional(),
           })
           .optional(),
+        concurrency: z.enum(['parallel', 'sequential', 'orchestrated']).optional(),
+        maxDecisions: z.number().int().min(1).max(50).optional(),
+        language: z.enum(['fr', 'en']).optional(),
+        batchId: z.string().min(8).max(80).optional(),
       })
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -1296,7 +1418,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ...(body.data.useWeb !== undefined ? { useWeb: body.data.useWeb } : {}),
       ...(body.data.reasoningEffort ? { reasoningEffort: body.data.reasoningEffort } : {}),
       ...(body.data.models ? { models: body.data.models } : {}),
+      ...(body.data.concurrency ? { concurrency: body.data.concurrency } : {}),
+      ...(body.data.maxDecisions && body.data.concurrency === 'orchestrated' ? { maxDecisions: body.data.maxDecisions } : {}),
+      ...(body.data.language ? { language: body.data.language } : {}),
+      ...(body.data.batchId ? { batchId: body.data.batchId } : {}),
     })
+  })
+
+  /** The assessments of one series (one per sector), oldest first, with their reports. */
+  app.get('/v1/readiness/batches/:batchId', async (request) => {
+    const { batchId } = request.params as { batchId: string }
+    const operator = operatorOf(request)
+    const runs = await readinessRuns.listBatch(operator.email, batchId)
+    return { runs }
   })
 
   /** Resumes an interrupted assessment where it stopped: the dimensions already scored are kept. */

@@ -19,8 +19,6 @@ export interface TrailStepView {
 
 interface AgentActivityTrailProps {
   steps: TrailStepView[]
-  /** Agent handles shown in the header (e.g. ['Shaka', 'Sankara']). */
-  agents: string[]
   /** True while the assistant turn is still streaming. */
   isStreaming: boolean
   /** Epoch ms of the first step, for the elapsed counter. */
@@ -79,7 +77,7 @@ function phaseOf(key: string): string {
   return head in PHASE_WORDS ? head : 'generating'
 }
 
-export function AgentActivityTrail({ steps, agents, isStreaming, startedAt, endedAt, headerLabel }: AgentActivityTrailProps) {
+export function AgentActivityTrail({ steps, isStreaming, startedAt, endedAt, headerLabel }: AgentActivityTrailProps) {
   const { t } = useI18n()
   const [open, setOpen] = useState(isStreaming)
   const elapsed = useElapsed(startedAt, isStreaming, endedAt)
@@ -107,15 +105,7 @@ export function AgentActivityTrail({ steps, agents, isStreaming, startedAt, ende
 
   return (
     <ChainOfThought open={open} onOpenChange={setOpen} className="my-1">
-      <ChainOfThoughtHeader className="flex items-center gap-1.5 text-[10px] font-light tracking-widest text-foreground/40 hover:text-foreground/70">
-        <div className="flex items-center gap-1 min-w-0">
-          {agents.map((agent, index) => (
-            <React.Fragment key={agent}>
-              {index > 0 && <span className="opacity-20">+</span>}
-              <span className="truncate">@{agent}</span>
-            </React.Fragment>
-          ))}
-        </div>
+      <ChainOfThoughtHeader className="flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-[10px] font-light tracking-widest text-foreground/40 hover:text-foreground/70">
         <span className="text-foreground/20">·</span>
         <span className={showRunning ? 'truncate text-foreground/80' : 'truncate'}>
           {showRunning ? <span className="animate-pulse">{thinking}…</span> : headerLabel}

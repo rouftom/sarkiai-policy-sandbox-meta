@@ -9,6 +9,9 @@ const ACCENTS: Record<string, string> = {
   'text-sky-500': '#0ea5e9',
   'text-violet-500': '#8b5cf6',
   'text-rose-500': '#f43f5e',
+  'text-orange-500': '#f97316',
+  'text-lime-600': '#65a30d',
+  'text-indigo-500': '#6366f1',
   'text-primary': '#0f766e',
 }
 
@@ -26,6 +29,9 @@ const INKS: Record<string, string> = {
   'text-sky-500': '#0369a1',
   'text-violet-500': '#6d28d9',
   'text-rose-500': '#be123c',
+  'text-orange-500': '#c2410c',
+  'text-lime-600': '#4d7c0f',
+  'text-indigo-500': '#4338ca',
   'text-primary': '#0f766e',
 }
 

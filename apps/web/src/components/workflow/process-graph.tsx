@@ -163,6 +163,30 @@ function layout(steps: ProcessGraphStep[], onSelect: (id: string) => void): { no
   return { nodes, edges }
 }
 
+/**
+ * Keeps the whole process in view when the canvas changes size (the tab it sits in
+ * opens, the window resizes, the layout settles): without it the canvas can stay
+ * empty until the view is reset.
+ */
+function FitOnResize({ target }: { target: React.RefObject<HTMLDivElement | null> }) {
+  const { fitView } = useReactFlow()
+  React.useEffect(() => {
+    const element = target.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    let frame = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => void fitView({ padding: 0.2, duration: 200 }))
+    })
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [target, fitView])
+  return null
+}
+
 /** Puts the whole process back in view: the automatic layout, fitted to the canvas. */
 function ResetView() {
   const { fitView } = useReactFlow()
@@ -249,6 +273,7 @@ export function ProcessGraph({
         <Background gap={18} size={1} color="#94a3b855" />
         <Controls showInteractive={false} position="bottom-left" className="!shadow-sm" />
         <ResetView />
+        <FitOnResize target={container} />
       </ReactFlow>
       {anchor && renderPopover && (
         <div
