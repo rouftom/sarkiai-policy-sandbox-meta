@@ -24,6 +24,7 @@
     "@sps/gazette": "workspace:*",
     "@sps/impact": "workspace:*",
     "@sps/kb": "workspace:*",
+    "@sps/notifications": "workspace:*",
     "@sps/readiness": "workspace:*",
     "@sps/report": "workspace:*",
     "@sps/retrieval": "workspace:*",

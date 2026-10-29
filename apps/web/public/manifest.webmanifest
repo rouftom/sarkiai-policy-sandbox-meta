@@ -1,5 +1,5 @@
 {
-  "name": "SarkiAI Policy Sandbox",
+  "name": "SPS",
   "short_name": "SPS",
   "description": "Policy-grounded multi-agent engine: error-scenario simulation and AI-readiness assessment.",
   "start_url": "/",

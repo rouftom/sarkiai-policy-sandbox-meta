@@ -84,11 +84,16 @@ services:
       - key: WHATSAPP_TEMPLATE_LANGUAGE
         value: en
 
-      # ── approval links (web app origin) ────────────────────────────────────
+      # ── console origin (approval + e-mail links) ───────────────────────────
       - key: APPROVAL_SECRET
         sync: false
+      # Set in the dashboard: no host is committed to the repository. The
+      # canonical origin builds every link; aliases keep a previous domain (or a
+      # preview) accepted by CORS during a switch. See apps/api/src/config.ts.
       - key: WEB_PUBLIC_URL
-        value: https://sarkiai-policy-sandbox-meta.vercel.app
+        sync: false
+      - key: WEB_PUBLIC_URL_ALIASES
+        sync: false
 
       # ── operator accounts ──────────────────────────────────────────────────
       # Public self-service sign-up for hackathon judges. The API also opens it

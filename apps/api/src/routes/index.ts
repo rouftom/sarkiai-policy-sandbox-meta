@@ -24,6 +24,11 @@ import {
   createApprovalToken,
   verifyApprovalToken,
 } from '@sps/whatsapp'
+import {
+  formatPhone,
+  maskPhone,
+  normalizePhone,
+} from '@sps/notifications'
 import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
@@ -49,6 +54,8 @@ import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
 import { McpGateway } from '../mcp.js'
 import { ChatSessionStore } from '../chat-sessions.js'
 import { ReadinessRunStore, type ReadinessRun, type ReadinessRunInput, type ReadinessRunSummary } from '../readiness-runs.js'
+import { NotificationContactStore, type NotificationContact } from '../notification-contacts.js'
+import { mailConfigured, mailFrom, sendNotificationEmail } from '../mailer.js'
 import { buildReadinessReport } from '../readiness-report.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
@@ -61,6 +68,7 @@ const knowledge: AtlasIngestor = createKnowledgeIngestor()
 const whatsapp = new WhatsAppClient({
   version: config.whatsapp.version,
   phoneNumberId: config.whatsapp.phoneNumberId,
+  ...(config.whatsapp.wabaId ? { wabaId: config.whatsapp.wabaId } : {}),
   accessToken: config.whatsapp.accessToken,
   verifyToken: config.whatsapp.verifyToken,
   appSecret: config.whatsapp.appSecret,
@@ -112,6 +120,10 @@ const mcpGateway = new McpGateway(process.env.SEA_MCP_API_KEY)
 const chatSessions = new ChatSessionStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const readinessRuns = new ReadinessRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const scenarioRuns = new ScenarioRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
+const notificationContacts = new NotificationContactStore({
+  mongodbUri: config.mongodb.uri,
+  dbName: config.mongodb.dbName,
+})
 
 const actionStore = new ActionStore({
   mongodbUri: config.mongodb.uri,
@@ -2154,6 +2166,345 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return { recorded: true, decision, decidedAt }
+  })
+
+  // ── N4b: operator notifications (e-mail + WhatsApp) ───────────────────────
+  // Two channels, one address book. A contact consents per channel; a send only
+  // goes to contacts whose consent is on for that channel. Every successful send
+  // is written to the audit chain, with the address masked: the journal proves
+  // who was notified, not what their number is.
+  const contactSchema = z.object({
+    name: z.string().trim().min(1).max(120),
+    email: z.string().trim().email().max(200).optional(),
+    phone: z.string().trim().min(4).max(40).optional(),
+    phoneCountry: z.string().trim().length(2).optional(),
+    channels: z
+      .object({ email: z.boolean(), whatsapp: z.boolean() })
+      .optional(),
+  })
+
+  const maskEmail = (value: string): string => {
+    const [local = '', domain = ''] = value.split('@')
+    if (!domain) return '•'
+    const head = local.slice(0, 1) || '•'
+    return `${head}${'•'.repeat(Math.max(2, local.length - 1))}@${domain}`
+  }
+
+  const contactDto = (contact: NotificationContact) => ({
+    ...contact,
+    ...(contact.phone ? { phoneDisplay: formatPhone(contact.phone) } : {}),
+  })
+
+  app.get('/v1/notifications/contacts', async () => {
+    const contacts = await notificationContacts.list()
+    return { contacts: contacts.map(contactDto) }
+  })
+
+  app.post('/v1/notifications/contacts', async (request, reply) => {
+    const parsed = contactSchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const input = parsed.data
+    if (!input.email && !input.phone) {
+      return reply.status(400).send({ error: 'at_least_one_channel' })
+    }
+
+    let phone: { e164: string; country?: string } | undefined
+    if (input.phone) {
+      const normalized = normalizePhone(input.phone, (input.phoneCountry?.toUpperCase() ?? 'CM') as never)
+      if (!normalized.ok) {
+        return reply.status(422).send({ error: 'invalid_phone', reason: normalized.reason })
+      }
+      phone = {
+        e164: normalized.phone.e164,
+        ...(normalized.phone.country ? { country: normalized.phone.country } : {}),
+      }
+    }
+
+    const channels = input.channels ?? {
+      email: Boolean(input.email),
+      whatsapp: Boolean(phone),
+    }
+    if (channels.email && !input.email) return reply.status(400).send({ error: 'email_consent_without_email' })
+    if (channels.whatsapp && !phone) return reply.status(400).send({ error: 'whatsapp_consent_without_phone' })
+
+    const email = input.email?.toLowerCase()
+    const duplicate = await notificationContacts.duplicate({
+      ...(email ? { email } : {}),
+      ...(phone ? { phone: phone.e164 } : {}),
+    })
+    if (duplicate) {
+      return reply.status(409).send({
+        error: 'duplicate',
+        contact: { id: duplicate.id, name: duplicate.name },
+      })
+    }
+
+    const contact = await notificationContacts.add({
+      name: input.name,
+      ...(email ? { email } : {}),
+      ...(phone ? { phone: phone.e164 } : {}),
+      ...(phone?.country ? { country: phone.country } : {}),
+      channels,
+      createdBy: operatorOf(request).email,
+    })
+
+    await engine.audit
+      .logAction({
+        actor: 'operator',
+        userId: operatorOf(request).email,
+        action: 'notification.contact_added',
+        target: `${input.name} · ${[email ? 'email' : null, phone ? 'whatsapp' : null].filter(Boolean).join('+')}`,
+        lens: 'hybrid',
+      })
+      .catch(() => undefined)
+
+    return reply.status(201).send({ contact: contactDto(contact) })
+  })
+
+  app.delete('/v1/notifications/contacts/:id', async (request, reply) => {
+    const { id } = z.object({ id: z.string().min(1).max(120) }).parse(request.params)
+    const removed = await notificationContacts.remove(id)
+    if (!removed) return reply.status(404).send({ error: 'not_found' })
+    await engine.audit
+      .logAction({
+        actor: 'operator',
+        userId: operatorOf(request).email,
+        action: 'notification.contact_removed',
+        target: id,
+        lens: 'hybrid',
+      })
+      .catch(() => undefined)
+    return { removed: true }
+  })
+
+  /** Template review status, cached for a minute: the UI must not lie about PENDING. */
+  let templateCache: { at: number; rows: Array<{ id: string; name: string; status: string; category?: string; language?: string }> } | null = null
+  const TEMPLATE_CACHE_MS = 60_000
+
+  app.get('/v1/notifications/status', async () => {
+    let templates: Array<{ id: string; name: string; status: string; category?: string; language?: string }> = []
+    let templateError: string | null = null
+    if (whatsapp.configured) {
+      if (!templateCache || Date.now() - templateCache.at > TEMPLATE_CACHE_MS) {
+        try {
+          const rows = await whatsapp.listTemplates()
+          templateCache = { at: Date.now(), rows }
+        } catch (error) {
+          templateError = (error as Error).message
+        }
+      }
+      if (templateCache) templates = templateCache.rows
+    }
+    return {
+      email: { configured: mailConfigured(), from: mailFrom() },
+      whatsapp: {
+        configured: whatsapp.configured,
+        wabaConfigured: Boolean(config.whatsapp.wabaId),
+        templates: templates
+          .filter((template) => template.name.startsWith('meta_hackathon_'))
+          .map((template) => ({
+            name: template.name,
+            status: template.status,
+            category: template.category ?? '',
+            language: template.language ?? '',
+          })),
+        templateError,
+      },
+    }
+  })
+
+  const whatsappSendSchema = z.object({
+    contactIds: z.array(z.string().min(1)).min(1).max(50),
+    kind: z.enum(['test', 'joint_report', 'deadline_alert', 'approval_request']),
+    runId: z.string().min(1).max(120).optional(),
+    tick: z.number().int().min(0).optional(),
+    summary: z.string().min(1).max(900).optional(),
+    title: z.string().min(1).max(200).optional(),
+    deadline: z.string().min(1).max(120).optional(),
+    actionUrl: z.string().url().optional(),
+    expiresInMinutes: z.number().int().min(5).max(10_080).optional(),
+  })
+
+  app.post('/v1/notifications/whatsapp', async (request, reply) => {
+    const parsed = whatsappSendSchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!whatsapp.configured) return reply.status(503).send({ error: 'whatsapp_not_configured' })
+
+    const body = parsed.data
+    const contacts = await notificationContacts.getMany(body.contactIds)
+
+    const missing = (() => {
+      if (body.kind === 'joint_report' && (!body.runId || body.tick === undefined || !body.summary)) {
+        return 'missing_joint_report_fields'
+      }
+      if (body.kind === 'deadline_alert' && (!body.title || !body.deadline)) return 'missing_deadline_fields'
+      if (body.kind === 'approval_request' && (!body.runId || !body.summary)) return 'missing_approval_fields'
+      if (body.kind === 'approval_request' && !config.whatsapp.approvalSecret) return 'approval_secret_missing'
+      return null
+    })()
+    if (missing) return reply.status(400).send({ error: missing })
+
+    const skipped: Array<{ contactId: string; name: string; reason: string }> = []
+    const eligible = contacts.filter((contact) => {
+      if (!contact.phone) {
+        skipped.push({ contactId: contact.id, name: contact.name, reason: 'no_phone' })
+        return false
+      }
+      if (!contact.channels.whatsapp) {
+        skipped.push({ contactId: contact.id, name: contact.name, reason: 'no_whatsapp_consent' })
+        return false
+      }
+      return true
+    })
+
+    /** Template payload for one recipient. Only the approval link is per-recipient. */
+    const templateFor = (): { name: string; bodyParams: string[]; buttonUrlParam?: string } => {
+      if (body.kind === 'test') return { name: WHATSAPP_TEMPLATES.helloWorld, bodyParams: [] }
+      if (body.kind === 'joint_report') {
+        return {
+          name: WHATSAPP_TEMPLATES.jointReport,
+          bodyParams: [body.runId as string, String(body.tick), body.summary as string],
+        }
+      }
+      if (body.kind === 'deadline_alert') {
+        return {
+          name: WHATSAPP_TEMPLATES.deadlineAlert,
+          bodyParams: [body.title as string, body.deadline as string, body.actionUrl ?? 'Open the console'],
+        }
+      }
+      const { token, claims } = createApprovalToken({
+        runId: body.runId as string,
+        userId: operatorOf(request).email,
+        secret: config.whatsapp.approvalSecret as string,
+        ttlSeconds: (body.expiresInMinutes ?? 1_440) * 60,
+        subject: body.summary as string,
+      })
+      return {
+        name: WHATSAPP_TEMPLATES.approvalRequest,
+        bodyParams: [body.summary as string, new Date(claims.exp * 1000).toISOString()],
+        buttonUrlParam: token,
+      }
+    }
+
+    const sent: Array<{ contactId: string; name: string; to: string; messageId: string }> = []
+    const failed: Array<{ contactId: string; name: string; to: string; error: string }> = []
+    let templateName = ''
+
+    for (const contact of eligible) {
+      const phone = contact.phone as string
+      const message = (() => {
+        try {
+          return { ok: true as const, plan: templateFor() }
+        } catch (error) {
+          return { ok: false as const, error: (error as Error).message }
+        }
+      })()
+      if (!message.ok) return reply.status(400).send({ error: message.error })
+      templateName = message.plan.name
+      try {
+        const result = await whatsapp.sendTemplate({
+          to: phone,
+          name: message.plan.name,
+          language: config.whatsapp.templateLanguage,
+          bodyParams: message.plan.bodyParams,
+          ...(message.plan.buttonUrlParam ? { buttonUrlParam: message.plan.buttonUrlParam } : {}),
+        })
+        sent.push({ contactId: contact.id, name: contact.name, to: maskPhone(phone), messageId: result.messageId })
+        await engine.audit
+          .logAction({
+            actor: 'operator',
+            userId: operatorOf(request).email,
+            action: 'notification.whatsapp_sent',
+            target: `${contact.name} · ${maskPhone(phone)} · ${templateName}`,
+            lens: 'hybrid',
+            ...(body.runId ? { runId: body.runId } : {}),
+          })
+          .catch(() => undefined)
+      } catch (error) {
+        failed.push({ contactId: contact.id, name: contact.name, to: maskPhone(phone), error: (error as Error).message })
+      }
+    }
+
+    return {
+      template: templateName,
+      language: config.whatsapp.templateLanguage,
+      sent,
+      failed,
+      skipped,
+    }
+  })
+
+  const emailSendSchema = z
+    .object({
+      contactIds: z.array(z.string().min(1)).min(1).max(50),
+      subject: z.string().trim().min(1).max(160),
+      heading: z.string().trim().min(1).max(160).optional(),
+      intro: z.string().trim().max(300).optional(),
+      message: z.string().trim().min(1).max(5_000),
+      ctaLabel: z.string().trim().min(1).max(60).optional(),
+      ctaUrl: z.string().url().max(2_000).optional(),
+      locale: z.enum(['fr', 'en']).optional(),
+    })
+    .refine((value) => Boolean(value.ctaLabel) === Boolean(value.ctaUrl), {
+      message: 'cta_incomplete',
+      path: ['ctaUrl'],
+    })
+
+  app.post('/v1/notifications/email', async (request, reply) => {
+    const parsed = emailSendSchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!mailConfigured()) return reply.status(503).send({ error: 'mail_not_configured' })
+
+    const body = parsed.data
+    const contacts = await notificationContacts.getMany(body.contactIds)
+    const skipped: Array<{ contactId: string; name: string; reason: string }> = []
+    const eligible = contacts.filter((contact) => {
+      if (!contact.email) {
+        skipped.push({ contactId: contact.id, name: contact.name, reason: 'no_email' })
+        return false
+      }
+      if (!contact.channels.email) {
+        skipped.push({ contactId: contact.id, name: contact.name, reason: 'no_email_consent' })
+        return false
+      }
+      return true
+    })
+
+    const sent: Array<{ contactId: string; name: string; to: string; messageId: string | null }> = []
+    const failed: Array<{ contactId: string; name: string; to: string; error: string }> = []
+
+    for (const contact of eligible) {
+      const address = contact.email as string
+      try {
+        const result = await sendNotificationEmail({
+          to: address,
+          subject: body.subject,
+          heading: body.heading ?? body.subject,
+          ...(body.intro ? { intro: body.intro } : {}),
+          message: body.message,
+          ...(body.ctaLabel && body.ctaUrl ? { cta: { label: body.ctaLabel, url: body.ctaUrl } } : {}),
+          ...(body.locale ? { locale: body.locale } : {}),
+          note:
+            body.locale === 'fr'
+              ? 'Vous recevez ce message parce que vous avez consenti à recevoir les notifications de la cellule de coordination.'
+              : 'You receive this message because you consented to notifications from the coordination cell.',
+        })
+        sent.push({ contactId: contact.id, name: contact.name, to: maskEmail(address), messageId: result.id ?? null })
+        await engine.audit
+          .logAction({
+            actor: 'operator',
+            userId: operatorOf(request).email,
+            action: 'notification.email_sent',
+            target: `${contact.name} · ${maskEmail(address)} · ${body.subject}`,
+            lens: 'hybrid',
+          })
+          .catch(() => undefined)
+      } catch (error) {
+        failed.push({ contactId: contact.id, name: contact.name, to: maskEmail(address), error: (error as Error).message })
+      }
+    }
+
+    return { subject: body.subject, sent, failed, skipped }
   })
 
   // ── N8: table-top crisis exercise ─────────────────────────────────────────

@@ -16,20 +16,34 @@ the same template if the focal points read French). Body variables are positiona
 | `meta_hackathon_deadline_alert` | `Deadline alert: {{1}}\n\nThe clock on this item stops at {{2}}. The coordination cell has flagged the outstanding clauses and prepared the review pack.\n\n{{3}}\n\nOpen the console to approve, amend or reject before the deadline.` | URL (static): `https://<WEB_PUBLIC_URL>/` |
 | `meta_hackathon_approval_request` | `Approval requested.\n\nA decision from the focal point is needed on the following item:\n\n{{1}}\n\nThe signed link below opens the approval page. It works once and expires on {{2}}. Nothing is published until you decide.` | URL (dynamic): `https://<WEB_PUBLIC_URL>/approve/{{1}}` |
 
-### Current status (27 Oct 2026)
+A fourth template, `meta_hackathon_hello_world` (`Hello World`, no variable, no
+button), exists only to smoke-test the channel: send it first when the number or
+the token changes.
 
-Created through `POST /{WABA}/message_templates` (`v26.0`), category `UTILITY`,
-language `en`. All three were **APPROVED** by Meta on 27 October 2026 (read back
-with `GET /{WABA}/message_templates?fields=name,status`):
+### Review status
 
-| Template | ID | Status |
-|---|---|---|
-| `meta_hackathon_joint_report` | `1389658312947485` | APPROVED |
-| `meta_hackathon_deadline_alert` | `1106780912229163` | APPROVED |
-| `meta_hackathon_approval_request` | `1682829429905161` | APPROVED |
+Before a demo, read the review status back from the WABA:
+
+```
+GET /{WABA}/message_templates?fields=name,status,category,language
+```
+
+Only an `APPROVED` template can be sent on the business-initiated path. A
+template still `PENDING` is reported as such by `GET /v1/notifications/status`
+and refused at send time by Meta; the console never presents it as usable.
+
+The exact sample name `hello_world` cannot be created: Meta reserves it and
+answers `400 / code 100 / subcode 2388155` — *"Le nom du modèle est déjà utilisé
+comme exemple de modèle"*. Use `meta_hackathon_hello_world` instead.
 
 `WEB_PUBLIC_URL` is the public address of the web app, so the approval button
 base is `<web-public-url>/approve/{{1}}`.
+
+The domain changed from the Vercel deployment to the custom console origin. The
+existing template buttons still carry the legacy base URL and keep working
+because that host stays alive; editing the base URL means submitting the
+template again for review (a new version), so it can be done whenever the old
+host is retired.
 
 The bodies above are longer than the first draft on purpose: Meta rejects a
 template whose variable-to-word ratio is too high (`error_subcode 2388293`,
@@ -58,6 +72,14 @@ deadline_alert    → meta_hackathon_deadline_alert    body: [title, deadline, a
 approval_request  → meta_hackathon_approval_request  body: [summary, expiresAtISO], button: signed token
 ```
 
+The console does not use `/v1/whatsapp/notify` directly: it sends through
+`/v1/notifications/whatsapp`, which resolves the address book, checks each
+recipient's WhatsApp consent, then calls the same templates. Its `kind` values
+add `test` → `meta_hackathon_hello_world` (no body variable), the only template
+that can be sent before the Utility ones are approved.
+See `docs/NOTIFICATIONS.md` for the address book, the audit trail and the
+consent model.
+
 `WHATSAPP_TEMPLATE_LANGUAGE` selects the language code sent with every message
 (default `en`). `dryRun: true` (or an unconfigured client) returns the rendered
 payload and the signed approval URL instead of calling Meta: this is what the
@@ -69,8 +91,37 @@ demo uses when no live number is attached.
   over the claims with `APPROVAL_SECRET`, 24 h TTL by default, single use
   enforced by the `whatsapp_approvals` collection (`_id = jti`).
 - The webhook is verified against `X-Hub-Signature-256` computed over the **raw**
-  body; Fastify keeps the raw bytes for that reason.
+  body; Fastify keeps the raw bytes for that reason. Verified on the deployed API:
+  handshake echoes `hub.challenge`, a signed POST returns `{ received: true }`,
+  a forged signature returns `401`.
 - Inbound free text is acknowledged, never interpreted as an approval. A
   decision requires the signed link.
 - A single-use decision is also written to the hash-chained audit log as
   `whatsapp.approval`.
+
+## Webhook: intentionally not implemented
+
+The route is implemented and verified (`GET` handshake, `X-Hub-Signature-256`
+checked over the raw body, signed `POST` accepted, forged signature `401`), but
+Meta does not call it and we decided not to change that for the hackathon.
+
+Reason: inbound messages and delivery statuses require the Meta app that owns
+the WABA (the system user token in `WHATSAPP_ACCESS_TOKEN`) to point its
+`whatsapp_business_account` callback at `https://<api-host>/v1/whatsapp/webhook`.
+That app is shared and already routes its WhatsApp callback to another product.
+Repointing it would risk an unrelated integration for a feature the demo does not
+need — sending works without receipts.
+
+Accepted consequences:
+
+- a message counts as sent when `POST /{phone-number-id}/messages` answers `200`
+  with a `wamid`; no `delivered` / `read` receipt is recorded;
+- replies to a template are not ingested (inbound text never decides anything
+  anyway: approvals go through the signed link);
+- the console shows the provider's answer, not a delivery state.
+
+If statuses ever become necessary, dedicate a Meta app to this product (WhatsApp
+product, same WABA, callback `https://<api-host>/v1/whatsapp/webhook`, `messages`
+field) and subscribe it with `POST /{WABA}/subscribed_apps` using that app's
+token. That is the only safe option: a Meta app has a single WhatsApp callback.
+

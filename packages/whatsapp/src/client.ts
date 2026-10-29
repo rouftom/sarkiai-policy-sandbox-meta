@@ -16,13 +16,24 @@ export const WHATSAPP_TEMPLATES = {
   jointReport: `${WHATSAPP_TEMPLATE_PREFIX}joint_report`,
   deadlineAlert: `${WHATSAPP_TEMPLATE_PREFIX}deadline_alert`,
   approvalRequest: `${WHATSAPP_TEMPLATE_PREFIX}approval_request`,
+  /** No variable, no button: the only way to smoke-test a number. */
+  helloWorld: `${WHATSAPP_TEMPLATE_PREFIX}hello_world`,
 } as const
 
 export type WhatsAppTemplate = (typeof WHATSAPP_TEMPLATES)[keyof typeof WHATSAPP_TEMPLATES]
 
+export const WHATSAPP_TEMPLATE_LABELS: Record<WhatsAppTemplate, string> = {
+  [WHATSAPP_TEMPLATES.jointReport]: 'Joint report',
+  [WHATSAPP_TEMPLATES.deadlineAlert]: 'Deadline alert',
+  [WHATSAPP_TEMPLATES.approvalRequest]: 'Approval request',
+  [WHATSAPP_TEMPLATES.helloWorld]: 'Hello world (test)',
+}
+
 export interface WhatsAppConfig {
   version?: string
   phoneNumberId: string
+  /** WhatsApp Business Account id, needed to read template review status. */
+  wabaId?: string
   accessToken: string
   verifyToken?: string
   appSecret?: string
@@ -46,6 +57,15 @@ export interface TemplateMessageInput {
 
 export interface SentMessage {
   messageId: string
+}
+
+/** One row of `GET /{WABA}/message_templates`. */
+export interface TemplateSummary {
+  id: string
+  name: string
+  status: string
+  category?: string
+  language?: string
 }
 
 export interface WebhookStatus {
@@ -86,6 +106,7 @@ function templateParam(value: string): string {
 export class WhatsAppClient {
   private readonly version: string
   private readonly phoneNumberId: string
+  private readonly wabaId: string
   private readonly accessToken: string
   private readonly verifyToken: string
   private readonly appSecret: string
@@ -96,6 +117,7 @@ export class WhatsAppClient {
   constructor(config: WhatsAppConfig) {
     this.version = config.version ?? DEFAULT_VERSION
     this.phoneNumberId = config.phoneNumberId
+    this.wabaId = config.wabaId ?? ''
     this.accessToken = config.accessToken
     this.verifyToken = config.verifyToken ?? ''
     this.appSecret = config.appSecret ?? ''
@@ -239,6 +261,33 @@ export class WhatsAppClient {
     }
 
     return { statuses, messages }
+  }
+
+  /**
+   * Review status of every template in the WABA, so the console can say
+   * "pending review" instead of failing at send time. Any Graph error is thrown;
+   * callers treat it as "unknown", never as "approved".
+   */
+  async listTemplates(): Promise<TemplateSummary[]> {
+    if (!this.configured || !this.wabaId) return []
+    const url = new URL(`${this.apiBaseUrl}/${this.version}/${this.wabaId}/message_templates`)
+    url.searchParams.set('fields', 'id,name,status,category,language')
+    url.searchParams.set('limit', '200')
+    let response: Response
+    try {
+      response = await this.fetchImpl(url, {
+        headers: { Authorization: `Bearer ${this.accessToken}` },
+        signal: AbortSignal.timeout(this.timeoutMs),
+      })
+    } catch (error) {
+      throw new Error(`WhatsApp request failed: ${(error as Error).message}`)
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(`WhatsApp API failed (${response.status}): ${text.slice(0, 300)}`)
+    }
+    const body = (await response.json().catch(() => ({}))) as { data?: TemplateSummary[] }
+    return body.data ?? []
   }
 
   private async send(body: unknown): Promise<SentMessage> {

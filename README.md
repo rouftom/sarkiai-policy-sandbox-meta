@@ -32,8 +32,9 @@ It runs on **Meta models**, in three interchangeable provider modes:
 - **local**: any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
 
 Around the incident run, the sandbox also rehearses the team (**timed crisis
-injects with a deterministic after-action score**) and drafts public messages in
-**Fulfulde or Hausa**, always marked pending native review.
+injects with a deterministic after-action score**). Public-message drafting in
+**Fulfulde or Hausa** is available through the API, always marked pending native
+review; it is not surfaced in the console.
 
 - **Primary country:** Cameroon (MINPOSTEL-aligned), then multi-country (UAE → …).
 - **Primary domain:** healthcare, with cross-domain spillover (data protection, telecom, cybersecurity).
@@ -132,6 +133,34 @@ Then:
 Recording the submission video? [`docs/DEMO.md`](docs/DEMO.md) is the 3-minute
 runbook, pre-flight checks included.
 
+### Origins, local and on-premise
+
+A bare `docker compose up` needs no origin configuration. Link building falls
+back to `http://localhost:3000`, local-network origins are always accepted
+(loopback on any port, private IPs, container names, `.local`/`.internal`), and
+the API keeps a permissive CORS policy until it is told otherwise.
+
+For a host users reach from elsewhere, set the console's address:
+
+```bash
+WEB_PUBLIC_URL=https://<web-host>              # links sent by e-mail / WhatsApp
+NEXT_PUBLIC_WEB_URL=https://<web-host>         # absolute metadata, build time
+WEB_PUBLIC_URL_ALIASES=https://<other-host>    # optional, comma-separated
+```
+
+Once `WEB_PUBLIC_URL` is set, the API allowlist contains that origin, its
+aliases, local-network origins and `*.vercel.app` previews. A *public* name that
+differs from `WEB_PUBLIC_URL` (second domain, staging host) goes in
+`WEB_PUBLIC_URL_ALIASES`; a LAN address or internal name never needs to.
+`WEB_ALLOW_ANY_ORIGIN=true` is the escape hatch for a reverse proxy that cannot
+be expressed as a list. Details in
+[`deploy/api/README.md`](deploy/api/README.md) and
+[`deploy/web/README.md`](deploy/web/README.md).
+
+For a browser to reach the API from another machine, `NEXT_PUBLIC_API_URL` must
+name the API as that machine sees it (`http://<host>:8000`), not `localhost`.
+
+
 ### Operator accounts (first run)
 
 There is no seeded operator and no password in the source tree or in an
@@ -155,6 +184,7 @@ AUTH_RESEND_KEY=re_...                       # Resend API key
 AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
 AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
 WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
+WEB_PUBLIC_URL_ALIASES=https://your-project.vercel.app  # optional, comma-separated
 ```
 
 Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators
@@ -344,6 +374,7 @@ messages use approved utility templates prefixed `meta_hackathon_`:
 | `meta_hackathon_joint_report` | a joint situation report at a scenario tick |
 | `meta_hackathon_deadline_alert` | an approaching legal deadline |
 | `meta_hackathon_approval_request` | a decision that needs a human |
+| `meta_hackathon_hello_world` | channel smoke test, no variable (the only one already approved) |
 
 The approval message carries a **signed, expiring link** to the web app
 (`/approve/:token`); there is no quick-reply. The operator reads the run, writes
@@ -356,6 +387,23 @@ Template wording, categories and button configuration:
 [`deploy/whatsapp/templates.md`](deploy/whatsapp/templates.md). Without a live
 number, `POST /v1/whatsapp/notify` with `dryRun: true` returns the exact payload
 and the signed link, which is what the demo uses.
+
+### Operator notifications: e-mail and WhatsApp (N4b)
+
+The Communications page notifies the people who must act. One shared address book
+stores each contact with a consent flag **per channel**; the console only offers
+recipients who consented, and the API re-checks the flag before sending. E-mail
+goes out through a React Email template (`packages/notifications`), WhatsApp
+through an approved template. Numbers are validated with `libphonenumber-js`
+and stored in E.164 only. Every add, removal and successful send is appended to
+the audit chain with the address masked.
+
+The Meta status webhook is deliberately left unwired in this deployment (the
+shared Meta app already routes its callback elsewhere): sending works, receipts
+do not. Consent in real use would come from a public portal rather than an
+operator's checkbox. Both decisions, the endpoints and the intended portal flow
+are documented in [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md).
+
 
 ### Scanned gazettes (N3)
 
@@ -416,7 +464,8 @@ audit trail as `exercise.after_action`.
 
 ### Communications: generated briefs in Fulfulde and Hausa (N9)
 
-`POST /v1/communications/draft` produces a short public-information draft in
+This endpoint is not exposed in the console; the notification panel covers the
+e-mail and WhatsApp channels. `POST /v1/communications/draft` produces a short public-information draft in
 Fulfulde or Hausa from a supplied set of facts. The service enforces three rules:
 it refuses drafts that contain political content or offer medical advice; it
 flags phone numbers that appear in the draft but not in the supplied facts; and

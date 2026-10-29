@@ -496,6 +496,52 @@ export interface WhatsappNotifyDto {
   messageId?: string
 }
 
+/** Notification address book: one row per person, consent per channel. */
+export interface NotificationContactDto {
+  id: string
+  name: string
+  email?: string
+  /** E.164, the only stored form. */
+  phone?: string
+  /** International form for display, computed server-side. */
+  phoneDisplay?: string
+  country?: string
+  channels: { email: boolean; whatsapp: boolean }
+  createdAt: string
+  createdBy: string
+}
+
+export interface NotificationStatusDto {
+  email: { configured: boolean; from: string }
+  whatsapp: {
+    configured: boolean
+    wabaConfigured: boolean
+    templates: Array<{ name: string; status: string; category: string; language: string }>
+    templateError: string | null
+  }
+}
+
+export type WhatsAppNotificationKind = 'test' | 'joint_report' | 'deadline_alert' | 'approval_request'
+
+export interface NotificationSendResultDto {
+  /** WhatsApp only. */
+  template?: string
+  /** E-mail only. */
+  subject?: string
+  language?: string
+  sent: Array<{ contactId: string; name: string; to: string; messageId: string | null }>
+  failed: Array<{ contactId: string; name: string; to: string; error: string }>
+  skipped: Array<{ contactId: string; name: string; reason: string }>
+}
+
+export interface NewNotificationContactDto {
+  name: string
+  email?: string
+  phone?: string
+  phoneCountry?: string
+  channels?: { email: boolean; whatsapp: boolean }
+}
+
 /** N8 · table-top crisis exercise. Injects are timed; actions are logged by the team. */
 export type ExerciseSeverity = 'low' | 'medium' | 'high' | 'critical'
 export type ExerciseActionKind = 'action' | 'decision' | 'escalation' | 'note'
@@ -585,39 +631,6 @@ export interface ExerciseBodyDto {
   definition: ExerciseDefinitionDto
   actions: ExerciseActionDto[]
   evaluatedAtMinute: number
-}
-
-/** N9 · public-communication drafts in Fulfulde / Hausa, always pending native review. */
-export type CommunicationLanguageCode = 'ff' | 'ha'
-
-export interface CommunicationLanguageDto {
-  code: CommunicationLanguageCode
-  name: string
-  script: string
-  region: string
-  note: string
-}
-
-export interface CommunicationKeyTermDto {
-  term: string
-  translation: string
-}
-
-export interface CommunicationDraftDto {
-  language: CommunicationLanguageCode
-  languageName: string
-  script: string
-  reviewStatus: 'pending_native_review'
-  reviewRequired: true
-  title: string
-  summary: string
-  message: string
-  sms: string
-  keyTerms: CommunicationKeyTermDto[]
-  caveats: string[]
-  warnings: string[]
-  model: string
-  generatedAt: string
 }
 
 export interface MetaModelDto {
@@ -986,6 +999,54 @@ export const api = {
     | { kind: 'approval_request'; to?: string; runId: string; summary: string; dryRun?: boolean }
   ) => request<WhatsappNotifyDto>('/v1/whatsapp/notify', { method: 'POST', body: JSON.stringify(body) }),
 
+  /** Notification channels: what is configured, and the review status of each template. */
+  notificationStatus: () => request<NotificationStatusDto>('/v1/notifications/status'),
+
+  notificationContacts: () =>
+    request<{ contacts: NotificationContactDto[] }>('/v1/notifications/contacts'),
+
+  addNotificationContact: (body: NewNotificationContactDto) =>
+    request<{ contact: NotificationContactDto }>('/v1/notifications/contacts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  deleteNotificationContact: (id: string) =>
+    request<{ removed: boolean }>(`/v1/notifications/contacts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  sendWhatsAppNotification: (body: {
+    contactIds: string[]
+    kind: WhatsAppNotificationKind
+    runId?: string
+    tick?: number
+    summary?: string
+    title?: string
+    deadline?: string
+    actionUrl?: string
+    expiresInMinutes?: number
+  }) =>
+    request<NotificationSendResultDto>('/v1/notifications/whatsapp', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  sendEmailNotification: (body: {
+    contactIds: string[]
+    subject: string
+    heading?: string
+    intro?: string
+    message: string
+    ctaLabel?: string
+    ctaUrl?: string
+    locale?: 'fr' | 'en'
+  }) =>
+    request<NotificationSendResultDto>('/v1/notifications/email', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   /** N8 · authored sample exercise (timed injects) for a country. */
   exerciseSample: (country: string) =>
     request<ExerciseDefinitionDto>(`/v1/exercise/sample?country=${encodeURIComponent(country)}`),
@@ -997,20 +1058,6 @@ export const api = {
   /** Same evidence, then a model-written narrative on top of it. */
   exerciseAfterAction: (body: ExerciseBodyDto) =>
     request<AfterActionDto>('/v1/exercise/after-action', { method: 'POST', body: JSON.stringify(body) }),
-
-  /** N9 · supported drafting languages (Fulfulde, Hausa). */
-  communicationLanguages: () => request<CommunicationLanguageDto[]>('/v1/communications/languages'),
-
-  /** N9 · draft a public message. Political or medical content is refused with 422. */
-  draftCommunication: (body: {
-    language: CommunicationLanguageCode
-    sourceLanguage?: 'en' | 'fr'
-    audience: string
-    jurisdiction: string
-    incidentSummary: string
-    channels?: Array<'radio' | 'sms' | 'social' | 'press'>
-    constraints?: string[]
-  }) => request<CommunicationDraftDto>('/v1/communications/draft', { method: 'POST', body: JSON.stringify(body) }),
 
   /**
    * Run dossier, fetched with the operator Bearer token. The API rejects

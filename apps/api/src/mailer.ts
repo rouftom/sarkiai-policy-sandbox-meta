@@ -13,6 +13,7 @@
  */
 
 import { config } from './config.js'
+import { renderNotificationEmail, type NotificationLocale } from '@sps/notifications'
 
 export type MailErrorCode = 'mail_not_configured' | 'mail_failed'
 
@@ -432,5 +433,49 @@ export async function sendPasswordReset(reset: PasswordReset): Promise<MailResul
     subject: passwordResetSubject(),
     html: passwordResetHtml(reset),
     text: passwordResetText(reset),
+  })
+}
+
+/** Whether Resend has a key: the console shows this before offering a broadcast. */
+export function mailConfigured(): boolean {
+  return Boolean(config.mail.apiKey)
+}
+
+export function mailFrom(): string {
+  return config.mail.from
+}
+
+export interface NotificationMail {
+  to: string
+  subject: string
+  heading: string
+  intro?: string
+  message: string
+  cta?: { label: string; url: string }
+  note?: string
+  locale?: NotificationLocale
+}
+
+/**
+ * Operator notification, rendered by the React Email template in
+ * `@sps/notifications`. One recipient per call: an address is never put in a
+ * `Bcc` list, so no one sees who else was notified.
+ */
+export async function sendNotificationEmail(input: NotificationMail): Promise<MailResult> {
+  const { html, text } = await renderNotificationEmail({
+    ...(input.locale ? { locale: input.locale } : {}),
+    preview: input.heading,
+    heading: input.heading,
+    ...(input.intro ? { intro: input.intro } : {}),
+    message: input.message,
+    ...(input.cta ? { cta: input.cta } : {}),
+    ...(input.note ? { note: input.note } : {}),
+    sentAt: new Date().toISOString(),
+  })
+  return send({
+    to: [input.to],
+    subject: input.subject.slice(0, 160),
+    html,
+    text,
   })
 }
