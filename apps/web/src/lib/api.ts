@@ -904,6 +904,12 @@ export const api = {
 
   scenarioRun: (runId: string) => request<ScenarioRunDto>(`/v1/scenarios/runs/${encodeURIComponent(runId)}`),
 
+  /** One saved run as a file: JSON, Markdown, HTML or Word (base64). */
+  scenarioExport: (runId: string, format: 'json' | 'markdown' | 'html' | 'docx') =>
+    request<{ filename: string; mime: string; content: string; encoding: 'utf8' | 'base64' }>(
+      `/v1/scenarios/runs/${encodeURIComponent(runId)}/export?format=${format}`,
+    ),
+
   /** Resumes a failed run from its last released tick. */
   resumeScenarioRun: (runId: string) =>
     request<ScenarioStartDto & { released: number }>(`/v1/scenarios/runs/${encodeURIComponent(runId)}/resume`, { method: 'POST' }),

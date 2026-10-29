@@ -42,6 +42,7 @@ import { createEngine, createKnowledgeIngestor, createScenario, recordProviderSw
 import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { scenarioFor, type ScenarioLang } from '../scenarios.js'
 import { ScenarioRunStore } from '../scenario-runs.js'
+import { buildScenarioExport } from '../scenario-report.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
@@ -1187,6 +1188,33 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ...record,
       agents: scenario.agents,
       events: scenario.events,
+    }
+  })
+
+  /**
+   * One saved run as a file: the raw JSON, Markdown, a self-contained HTML page,
+   * or a Word document. The Word file is built by the docx MCP server, like the
+   * readiness report.
+   */
+  app.get('/v1/scenarios/runs/:runId/export', async (request, reply) => {
+    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const query = z
+      .object({ format: z.enum(['json', 'markdown', 'html', 'docx']).default('json') })
+      .safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    const operator = operatorOf(request)
+    const record = await scenarioRuns.get(runId, operator.email)
+    if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
+    try {
+      return await buildScenarioExport({
+        run: record,
+        traces: await engine.audit.getTrace(runId, operator.email),
+        format: query.data.format,
+        mcp: mcpGateway,
+      })
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
     }
   })
 

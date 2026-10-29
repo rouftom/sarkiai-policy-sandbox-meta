@@ -8,7 +8,7 @@
  */
 
 import * as React from 'react'
-import { Eye, Loader, Play, RotateCcw, Search, Siren } from 'lucide-react'
+import { Eye, Play, RotateCcw, Search, Siren } from 'lucide-react'
 import {
   Button,
   Checkbox,
@@ -196,9 +196,44 @@ export function ScenarioHistory({
       </div>
 
       {runs === null ? (
-        <p className="flex items-center gap-2 py-10 text-[11px] text-muted-foreground">
-          <Loader className="h-3.5 w-3.5 animate-spin" /> {t('scenario.historyLoading')}
-        </p>
+        <div className="border border-border" aria-busy="true" aria-label={t('scenario.historyLoading')}>
+          <Table className="table-actions-overlay">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>{t('scenario.table.date')}</TableHead>
+                <TableHead>{t('scenario.table.sector')}</TableHead>
+                <TableHead>{t('scenario.table.country')}</TableHead>
+                <TableHead className="text-right">{t('scenario.table.progress')}</TableHead>
+                <TableHead>{t('scenario.table.status')}</TableHead>
+                <TableHead className="text-right">{t('scenario.table.action')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array.from({ length: Math.min(pageSize, 6) }, (_, index) => (
+                <TableRow key={`skeleton-${index}`} className="hover:bg-transparent">
+                  <TableCell className="min-w-[200px]">
+                    <div className="shimmer h-3 w-36 rounded bg-secondary" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="shimmer h-3 w-16 rounded bg-secondary" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="shimmer h-3 w-7 rounded bg-secondary" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="shimmer ml-auto h-3 w-10 rounded bg-secondary" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="shimmer h-4 w-16 rounded-full bg-secondary" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="shimmer ml-auto h-3 w-14 rounded bg-secondary" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       ) : rows.length === 0 ? (
         <div className="border border-border px-4 py-12 text-center">
           <div

@@ -20,6 +20,7 @@
 
 import { Resvg } from '@resvg/resvg-js'
 import type { McpGateway } from './mcp.js'
+import { callMcpTool } from './mcp-tool.js'
 import { referenceImage, type GeneratedImage, type ImageGenerationOptions } from '@sps/agents'
 import { dimensionTextIn, flagOf, type ReadinessLang } from '@sps/shared'
 import type { ReadinessRun } from './readiness-runs.js'
@@ -233,27 +234,6 @@ function countryNameOf(code: string, lang: ReadinessLang): string {
   }
 }
 
-/** Calls one MCP tool and reports whether it answered without error. */
-async function callChecked(
-  mcp: McpGateway | undefined,
-  server: string,
-  pattern: RegExp,
-  args: Record<string, unknown>,
-): Promise<{ ok: true; tool: string; result: unknown } | { ok: false; message: string }> {
-  if (!mcp) return { ok: false, message: 'MCP gateway not configured' }
-  try {
-    const tools = await mcp.listTools(server)
-    const tool = tools.find((entry) => pattern.test(entry.name))
-    if (!tool) return { ok: false, message: `${server} exposes no matching tool` }
-    const response = await mcp.callTool(server, tool.name, args)
-    const result = response.result as { isError?: boolean; content?: Array<{ text?: string }> } | undefined
-    if (result?.isError) return { ok: false, message: (result.content?.[0]?.text ?? 'tool error').slice(0, 160) }
-    return { ok: true, tool: tool.name, result: response.result }
-  } catch (error) {
-    return { ok: false, message: (error as Error).message.slice(0, 160) }
-  }
-}
-
 /** A PNG of an SVG drawing, `width` pixels wide; null when the drawing cannot be rendered. */
 function rasterize(svg: string, width: number): Buffer | null {
   try {
@@ -442,7 +422,7 @@ export async function buildReadinessReport(
   const chartPng = rasterize(barChartSvg(rows), 1200)
   const diagramPng = rasterize(flowSvg(steps), 1200)
   const [chartCall, cover] = await Promise.all([
-    callChecked(options.mcp, 'sarkiai_charts', /display_chart/i, {
+    callMcpTool(options.mcp, 'sarkiai_charts', /display_chart/i, {
       type: 'horizontal_bar',
       data: rows.map((row) => ({ dimension: row.label, score: row.value })),
       config: { series: [{ key: 'score' }], locale: lang === 'fr' ? 'fr-FR' : 'en-GB' },
@@ -503,7 +483,7 @@ export async function buildReadinessReport(
   if (options.format === 'docx') {
     doc.coverDocx = await coverForWord(coverSource, coverUpload)
     const word = (withImages: boolean) =>
-      callChecked(options.mcp, 'sea_mcp_docx', /^docx_create_document$/i, {
+      callMcpTool(options.mcp, 'sea_mcp_docx', /^docx_create_document$/i, {
         title: `${doc.flag} ${doc.countryName} · ${labels.cover}`.trim(),
         subtitle: `${doc.domain} · ${date}`,
         headerText: 'SarkiAI Policy Sandbox',
