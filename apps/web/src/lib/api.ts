@@ -157,6 +157,21 @@ export type ReadinessEventDto =
   | { type: 'saved'; run: ReadinessRunSummaryDto }
   | { type: 'failed'; message: string; runId?: string; completed?: number; total?: number }
 
+export interface ReadinessRunsQuery {
+  page?: number
+  limit?: number
+  q?: string
+  domains?: string[]
+  statuses?: Array<'complete' | 'failed'>
+}
+
+export interface ReadinessRunsPageDto {
+  runs: ReadinessRunSummaryDto[]
+  total: number
+  page: number
+  limit: number
+}
+
 export interface ReadinessRunSummaryDto {
   id: string
   country: string
@@ -834,7 +849,17 @@ export const api = {
     onEvent: (event: ReadinessEventDto) => void,
   ) => streamReadiness(body, onEvent),
 
-  readinessRuns: () => request<{ runs: ReadinessRunSummaryDto[] }>('/v1/readiness/runs'),
+  /** One page of the saved assessments, filtered and paged on the server. */
+  readinessRuns: (query: ReadinessRunsQuery = {}) => {
+    const params = new URLSearchParams()
+    if (query.page) params.set('page', String(query.page))
+    if (query.limit) params.set('limit', String(query.limit))
+    if (query.q) params.set('q', query.q)
+    if (query.domains?.length) params.set('domain', query.domains.join(','))
+    if (query.statuses?.length) params.set('status', query.statuses.join(','))
+    const qs = params.toString()
+    return request<ReadinessRunsPageDto>(`/v1/readiness/runs${qs ? `?${qs}` : ''}`)
+  },
 
   /** A report of a saved assessment, as a file the browser can download. */
   readinessReport: (id: string, format: 'markdown' | 'html' | 'docx', lang: ReadinessLangDto) =>

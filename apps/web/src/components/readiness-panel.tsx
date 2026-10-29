@@ -1,10 +1,14 @@
 'use client'
 
 import * as React from 'react'
-import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Circle, Download, FileCheck2, History, ListChecks, Loader, Play, Plus, RotateCcw, Settings2, Waypoints, Workflow } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Circle, Download, FileCheck2, ListChecks, Loader, Play, Plus, RotateCcw, Settings2, Waypoints, Workflow } from 'lucide-react'
 import {
   AnimatedTabsList,
   Badge,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Button,
   Card,
   CardContent,
@@ -29,27 +33,27 @@ import {
   type TabItem,
 } from '@sps/ui'
 import { READINESS_DIMENSIONS, flagOf, type Domain } from '@sps/shared'
-import { type DimensionScoreDto } from '@/lib/api'
+import { type DimensionScoreDto, type ReadinessReportDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
-import { ProcessGraph, type ProcessGraphStep, type ProcessState } from '@/components/workflow/process-graph'
+import { ProcessGraph, type ProcessGraphStep, type ProcessGraphView, type ProcessState } from '@/components/workflow/process-graph'
 import { ReadinessHistory } from '@/components/readiness-history'
-import { useReadiness, type SectorResult, type Step } from '@/components/readiness-context'
+import { ICON_BUTTON_OUTLINE } from '@/components/icon-button-styles'
+import { useReadiness, type ReadinessTab, type ReportFormat, type RunMeta, type SectorResult, type Step } from '@/components/readiness-context'
 
 function seconds(ms: number | undefined): string {
   return ms === undefined ? 'n/a' : `${(ms / 1000).toFixed(1)} s`
 }
 
 /**
- * The page-title actions: the history toggle (pressed while it is shown) and a
- * plus button that opens the settings of a new assessment, with the start action.
+ * The page-title actions: a plus button that opens the settings of a new assessment,
+ * with the start action and the way to resume an interrupted run.
  */
 export function ReadinessActions() {
   const { t } = useI18n()
-  const { view, running, run, showHistory, showAssessment, creating, setCreating, openCreate, startDomains, setStartDomains, settings, resumable, resume } = useReadiness()
+  const { running, run, creating, setCreating, openCreate, startDomains, setStartDomains, settings, resumable, resume } = useReadiness()
   const sectorOptions: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
-  const inHistory = view === 'history'
   const start = () => {
     setCreating(false)
     void run()
@@ -57,25 +61,6 @@ export function ReadinessActions() {
   return (
     <TooltipProvider>
     <div className="flex items-center gap-2">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon-sm"
-            aria-label={t('readiness.history')}
-            aria-pressed={inHistory}
-            onClick={() => (inHistory ? showAssessment() : showHistory())}
-            className={cn(
-              'h-8 w-8 rounded-lg transition-colors',
-              inHistory
-                ? 'bg-brand-primary text-white shadow-sm hover:bg-brand-primary/90'
-                : 'bg-transparent text-muted-foreground hover:bg-brand-primary/10 hover:text-brand-primary dark:hover:text-brand-primary-light',
-            )}
-          >
-            <History className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-md">{t('readiness.history')}</TooltipContent>
-      </Tooltip>
       {resumable && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -148,7 +133,6 @@ export function ReadinessActions() {
   )
 }
 
-type Tab = 'process' | 'steps' | 'result' | 'settings'
 
 /** Details of one node of the process, shown in a popup when the node is clicked. */
 interface NodeInfo {
@@ -190,7 +174,7 @@ export function ReadinessPanel() {
   const { t, locale } = useI18n()
   const { country } = useWorkspace()
   const r = useReadiness()
-  const [tab, setTab] = React.useState<Tab>('process')
+  const { tab, setTab } = r
   const lang: 'fr' | 'en' = locale === 'fr' ? 'fr' : 'en'
   const busy = r.loading || r.localizing
   const situation = r.report?.situation?.[lang] ?? r.report?.situation?.en ?? r.report?.situation?.fr
@@ -199,73 +183,59 @@ export function ReadinessPanel() {
   const liveTotal = r.startedAt !== null && r.running ? r.now - r.startedAt : r.totalMs
   const doneSteps = r.steps.filter((step) => step.status === 'done' || step.status === 'error')
 
-  // The process graph: start → web → one agent per dimension → synthesis → saved.
-  const graphSteps: ProcessGraphStep[] = React.useMemo(() => {
-    if (r.steps.length === 0) return []
-    const everyAgentDone = r.steps.every((step) => step.status === 'done')
-    const anyFailed = r.steps.some((step) => step.status === 'error')
-    const webState: ProcessState = r.steps.some((step) => step.webSources.length > 0) ? 'success' : r.running ? 'running' : 'idle'
-    const synthesisState: ProcessState = r.report ? 'success' : anyFailed ? 'failed' : everyAgentDone ? 'running' : 'idle'
-    const webSources = r.steps.reduce((sum, step) => sum + step.webSources.length, 0)
-    return [
-      { id: 'start', kind: 'start', label: t('readiness.process.start'), state: r.running || r.report ? 'success' : 'idle', detail: `${country.toUpperCase()} · ${r.steps.length} ${t('readiness.dimensionsWord')}` },
-      { id: 'web', kind: 'web', label: t('readiness.process.webNode'), state: webState, detail: `${webSources} ${t('readiness.process.sourcesCount')}`, from: ['start'] },
-      ...r.steps.map((step) => ({
-        id: `agent:${step.dimension}`,
-        kind: 'agent' as const,
-        label: step.name,
-        state: (step.status === 'done' ? 'success' : step.status === 'error' ? 'failed' : step.status === 'running' ? 'running' : 'idle') as ProcessState,
-        detail: step.score ? `${step.score.score}/5` : step.status === 'pending' ? t('readiness.process.waiting') : undefined,
-        duration: step.durationMs !== undefined ? seconds(step.durationMs) : step.status === 'running' && step.startedAt ? seconds(r.now - step.startedAt) : undefined,
-        from: ['web'],
-      })),
-      { id: 'synthesis', kind: 'synthesis', label: t('readiness.process.synthesis'), state: synthesisState, detail: r.report ? `${r.report.scenario?.composite ?? 'n/a'}/5` : undefined, from: r.steps.map((step) => `agent:${step.dimension}`) },
-      { id: 'saved', kind: 'saved', label: t('readiness.process.saved'), state: r.meta ? 'success' : 'idle', detail: r.meta ? formatDate(r.meta.createdAt) : undefined, from: ['synthesis'] },
-    ]
+  const graphSteps: ProcessGraphStep[] = React.useMemo(
+    () => processGraphOf({ steps: r.steps, report: r.report, meta: r.meta, running: r.running, now: r.now, country, t, formatDate }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [r.steps, r.report, r.meta, r.running, r.now, country, t])
+    [r.steps, r.report, r.meta, r.running, r.now, country, t],
+  )
 
-  const nodeInfo = (id: string | null): NodeInfo | null => {
-    if (!id) return null
-    const node = graphSteps.find((entry) => entry.id === id)
-    if (!node) return null
-    const step = node.kind === 'agent' ? r.steps.find((entry) => `agent:${entry.dimension}` === id) : undefined
-    return { id, kind: node.kind, label: node.label, state: node.state, detail: node.detail, duration: node.duration, step }
-  }
+  const nodeInfo = (id: string | null): NodeInfo | null => nodeInfoOf(graphSteps, r.steps, id)
 
   const selectNode = React.useCallback((id: string) => r.setSelectedNode(id), [r.setSelectedNode])
 
   // The tabs and their counters show only an assessment: running, finished, or opened by its id.
-  const hasAssessment = r.running || r.steps.length > 0 || r.report !== null || r.runId !== undefined
+  const hasAssessment = assessmentStarted(r)
 
-  const processTab = busy ? <ShimmerLines /> : (
+  const graphViews = graphViewsOf(graphSteps, t)
+
+  const progressSummary = (
+    <>
+      <span>{t('readiness.process.agents', { count: r.steps.length })}</span>
+      {r.sectorProgress && r.sectorProgress.total > 1 && (
+        <>
+          <span>·</span>
+          <span>
+            {t('readiness.sector.progress', {
+              n: r.sectorProgress.index + 1,
+              total: r.sectorProgress.total,
+              name: t(`domain.${r.sectorProgress.domain}` as 'domain.health'),
+            })}
+          </span>
+        </>
+      )}
+      <span>·</span>
+      <span>{t('readiness.process.progress', { done: doneSteps.length, total: r.steps.length })}</span>
+      {liveTotal !== undefined && (
+        <>
+          <span>·</span>
+          <span className="font-mono">{seconds(liveTotal)}</span>
+        </>
+      )}
+    </>
+  )
+
+  // The graph is never replaced by the shimmer once it has steps: a localization or a
+  // reload of a saved run must not make the process disappear from the tab.
+  const processTab = busy && graphSteps.length === 0 ? <ShimmerLines /> : (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-        <span>{t('readiness.process.agents', { count: r.steps.length })}</span>
-        {r.sectorProgress && r.sectorProgress.total > 1 && (
-          <>
-            <span>·</span>
-            <span>
-              {t('readiness.sector.progress', {
-                n: r.sectorProgress.index + 1,
-                total: r.sectorProgress.total,
-                name: t(`domain.${r.sectorProgress.domain}` as 'domain.health'),
-              })}
-            </span>
-          </>
-        )}
-        <span>·</span>
-        <span>{t('readiness.process.progress', { done: doneSteps.length, total: r.steps.length })}</span>
-        {liveTotal !== undefined && (
-          <>
-            <span>·</span>
-            <span className="font-mono">{seconds(liveTotal)}</span>
-          </>
-        )}
-      </div>
-      {graphSteps.length > 0 ? (
+      {r.lanes.length > 1 ? (
+        <LaneGraphs onOpenSteps={() => setTab('steps')} />
+      ) : graphSteps.length > 0 ? (
         <ProcessGraph
           steps={graphSteps}
+          views={graphViews}
+          viewLabel={t('readiness.graph.view.label')}
+          summary={progressSummary}
           onSelect={selectNode}
           renderPopover={(id, close) => (
             <NodeCard info={nodeInfo(id)} close={close} onOpenSteps={() => { close(); setTab('steps') }} />
@@ -277,21 +247,34 @@ export function ReadinessPanel() {
     </section>
   )
 
+  const stepList = (steps: Step[]) => (
+    <ol className="space-y-1">
+      {steps.map((step) => (
+        <StepRow
+          key={step.dimension}
+          step={step}
+          now={r.now}
+          open={r.openIds.has(step.dimension)}
+          onToggle={() => r.toggleStep(step.dimension)}
+          onOpenSource={r.setSource}
+        />
+      ))}
+    </ol>
+  )
+
   const stepsTab = busy ? <ShimmerLines rows={6} /> : (
     <section className="space-y-2">
       {r.steps.length === 0 && <p className="py-16 text-center text-[11px] text-muted-foreground">{t('readiness.empty')}</p>}
-      <ol className="space-y-1">
-        {r.steps.map((step) => (
-          <StepRow
-            key={step.dimension}
-            step={step}
-            now={r.now}
-            open={r.openIds.has(step.dimension)}
-            onToggle={() => r.toggleStep(step.dimension)}
-            onOpenSource={r.setSource}
-          />
-        ))}
-      </ol>
+      {r.lanes.length > 1 ? (
+        r.lanes.map((lane) => (
+          <section key={lane.domain} className="space-y-1">
+            <p className="text-[12px] font-semibold text-foreground">{t(`domain.${lane.domain}` as 'domain.health')}</p>
+            {stepList(lane.steps)}
+          </section>
+        ))
+      ) : (
+        stepList(r.steps)
+      )}
     </section>
   )
 
@@ -377,25 +360,9 @@ export function ReadinessPanel() {
             ))}
           </div>
 
-          <div className="rounded-xl bg-secondary/40 p-3">
-            <p className="text-[12px] font-semibold text-foreground">{t('readiness.report.title')}</p>
-            <p className="mb-3 text-[11px] text-muted-foreground">{t('readiness.report.hint')}</p>
-            <div className="flex flex-wrap items-center gap-2">
-              {(['html', 'markdown', 'docx'] as const).map((format) => (
-                <Button
-                  key={format}
-                  size="sm"
-                  variant={format === 'html' ? undefined : 'secondary'}
-                  onClick={() => void r.generateReport(format)}
-                  disabled={r.reportBusy !== null}
-                  aria-busy={r.reportBusy === format}
-                >
-                  {r.reportBusy === format ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                  {format === 'html' ? `${t('readiness.report.generate')} · HTML` : format === 'markdown' ? 'Markdown' : 'Word'}
-                </Button>
-              ))}
-            </div>
-            {r.reportFile && (
+          {r.reportFile && (
+            <div className="rounded-xl bg-secondary/40 p-3">
+              <p className="text-[12px] font-semibold text-foreground">{t('readiness.report.title')}</p>
               <ul className="mt-3 space-y-1 text-[11px]">
                 {r.reportFile.assets.map((asset) => (
                   <li key={asset.kind} className="flex flex-wrap items-center gap-2">
@@ -405,8 +372,8 @@ export function ReadinessPanel() {
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="rounded-lg border border-border bg-secondary/40 p-3">
             <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
@@ -445,21 +412,13 @@ export function ReadinessPanel() {
 
   const settingsTab = <SettingsTab />
 
-  const tabs: TabItem[] = [
-    { id: 'process', label: t('readiness.tab.process'), icon: Workflow },
-    { id: 'steps', label: t('readiness.tab.steps'), icon: ListChecks },
-    { id: 'result', label: t('readiness.tab.result'), icon: FileCheck2 },
-    { id: 'settings', label: t('readiness.tab.settings'), icon: Settings2 },
-  ]
-
   const assessment = (
     <>
       {r.failure && <p className="mb-3 text-[11px] text-destructive">{r.failure}</p>}
       {!hasAssessment ? (
-        <EmptyAssessment />
+        r.historyTotal === 0 && <EmptyAssessment />
       ) : (
-        <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="space-y-4">
-          <AnimatedTabsList items={tabs} value={tab} onValueChange={(value) => setTab(value as Tab)} dense />
+        <Tabs value={tab} onValueChange={(value) => setTab(value as ReadinessTab)} className="space-y-4">
           <TabsContent value="process">{processTab}</TabsContent>
           <TabsContent value="steps">{stepsTab}</TabsContent>
           <TabsContent value="result">{resultTab}</TabsContent>
@@ -471,13 +430,11 @@ export function ReadinessPanel() {
 
   return (
     <>
-      {r.view === 'history' ? (
-        <>
-          {r.failure && <p className="mb-3 text-[11px] text-destructive">{r.failure}</p>}
-          <ReadinessHistory runs={r.history} activeId={r.runId} onOpen={r.openSaved} onDelete={r.deleteRun} deletingId={r.deletingId} />
-        </>
-      ) : (
-        assessment
+      {assessment}
+      {!r.runId && !assessmentStarted(r) && !r.creating && (
+        <section className="mt-6">
+          <ReadinessHistory version={r.historyVersion} onOpen={r.openSaved} onDelete={r.deleteRun} deletingId={r.deletingId} />
+        </section>
       )}
 
       <SourceDrawer source={r.source} onClose={() => r.setSource(null)} />
@@ -495,6 +452,71 @@ function EmptyAssessment() {
       <Button size="sm" onClick={() => r.openCreate()}>
         <Plus className="h-3.5 w-3.5" /> {t('readiness.startNew')}
       </Button>
+    </div>
+  )
+}
+
+function assessmentStarted(r: ReturnType<typeof useReadiness>): boolean {
+  // The sectors of a series each have a graph: the series is an assessment of its own,
+  // even though its steps live in the lanes rather than in `steps`.
+  return r.running || r.steps.length > 0 || r.report !== null || r.runId !== undefined || r.lanes.length > 0
+}
+
+/** Exports the open assessment's report, in the page header between the tabs and the plus button. Shown once there is a report. */
+export function ReadinessExport() {
+  const { t } = useI18n()
+  const r = useReadiness()
+  if (!r.report) return null
+  const formats: Array<{ id: ReportFormat; label: string }> = [
+    { id: 'html', label: 'HTML' },
+    { id: 'markdown', label: 'Markdown' },
+    { id: 'docx', label: 'Word' },
+  ]
+  return (
+    <DropdownMenu>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label={t('readiness.report.generate')}
+                disabled={r.reportBusy !== null}
+                className={ICON_BUTTON_OUTLINE}
+              >
+                {r.reportBusy ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-md">{t('readiness.report.generate')}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <DropdownMenuContent align="end">
+        {formats.map((format) => (
+          <DropdownMenuItem key={format.id} onSelect={() => void r.generateReport(format.id)}>
+            {format.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** The tabs of the open assessment, in the page header before the actions. Shown once there is an assessment. */
+export function ReadinessTabs() {
+  const { t } = useI18n()
+  const r = useReadiness()
+  if (!assessmentStarted(r)) return null
+  const items: TabItem[] = [
+    { id: 'process', label: t('readiness.tab.process'), icon: Workflow },
+    { id: 'steps', label: t('readiness.tab.steps'), icon: ListChecks },
+    { id: 'result', label: t('readiness.tab.result'), icon: FileCheck2 },
+    { id: 'settings', label: t('readiness.tab.settings'), icon: Settings2 },
+  ]
+  return (
+    <div className="min-w-[260px] max-w-md">
+      <AnimatedTabsList items={items} value={r.tab} onValueChange={(value) => r.setTab(value as ReadinessTab)} dense />
     </div>
   )
 }
@@ -605,6 +627,114 @@ function LiveScores({ steps }: { steps: Step[] }) {
 }
 
 /** The card of one node, shown next to the node as a dropdown: state, model, what it does. */
+type Translate = ReturnType<typeof useI18n>['t']
+
+/** The process of one assessment as a graph: start, web search, one node per dimension, synthesis, saved. */
+function processGraphOf({
+  steps,
+  report,
+  meta,
+  running,
+  now,
+  country,
+  t,
+  formatDate,
+}: {
+  steps: Step[]
+  report: ReadinessReportDto | null
+  meta: RunMeta | null
+  running: boolean
+  now: number
+  country: string
+  t: Translate
+  formatDate: (iso: string) => string
+}): ProcessGraphStep[] {
+  if (steps.length === 0) return []
+  const everyAgentDone = steps.every((step) => step.status === 'done')
+  const anyFailed = steps.some((step) => step.status === 'error')
+  const webState: ProcessState = steps.some((step) => step.webSources.length > 0) ? 'success' : running ? 'running' : 'idle'
+  const synthesisState: ProcessState = report ? 'success' : anyFailed ? 'failed' : everyAgentDone ? 'running' : 'idle'
+  const webSources = steps.reduce((sum, step) => sum + step.webSources.length, 0)
+  return [
+    { id: 'start', kind: 'start', label: t('readiness.process.start'), state: running || report ? 'success' : 'idle', detail: `${country.toUpperCase()} · ${steps.length} ${t('readiness.dimensionsWord')}` },
+    { id: 'web', kind: 'web', label: t('readiness.process.webNode'), state: webState, detail: `${webSources} ${t('readiness.process.sourcesCount')}`, from: ['start'] },
+    ...steps.map((step) => ({
+      id: `agent:${step.dimension}`,
+      kind: 'agent' as const,
+      label: step.name,
+      state: (step.status === 'done' ? 'success' : step.status === 'error' ? 'failed' : step.status === 'running' ? 'running' : 'idle') as ProcessState,
+      detail: step.score ? `${step.score.score}/5` : step.status === 'pending' ? t('readiness.process.waiting') : undefined,
+      duration: step.durationMs !== undefined ? seconds(step.durationMs) : step.status === 'running' && step.startedAt ? seconds(now - step.startedAt) : undefined,
+      from: ['web'],
+    })),
+    { id: 'synthesis', kind: 'synthesis', label: t('readiness.process.synthesis'), state: synthesisState, detail: report ? `${report.scenario?.composite ?? 'n/a'}/5` : undefined, from: steps.map((step) => `agent:${step.dimension}`) },
+    { id: 'saved', kind: 'saved', label: t('readiness.process.saved'), state: meta ? 'success' : 'idle', detail: meta ? formatDate(meta.createdAt) : undefined, from: ['synthesis'] },
+  ]
+}
+
+/** The views a process graph can frame: the whole process, the search, the dimensions, the synthesis. */
+function graphViewsOf(graph: ProcessGraphStep[], t: Translate): ProcessGraphView[] {
+  const agentIds = graph.filter((node) => node.kind === 'agent').map((node) => node.id)
+  return [
+    { id: 'all', label: t('readiness.graph.view.all') },
+    { id: 'web', label: t('readiness.graph.view.web'), nodes: ['start', 'web'] },
+    { id: 'dimensions', label: t('readiness.graph.view.dimensions'), nodes: ['web', ...agentIds] },
+    { id: 'synthesis', label: t('readiness.graph.view.synthesis'), nodes: [...agentIds, 'synthesis', 'saved'] },
+  ]
+}
+
+function nodeInfoOf(graph: ProcessGraphStep[], steps: Step[], id: string | null): NodeInfo | null {
+  if (!id) return null
+  const node = graph.find((entry) => entry.id === id)
+  if (!node) return null
+  const step = node.kind === 'agent' ? steps.find((entry) => `agent:${entry.dimension}` === id) : undefined
+  return { id, kind: node.kind, label: node.label, state: node.state, detail: node.detail, duration: node.duration, step }
+}
+
+/** Several sectors at once: one process graph per sector, all moving together. */
+function LaneGraphs({ onOpenSteps }: { onOpenSteps: () => void }) {
+  const { t, locale } = useI18n()
+  const r = useReadiness()
+  const { country } = useWorkspace()
+  const formatDate = (iso: string) => new Date(iso).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })
+  return (
+    <div className="space-y-5">
+      {r.lanes.map((lane) => {
+        const graph = processGraphOf({
+          steps: lane.steps,
+          report: lane.report,
+          meta: null,
+          running: r.running && !lane.report,
+          now: r.now,
+          country,
+          t,
+          formatDate,
+        })
+        return (
+          <section key={lane.domain} className="space-y-2">
+            <p className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+              {t(`domain.${lane.domain}` as 'domain.health')}
+              <span className="font-mono text-[10px] font-normal text-muted-foreground">
+                {lane.report ? t('readiness.process.finished') : t('readiness.process.running')}
+              </span>
+            </p>
+            <ProcessGraph
+              steps={graph}
+              views={graphViewsOf(graph, t)}
+              viewLabel={t('readiness.graph.view.label')}
+              onSelect={(id) => r.setSelectedNode(id)}
+              renderPopover={(id, close) => (
+                <NodeCard info={nodeInfoOf(graph, lane.steps, id)} close={close} onOpenSteps={() => { close(); onOpenSteps() }} />
+              )}
+              className="h-[420px]"
+            />
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
 function NodeCard({ info, close, onOpenSteps }: { info: NodeInfo | null; close: () => void; onOpenSteps: () => void }) {
   const { t } = useI18n()
   const r = useReadiness()

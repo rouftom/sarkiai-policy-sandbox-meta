@@ -1443,18 +1443,39 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     await streamAssessment(request, reply, run.input, run)
   })
 
-  /** Past assessments of this operator, newest first. */
-  app.get('/v1/readiness/runs', async (request) => {
+  /** Past assessments of this operator, newest first: one page, filtered on the server. */
+  app.get('/v1/readiness/runs', async (request, reply) => {
+    const query = z
+      .object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(10),
+        q: z.string().max(100).optional(),
+        domain: z.string().max(300).optional(),
+        status: z.string().max(60).optional(),
+      })
+      .safeParse(request.query ?? {})
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    const sectors = new Set<string>(['health', 'education', 'telecom', 'public_services', 'agriculture'])
+    const domains = (query.data.domain ?? '').split(',').filter((value) => sectors.has(value))
+    const statuses = (query.data.status ?? '')
+      .split(',')
+      .filter((value): value is 'complete' | 'failed' => value === 'complete' || value === 'failed')
     const operator = operatorOf(request)
-    const runs = await readinessRuns.list(operator.email)
+    const { runs, total } = await readinessRuns.page(operator.email, {
+      page: query.data.page,
+      limit: query.data.limit,
+      ...(query.data.q?.trim() ? { q: query.data.q } : {}),
+      domains,
+      statuses,
+    })
     await engine.audit.logAction({
       actor: operator.email,
       action: 'readiness.history.viewed',
-      target: `${runs.length} assessment(s) listed`,
+      target: `${runs.length} of ${total} assessment(s) listed (page ${query.data.page})`,
       lens: 'readiness',
       userId: operator.email,
     })
-    return { runs }
+    return { runs, total, page: query.data.page, limit: query.data.limit }
   })
 
   app.get('/v1/readiness/runs/:id', async (request, reply) => {

@@ -2,8 +2,8 @@
 
 /**
  * State of an AI-readiness assessment, shared by the page title (actions), the
- * history panel and the content. One run at a time; a saved run can be opened
- * at its own address (`runId`), and the history is a list of saved runs.
+ * table in the page and the content. A run is one assessment, or several sectors
+ * at once (one lane each); a saved run can be opened at its own address (`runId`).
  */
 
 import * as React from 'react'
@@ -87,13 +87,21 @@ export interface Step {
   decision?: string
 }
 
+/** One sector of several run at the same time: its own steps, report and timing. */
+export interface Lane {
+  domain: Domain
+  steps: Step[]
+  report: ReadinessReportDto | null
+  startedAt: number
+  totalMs?: number
+}
+
 export interface RunMeta {
   id: string
   createdAt: string
   runBy: string
 }
 
-export type ReadinessView = 'assessment' | 'history'
 
 /** The comparison line of one saved assessment of a series. */
 function sectorResultOf(run: { id: string; domain: string; report: ReadinessReportDto }): SectorResult {
@@ -150,8 +158,10 @@ interface ReadinessState {
   totalMs: number | undefined
   now: number
   failure: string | null
-  view: ReadinessView
-  history: ReadinessRunSummaryDto[] | null
+  /** Changes when the saved assessments change: the history table reloads its page. */
+  historyVersion: number
+  /** Every saved assessment, whatever the filters (null while loading). */
+  historyTotal: number | null
   whatIf: WhatIfResultDto | null
   change: { dimension: string; delta: number }
   source: WebSourceView | null
@@ -160,8 +170,6 @@ interface ReadinessState {
   setChange: React.Dispatch<React.SetStateAction<{ dimension: string; delta: number }>>
   setSource: (source: WebSourceView | null) => void
   run: () => Promise<void>
-  showHistory: () => void
-  showAssessment: () => void
   openSaved: (id: string) => void
   simulate: () => Promise<void>
   toggleStep: (id: string) => void
@@ -173,6 +181,9 @@ interface ReadinessState {
   /** The chat models the operator may choose for a task. */
   chatModels: Array<{ id: string }>
   /** The node whose details are open in the popup. */
+  /** The tab of the open assessment (its tabs sit in the page header). */
+  tab: ReadinessTab
+  setTab: (tab: ReadinessTab) => void
   selectedNode: string | null
   setSelectedNode: (id: string | null) => void
   /** The format being generated, so only its button shows the loader. */
@@ -194,6 +205,8 @@ interface ReadinessState {
   /** The sectors the next assessment covers: one assessment per sector, run one after another. */
   startDomains: Domain[]
   setStartDomains: (domains: Domain[]) => void
+  /** The sectors run at the same time: one lane each, so their graphs move together. */
+  lanes: Lane[]
   /** The sector being assessed while several are run. */
   sectorProgress: { index: number; total: number; domain: Domain } | null
   /** The sectors of the current series, finished so far (for the comparison). */
@@ -204,6 +217,8 @@ interface ReadinessState {
 }
 
 const ReadinessContext = React.createContext<ReadinessState | null>(null)
+
+export type ReadinessTab = 'process' | 'steps' | 'result' | 'settings'
 
 /** Seconds since mount, refreshed while a run is live. */
 function useNow(active: boolean): number {
@@ -229,6 +244,44 @@ function stepsFromReport(report: ReadinessReportDto): Step[] {
   }))
 }
 
+/** Applies one progress event to the steps of an assessment; other events leave them as they are. */
+function reduceSteps(steps: Step[], event: ReadinessEventDto): Step[] {
+  const patch = (dimension: string, change: Partial<Step>) =>
+    steps.map((step) => (step.dimension === dimension ? { ...step, ...change } : step))
+  switch (event.type) {
+    case 'start':
+      return event.dimensions.map((entry) => ({
+        dimension: entry.dimension,
+        dimensionId: entry.dimensionId,
+        name: entry.name,
+        status: 'pending' as const,
+        webSources: [],
+        reasoning: '',
+      }))
+    case 'web':
+      return patch(event.dimension, { webSources: event.sources })
+    case 'running':
+      return patch(event.dimension, { status: 'running', startedAt: Date.now() })
+    case 'result':
+      return patch(event.dimension, {
+        status: 'done',
+        durationMs: event.durationMs,
+        score: event.score,
+        reasoning: event.reasoning,
+        attempts: event.attempts,
+        passages: { country: event.countryPassages, global: event.globalPassages },
+      })
+    case 'error':
+      return patch(event.dimension, { status: 'error', durationMs: event.durationMs, error: event.message })
+    case 'restored':
+      return patch(event.dimension, { status: 'done', score: event.score, webSources: event.score.webSources ?? [], reasoning: '' })
+    case 'decision':
+      return event.dimension ? patch(event.dimension, { decision: event.hint ? `${event.reason} — ${event.hint}` : event.reason }) : steps
+    default:
+      return steps
+  }
+}
+
 export function ReadinessProvider({ runId, children }: { runId?: string; children: React.ReactNode }) {
   const router = useRouter()
   const { country, domain, domains: workspaceDomains } = useWorkspace()
@@ -240,8 +293,9 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   const [totalMs, setTotalMs] = React.useState<number | undefined>(undefined)
   const now = useNow(running)
   const [failure, setFailure] = React.useState<string | null>(null)
-  const [view, setView] = React.useState<ReadinessView>('assessment')
-  const [history, setHistory] = React.useState<ReadinessRunSummaryDto[] | null>(null)
+  const [lanes, setLanes] = React.useState<Lane[]>([])
+  const [historyVersion, setHistoryVersion] = React.useState(0)
+  const [historyTotal, setHistoryTotal] = React.useState<number | null>(null)
   const [whatIf, setWhatIf] = React.useState<WhatIfResultDto | null>(null)
   const [change, setChange] = React.useState<{ dimension: string; delta: number }>({ dimension: 'digital_infrastructure', delta: 1 })
   const [source, setSource] = React.useState<WebSourceView | null>(null)
@@ -250,6 +304,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   const [model, setModel] = React.useState('')
   const [chatModels, setChatModels] = React.useState<Array<{ id: string }>>([])
   const [selectedNode, setSelectedNode] = React.useState<string | null>(null)
+  const [tab, setTab] = React.useState<ReadinessTab>('process')
   const [reportBusy, setReportBusy] = React.useState<ReportFormat | null>(null)
   const [reportFile, setReportFile] = React.useState<ReadinessReportFileDto | null>(null)
   const [loading, setLoading] = React.useState(false)
@@ -308,41 +363,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     }
   }
 
-  const patchStep = (dimension: string, patch: Partial<Step>) =>
-    setSteps((previous) => previous.map((step) => (step.dimension === dimension ? { ...step, ...patch } : step)))
-
   const onEvent = (event: ReadinessEventDto) => {
-    if (event.type === 'start') {
-      setSteps(
-        event.dimensions.map((entry) => ({
-          dimension: entry.dimension,
-          dimensionId: entry.dimensionId,
-          name: entry.name,
-          status: 'pending',
-          webSources: [],
-          reasoning: '',
-        })),
-      )
-    } else if (event.type === 'web') {
-      patchStep(event.dimension, { webSources: event.sources })
-    } else if (event.type === 'running') {
-      patchStep(event.dimension, { status: 'running', startedAt: Date.now() })
-    } else if (event.type === 'result') {
-      patchStep(event.dimension, {
-        status: 'done',
-        durationMs: event.durationMs,
-        score: event.score,
-        reasoning: event.reasoning,
-        attempts: event.attempts,
-        passages: { country: event.countryPassages, global: event.globalPassages },
-      })
-    } else if (event.type === 'error') {
-      patchStep(event.dimension, { status: 'error', durationMs: event.durationMs, error: event.message })
-    } else if (event.type === 'restored') {
-      patchStep(event.dimension, { status: 'done', score: event.score, webSources: event.score.webSources ?? [], reasoning: '' })
-    } else if (event.type === 'decision') {
-      if (event.dimension) patchStep(event.dimension, { decision: event.hint ? `${event.reason} — ${event.hint}` : event.reason })
-    } else if (event.type === 'failed') {
+    if (event.type === 'failed') {
       if (event.runId) {
         setResumable({
           id: event.runId,
@@ -355,6 +377,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     } else if (event.type === 'done') {
       doneReport.current = event.report as ReadinessReportDto
       setReport(event.report as ReadinessReportDto)
+    } else {
+      setSteps((previous) => reduceSteps(previous, event))
     }
   }
 
@@ -364,15 +388,76 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setCreating(true)
   }
 
+  /** The request of one sector's assessment. */
+  const paramsFor = (sector: Domain, batchId?: string) =>
+    ({
+      country,
+      domain: sector,
+      globalCountry: 'global',
+      dimensions: settings.dimensions.length === ALL_DIMENSIONS.length ? undefined : settings.dimensions,
+      perDimensionK: settings.perDimensionK,
+      useWeb: settings.useWeb,
+      reasoningEffort: settings.reasoningEffort,
+      concurrency: settings.concurrency,
+      ...(settings.concurrency === 'orchestrated' ? { maxDecisions: settings.maxDecisions, language: lang } : {}),
+      ...(batchId ? { batchId } : {}),
+      models: {
+        ...(settings.models.webSearch ? { webSearch: settings.models.webSearch } : {}),
+        ...(settings.models.evaluate ? { evaluate: settings.models.evaluate } : {}),
+      },
+    }) satisfies { country: string; domain: string; globalCountry: string } & ReadinessSettingsDto
+
   /**
-   * One assessment per chosen sector, one after another: each is saved on its own
-   * and listed in the history. A failure stops the list; the run that failed can be resumed.
+   * Several sectors at once: one stream per sector, each in its own lane, so the graphs
+   * evolve together. A failed sector does not stop the others; the saved ones are kept.
+   */
+  const runTogether = async (sectors: Domain[], batchId: string): Promise<ReadinessRunSummaryDto[]> => {
+    setLanes(sectors.map((domain) => ({ domain, steps: pendingSteps(settings.dimensions), report: null, startedAt: Date.now() })))
+    const outcomes = await Promise.allSettled(
+      sectors.map(async (sector) => {
+        const result: { report: ReadinessReportDto | null } = { report: null }
+        const started = Date.now()
+        const finished = await api.readinessStream(paramsFor(sector, batchId), (event) => {
+          if (event.type === 'done') {
+            result.report = event.report as ReadinessReportDto
+            setLanes((current) => current.map((lane) => (lane.domain === sector ? { ...lane, report: result.report } : lane)))
+            return
+          }
+          if (event.type === 'failed') onEvent(event)
+          setLanes((current) => current.map((lane) => (lane.domain === sector ? { ...lane, steps: reduceSteps(lane.steps, event) } : lane)))
+        })
+        setLanes((current) => current.map((lane) => (lane.domain === sector ? { ...lane, totalMs: Date.now() - started } : lane)))
+        const finishedReport = result.report
+        if (finished && finishedReport) {
+          const scores = finishedReport.scores
+          const composite = finishedReport.scenario?.composite ?? null
+          setBatch((current) => [...current, { runId: finished.id, domain: sector, scores, composite }])
+        }
+        return finished
+      }),
+    )
+    const saved: ReadinessRunSummaryDto[] = []
+    let failure: string | null = null
+    for (const outcome of outcomes) {
+      if (outcome.status === 'fulfilled') {
+        if (outcome.value) saved.push(outcome.value)
+      } else if (!failure) {
+        failure = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)
+      }
+    }
+    if (failure) setFailure(failure)
+    return saved
+  }
+
+  /**
+   * One assessment per chosen sector: several run at the same time (one lane each), a
+   * single one runs alone. Each is saved on its own and listed in the history. A failed
+   * run can be resumed.
    */
   const run = async () => {
     const sectors = startDomains.slice(0, Math.max(1, settings.maxDomains))
     if (sectors.length === 0) return
     setRunning(true)
-    setView('assessment')
     setWhatIf(null)
     setFailure(null)
     setReport(null)
@@ -380,52 +465,39 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setResumable(null)
     setOpenIds(new Set())
     setBatch([])
-    // One series id for the sectors run together: their assessments are compared later.
+    setLanes([])
     const batchId = sectors.length > 1 ? crypto.randomUUID() : undefined
-    const saved: ReadinessRunSummaryDto[] = []
     try {
-      for (const [index, sector] of sectors.entries()) {
-        setSectorProgress({ index, total: sectors.length, domain: sector })
-        setReport(null)
+      let saved: ReadinessRunSummaryDto[] = []
+      if (batchId) {
+        saved = await runTogether(sectors, batchId)
+      } else {
+        const sector = sectors[0]!
+        setSectorProgress({ index: 0, total: 1, domain: sector })
         setSteps(pendingSteps(settings.dimensions))
         const started = Date.now()
         setStartedAt(started)
         doneReport.current = null
-        const finished = await api.readinessStream(
-          {
-            country,
-            domain: sector,
-            globalCountry: 'global',
-            dimensions: settings.dimensions.length === ALL_DIMENSIONS.length ? undefined : settings.dimensions,
-            perDimensionK: settings.perDimensionK,
-            useWeb: settings.useWeb,
-            reasoningEffort: settings.reasoningEffort,
-            concurrency: settings.concurrency,
-            ...(settings.concurrency === 'orchestrated' ? { maxDecisions: settings.maxDecisions, language: lang } : {}),
-            ...(batchId ? { batchId } : {}),
-            models: {
-              ...(settings.models.webSearch ? { webSearch: settings.models.webSearch } : {}),
-              ...(settings.models.evaluate ? { evaluate: settings.models.evaluate } : {}),
-            },
-          } satisfies { country: string; domain: string; globalCountry: string } & ReadinessSettingsDto,
-          onEvent,
-        )
+        const finished = await api.readinessStream(paramsFor(sector), onEvent)
         setTotalMs(Date.now() - started)
-        if (!finished) break
-        saved.push(finished)
-        // Written by the stream callback, so read with its declared type.
-        const result = doneReport.current as ReadinessReportDto | null
-        if (result) {
-          setBatch((current) => [
-            ...current,
-            { runId: finished.id, domain: sector, scores: result.scores, composite: result.scenario?.composite ?? null },
-          ])
+        if (finished) {
+          saved = [finished]
+          // Written by the stream callback, so read with its declared type.
+          const result = doneReport.current as ReadinessReportDto | null
+          if (result) {
+            setBatch([{ runId: finished.id, domain: sector, scores: result.scores, composite: result.scenario?.composite ?? null }])
+          }
         }
-        setMeta({ id: finished.id, createdAt: finished.createdAt, runBy: finished.runBy })
       }
-      setHistory(null)
+      // A single assessment opens at its own address. A series stays on the console: its
+      // lanes keep one graph per sector, and navigating to one run would drop the others.
       const last = saved[saved.length - 1]
-      if (last) router.replace(`/readiness/${last.id}`)
+      if (last && !batchId) {
+        setMeta({ id: last.id, createdAt: last.createdAt, runBy: last.runBy })
+        router.replace(`/readiness/${last.id}`)
+      }
+      if (batchId) setMeta(null)
+      refreshHistory()
     } catch (caught) {
       setFailure(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -440,12 +512,12 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     const { id, dimensions } = resumable
     const kept = report?.scores ?? []
     setRunning(true)
-    setView('assessment')
     setWhatIf(null)
     setFailure(null)
     setReport(null)
     setMeta(null)
     setBatch([])
+    setLanes([])
     setSteps(stepsFromScores(kept, dimensions))
     setOpenIds(new Set())
     const started = Date.now()
@@ -458,7 +530,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
         setResumable(null)
         router.replace(`/readiness/${saved.id}`)
       }
-      setHistory(null)
+      refreshHistory()
     } catch (caught) {
       setFailure(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -491,7 +563,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
         setMeta({ id: saved.id, createdAt: saved.createdAt, runBy: saved.runBy })
         setTotalMs(undefined)
         setWhatIf(null)
-        setView('assessment')
+        setLanes([])
         if (saved.status === 'failed') {
           const dimensions = saved.input?.dimensions ?? ALL_DIMENSIONS
           setSteps(stepsFromScores(saved.report.scores, dimensions))
@@ -534,27 +606,21 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     }
   }, [savedId, lang, report, running])
 
-  const loadHistory = React.useCallback(async () => {
-    try {
-      setHistory((await api.readinessRuns()).runs)
-    } catch {
-      setHistory([])
-    }
-  }, [])
+  const refreshHistory = () => setHistoryVersion((version) => version + 1)
 
-  const showHistory = () => {
-    setView('history')
-    void loadHistory()
-  }
-
-  const showAssessment = () => setView('assessment')
+  React.useEffect(() => {
+    api
+      .readinessRuns({ limit: 1 })
+      .then((result) => setHistoryTotal(typeof result.total === 'number' ? result.total : result.runs.length))
+      .catch(() => setHistoryTotal(0))
+  }, [historyVersion])
 
   const deleteRun = async (id: string) => {
     setDeletingId(id)
     setFailure(null)
     try {
       await api.readinessDelete(id)
-      setHistory((current) => current?.filter((entry) => entry.id !== id) ?? null)
+      refreshHistory()
       setResumable((current) => (current?.id === id ? null : current))
       if ((meta?.id ?? runId) === id) {
         setReport(null)
@@ -570,7 +636,6 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   }
 
   const openSaved = (id: string) => {
-    setView('assessment')
     router.push(`/readiness/${id}`)
   }
 
@@ -605,8 +670,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     totalMs,
     now,
     failure,
-    view,
-    history,
+    historyVersion,
+    historyTotal,
     whatIf,
     change,
     source,
@@ -615,8 +680,6 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setChange,
     setSource,
     run,
-    showHistory,
-    showAssessment,
     openSaved,
     simulate,
     toggleStep,
@@ -625,6 +688,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setSettings,
     model,
     chatModels,
+    tab,
+    setTab,
     selectedNode,
     setSelectedNode,
     reportBusy,
@@ -643,6 +708,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setStartDomains,
     sectorProgress,
     batch,
+    lanes,
   }
   return <ReadinessContext.Provider value={value}>{children}</ReadinessContext.Provider>
 }

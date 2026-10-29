@@ -50,4 +50,27 @@ describe('readiness runs', () => {
     expect(await store.listBatch('other', 'series-0001')).toEqual([])
     expect((await store.list('op')).find((entry) => entry.id === first.id)?.batchId).toBe('series-0001')
   })
+
+  test('a page is filtered and counted on the server: search, sector, status, paging', async () => {
+    const store = new ReadinessRunStore({})
+    const make = (country: string, domain: string, runBy: string) =>
+      store.save({ userId: 'page-op', runBy, report: { ...report(1), country, domain } as unknown as ReadinessReport })
+    await make('cm', 'health', 'alice')
+    await make('cm', 'education', 'bob')
+    await make('fr', 'health', 'carol')
+    const failed = await store.save({ userId: 'page-op', runBy: 'dan', report: report(1), status: 'failed', failure: 'x' })
+
+    const all = await store.page('page-op', { page: 1, limit: 2 })
+    expect(all.total).toBe(4)
+    expect(all.runs).toHaveLength(2)
+
+    expect((await store.page('page-op', { page: 2, limit: 2 })).runs).toHaveLength(2)
+    expect((await store.page('page-op', { page: 1, limit: 10, domains: ['education'] })).total).toBe(1)
+    expect((await store.page('page-op', { page: 1, limit: 10, statuses: ['failed'] })).runs.map((run) => run.id)).toEqual([failed.id])
+    expect((await store.page('page-op', { page: 1, limit: 10, q: 'CAROL' })).total).toBe(1)
+    expect((await store.page('page-op', { page: 1, limit: 10, q: 'nobody' })).total).toBe(0)
+    expect((await store.page('page-op', { page: 1, limit: 10, q: 'SANTE' })).total).toBe(3)
+    expect((await store.page('page-op', { page: 1, limit: 10, q: 'services publics' })).total).toBe(0)
+    expect((await store.page('other', { page: 1, limit: 10 })).total).toBe(0)
+  })
 })

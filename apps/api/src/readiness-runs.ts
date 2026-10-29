@@ -51,6 +51,43 @@ export interface ReadinessRun extends ReadinessRunSummary {
   input?: ReadinessRunInput
 }
 
+function summaryOfDoc(doc: Document): ReadinessRunSummary {
+  return {
+    id: String(doc._id),
+    country: String(doc.country),
+    domain: String(doc.domain),
+    createdAt: String(doc.createdAt),
+    runBy: String(doc.runBy ?? ''),
+    composite: typeof doc.composite === 'number' ? doc.composite : null,
+    dimensions: Number(doc.dimensions ?? 0),
+    status: doc.status === 'failed' ? 'failed' : 'complete',
+    ...(typeof doc.failure === 'string' ? { failure: doc.failure } : {}),
+    ...(typeof doc.batchId === 'string' ? { batchId: doc.batchId } : {}),
+  }
+}
+
+/**
+ * The sector names the search understands, in both consoles' languages. The server
+ * has no dictionary of the console, so the labels are listed here (see i18n).
+ */
+const SECTOR_NAMES: Record<string, string[]> = {
+  health: ['health', 'santé'],
+  education: ['education', 'éducation'],
+  telecom: ['telecom', 'télécoms'],
+  public_services: ['public services', 'services publics'],
+  agriculture: ['agriculture'],
+}
+
+const plain = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/** The sectors whose id or name (either language, without accents) contains the search text. */
+export function sectorsMatching(needle: string): string[] {
+  const wanted = plain(needle)
+  return Object.entries(SECTOR_NAMES)
+    .filter(([id, names]) => [id, ...names].some((name) => plain(name).includes(wanted)))
+    .map(([id]) => id)
+}
+
 export class ReadinessRunStore {
   private readonly memory = new Map<string, ReadinessRun & { userId: string }>()
   private client: MongoClient | null = null
@@ -109,6 +146,49 @@ export class ReadinessRunStore {
     return this.summary(run)
   }
 
+  /** One page of the operator's assessments, newest first, filtered on the server. */
+  async page(
+    userId: string,
+    query: { page: number; limit: number; q?: string; domains?: string[]; statuses?: ReadinessRunStatus[] },
+  ): Promise<{ runs: ReadinessRunSummary[]; total: number }> {
+    const { page, limit } = query
+    const needle = query.q?.trim().toLowerCase() ?? ''
+    const domains = query.domains ?? []
+    const statuses = query.statuses ?? []
+    const sectors = needle ? sectorsMatching(needle) : []
+    const col = await this.col()
+    if (col) {
+      const filter: Record<string, unknown> = { userId }
+      if (domains.length) filter.domain = { $in: domains }
+      if (statuses.length) filter.status = { $in: statuses }
+      if (needle) {
+        const pattern = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+        filter.$or = [{ country: pattern }, { runBy: pattern }, ...(sectors.length ? [{ domain: { $in: sectors } }] : [])]
+      }
+      const [docs, total] = await Promise.all([
+        col
+          .find(filter, { projection: { report: 0, input: 0, userId: 0 } })
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .toArray()
+          .catch(() => null),
+        col.countDocuments(filter).catch(() => null),
+      ])
+      if (docs && total !== null) return { runs: docs.map(summaryOfDoc), total }
+    }
+    const matching = [...this.memory.values()]
+      .filter(
+        (run) =>
+          run.userId === userId &&
+          (!domains.length || domains.includes(run.domain)) &&
+          (!statuses.length || statuses.includes(run.status)) &&
+          (!needle || sectors.includes(run.domain) || [run.country, run.runBy].some((value) => value.toLowerCase().includes(needle))),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return { runs: matching.slice((page - 1) * limit, page * limit).map((run) => this.summary(run)), total: matching.length }
+  }
+
   async list(userId: string, limit = 50): Promise<ReadinessRunSummary[]> {
     const col = await this.col()
     if (col) {
@@ -118,20 +198,7 @@ export class ReadinessRunStore {
         .limit(limit)
         .toArray()
         .catch(() => null)
-      if (docs) {
-        return docs.map((doc) => ({
-          id: String(doc._id),
-          country: String(doc.country),
-          domain: String(doc.domain),
-          createdAt: String(doc.createdAt),
-          runBy: String(doc.runBy ?? ''),
-          composite: typeof doc.composite === 'number' ? doc.composite : null,
-          dimensions: Number(doc.dimensions ?? 0),
-          status: doc.status === 'failed' ? 'failed' : 'complete',
-          ...(typeof doc.failure === 'string' ? { failure: doc.failure } : {}),
-          ...(typeof doc.batchId === 'string' ? { batchId: doc.batchId } : {}),
-        }))
-      }
+      if (docs) return docs.map(summaryOfDoc)
     }
     return [...this.memory.values()]
       .filter((run) => run.userId === userId)
