@@ -114,14 +114,15 @@ export interface ProcessGraphStep {
 function layout(steps: ProcessGraphStep[], onSelect: (id: string) => void): { nodes: ProcessFlowNode[]; edges: Edge[] } {
   const agents = steps.filter((step) => step.kind === 'agent')
   const nodes: ProcessFlowNode[] = steps.map((step) => {
-    const column = step.kind === 'start' ? 0 : step.kind === 'web' ? 1 : step.kind === 'agent' ? 2 : step.kind === 'synthesis' ? 3 : 4
+    // Column left edges: wider gaps before and after the dimensions column, which holds the most nodes.
+    const x = step.kind === 'start' ? 0 : step.kind === 'web' ? 360 : step.kind === 'agent' ? 820 : step.kind === 'synthesis' ? 1340 : 1700
     const row = step.kind === 'agent' ? agents.indexOf(step) : 0
     const centre = (agents.length - 1) / 2
     const y = step.kind === 'agent' ? (row - centre) * 96 : 0
     return {
       id: step.id,
       type: 'process',
-      position: { x: column * 340, y },
+      position: { x, y },
       data: { kind: step.kind, label: step.label, state: step.state, detail: step.detail, duration: step.duration, onSelect },
       draggable: false,
       selectable: true,
@@ -154,7 +155,7 @@ function ResetView() {
       <button
         type="button"
         onClick={() => void fitView({ padding: 0.2, duration: 300 })}
-        className="rounded-lg bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-sm transition-colors hover:bg-white dark:bg-brand-ink/90"
+        className="rounded-lg border border-border bg-card/90 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-sm transition-colors hover:bg-secondary"
       >
         Réorganiser
       </button>
@@ -162,16 +163,64 @@ function ResetView() {
   )
 }
 
-export function ProcessGraph({ steps, onSelect, className }: { steps: ProcessGraphStep[]; onSelect?: (id: string) => void; className?: string }) {
+const POPOVER_WIDTH = 320
+const POPOVER_HEIGHT = 380
+
+/**
+ * The canvas. A click on a node opens `renderPopover` next to the node, as a
+ * dropdown does: no overlay, closed by a click on the canvas or Escape.
+ */
+export function ProcessGraph({
+  steps,
+  onSelect,
+  renderPopover,
+  className,
+}: {
+  steps: ProcessGraphStep[]
+  onSelect?: (id: string) => void
+  renderPopover?: (id: string, close: () => void) => React.ReactNode
+  className?: string
+}) {
+  const container = React.useRef<HTMLDivElement>(null)
+  const [anchor, setAnchor] = React.useState<{ id: string; x: number; y: number } | null>(null)
+  const close = React.useCallback(() => setAnchor(null), [])
   const handle = React.useCallback((id: string) => onSelect?.(id), [onSelect])
   const { nodes, edges } = React.useMemo(() => layout(steps, handle), [steps, handle])
+
+  React.useEffect(() => {
+    if (!anchor) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [anchor, close])
+
+  const place = (x: number, y: number) => {
+    const width = container.current?.clientWidth ?? 800
+    const height = container.current?.clientHeight ?? 520
+    return {
+      left: Math.max(8, Math.min(x + 14, width - POPOVER_WIDTH - 8)),
+      top: Math.max(8, Math.min(y + 14, height - POPOVER_HEIGHT - 8)),
+    }
+  }
+
   return (
-    <div className={cn('h-[520px] w-full overflow-hidden rounded-2xl bg-secondary/40', className)}>
+    <div ref={container} className={cn('sps-flow relative h-[520px] w-full overflow-hidden rounded-2xl bg-secondary/40', className)}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onNodeClick={(event, node) => {
+          const rect = container.current?.getBoundingClientRect()
+          const x = event.clientX - (rect?.left ?? 0)
+          const y = event.clientY - (rect?.top ?? 0)
+          setAnchor({ id: node.id, x, y })
+          handle(node.id)
+        }}
+        onPaneClick={close}
+        onMoveStart={close}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         nodesDraggable={false}
@@ -185,6 +234,16 @@ export function ProcessGraph({ steps, onSelect, className }: { steps: ProcessGra
         <Controls showInteractive={false} position="bottom-left" className="!shadow-sm" />
         <ResetView />
       </ReactFlow>
+      {anchor && renderPopover && (
+        <div
+          role="dialog"
+          aria-label={anchor.id}
+          className="absolute z-30 flex max-h-[380px] w-80 flex-col overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-black/5 dark:ring-white/10"
+          style={place(anchor.x, anchor.y)}
+        >
+          {renderPopover(anchor.id, close)}
+        </div>
+      )}
     </div>
   )
 }

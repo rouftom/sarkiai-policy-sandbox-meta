@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { AuditService } from './index'
 
 /**
- * Integration test — requires a MongoDB instance.
+ * Integration test · requires a MongoDB instance.
  * Run with:  MONGO_URL=mongodb://localhost:27017 bun test
  * Skipped automatically when MONGO_URL is unset (no infra on this machine).
  */

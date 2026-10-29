@@ -23,10 +23,10 @@ git.
 
 ## Rules
 
-- **Commit only `*.env.enc`** — never `.env` (already git-ignored).
+- **Commit only `*.env.enc`**: never `.env` (already git-ignored).
 - The **private key `secrets/age.key` is never committed** (git-ignored).
 - Rotate by editing `.env.enc` with `sops` and re-encrypting; no service to run.
-- For a team/UI workflow, an alternative is self-hosted Infisical — but SOPS+age
+- For a team/UI workflow, an alternative is self-hosted Infisical: but SOPS+age
   is the default here (no server, aligned with the local/sovereign posture).
 
 ## Per-environment layering

@@ -64,7 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/*
           Pre-paint: the bootstrap script sets `data-theme-pack` / `.dark` on
           <html>, and the pack CSS is server-rendered here so the very first
-          paint — including the unauthenticated screens — already carries the
+          paint · including the unauthenticated screens · already carries the
           operator's theme. The 46 KB of token rules cost less than a flash of
           the default palette.
         */}

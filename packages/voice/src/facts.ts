@@ -19,7 +19,7 @@ export interface VoiceFact {
   text: string
 }
 
-/** "T+00:12" / "T+01:04:07" — monospaced in the UI, sortable by `atMs`. */
+/** "T+00:12" / "T+01:04:07" · monospaced in the UI, sortable by `atMs`. */
 export function formatTimestamp(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000))
   const hours = Math.floor(total / 3600)

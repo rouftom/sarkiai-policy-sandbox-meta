@@ -101,7 +101,7 @@ export interface OrchestratorDeps {
   /**
    * Output ceiling per generation. Reasoning models spend output tokens before
    * answering (muse-spark-1.3: 600–1500), so a tight cap returns an empty answer.
-   * The ceiling is not billed — only produced tokens are.
+   * The ceiling is not billed · only produced tokens are.
    */
   maxOutputTokens?: number
 }
@@ -109,7 +109,7 @@ export interface OrchestratorDeps {
 export class PolicyOrchestrator {
   constructor(private readonly deps: OrchestratorDeps) {}
 
-  /** `mode · model` of whatever answered — persisted with each trace step. */
+  /** `mode · model` of whatever answered · persisted with each trace step. */
   private modelLabel(): string {
     return this.deps.provider ? describeProvider(this.deps.provider) : 'configured'
   }

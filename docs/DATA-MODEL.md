@@ -2,8 +2,8 @@
 
 Two stores, deliberately separated:
 
-- **Qdrant** — the vector knowledge base (retrieval chunks, dense + sparse).
-- **MongoDB** — operational data only (audit log + chain-of-thought traces).
+- **Qdrant**: the vector knowledge base (retrieval chunks, dense + sparse).
+- **MongoDB**: operational data only (audit log + chain-of-thought traces).
 
 Types are canonical in `packages/shared/src/types.ts`.
 
@@ -20,7 +20,7 @@ Payload (per point):
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| `country` | string | ISO-3166 alpha-2 or `global` — **primary filter** |
+| `country` | string | ISO-3166 alpha-2 or `global`: **primary filter** |
 | `jurisdiction` | national \| regional \| international | legal level |
 | `docType` | law/strategy/regulation/policy/treaty/standard/guidance/report | source class |
 | `pillar` | string[] | readiness dimensions informed |
@@ -51,7 +51,7 @@ Point ids are `uuid5(content_hash)` → re-ingestion is idempotent.
 
 ### `cot_traces`
 
-`{ id, runId, agentId, step, thought, toolCalls[], model, ts }` — one document
+`{ id, runId, agentId, step, thought, toolCalls[], model, ts }`: one document
 per reasoning step, queryable by `runId`.
 
 ## Retrieval filter contract

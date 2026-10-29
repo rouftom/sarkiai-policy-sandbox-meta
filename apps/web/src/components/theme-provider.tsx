@@ -55,7 +55,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   /**
    * The pack CSS is server-rendered in the root layout, so nothing is injected
    * here any more. This effect only re-applies the stored choice to the
-   * document (React state has to match what the pre-paint script did) — without
+   * document (React state has to match what the pre-paint script did) · without
    * it, a client-side navigation could leave the theme attribute stale.
    */
   React.useEffect(() => {

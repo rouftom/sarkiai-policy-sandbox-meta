@@ -91,9 +91,9 @@ describe('citation validator in the agent loop', () => {
   test('a fabricated quote is rejected and the agent answers again', async () => {
     const { model, calls } = scriptedModel([
       // attempt 1: invents a provision that is not in the corpus
-      'Under loi_2024_protection_donnees.pdf · ARTICLE 12, “le traitement des données de santé est interdit en toutes circonstances sans exception” — the hospital is therefore unlawful.',
+      'Under loi_2024_protection_donnees.pdf · ARTICLE 12, “le traitement des données de santé est interdit en toutes circonstances sans exception” · the hospital is therefore unlawful.',
       // attempt 2: quotes the actual text
-      `Under loi_2024_protection_donnees.pdf · ARTICLE 12, “${PROVISION}” — consent is required.`,
+      `Under loi_2024_protection_donnees.pdf · ARTICLE 12, “${PROVISION}” · consent is required.`,
     ])
 
     const orchestrator = new PolicyOrchestrator({ model, retriever })
@@ -109,7 +109,7 @@ describe('citation validator in the agent loop', () => {
   })
 
   test('when the retry budget is exhausted the gap is reported, not the claim', async () => {
-    const fabricated = 'Under ARTICLE 12, “le traitement des données de santé est interdit en toutes circonstances” — unlawful.'
+    const fabricated = 'Under ARTICLE 12, “le traitement des données de santé est interdit en toutes circonstances” · unlawful.'
     const { model, calls } = scriptedModel([fabricated, fabricated])
 
     const orchestrator = new PolicyOrchestrator({ model, retriever })
@@ -135,7 +135,7 @@ describe('citation validator in the agent loop', () => {
 })
 
 describe('streamed answers', () => {
-  const valid = `Under loi_2024_protection_donnees.pdf · ARTICLE 12, “${PROVISION}” — consent is required.`
+  const valid = `Under loi_2024_protection_donnees.pdf · ARTICLE 12, “${PROVISION}” · consent is required.`
 
   test('forwards the deltas and the same assessment the buffered route returns', async () => {
     const { model } = scriptedModel([valid])
@@ -207,7 +207,7 @@ describe('streamed answers', () => {
   })
 
   test('a rejected draft emits `retry` so the client can clear it', async () => {
-    const fabricated = 'Under ARTICLE 12, “le traitement des données de santé est interdit en toutes circonstances” — unlawful.'
+    const fabricated = 'Under ARTICLE 12, “le traitement des données de santé est interdit en toutes circonstances” · unlawful.'
     const { model, calls } = scriptedModel([fabricated, valid])
     const orchestrator = new PolicyOrchestrator({ model, retriever })
     const stages: string[] = []

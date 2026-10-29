@@ -31,13 +31,13 @@ Full diff: [`pre-hackathon-baseline...meta-hackathon`](../../compare/pre-hackath
 | N1 | Provider layer (`cloud` / `sovereign` / `local`), provider badge, `provider.switched` audit event, model recorded per reasoning step | Muse Spark (Meta Model API) | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
 | N2 | Citation validator: a quote absent from the corpus is rejected and the agent retries | Muse Spark | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
 | N3 | Scanned gazette ingestion: column segmentation, per-zone transcription, SAM artefact overlay, provenance carried into the KB (`@sps/gazette`, `/v1/gazette/*`, console panel) | SAM 3.1 + Muse Spark | done | `bun run check:gazette` |
-| N4 | **WhatsApp channel** — joint reports and deadline alerts sent as approved utility templates (`meta_hackathon_*`); an approval request carries a signed, expiring link and the decision is taken in the web app (`/approve/:token`), recorded once in `whatsapp_approvals` and in the audit chain. Direct Meta Cloud API client, no notification gateway. | — | done | `bun test packages/whatsapp` |
+| N4 | **WhatsApp channel**: joint reports and deadline alerts sent as approved utility templates (`meta_hackathon_*`); an approval request carries a signed, expiring link and the decision is taken in the web app (`/approve/:token`), recorded once in `whatsapp_approvals` and in the audit chain. Direct Meta Cloud API client, no notification gateway. |: | done | `bun test packages/whatsapp` |
 | N5 | Sovereign mode: the same engine on open weights, one command to build the local Muse Glimmer (`deploy/ollama/Modelfile.glimmer`, `make glimmer`) | Muse Glimmer 30B (Ollama), Muse Spark Open (hosted) | done | `make glimmer` |
 | N6 | Voice notes turned into timed, speaker-attributed facts (`@sps/voice`, `/v1/voice/transcribe`); cloud uses Muse Voice Transcribe, sovereign/local use on-premise faster-whisper | Muse Voice Transcribe | done | `bun test packages/voice` |
 | N7 | Impact analysis: a new provision re-opens the persisted incidents it changes (`@sps/impact`, `/v1/impact/analyze`) | Muse Spark | done | `bun test packages/impact` |
-| N8 | **Table-top crisis exercise** — authored injects released on a clock, an action log kept by the team, and a score computed deterministically (addressed / late / missed, coverage, response time) before Muse Spark writes the after-action narrative. The narrative cannot change the score (`@sps/exercise`, `/v1/exercise/*`, console panel). | Muse Spark / Muse Glimmer | done | `bun test packages/exercise` |
-| N9 | **Public communication in Fulfulde or Hausa** — drafts from verified facts only, hard-blocked on political content and medical advice, every draft marked `pending native review`; invented phone numbers are flagged (`@sps/communications`, `/v1/communications/*`, console panel) | Muse Spark | done | `bun test packages/communications` |
-| N10 | Demo UI: incident timeline (who saw what), clickable citations, bilingual EN/FR, provider badge, audit-chain check | — | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
+| N8 | **Table-top crisis exercise**: authored injects released on a clock, an action log kept by the team, and a score computed deterministically (addressed / late / missed, coverage, response time) before Muse Spark writes the after-action narrative. The narrative cannot change the score (`@sps/exercise`, `/v1/exercise/*`, console panel). | Muse Spark / Muse Glimmer | done | `bun test packages/exercise` |
+| N9 | **Public communication in Fulfulde or Hausa**: drafts from verified facts only, hard-blocked on political content and medical advice, every draft marked `pending native review`; invented phone numbers are flagged (`@sps/communications`, `/v1/communications/*`, console panel) | Muse Spark | done | `bun test packages/communications` |
+| N10 | Demo UI: incident timeline (who saw what), clickable citations, bilingual EN/FR, provider badge, audit-chain check |: | done | see `git log --oneline pre-hackathon-baseline..meta-hackathon` |
 | N11 | **Operable knowledge base** (`/knowledge`): corpus counts and retirement, in-process Atlas ingestion with a six-step journal (chunk → embed → upsert → index → verify), index state and repair, and a retrieval playground that exposes dense/BM25/RRF/rerank scores and provenance | Voyage `voyage-4` + `rerank-2` | done | `bun test packages/kb packages/retrieval` |
 
 Cloud mode also switches the retrieval backend: chunk embeddings come from
@@ -50,14 +50,13 @@ startup, in cloud mode only.
 
 ## Deployment
 
-Public demo: <https://sarkiai-policy-sandbox-meta.vercel.app> (Next.js console on
-Vercel). The Fastify API runs as a Docker web service on Render's free plan, so
-the SSE stream and the WhatsApp webhook keep a stable origin; settings are in
-`deploy/vercel/README.md` and `deploy/render/README.md`.
+Public demo: the Next.js console on a web host, and the Fastify API as a Docker
+web service, so the SSE stream and the WhatsApp webhook keep a stable origin.
+Settings are in `deploy/web/README.md` and `deploy/api/README.md`.
 
 WhatsApp: the three `meta_hackathon_*` utility templates were submitted to the
 WABA on 27 October 2026 (ids in `deploy/whatsapp/templates.md`) and stay
-`PENDING` until Meta approves them — no business-initiated message is delivered
+`PENDING` until Meta approves them: no business-initiated message is delivered
 before that.
 
 ## How to run

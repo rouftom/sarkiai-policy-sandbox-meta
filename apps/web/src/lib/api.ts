@@ -82,16 +82,34 @@ export interface GapDto {
   severity: 'low' | 'medium' | 'high' | 'critical'
 }
 
+export type ReadinessLangDto = 'fr' | 'en'
+
+export interface DimensionTextDto {
+  summary: string
+  evidence: string[]
+  gaps: string[]
+  recommendations: string[]
+}
+
+export interface CountrySituationDto {
+  headline: string
+  situation: string
+  context: string
+}
+
 export interface DimensionScoreDto {
   dimension: string
   dimensionId: number
   dimensionName: string
   score: number
   maturity: string
+  summary?: string
   evidence: string[]
   gaps: string[]
   recommendations: string[]
   confidence: number
+  /** The same text per language; absent on assessments made before bilingual output. */
+  localized?: Partial<Record<ReadinessLangDto, DimensionTextDto>>
   causalEffect?: number
   /** Live web sources consulted for this dimension. */
   webSources?: Array<{ title: string; url: string }>
@@ -104,6 +122,7 @@ export interface ReadinessReportDto {
   dimensions: Array<{ dimension: string; dimensionId: number; gaps: GapDto[] }>
   scores: DimensionScoreDto[]
   scenario: { overall: number; composite: number }
+  situation?: Partial<Record<ReadinessLangDto, CountrySituationDto>>
 }
 
 /** One step of a live assessment, as the API streams it. */
@@ -423,7 +442,7 @@ export interface WhatsappNotifyDto {
   messageId?: string
 }
 
-/** N8 — table-top crisis exercise. Injects are timed; actions are logged by the team. */
+/** N8 · table-top crisis exercise. Injects are timed; actions are logged by the team. */
 export type ExerciseSeverity = 'low' | 'medium' | 'high' | 'critical'
 export type ExerciseActionKind = 'action' | 'decision' | 'escalation' | 'note'
 
@@ -514,7 +533,7 @@ export interface ExerciseBodyDto {
   evaluatedAtMinute: number
 }
 
-/** N9 — public-communication drafts in Fulfulde / Hausa, always pending native review. */
+/** N9 · public-communication drafts in Fulfulde / Hausa, always pending native review. */
 export type CommunicationLanguageCode = 'ff' | 'ha'
 
 export interface CommunicationLanguageDto {
@@ -662,13 +681,16 @@ export interface ReadinessSettingsDto {
   perDimensionK?: number
   useWeb?: boolean
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
+  models?: { webSearch?: string; evaluate?: string; synthesis?: string }
 }
 
 export interface ReadinessReportFileDto {
   filename: string
   mime: string
+  /** Text for Markdown and HTML, base64 bytes for Word. */
   content: string
-  assets: Array<{ kind: 'chart' | 'diagram' | 'cover'; status: 'included' | 'unavailable' | 'fallback'; tool?: string; message: string }>
+  encoding: 'utf8' | 'base64'
+  assets: Array<{ kind: 'chart' | 'diagram' | 'cover' | 'document'; status: 'included' | 'unavailable' | 'fallback'; tool?: string; message: string }>
 }
 
 /** Reads a Server-Sent Events body frame by frame. */
@@ -756,13 +778,23 @@ export const api = {
   readinessRuns: () => request<{ runs: ReadinessRunSummaryDto[] }>('/v1/readiness/runs'),
 
   /** A report of a saved assessment, as a file the browser can download. */
-  readinessReport: (id: string, format: 'markdown' | 'html') =>
+  readinessReport: (id: string, format: 'markdown' | 'html' | 'docx', lang: ReadinessLangDto) =>
     request<ReadinessReportFileDto>(`/v1/readiness/runs/${encodeURIComponent(id)}/report`, {
       method: 'POST',
-      body: JSON.stringify({ format }),
+      body: JSON.stringify({ format, lang }),
     }),
 
   readinessRun: (id: string) => request<ReadinessRunSummaryDto & { report: ReadinessReportDto & { generatedAt?: string } }>(`/v1/readiness/runs/${encodeURIComponent(id)}`),
+
+  /** Deletes a saved assessment of the operator. */
+  readinessDelete: (id: string) => request<{ deleted: boolean; id: string }>(`/v1/readiness/runs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** Adds a language to a saved assessment (translated once, then kept with it). */
+  readinessLocalize: (id: string, lang: ReadinessLangDto) =>
+    request<ReadinessRunSummaryDto & { report: ReadinessReportDto & { generatedAt?: string } }>(
+      `/v1/readiness/runs/${encodeURIComponent(id)}/localize`,
+      { method: 'POST', body: JSON.stringify({ lang }) },
+    ),
 
   readiness: (body: { country: string; domain: string; globalCountry?: string }) =>
     request<ReadinessReportDto>('/v1/readiness/report', { method: 'POST', body: JSON.stringify(body) }),
@@ -844,7 +876,7 @@ export const api = {
     | { kind: 'approval_request'; to?: string; runId: string; summary: string; dryRun?: boolean }
   ) => request<WhatsappNotifyDto>('/v1/whatsapp/notify', { method: 'POST', body: JSON.stringify(body) }),
 
-  /** N8 — authored sample exercise (timed injects) for a country. */
+  /** N8 · authored sample exercise (timed injects) for a country. */
   exerciseSample: (country: string) =>
     request<ExerciseDefinitionDto>(`/v1/exercise/sample?country=${encodeURIComponent(country)}`),
 
@@ -856,10 +888,10 @@ export const api = {
   exerciseAfterAction: (body: ExerciseBodyDto) =>
     request<AfterActionDto>('/v1/exercise/after-action', { method: 'POST', body: JSON.stringify(body) }),
 
-  /** N9 — supported drafting languages (Fulfulde, Hausa). */
+  /** N9 · supported drafting languages (Fulfulde, Hausa). */
   communicationLanguages: () => request<CommunicationLanguageDto[]>('/v1/communications/languages'),
 
-  /** N9 — draft a public message. Political or medical content is refused with 422. */
+  /** N9 · draft a public message. Political or medical content is refused with 422. */
   draftCommunication: (body: {
     language: CommunicationLanguageCode
     sourceLanguage?: 'en' | 'fr'

@@ -24,12 +24,12 @@ flags conflicts between mandates. Every step lands in a **hash-chained audit log
 
 It runs on **Meta models**, in three interchangeable provider modes:
 
-- **cloud** — Meta Model API: `muse-spark-1.3` for reasoning, `sam-3.1` for scanned-gazette
+- **cloud**: Meta Model API: `muse-spark-1.3` for reasoning, `sam-3.1` for scanned-gazette
   segmentation, `muse-voice-transcribe-1.0` for WhatsApp voice notes. Retrieval runs on
   **Voyage** embeddings + **MongoDB Atlas** Vector Search (Meta publishes no embedding model).
-- **sovereign** — **Muse Glimmer** (30B, Apache-2.0) served locally by Ollama: same engine, no data
+- **sovereign**: **Muse Glimmer** (30B, Apache-2.0) served locally by Ollama: same engine, no data
   leaving the institution, retrieval stays on `bge-m3` + Qdrant.
-- **local** — any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
+- **local**: any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
 
 Around the incident run, the sandbox also rehearses the team (**timed crisis
 injects with a deterministic after-action score**) and drafts public messages in
@@ -104,7 +104,7 @@ sarkiai-policy-sandbox/
 
 ## Quick start
 
-> **Pick a provider mode** with `SANDBOX_MODE` in `.env`: `local` (default —
+> **Pick a provider mode** with `SANDBOX_MODE` in `.env`: `local` (default , 
 > Ollama, no key, nothing leaves the machine), `sovereign` (Muse Glimmer on
 > Ollama, or a hosted open-weight endpoint) or `cloud` (Meta Model API, requires
 > `MODEL_API_KEY`). The badge in the console shows which one is answering.
@@ -145,7 +145,7 @@ empty?*
    cannot be delivered, the account is rolled back and the screen can be retried.
 3. The first sign-in returns `password_change_required`: the console asks for a
    new password (12 characters minimum, letters and digits).
-4. The same sign-in then continues into TOTP enrolment — QR code, 6-digit
+4. The same sign-in then continues into TOTP enrolment: QR code, 6-digit
    confirmation, ten single-use recovery codes shown once.
 
 Setup requires three variables, shared with the enterprise stack:
@@ -169,7 +169,7 @@ the signed approval links requires that Bearer token. Inside the console, the
 operator's e-mail is the tenant key: audit records, chain-of-thought traces,
 joint reports, scenario sessions, approvals and preferences are filtered by
 `userId`, so two judges sharing the demo never see each other's runs. The legal
-corpus and its vectors are deliberately shared — it is the same law.
+corpus and its vectors are deliberately shared: it is the same law.
 
 ### Forgotten password
 
@@ -184,7 +184,7 @@ link.
 ### Public sign-up (cloud demo only)
 
 The public demo at
-[sarkiai-policy-sandbox-meta.vercel.app](https://sarkiai-policy-sandbox-meta.vercel.app)
+the public demo (address in the deployment notes)
 opens self-service accounts so judges can walk the console with their own login:
 `/signup` shows what the sandbox does and the notice (prompts, answers and
 files **may be used by Meta to train or improve its models**) in the left
@@ -195,7 +195,7 @@ mandatory TOTP enrolment, so no session exists before the second factor. A
 sign-up in progress survives a reload: the auth pages show the progression
 (password, e-mail, two-factor, access) instead of the forms. `AUTH_SIGNUP=true|false` overrides the default, which is *open in
 cloud mode, closed otherwise*; `AUTH_MAX_OPERATORS` (default 12) caps the demo.
-The **Create an account** link on `/login` stays visible once accounts exist —
+The **Create an account** link on `/login` stays visible once accounts exist , 
 only the API gate closes self-service, not the presence of a root operator.
 
 ### Reset the demo state
@@ -250,7 +250,7 @@ bun run check:provider sovereign
 ```
 
 `deploy/ollama/Modelfile.glimmer` only sets the model card's sampling
-(1.0 / 0.95 / 64) and a 32K context — no system prompt, because the engine
+(1.0 / 0.95 / 64) and a 32K context: no system prompt, because the engine
 already sends its own mandate and citation rules. On Apple silicon use
 `muse-glimmer:30b-mlx` as the base tag.
 
@@ -278,7 +278,7 @@ contract on **MongoDB Atlas**:
 `RETRIEVAL_BACKEND=auto` follows the provider mode (cloud → Atlas, otherwise
 Qdrant). The index definitions live in code
 ([`packages/retrieval/src/atlas-index-definitions.ts`](packages/retrieval/src/atlas-index-definitions.ts)),
-because the API image only ships `packages/` and `apps/api/` — a definition file
+because the API image only ships `packages/` and `apps/api/`: a definition file
 under `deploy/` would be missing in the container. They are created **only in
 cloud mode**, at API startup: the collection first, then `sps_vector_index` and
 `sps_text_index`, idempotently. [`deploy/mongo/kb.indexes.json`](deploy/mongo/kb.indexes.json)
@@ -298,18 +298,18 @@ On the local Mongo used by Compose there is no Atlas Search; the script reports
 RAG is not a claim in this console, it is a screen. `/knowledge` shows the live
 corpus and every step that produced it:
 
-- **Corpus** — documents with chunk counts, characters, country, type and last
+- **Corpus**: documents with chunk counts, characters, country, type and last
   ingestion; a document can be retired (chunks kept for audit, removed from
   retrieval) or restored.
-- **Vectorise** — paste text or load `.txt` / `.md` / `.csv`, set country,
+- **Vectorise**: paste text or load `.txt` / `.md` / `.csv`, set country,
   jurisdiction, type, chunk size and overlap, then watch the six-step journal
   (accept → chunk → embed → upsert → index → verify) with per-step timings.
   Re-running the same document is a no-op: chunks are keyed by content hash.
-- **Retrieval** — a playground that returns each stage separately (dense hits
+- **Retrieval**: a playground that returns each stage separately (dense hits
   with `vectorSearchScore`, BM25 hits with their score, the RRF fusion, the
   reranked list and the final context), plus the Atlas filter, the timings and
   the model names.
-- **Atlas indexes** — `READY` / `BUILDING` / missing, with a create-or-repair
+- **Atlas indexes**: `READY` / `BUILDING` / missing, with a create-or-repair
   button that calls the same idempotent bootstrap as startup.
 
 The API surface behind it:
@@ -365,7 +365,7 @@ Official journals are often published as scans with no text layer. The console's
 1. binarises the page (Otsu) and finds the columns from ink projection profiles;
 2. cuts each column into paragraphs / headings / tables in reading order;
 3. transcribes one crop per zone with the vision model, and lets **SAM 3.1**
-   locate stamps, signatures and tables (cloud mode only — in `sovereign` and
+   locate stamps, signatures and tables (cloud mode only: in `sovereign` and
    `local` the geometric overlay still works);
 4. tags every zone with page, column, bounding box, page sha256 and a deep link,
    then `POST /v1/gazette/ingest` writes the page into the jurisdiction-scoped
@@ -383,7 +383,7 @@ bun run check:gazette path/to/scanned-page.png           # your own scan
 ### Voice notes (N6)
 
 `POST /v1/voice/transcribe` takes a base64 RIFF/WAVE file (mono, 16-bit PCM,
-16 kHz or 24 kHz — convert WhatsApp OGG/Opus first) and returns the transcript,
+16 kHz or 24 kHz: convert WhatsApp OGG/Opus first) and returns the transcript,
 timed turns and `facts` (`T+00:12`, speaker label when diarization is on).
 Cloud mode uses **Muse Voice Transcribe**; `sovereign` and `local` call the
 on-premise `faster-whisper` service, so a recording never leaves the network.
@@ -394,7 +394,7 @@ with the exact conversion to run, not transcribed badly.
 
 `POST /v1/impact/analyze` takes a new provision and a list of open run ids. Runs
 are filtered deterministically first (same article, same instrument), then the
-model ranks the candidates and says what to re-run — a finding that names an
+model ranks the candidates and says what to re-run: a finding that names an
 unknown run is dropped, so the analysis cannot invent a case. Deadline changes
 and unaffected runs are returned alongside the findings, and the pass is recorded
 as `impact.analyzed` in the audit chain.
@@ -404,7 +404,7 @@ as `impact.analyzed` in the audit chain.
 A scenario replays an incident; an exercise adds a clock and a team. The console's
 **Table-top crisis exercise** panel loads a drill whose injects are released at
 fixed minutes (`GET /v1/exercise/sample`). Participants log what they actually
-did — action, decision, escalation or note — and `POST /v1/exercise/evaluate`
+did: action, decision, escalation or note: and `POST /v1/exercise/evaluate`
 scores the log without calling a model: it separates addressed, late and
 unanswered injects, computes coverage and average response time, and lists the
 gaps.
@@ -462,25 +462,25 @@ The public demo splits in two, because the two halves have different shapes:
 
 | Piece | Host | Why |
 |---|---|---|
-| `apps/web` (Next.js) | **Vercel** — <https://sarkiai-policy-sandbox-meta.vercel.app> | static + one dynamic route (`/approve/[token]`) |
-| `apps/api` (Fastify) | **Render**, Docker, free plan | long-lived process, SSE stream, WhatsApp webhook |
+| `apps/web` (Next.js) | a Next.js web host | static + one dynamic route (`/approve/[token]`) |
+| `apps/api` (Fastify) | a Docker web service | long-lived process, SSE stream, WhatsApp webhook |
 
-The API is deliberately *not* on Vercel: serverless functions cannot hold the
-`/simulate` stream open or receive a webhook on a stable host. Exact settings,
-environment variables and the cold-start strategy live in
-[`deploy/vercel/README.md`](deploy/vercel/README.md) and
-[`deploy/render/README.md`](deploy/render/README.md); the blueprint is
-[`deploy/render/render.yaml`](deploy/render/render.yaml).
+The API is deliberately not a serverless function: a serverless function cannot
+hold the `/simulate` stream open or receive a webhook on a stable host. Exact
+settings, environment variables and the warm-up strategy live in
+[`deploy/web/README.md`](deploy/web/README.md) and
+[`deploy/api/README.md`](deploy/api/README.md); the blueprint is
+[`deploy/api/blueprint.yaml`](deploy/api/blueprint.yaml).
 
 #### Model-call relay
 
-Container egress is refused by the Meta Model API: every model call from the
-Render network returns `404 model_not_found`, on every model id, while the same
-key works from Vercel. The API therefore points `META_BASE_URL` at the web app:
+Some hosts' outbound traffic is refused by the Meta Model API: every model call
+returns `404 model_not_found`, on every model id, while the same key works from
+the web host. In that case the API points `META_BASE_URL` at the web app's relay:
 
 ```
-META_BASE_URL=https://sarkiai-policy-sandbox-meta.vercel.app/api/meta
-MODEL_RELAY_KEY=<shared secret, same value as META_RELAY_KEY on Vercel>
+META_BASE_URL=https://<web-host>/api/meta
+MODEL_RELAY_KEY=<shared secret, same value as META_RELAY_KEY on the web host>
 ```
 
 `apps/web/src/app/api/meta/[...path]` forwards the call to `api.meta.ai` with
@@ -501,8 +501,8 @@ lists their exact bodies, ids and review status.
 
 ## License
 
-- **Code** — Apache-2.0 (see [`LICENSE`](LICENSE)).
-- **Knowledge base / docs** — CC BY 4.0 (see [`LICENSE-CONTENT`](LICENSE-CONTENT)); source documents retain their own terms.
+- **Code**: Apache-2.0 (see [`LICENSE`](LICENSE)).
+- **Knowledge base / docs**: CC BY 4.0 (see [`LICENSE-CONTENT`](LICENSE-CONTENT)); source documents retain their own terms.
 
 See [`docs/LICENSING.md`](docs/LICENSING.md) for the rationale and provenance.
 

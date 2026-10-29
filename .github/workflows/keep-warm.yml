@@ -1,8 +1,8 @@
 name: keep-warm
 
-# Render's free plan sleeps after 15 min of inactivity. A scheduled ping keeps
-# the public API answering on demo day. Set the repository variable once:
-#   gh variable set SPS_API_URL --body https://<render-host>
+# Some free hosting plans stop idle instances. A scheduled ping keeps the public
+# API answering on demo day. Set the repository variable once:
+#   gh variable set SPS_API_URL --body https://<api-host>
 # Without the variable the job exits immediately.
 
 on:

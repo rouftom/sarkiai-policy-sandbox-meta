@@ -27,7 +27,7 @@ import {
 import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
-import { institutionsForDomain } from '@sps/shared'
+import { hasLanguage, institutionsForDomain } from '@sps/shared'
 import {
   READINESS_DIMENSIONS,
   type DocType,
@@ -145,7 +145,7 @@ const GAZETTE_MAX_BYTES = 12 * 1024 * 1024
 /**
  * SAM 3.1 is a Meta Model API model: it exists in `cloud` mode only. In
  * `sovereign` and `local` the pipeline still segments by projection profile and
- * transcribes zone by zone — the artefact overlay is simply absent.
+ * transcribes zone by zone · the artefact overlay is simply absent.
  */
 function gazetteSam(): SamClient | undefined {
   if (engine.provider.mode !== 'cloud' || !engine.provider.models.segmentation) return undefined
@@ -890,7 +890,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       try {
         raw.write(`data: ${JSON.stringify(payload)}\n\n`)
       } catch {
-        /* client went away — the run still completes for the audit trail */
+        /* client went away · the run still completes for the audit trail */
       }
     }
 
@@ -1042,7 +1042,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     })
   }
 
-  // SSE stream of all ticks (fixed delay) — for passive viewers.
+  // SSE stream of all ticks (fixed delay) · for passive viewers.
   app.get('/v1/scenarios/:id/release', async (request, reply) => {
     const query = z.object({ country: z.string().default('cm') }).parse(request.query)
     const scenario = createScenario(healthDataBreach(query.country), 'simulation')
@@ -1181,6 +1181,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         perDimensionK: z.number().int().min(2).max(10).optional(),
         useWeb: z.boolean().optional(),
         reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+        models: z
+          .object({
+            webSearch: z.string().min(1).max(80).optional(),
+            evaluate: z.string().min(1).max(80).optional(),
+            synthesis: z.string().min(1).max(80).optional(),
+          })
+          .optional(),
       })
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -1217,6 +1224,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           ...(body.data.perDimensionK ? { perDimensionK: body.data.perDimensionK } : {}),
           ...(body.data.useWeb !== undefined ? { useWeb: body.data.useWeb } : {}),
           ...(body.data.reasoningEffort ? { reasoningEffort: body.data.reasoningEffort } : {}),
+          ...(body.data.models ? { models: body.data.models } : {}),
         },
         (event) => send(event),
       )
@@ -1224,7 +1232,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       await engine.audit.logAction({
         actor: operator.email,
         action: 'readiness.assessed',
-        target: `${report.country.toUpperCase()} · ${report.domain} · composite ${report.scenario?.composite ?? '—'}/5`,
+        target: `${report.country.toUpperCase()} · ${report.domain} · composite ${report.scenario?.composite ?? 'n/a'}/5`,
         lens: 'readiness',
         runId: saved.id,
         userId: operator.email,
@@ -1269,10 +1277,55 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return run
   })
 
-  /** A report of a saved assessment: Markdown or HTML, with the charts, diagram and cover it could produce. */
+  /** Deletes one saved assessment of the operator (the console asks for confirmation first). */
+  app.delete('/v1/readiness/runs/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const operator = operatorOf(request)
+    const run = await readinessRuns.get(id, operator.email)
+    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    await readinessRuns.delete(id, operator.email)
+    await engine.audit.logAction({
+      actor: operator.email,
+      action: 'readiness.deleted',
+      target: `${run.country.toUpperCase()} · ${run.domain} · ${run.createdAt}`,
+      lens: 'readiness',
+      runId: run.id,
+      userId: operator.email,
+    })
+    return { deleted: true, id }
+  })
+
+  /**
+   * Adds a language to a saved assessment: the text is translated once from the
+   * text it has, then kept with the run. A language already present is returned as is.
+   */
+  app.post('/v1/readiness/runs/:id/localize', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const body = z.object({ lang: z.enum(['fr', 'en']) }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    const operator = operatorOf(request)
+    const run = await readinessRuns.get(id, operator.email)
+    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    if (hasLanguage(run.report.scores, body.data.lang)) return run
+    const localized = await engine.readiness.localize(run.report, body.data.lang)
+    const updated = await readinessRuns.updateReport(id, operator.email, localized)
+    await engine.audit.logAction({
+      actor: operator.email,
+      action: 'readiness.localized',
+      target: `${body.data.lang} · ${run.country.toUpperCase()} · ${run.domain}`,
+      lens: 'readiness',
+      runId: run.id,
+      userId: operator.email,
+    })
+    return updated ?? run
+  })
+
+  /** A report of a saved assessment, in the console's language, with the charts, diagram and cover it could produce. */
   app.post('/v1/readiness/runs/:id/report', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = z.object({ format: z.enum(['markdown', 'html']) }).safeParse(request.body)
+    const body = z
+      .object({ format: z.enum(['markdown', 'html', 'docx']), lang: z.enum(['fr', 'en']).optional() })
+      .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
@@ -1280,13 +1333,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const access = providerAccess(engine.provider)
     const report = await buildReadinessReport(run, {
       format: body.data.format,
+      lang: body.data.lang ?? 'fr',
       mcp: mcpGateway,
       image: engine.provider.mode === 'cloud' && access.apiKey ? { baseURL: engine.provider.baseURL, apiKey: access.apiKey, headers: access.headers } : null,
     })
     await engine.audit.logAction({
       actor: operator.email,
       action: 'readiness.report.generated',
-      target: `${body.data.format} · ${report.assets.map((asset) => `${asset.kind}:${asset.status}`).join(' ')}`,
+      target: `${body.data.format} · ${body.data.lang ?? 'fr'} · ${report.assets.map((asset) => `${asset.kind}:${asset.status}`).join(' ')}`,
       lens: 'readiness',
       runId: run.id,
       userId: operator.email,

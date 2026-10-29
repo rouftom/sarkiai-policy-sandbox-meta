@@ -24,7 +24,7 @@ function fmt(value: number): string {
 }
 
 function score(value?: number): string {
-  if (value === undefined) return '—'
+  if (value === undefined) return 'n/a'
   return value >= 0.01 ? value.toFixed(4) : value.toFixed(5)
 }
 

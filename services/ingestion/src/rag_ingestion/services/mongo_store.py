@@ -3,7 +3,7 @@
 The payload mirrors the local Qdrant collection, so the same `KbChunk` contract
 serves both backends. Chunks are embedded with Voyage (`voyage-4`, 1024-d,
 dotProduct) by the caller and upserted with a deterministic `_id` derived from
-the content hash — re-ingesting a document is idempotent.
+the content hash · re-ingesting a document is idempotent.
 
 Search indexes are created by the API at startup (cloud mode only), not here:
 the ingestion service must also work against a local Mongo used for operations.

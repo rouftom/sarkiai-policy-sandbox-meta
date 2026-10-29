@@ -400,7 +400,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
             {evaluation && (
               <div className="space-y-2 rounded-xl border border-border p-2.5">
                 <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3">
-                  <Metric label={t('exercise.coverage')} value={coverage === null ? '—' : `${coverage}%`} strong={coverage === 100} />
+                  <Metric label={t('exercise.coverage')} value={coverage === null ? 'n/a' : `${coverage}%`} strong={coverage === 100} />
                   <Metric label={t('exercise.released')} value={String(evaluation.releasedInjects)} />
                   <Metric label={t('exercise.addressed')} value={String(evaluation.addressed.length)} />
                   <Metric label={t('exercise.missed')} value={String(evaluation.missed.length)} />
@@ -408,7 +408,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
                     label={t('exercise.average')}
                     value={
                       evaluation.averageResponseMinutes === null
-                        ? '—'
+                        ? 'n/a'
                         : t('exercise.minutes', { value: evaluation.averageResponseMinutes })
                     }
                   />
@@ -416,7 +416,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
                     label={t('exercise.firstAction')}
                     value={
                       evaluation.firstActionMinute === null
-                        ? '—'
+                        ? 'n/a'
                         : t('exercise.minute', { minute: evaluation.firstActionMinute })
                     }
                   />

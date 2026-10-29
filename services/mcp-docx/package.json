@@ -1,0 +1,29 @@
+{
+  "name": "@sps/mcp-docx",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Word (.docx) document generation MCP server for SarkiAI Enterprise",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && bun build src/server.ts --outdir dist --target node && bun build src/main.ts --outfile dist/index.js --target node --banner \"#!/usr/bin/env node\"",
+    "start": "bun dist/index.js",
+    "serve": "bun --watch src/main.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "cors": "^2.8.5",
+    "docx": "^9.5.1",
+    "express": "^5.1.0",
+    "mcp-handler": "^1.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}

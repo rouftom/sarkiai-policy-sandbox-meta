@@ -45,7 +45,7 @@ export function formatCitationList(citations: Citation[]): string {
   if (citations.length === 0) return ''
   const lines = citations.map((c, i) => {
     const url = c.sourceUrl ? ` ([source](${c.sourceUrl}))` : ''
-    return `${i + 1}. **${formatCitation(c)}** — “${c.quote}”${url}`
+    return `${i + 1}. **${formatCitation(c)}** · “${c.quote}”${url}`
   })
   return `\n\n---\n**Sources**\n${lines.join('\n')}`
 }
@@ -106,7 +106,7 @@ export function extractQuotes(answer: string, minLength = 24): string[] {
  * so they are stripped before comparing with the corpus.
  */
 const CITATION_LABEL =
-  /[^\s·]{2,}\.(?:pdf|txt|md|docx?|rtf|html?)(?:\s*·\s*[^:”"«»]{0,80})?\s*[:\-–—]?/gi
+  /[^\s·]{2,}\.(?:pdf|txt|md|docx?|rtf|html?)(?:\s*·\s*[^:”"«»]{0,80})?\s*[:\-–-]?/gi
 
 export function stripCitationLabels(quote: string): string {
   return quote.replace(CITATION_LABEL, ' ')
@@ -127,8 +127,8 @@ function corpusOf(citations: Citation[], corpus?: string): string {
 const MIN_CLAUSE = 20
 
 /**
- * A quote is verbatim when the corpus contains it, or — for composite quotes
- * that join several passages — when every substantive clause does.
+ * A quote is verbatim when the corpus contains it, or · for composite quotes
+ * that join several passages · when every substantive clause does.
  */
 function isVerbatim(quote: string, corpus: string): boolean {
   const cleaned = normalise(stripCitationLabels(quote))

@@ -2,7 +2,7 @@
  * Progressive error-scenario engine.
  *
  * Hackathon requirement #5: events must be released in sequenced, chunked order
- * — never all at once — and different agents may receive different events
+ * · never all at once · and different agents may receive different events
  * (information asymmetry). `release()` is an async generator: each yield is one
  * event delivery, optionally gated by a caller-provided delay/approval hook.
  */
@@ -20,7 +20,7 @@ export interface ScenarioDefinition {
 }
 
 export interface ReleaseOptions {
-  /** Pause (ms) between chunks — realistic "received at different times". */
+  /** Pause (ms) between chunks · realistic "received at different times". */
   chunkDelayMs?: number
   /** Await a hook before each release (e.g. facilitator approval). */
   onBeforeRelease?: (event: ScenarioEvent) => Promise<void> | void

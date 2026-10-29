@@ -1,4 +1,4 @@
-# Plan « Local-first » (souveraineté D10/D11) — VALIDÉ & IMPLÉMENTÉ
+# Plan « Local-first » (souveraineté D10/D11): VALIDÉ & IMPLÉMENTÉ
 
 > Décisions verrouillées : LLM **qwen3.5:9b** (multimodal texte+image, 6,6 Go) · embeddings
 > **bge-m3** (1024-dim, multilingue FR) · reranker **TEI local** ·
@@ -56,7 +56,7 @@ alignement direct avec les signaux de readiness **`d10_m10` Data Sovereignty** (
                                 │ transcription      │
                                 │ faster-whisper loc.│
                                 └───────────────────┘
-   (optionnel) TEI reranker bge-reranker-v2-m3 — profil `rerank`
+   (optionnel) TEI reranker bge-reranker-v2-m3: profil `rerank`
 ```
 
 Aucun appel sortant. `ollama` est le **seul** fournisseur de modèles.
@@ -78,7 +78,7 @@ Qdrant actuelle → **pas de migration vectorielle**.
 ## 5. Contexte/env cible
 
 ```env
-# Modèles locaux (souveraineté — défaut)
+# Modèles locaux (souveraineté: défaut)
 LLM_PROVIDER=local
 OLLAMA_BASE_URL=http://ollama:11434
 OLLAMA_MODEL=qwen3.5:9b
@@ -132,8 +132,8 @@ Documenté dans `docs/ROADMAP.md` + section README ; pas de code tant que non re
 
 ## 10. Questions de validation
 
-1. **LLM par défaut** : `qwen3.5:9b` (qualité, 16 Go RAM) — avec `qwen2.5:7b` en option env. OK ?
-2. **Embeddings** : `bge-m3` (1024, FR) — confirmé ?
-3. **Rerank** : on **supprime** Voyage et on met un **reranker TEI local optionnel** (sinon RRF) — OK, ou RRF seul sans TEI ?
-4. **Transcription** : passer à **faster-whisper local** (profil optionnel) — OK ?
-5. **Portée** : je retire **tout** cloud (y compris `OPENAI/ANTHROPIC/GOOGLE` des `.env.example`) — confirmé ?
+1. **LLM par défaut** : `qwen3.5:9b` (qualité, 16 Go RAM): avec `qwen2.5:7b` en option env. OK ?
+2. **Embeddings** : `bge-m3` (1024, FR): confirmé ?
+3. **Rerank** : on **supprime** Voyage et on met un **reranker TEI local optionnel** (sinon RRF): OK, ou RRF seul sans TEI ?
+4. **Transcription** : passer à **faster-whisper local** (profil optionnel): OK ?
+5. **Portée** : je retire **tout** cloud (y compris `OPENAI/ANTHROPIC/GOOGLE` des `.env.example`): confirmé ?

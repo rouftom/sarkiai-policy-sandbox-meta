@@ -35,7 +35,7 @@ export function Progress({
 }
 
 /**
- * Indeterminate bar for work whose duration nobody knows — a model call, a
+ * Indeterminate bar for work whose duration nobody knows · a model call, a
  * scenario tick, a transcription. Mirrors the treatment used by the admin
  * console's long-running jobs instead of a bare spinner.
  */

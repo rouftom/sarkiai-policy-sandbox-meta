@@ -11,7 +11,7 @@ from app.ocr import OCR_LANGUAGES, ocr_image, ocr_pdf
 
 SERVICE_API_KEY = os.getenv("SERVICE_API_KEY", "")
 
-app = FastAPI(title="SarkiAI Policy Sandbox — OCR", version="0.1.0")
+app = FastAPI(title="SarkiAI Policy Sandbox · OCR", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 

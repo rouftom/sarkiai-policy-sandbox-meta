@@ -97,6 +97,34 @@ export class ReadinessRunStore {
       .map((run) => this.summary(run))
   }
 
+  /** Removes a saved run of this operator. False when it does not exist for them. */
+  async delete(id: string, userId: string): Promise<boolean> {
+    const current = await this.get(id, userId)
+    if (!current) return false
+    this.memory.delete(id)
+    const col = await this.col()
+    if (col) {
+      // A failed delete is reported to the console, never silently kept.
+      const result = await col.deleteOne({ _id: id as unknown as Document['_id'], userId })
+      if (result.deletedCount !== 1) throw new Error('The assessment could not be deleted.')
+    }
+    return true
+  }
+
+  /** Replaces the report of a saved run (e.g. once a language has been added to it). */
+  async updateReport(id: string, userId: string, report: ReadinessReport): Promise<ReadinessRun | null> {
+    const current = await this.get(id, userId)
+    if (!current) return null
+    const updated: ReadinessRun = { ...current, report }
+    const cached = this.memory.get(id)
+    if (cached && cached.userId === userId) this.memory.set(id, { ...updated, userId })
+    const col = await this.col()
+    if (col) {
+      await col.updateOne({ _id: id as unknown as Document['_id'], userId }, { $set: { report } }).catch(() => undefined)
+    }
+    return updated
+  }
+
   async get(id: string, userId: string): Promise<ReadinessRun | null> {
     const col = await this.col()
     if (col) {

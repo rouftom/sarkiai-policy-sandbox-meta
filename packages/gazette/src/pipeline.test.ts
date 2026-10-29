@@ -107,8 +107,8 @@ describe('transcription helpers', () => {
   })
 
   test('article numbers survive the forms a gazette prints', () => {
-    expect(extractArticleNumber('ARTICLE 12 — Le traitement…')).toBe('ARTICLE 12')
-    expect(extractArticleNumber('Article 1er — Le présent décret…')).toBe('ARTICLE 1er')
+    expect(extractArticleNumber('ARTICLE 12 · Le traitement…')).toBe('ARTICLE 12')
+    expect(extractArticleNumber('Article 1er · Le présent décret…')).toBe('ARTICLE 1er')
     expect(extractArticleNumber('Art. 9')).toBe('ARTICLE 9')
     expect(extractArticleNumber('article 12 bis')).toBe('ARTICLE 12 bis')
     expect(extractArticleNumber('no article here')).toBeUndefined()
@@ -120,7 +120,7 @@ describe('transcription helpers', () => {
   })
 })
 
-describe('gazette pipeline — with injected model', () => {
+describe('gazette pipeline · with injected model', () => {
   test('segments, transcribes, tags artefacts and keeps provenance', async () => {
     const mask = gazetteMask()
     const bytes = pagePng(mask)
@@ -155,7 +155,7 @@ describe('gazette pipeline — with injected model', () => {
             }
           }
           return {
-            text: 'ARTICLE 2 — Le responsable du traitement notifie toute violation dans un délai de soixante-douze heures.',
+            text: 'ARTICLE 2 · Le responsable du traitement notifie toute violation dans un délai de soixante-douze heures.',
             inputTokens: 120,
             outputTokens: 80,
             durationMs: 5,

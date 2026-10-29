@@ -11,14 +11,14 @@
 4. **Every decision is auditable.** Reasoning is persisted, not merely streamed.
 5. **Open and sovereign.** Apache-2.0; **all models run locally** (Ollama:
    qwen2.5 LLM + bge-m3 embeddings; optional local TEI reranker); no cloud call;
-   runs entirely inside a locked-down sandbox — no data egress.
+   runs entirely inside a locked-down sandbox: no data egress.
 
 ## Storage split
 
 | Store | Holds | Why |
 |-------|-------|-----|
 | **Qdrant** | vector knowledge base (dense + sparse) | open source, multi-arch, native hybrid RRF, payload filtering |
-| **MongoDB** | audit log + chain-of-thought | operational documents, no vectors — portable anywhere |
+| **MongoDB** | audit log + chain-of-thought | operational documents, no vectors: portable anywhere |
 | **MinIO** | assistant image attachments | S3-compatible local bucket, content-addressed (sha256) |
 
 Secrets are versioned with **SOPS + age** (see [`SECRETS.md`](./SECRETS.md)); no
@@ -61,14 +61,14 @@ store never dictates vector-search capabilities.
 
 ## Data flow (simulation lens)
 
-1. **Ingest** — country corpus → `services/ingestion` → structure-aware chunks →
+1. **Ingest**: country corpus → `services/ingestion` → structure-aware chunks →
    local bge-m3 embeddings (Ollama) → Qdrant points (dense + sparse BM25).
-2. **Scenario start** — `ScenarioEngine.release()` yields event batches by tick.
-3. **Per agent** — `PolicyOrchestrator.runAgent()` retrieves country provisions
+2. **Scenario start**: `ScenarioEngine.release()` yields event batches by tick.
+3. **Per agent**: `PolicyOrchestrator.runAgent()` retrieves country provisions
    from Qdrant, builds the mandate-grounded prompt, generates, enforces citations.
-4. **Coordination** — each agent emits an independent `AgentAssessment`; the
+4. **Coordination**: each agent emits an independent `AgentAssessment`; the
    coordinator reconciles them into a joint situation report.
-5. **Auditability** — `AuditService.traceStep()` records each reasoning step;
+5. **Auditability**: `AuditService.traceStep()` records each reasoning step;
    `logAction()` appends a hash-chained audit record to MongoDB.
 
 ## Readiness lens

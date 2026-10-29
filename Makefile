@@ -1,4 +1,4 @@
-# SarkiAI Policy Sandbox — developer shortcuts
+# SarkiAI Policy Sandbox · developer shortcuts
 # All targets wrap docker compose so the full stack or any subset can be launched.
 
 COMPOSE      := docker compose

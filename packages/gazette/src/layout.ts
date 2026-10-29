@@ -1,5 +1,5 @@
 /**
- * Page layout for scanned gazettes — recursive XY-cut on ink projection
+ * Page layout for scanned gazettes · recursive XY-cut on ink projection
  * profiles.
  *
  * A scanned page has no text layer, so the first job is geometry: find the

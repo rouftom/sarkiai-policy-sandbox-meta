@@ -205,7 +205,7 @@ export function KbDocuments({
                           {document.country.toUpperCase()} ·{' '}
                           {document.lastIngestedAt
                             ? new Date(document.lastIngestedAt).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB')
-                            : '—'}
+                            : 'n/a'}
                         </p>
                       </TableCell>
                       <TableCell className="text-[12px]">{document.docType}</TableCell>

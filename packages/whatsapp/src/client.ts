@@ -1,5 +1,5 @@
 /**
- * WhatsApp Cloud API client — called directly, no external notification gateway.
+ * WhatsApp Cloud API client · called directly, no external notification gateway.
  *
  * The public repo must stay reproducible, so the transport is ~100 lines of
  * `fetch` against the Graph API instead of depending on a private worker. The

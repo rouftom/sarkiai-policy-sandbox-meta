@@ -72,3 +72,25 @@ describe('Voyage rerank', () => {
     expect(body.documents).toEqual(['first', 'second'])
   })
 })
+
+describe('Voyage base URL', () => {
+  const urlOf = async (baseUrl: string) => {
+    const calls: string[] = []
+    const client = new VoyageClient({
+      apiKey: 'k',
+      baseUrl,
+      fetchImpl: (async (url: string) => {
+        calls.push(String(url))
+        return new Response(JSON.stringify({ data: [{ index: 0, embedding: [1] }] }), { status: 200 })
+      }) as unknown as typeof fetch,
+    })
+    await client.embed(['x'])
+    return calls[0]
+  }
+
+  test('a host, a /v1 base and a full /v1/embeddings endpoint all reach the same route', async () => {
+    expect(await urlOf('https://api.voyageai.com')).toBe('https://api.voyageai.com/v1/embeddings')
+    expect(await urlOf('https://api.voyageai.com/v1')).toBe('https://api.voyageai.com/v1/embeddings')
+    expect(await urlOf('https://api.voyageai.com/v1/embeddings')).toBe('https://api.voyageai.com/v1/embeddings')
+  })
+})

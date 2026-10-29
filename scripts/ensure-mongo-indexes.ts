@@ -8,7 +8,7 @@
  * Creates the collection before the indexes (a fresh database otherwise returns
  * NamespaceNotFound) and is idempotent: unchanged definitions are skipped,
  * changed ones are recreated. On the local MongoDB used by the compose profile
- * there is no Atlas Search, so it reports `supported: false` and exits 0 —
+ * there is no Atlas Search, so it reports `supported: false` and exits 0 -
  * local/sovereign modes use Qdrant and never need these indexes.
  */
 
@@ -26,7 +26,7 @@ if (!uri) {
   process.exit(1)
 }
 
-console.log(`Atlas indexes — ${file}`)
+console.log(`Atlas indexes · ${file}`)
 console.log(`  db=${dbName} collection=${collection} indexes=${artifact.indexes.length}`)
 
 const result = await ensureAtlasIndexes({
@@ -43,5 +43,5 @@ if (!result.supported) {
 }
 
 console.log(
-  `Done — created: ${result.created.length}, updated: ${result.updated.length}, unchanged: ${result.unchanged.length}.`,
+  `Done · created: ${result.created.length}, updated: ${result.updated.length}, unchanged: ${result.unchanged.length}.`,
 )

@@ -1,5 +1,5 @@
 /**
- * @sps/gazette — scanned gazette ingestion for the policy sandbox.
+ * @sps/gazette · scanned gazette ingestion for the policy sandbox.
  *
  * Deterministic layout (projection profiles), SAM 3.1 for visual artefacts,
  * Muse Spark vision for per-zone transcription, and provenance that survives

@@ -3,7 +3,7 @@
  *
  * Bundles the hash-chained audit log, the persisted chain-of-thought traces, the
  * joint situation reports and every citation into one portable artifact (JSON or
- * Markdown) — the demo deliverable for the "auditability" evaluation criterion.
+ * Markdown) · the demo deliverable for the "auditability" evaluation criterion.
  */
 
 import type {
@@ -60,7 +60,7 @@ function integrityBadge(integrity?: { valid: boolean; brokenAt?: string }): stri
 
 export function renderDossierMarkdown(dossier: RunDossier): string {
   const lines: string[] = [
-    `# Dossier de run — ${dossier.runId}`,
+    `# Dossier de run · ${dossier.runId}`,
     '',
     `_Généré le ${dossier.generatedAt} · Intégrité : ${integrityBadge(dossier.integrity)}_`,
     '',
@@ -73,7 +73,7 @@ export function renderDossierMarkdown(dossier: RunDossier): string {
   ]
 
   for (const report of dossier.reports) {
-    lines.push(`## Tick ${report.tick} — ${report.summary}`, '')
+    lines.push(`## Tick ${report.tick} · ${report.summary}`, '')
 
     if (report.agreements.length) {
       lines.push('### Accords')
@@ -83,7 +83,7 @@ export function renderDossierMarkdown(dossier: RunDossier): string {
     if (report.conflicts.length) {
       lines.push('### Conflits de mandats')
       for (const conflict of report.conflicts) {
-        lines.push(`- **[${conflict.severity}] ${conflict.between.join(' ↔ ')}** — ${conflict.summary}`)
+        lines.push(`- **[${conflict.severity}] ${conflict.between.join(' ↔ ')}** · ${conflict.summary}`)
         for (const position of conflict.positions) lines.push(`  - _${position.agentId}_ : ${position.position}`)
       }
       lines.push('')
@@ -96,7 +96,7 @@ export function renderDossierMarkdown(dossier: RunDossier): string {
 
     lines.push('### Évaluations par agent')
     for (const assessment of report.assessments) {
-      lines.push(`- **${assessment.agentId}** (confiance ${assessment.confidence}) — ${assessment.findings.join(' ')}`)
+      lines.push(`- **${assessment.agentId}** (confiance ${assessment.confidence}) · ${assessment.findings.join(' ')}`)
     }
     lines.push('')
   }
@@ -107,14 +107,14 @@ export function renderDossierMarkdown(dossier: RunDossier): string {
       const label = [c.filename, c.articleNumber ? `ARTICLE ${c.articleNumber}` : '', c.headingPath ?? '']
         .filter(Boolean)
         .join(' · ')
-      lines.push(`${i + 1}. **${c.country.toUpperCase()} — ${label}** — « ${c.quote} »`)
+      lines.push(`${i + 1}. **${c.country.toUpperCase()} · ${label}** · « ${c.quote} »`)
     })
     lines.push('')
   }
 
   lines.push('## Piste de raisonnement (CoT)', '')
   for (const trace of dossier.traces) {
-    lines.push(`- \`${trace.agentId}\` étape ${trace.step} — ${trace.thought.slice(0, 300)}`)
+    lines.push(`- \`${trace.agentId}\` étape ${trace.step} · ${trace.thought.slice(0, 300)}`)
   }
   lines.push('')
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * N3 smoke check — runs the synthetic gazette page through the real pipeline:
+ * N3 smoke check · runs the synthetic gazette page through the real pipeline:
  * projection-profile layout, SAM 3.1 artefacts, Muse Spark vision transcription.
  *
  *   bun run check:gazette                 # cloud, the demo page

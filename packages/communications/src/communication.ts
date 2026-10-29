@@ -1,5 +1,5 @@
 /**
- * N9 — public-communication drafts in Fulfulde or Hausa.
+ * N9 · public-communication drafts in Fulfulde or Hausa.
  *
  * The engine never publishes. It produces a draft in the target language, flags
  * it `pending_native_review`, and refuses to emit political content or medical

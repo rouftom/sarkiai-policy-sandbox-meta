@@ -180,10 +180,10 @@ export function chunkDocument(raw: string, options: ChunkOptions = {}): Document
       headingStack.length = Math.max(0, level - 1)
       headingStack[level - 1] = heading
     } else if (article) {
-      heading = `${article[1] ? `Article ${article[1]}` : 'Article'}${article[2] ? ` — ${article[2].trim()}` : ''}`
+      heading = `${article[1] ? `Article ${article[1]}` : 'Article'}${article[2] ? ` · ${article[2].trim()}` : ''}`
       headingStack[headingStack.length > 1 ? 1 : 0] = heading
     } else if (section) {
-      heading = `${section[1] ? `Section ${section[1]}` : 'Section'}${section[2] ? ` — ${section[2].trim()}` : ''}`
+      heading = `${section[1] ? `Section ${section[1]}` : 'Section'}${section[2] ? ` · ${section[2].trim()}` : ''}`
       headingStack[headingStack.length > 1 ? 1 : 0] = heading
     } else {
       headingStack[headingStack.length > 0 ? headingStack.length - 1 : 0] = heading

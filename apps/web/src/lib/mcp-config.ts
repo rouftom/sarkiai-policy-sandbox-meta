@@ -13,7 +13,7 @@ export const MCP_SERVERS: McpServerEntry[] = [
   },
   {
     name: 'sarkiai_charts',
-    url: 'https://sarkiai-charts-mcp-app.vercel.app/mcp',
+    url: process.env.MCP_CHARTS_URL || 'https://sarkiai-charts-mcp-app.vercel.app/mcp',
     requiresApiKey: true,
   },
   {
@@ -22,8 +22,8 @@ export const MCP_SERVERS: McpServerEntry[] = [
     requiresApiKey: true,
   },
   {
-    name: 'sea_mcp_excalidraw',
-    url: 'https://sea-mcp-excalidraw.vercel.app/mcp',
+    name: 'sea_mcp_docx',
+    url: process.env.MCP_DOCX_URL || 'https://sea-mcp-docx.vercel.app/mcp',
     requiresApiKey: true,
   },
 ];

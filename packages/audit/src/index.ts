@@ -1,7 +1,7 @@
 /**
  * Auditability: immutable, hash-chained audit log + persisted chain-of-thought
  * traces. This is a first-class evaluation criterion, so reasoning is stored as
- * a durable artifact — not merely streamed to the UI.
+ * a durable artifact · not merely streamed to the UI.
  */
 
 import { createHash } from 'node:crypto'
@@ -23,7 +23,7 @@ function sha256(value: string): string {
  * Canonical hash payload. `runId` and `target` are optional, and Mongo stores
  * an absent value as `null`: both are normalised away so a record written from
  * the API and read back from the collection hash to the same string. The key
- * order is part of the contract — do not reorder.
+ * order is part of the contract · do not reorder.
  */
 /**
  * MongoDB stores an absent property as `null`, while `JSON.stringify` drops it.

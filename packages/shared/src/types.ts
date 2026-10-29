@@ -107,6 +107,24 @@ export const DIMENSION_FACTORS: Record<ReadinessDimension, ReadinessFactor[]> = 
   READINESS_DIMENSIONS.map((d) => [d.shortName, d.factors]),
 ) as Record<ReadinessDimension, ReadinessFactor[]>
 
+/** The languages an assessment is written in. */
+export type ReadinessLang = 'fr' | 'en'
+
+/** The written part of one dimension, in one language. */
+export interface DimensionText {
+  summary: string
+  evidence: string[]
+  gaps: string[]
+  recommendations: string[]
+}
+
+/** The country's situation against the global context, in one language. */
+export interface CountrySituation {
+  headline: string
+  situation: string
+  context: string
+}
+
 /** A single dimension scored on the 0–5 maturity scale. */
 export interface DimensionScore {
   dimension: ReadinessDimension
@@ -114,14 +132,30 @@ export interface DimensionScore {
   dimensionName: string
   score: number // 0..5
   maturity: string
+  /** Text in the first language the evaluation produced (English when both exist). */
+  summary?: string
   evidence: string[]
   gaps: string[]
   recommendations: string[]
   confidence: number // 0..1
+  /** The same text per language. Assessments made before bilingual output have none. */
+  localized?: Partial<Record<ReadinessLang, DimensionText>>
   /** Set when the value moved due to causal propagation. */
   causalEffect?: number
   /** Live web sources consulted for this dimension (readiness only). */
   webSources?: Array<{ title: string; url: string }>
+}
+
+/** The text of a dimension in `lang`, falling back to the text the evaluation kept. */
+export function dimensionTextIn(score: DimensionScore, lang: ReadinessLang): DimensionText {
+  const own = score.localized?.[lang]
+  if (own) return own
+  return { summary: score.summary ?? '', evidence: score.evidence, gaps: score.gaps, recommendations: score.recommendations }
+}
+
+/** Whether every dimension already has its text in `lang`. */
+export function hasLanguage(scores: DimensionScore[], lang: ReadinessLang): boolean {
+  return scores.every((score) => Boolean(score.localized?.[lang]))
 }
 
 export interface ReadinessScenario {
@@ -311,11 +345,11 @@ export interface ProviderModels {
   reasoning: string
   /** Vision model used to transcribe what a segmentation pass isolated. */
   vision: string
-  /** Image segmentation (scanned gazettes) — cloud mode only. */
+  /** Image segmentation (scanned gazettes) · cloud mode only. */
   segmentation?: string
-  /** Speech-to-text (WhatsApp voice notes) — cloud mode only. */
+  /** Speech-to-text (WhatsApp voice notes) · cloud mode only. */
   transcription?: string
-  /** Embeddings — always on-premise, whatever the mode. */
+  /** Embeddings · always on-premise, whatever the mode. */
   embedding: string
 }
 
@@ -344,7 +378,7 @@ export interface ProviderDescriptor {
  *
  * A policy answer is only admissible when every quoted provision actually
  * appears in the retrieved corpus. Fabricated quotes are rejected and the agent
- * is asked to answer again — the engine never ships an unsourced claim.
+ * is asked to answer again · the engine never ships an unsourced claim.
  */
 export interface CitationValidation {
   /** True when the answer cites at least one provision and quotes nothing invented. */
@@ -355,4 +389,11 @@ export interface CitationValidation {
   rejected: string[]
   /** Generation attempts, including rejected ones. */
   attempts: number
+}
+
+/** The flag of an ISO 3166 alpha-2 country code, from regional indicator symbols. */
+export function flagOf(code: string): string {
+  const upper = code.toUpperCase()
+  if (!/^[A-Z]{2}$/.test(upper)) return ''
+  return String.fromCodePoint(...[...upper].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65))
 }

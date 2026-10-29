@@ -59,7 +59,14 @@ function buildModelStack(
     maxOutputTokens: Number(process.env.AGENT_MAX_OUTPUT_TOKENS ?? 4096) || 4096,
   })
   const coordinator = new MultiAgentCoordinator({ model, orchestrator, audit })
-  const readiness = new ReadinessEngine({ model, retriever, ...(webSearch ? { webSearch } : {}) })
+  const onModel = (id: string) => ({ ...active, models: { ...active.models, reasoning: id } })
+  const readiness = new ReadinessEngine({
+    model,
+    retriever,
+    ...(webSearch ? { webSearch } : {}),
+    modelFor: (id) => createModel({ provider: onModel(id) }),
+    webSearchFor: (id) => webSearchFor(onModel(id)),
+  })
   return { provider: active, model, orchestrator, coordinator, readiness }
 }
 
@@ -136,7 +143,7 @@ export interface CloudStorePreparation {
 }
 
 /**
- * Prepare the cloud vector store at startup — and only in cloud mode.
+ * Prepare the cloud vector store at startup · and only in cloud mode.
  *
  * Local Mongo has no Atlas Search, so `sovereign` and `local` never try. The
  * collection is created first (a fresh cluster otherwise returns
@@ -187,7 +194,7 @@ export function createKnowledgeIngestor(): AtlasIngestor {
 }
 
 /**
- * Record a provider switch in the audit chain — and only a switch.
+ * Record a provider switch in the audit chain · and only a switch.
  *
  * The last `provider.switched` record is the mode in force; when the running
  * mode matches it nothing is written, so restarts do not flood the chain.

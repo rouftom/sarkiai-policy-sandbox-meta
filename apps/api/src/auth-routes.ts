@@ -94,7 +94,7 @@ function recorder(audit: AuditService) {
     try {
       await audit.logAction({ actor, action, target, userId, lens: 'hybrid' })
     } catch {
-      /* audit store unreachable — the console still works */
+      /* audit store unreachable · the console still works */
     }
   }
 }

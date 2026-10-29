@@ -1,4 +1,4 @@
-# Demo runbook — 3 minutes, one operator
+# Demo runbook: 3 minutes, one operator
 
 A recording plan that shows the engine, not the slides: a policy-grounded joint
 report, the RAG that backs it, and the human decision loop on WhatsApp. Everything
@@ -13,7 +13,7 @@ validation, audit chain), **Demo 25%** (a story with a visible causality).
 ## Before recording (T-15 min)
 
 ```bash
-API=https://sps-api-sbn6.onrender.com
+API=https://<api-host>
 curl -s $API/health
 curl -s $API/v1/kb/status | jq '{totals, indexes: [.indexes.indexes[] | {name, status, queryable}]}'
 curl -s $API/v1/provider | jq '{mode, models, ready}'
@@ -39,7 +39,7 @@ over the provider badge; it recovers.
 
 ## The script
 
-### 0:00–0:20 — Framing (overview)
+### 0:00–0:20: Framing (overview)
 
 Open `/`. Say what the product is in one sentence: *a policy sandbox where
 mandated institutions must answer from the national corpus, and every claim is
@@ -48,7 +48,7 @@ citable and audited.*
 Point at the provider badge: **Meta Model API · cloud**, and at the corpus
 counter. Do not tour the menu.
 
-### 0:20–1:35 — Use case 1: a joint report that cites the law
+### 0:20–1:35: Use case 1: a joint report that cites the law
 
 `/console` → **Simulation**.
 
@@ -63,7 +63,7 @@ counter. Do not tour the menu.
 
 Keep this segment to one tick. Resist scrolling the whole report.
 
-### 1:35–2:25 — Use case 2: the RAG is real (knowledge base)
+### 1:35–2:25: Use case 2: the RAG is real (knowledge base)
 
 `/knowledge`.
 
@@ -71,9 +71,9 @@ Keep this segment to one tick. Resist scrolling the whole report.
    Atlas indexes `READY`. One line: *this is the corpus the previous answer cited.*
 2. **Retrieval**: ask `protection des donnees personnelles sante`, country
    Cameroon. Then switch the stage chips:
-   - **Dense · vector** — 100 candidates with `vectorSearchScore`;
-   - **Sparse · BM25** — 100 candidates, accent-folded analyser;
-   - **Fusion · RRF**, then **Rerank · Voyage** — the final context.
+   - **Dense · vector**: 100 candidates with `vectorSearchScore`;
+   - **Sparse · BM25**: 100 candidates, accent-folded analyser;
+   - **Fusion · RRF**, then **Rerank · Voyage**: the final context.
 3. Point at the timings and the filter (`isActive`, `country`, `docType`).
 4. One sentence on ingestion: **Vectorise** shows the six-step journal, content
    hashes, and why re-running is free.
@@ -81,7 +81,7 @@ Keep this segment to one tick. Resist scrolling the whole report.
 This is the depth segment: hybrid retrieval, RRF, cross-encoder rerank, all
 inspectable rather than asserted.
 
-### 2:25–2:55 — Use case 3: the decision stays human (WhatsApp)
+### 2:25–2:55: Use case 3: the decision stays human (WhatsApp)
 
 `/console` → **Communications** (or the run's WhatsApp action).
 
@@ -91,7 +91,7 @@ inspectable rather than asserted.
 3. Say: *the decision is written once to `whatsapp_approvals`, appended to the
    audit chain, and the link cannot be replayed.*
 
-### 2:55–3:00 — Close
+### 2:55–3:00: Close
 
 `/audit`: the chain is valid, and the last events are the run, the retrieval
 calls and the approval. One sentence: *same engine on open weights, nothing
@@ -113,8 +113,8 @@ curl -s $API/v1/kb/status | jq '.totals, .embedding'
 git status --short     # should be clean
 ```
 
-Check Render logs for the run (`render logs -r srv-dbfvq1e1egvs73a6j4eg --limit 200`)
-— bootstrap index messages, no stack traces. Keep the take that shows a real
+Check the API host's logs for the run (last 200 lines)
+,  bootstrap index messages, no stack traces. Keep the take that shows a real
 score, not a sped-up one.
 
 To return the demo to a clean slate without touching the corpus:

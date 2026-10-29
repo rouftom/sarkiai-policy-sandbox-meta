@@ -1,5 +1,5 @@
 /**
- * Direct Atlas ingestion — the vectorisation path the console can actually run.
+ * Direct Atlas ingestion · the vectorisation path the console can actually run.
  *
  * Cloud mode used to depend on an optional Python ingestion service. That made
  * the RAG opaque (and unavailable on the public demo host). This module owns the
@@ -391,7 +391,7 @@ export class AtlasIngestor {
     }
 
     try {
-      // 1 — validate ────────────────────────────────────────────────────────
+      // 1 · validate ────────────────────────────────────────────────────────
       let stepStart = Date.now()
       const text = input.text.trim()
       if (text.length < 24) throw new Error('Document is too short (minimum 24 characters).')
@@ -405,7 +405,7 @@ export class AtlasIngestor {
         startedAt: stepStart,
       })
 
-      // 2 — chunk ───────────────────────────────────────────────────────────
+      // 2 · chunk ───────────────────────────────────────────────────────────
       stepStart = Date.now()
       const chunks = chunkDocument(text, {
         maxChars: input.maxChars,
@@ -438,7 +438,7 @@ export class AtlasIngestor {
       const fresh = records.filter((record) => !existingIds.has(record.id))
       const unchanged = records.length - fresh.length
 
-      // 3 — embed (only the chunks that are actually new) ──────────────────
+      // 3 · embed (only the chunks that are actually new) ──────────────────
       stepStart = Date.now()
       const vectors = new Map<string, number[]>()
       if (fresh.length === 0) {
@@ -446,7 +446,7 @@ export class AtlasIngestor {
           id: 'embed',
           status: 'skipped',
           label: 'Embedding skipped',
-          detail: `All ${records.length} chunks already exist — content unchanged, no Voyage call.`,
+          detail: `All ${records.length} chunks already exist · content unchanged, no Voyage call.`,
           count: 0,
           startedAt: stepStart,
         })
@@ -475,7 +475,7 @@ export class AtlasIngestor {
         })
       }
 
-      // 4 — write (idempotent upsert + stale-version cleanup) ─────────────
+      // 4 · write (idempotent upsert + stale-version cleanup) ─────────────
       stepStart = Date.now()
       const now = new Date()
       if (fresh.length > 0) {
@@ -545,7 +545,7 @@ export class AtlasIngestor {
         startedAt: stepStart,
       })
 
-      // 5 — indexes ─────────────────────────────────────────────────────────
+      // 5 · indexes ─────────────────────────────────────────────────────────
       stepStart = Date.now()
       result.indexes = await inspectAtlasIndexes({
         uri: this.config.mongodbUri,
@@ -583,13 +583,13 @@ export class AtlasIngestor {
           label: missing.length > 0 ? 'Indexes missing' : 'Indexes present',
           detail:
             missing.length > 0
-              ? `${missing.map((index) => index.name).join(', ')} not created — run the index repair.`
+              ? `${missing.map((index) => index.name).join(', ')} not created · run the index repair.`
               : `${result.indexes.indexes.length} index(es) · ${building} still building`,
           startedAt: stepStart,
         })
       }
 
-      // 6 — verify ──────────────────────────────────────────────────────────
+      // 6 · verify ──────────────────────────────────────────────────────────
       stepStart = Date.now()
       const total = await collection.countDocuments({ filename: input.filename, isActive: true })
       push({

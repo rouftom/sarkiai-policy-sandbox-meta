@@ -1,13 +1,8 @@
-# Render blueprint — public API (free instance)
+# API host blueprint (container web service, one instance).
 #
-# Why Render and not Vercel: the API is a long-lived Fastify process that keeps
-# an SSE stream open and receives Meta webhooks on a stable HTTPS origin. That is
-# exactly what a container web service gives you and what a serverless function
-# does not.
-#
-# Create the service from this file:
-#   Render dashboard → New → Blueprint → pick rouftom/sarkiai-policy-sandbox-meta
-#   Blueprint path: deploy/render/render.yaml
+# The API is a long-lived process that keeps an SSE stream open and receives
+# webhooks on a stable HTTPS origin: a container web service fits, a serverless
+# function does not. See deploy/api/README.md for the steps.
 #
 # `sync: false` means Render asks for the value at creation time and never stores
 # it in this file. Never commit real values here.

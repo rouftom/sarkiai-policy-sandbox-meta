@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * N4 — human approval page.
+ * N4 · human approval page.
  *
  * The WhatsApp message only carries a link with a signed, expiring token; the
  * decision is taken here, in the console, and recorded once in

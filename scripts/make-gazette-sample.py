@@ -141,7 +141,7 @@ def main() -> None:
     parts.append((journal, MARGIN, 44 + height(masthead) + 4))
 
     edition = text_block(
-        "ÉDITION SPÉCIALE N° 47 — 12 OCTOBRE 2026",
+        "ÉDITION SPÉCIALE N° 47 · 12 OCTOBRE 2026",
         width=WIDTH - 2 * MARGIN, size=14, font="DejaVu-Sans", gravity="center", out=WORK / "edition.png",
     )
     parts.append((edition, MARGIN, 44 + height(masthead) + height(journal) + 12))
@@ -162,20 +162,20 @@ def main() -> None:
         ("LE PRÉSIDENT DE LA RÉPUBLIQUE,", "DejaVu-Sans-Bold", 12),
         ("Vu la Constitution ; Vu la loi n° 2010/012 du 21 décembre 2010 relative à la cybersécurité ; "
          "Vu le décret n° 2025/118 fixant l'organisation du système national de santé numérique ;", "DejaVu-Serif", 13),
-        ("ARTICLE 1er — Le présent décret s'applique à tout traitement de données de santé à caractère "
+        ("ARTICLE 1er · Le présent décret s'applique à tout traitement de données de santé à caractère "
          "personnel mis en œuvre par un établissement public ou privé.", "DejaVu-Serif", 14),
-        ("ARTICLE 2 — Le responsable du traitement notifie à l'Autorité nationale de protection des données "
+        ("ARTICLE 2 · Le responsable du traitement notifie à l'Autorité nationale de protection des données "
          "toute violation de données dans un délai de soixante-douze heures après en avoir pris connaissance.",
          "DejaVu-Serif", 14),
-        ("ARTICLE 3 — Les établissements de santé publics notifient sans délai le ministère de la Santé de "
+        ("ARTICLE 3 · Les établissements de santé publics notifient sans délai le ministère de la Santé de "
          "tout incident de sécurité affectant les dossiers médicaux et préservent les traces techniques "
          "nécessaires à l'enquête.", "DejaVu-Serif", 14),
-        ("ARTICLE 4 — Les infractions aux dispositions du présent décret sont punies conformément à la loi "
+        ("ARTICLE 4 · Les infractions aux dispositions du présent décret sont punies conformément à la loi "
          "n° 2010/012.", "DejaVu-Serif", 15),
-        ("ARTICLE 9 — L'Autorité nationale de protection des données publie chaque année un rapport "
+        ("ARTICLE 9 · L'Autorité nationale de protection des données publie chaque année un rapport "
          "d'activité et une synthèse des incidents notifiés, sans identifier les personnes concernées.",
          "DejaVu-Serif", 15),
-        ("ARTICLE 10 — Les sous-traitants techniques déclarent à l'Autorité les traitements qu'ils mettent "
+        ("ARTICLE 10 · Les sous-traitants techniques déclarent à l'Autorité les traitements qu'ils mettent "
          "en œuvre pour le compte d'un établissement de santé.", "DejaVu-Serif", 15),
     ]
 
@@ -188,13 +188,13 @@ def main() -> None:
 
     # ── Column 2 ─────────────────────────────────────────────────────────────
     column2 = [
-        ("ARTICLE 5 — Le traitement de données de santé exige le consentement écrit et éclairé de la "
+        ("ARTICLE 5 · Le traitement de données de santé exige le consentement écrit et éclairé de la "
          "personne concernée, sauf urgence médicale.", "DejaVu-Serif", 15),
-        ("ARTICLE 6 — Les données sont conservées pour une durée maximale de dix ans à compter du dernier "
+        ("ARTICLE 6 · Les données sont conservées pour une durée maximale de dix ans à compter du dernier "
          "contact avec l'établissement.", "DejaVu-Serif", 15),
-        ("ARTICLE 7 — Un audit annuel de sécurité est réalisé par un organisme indépendant agréé.",
+        ("ARTICLE 7 · Un audit annuel de sécurité est réalisé par un organisme indépendant agréé.",
          "DejaVu-Serif", 15),
-        ("ARTICLE 11 — Toute personne concernée peut demander la rectification ou l'effacement de ses "
+        ("ARTICLE 11 · Toute personne concernée peut demander la rectification ou l'effacement de ses "
          "données de santé dans un délai de trente jours.", "DejaVu-Serif", 15),
     ]
 
@@ -226,7 +226,7 @@ def main() -> None:
     parts.append((minister, COL2_X, y))
 
     # ── Footer, confined to column 1 so it is not duplicated ─────────────────
-    footer = text_block("Page 1 sur 4 — Journal officiel de la République du Cameroun",
+    footer = text_block("Page 1 sur 4 · Journal officiel de la République du Cameroun",
                         width=COLUMN_WIDTH, size=10, font="DejaVu-Sans", fill="#555555",
                         out=WORK / "footer.png")
     parts.append((footer, MARGIN, HEIGHT - 60))

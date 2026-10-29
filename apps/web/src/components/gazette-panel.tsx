@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * N3 — scanned gazette ingestion.
+ * N3 · scanned gazette ingestion.
  *
  * A gazette is a scan: no text layer, two columns, stamps and signatures in the
  * margins. The panel shows the geometry the pipeline actually used (one box per

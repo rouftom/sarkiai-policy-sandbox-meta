@@ -244,7 +244,7 @@ export default function OverviewPage() {
               <>
                 <p className="flex items-center gap-1.5 truncate font-display text-base font-bold">
                   <Cpu className="h-4 w-4 shrink-0 text-brand-accent" />
-                  <span className="truncate">{model || '—'}</span>
+                  <span className="truncate">{model || 'n/a'}</span>
                 </p>
                 <p className="truncate text-[10px] text-muted-foreground">{provider.label}</p>
               </>

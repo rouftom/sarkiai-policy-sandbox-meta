@@ -75,7 +75,7 @@ async function embedQuery(config: RetrievalConfig, text: string): Promise<number
   return embedding
 }
 
-/** Reciprocal Rank Fusion — kept for callers that fuse lists locally. */
+/** Reciprocal Rank Fusion · kept for callers that fuse lists locally. */
 export function rrf<T>(lists: Array<{ items: T[]; weight: number }>, k = 60): Array<T & { score: number }> {
   const scores = new Map<string, { item: T; score: number }>()
   for (const { items, weight } of lists) {

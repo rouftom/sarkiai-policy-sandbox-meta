@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { AuthService, totpCode } from './index'
 
 /**
- * Integration test — requires MongoDB (the reset links live in their own
+ * Integration test · requires MongoDB (the reset links live in their own
  * collection). Run with:  MONGO_URL=mongodb://localhost:27017 bun test
  * Skipped automatically when MONGO_URL is unset.
  */

@@ -111,7 +111,7 @@ export default function AuditPage() {
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
             <Badge tone={chain.valid ? 'success' : 'danger'} className="max-w-full whitespace-nowrap">
               {chain.valid ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-              {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? '—' })}
+              {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? 'n/a' })}
             </Badge>
             {chain.valid && (chain.forks ?? 0) > 0 && (
               <span className="text-[10px] text-muted-foreground">{t('audit.forks', { count: chain.forks ?? 0 })}</span>
@@ -166,7 +166,7 @@ export default function AuditPage() {
                           </span>
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate text-muted-foreground">
-                          {event.target ?? '—'}
+                          {event.target ?? 'n/a'}
                         </TableCell>
                         <TableCell className="font-mono text-[10px] text-muted-foreground">
                           {event.hash.slice(0, 12)}…

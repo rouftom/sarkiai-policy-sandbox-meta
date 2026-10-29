@@ -143,7 +143,7 @@ async function main(): Promise<void> {
   const empty = await auth.isEmpty()
   app.log.info(
     { initialized: !empty, storage: auth.storage, mail: Boolean(config.mail.apiKey) },
-    empty ? 'operator store empty — the console will show the root setup screen' : 'operator store ready',
+    empty ? 'operator store empty · the console will show the root setup screen' : 'operator store ready',
   )
   if (empty && !config.mail.apiKey) {
     app.log.warn('AUTH_RESEND_KEY is not set: the root setup screen cannot mail an invitation.')

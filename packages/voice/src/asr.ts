@@ -1,13 +1,13 @@
 /**
  * Voice transcription with two interchangeable backends.
  *
- *   cloud      Muse Voice Transcribe — POST /v1/asr/transcribe (Meta Model API).
- *   sovereign  faster-whisper on-premise — POST /v1/transcribe (local service).
+ *   cloud      Muse Voice Transcribe · POST /v1/asr/transcribe (Meta Model API).
+ *   sovereign  faster-whisper on-premise · POST /v1/transcribe (local service).
  *   local      same as sovereign.
  *
  * Both return the same shape: a full transcript plus timed turns. The policy
  * engine only needs the timeline, so the backend choice stays invisible above
- * this module — exactly like the text provider layer.
+ * this module · exactly like the text provider layer.
  *
  * Meta accepts one container: RIFF/WAVE, mono, 16-bit PCM, 16 or 24 kHz. The
  * header is checked before the upload; the error names what to convert.

@@ -151,7 +151,7 @@ export function AnimatedTextCompletion({ text, isLast, isStreaming }: AnimatedTe
             return <td className="px-2 py-2 text-xs border-b border-neutral-400 dark:border-white/5">{children}</td>
           },
           // Tailwind v4 has no typography plugin, so preflight zeroes the
-          // paragraph/list/heading margins — restore readable spacing explicitly.
+          // paragraph/list/heading margins · restore readable spacing explicitly.
           p({ children }: any) {
             return <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>
           },

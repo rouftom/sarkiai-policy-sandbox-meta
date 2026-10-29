@@ -1,8 +1,8 @@
-# Souveraineté des données & modèles — analyse
+# Souveraineté des données & modèles: analyse
 
 > Réponse à la remarque : « leur repo utilise Ollama pour du fine-tuning,
 > probablement un aspect de la souveraineté des données. Quid de notre cas ? »
-> **Document d'analyse uniquement — aucune implémentation.**
+> **Document d'analyse uniquement: aucune implémentation.**
 
 ## 1. Mise au point : Ollama ≠ fine-tuning
 
@@ -62,7 +62,7 @@ C'est exactement là que se joue la question.
 
 ### A. Inférence locale via Ollama (miroir du dépôt de référence)
 - LLM : `qwen3.5:9b` (multimodal texte+image), `qwen2.5:14b`, `llama3.1:8b`, `gemma3:12b`, `mistral`.
-- Embeddings : `nomic-embed-text`, **`bge-m3`** (multilingue, excellent FR — préférable pour nos corpus FR/EN).
+- Embeddings : `nomic-embed-text`, **`bge-m3`** (multilingue, excellent FR: préférable pour nos corpus FR/EN).
 - Pros : egress 0, gratuit, offline, déployable dans la sandbox. Cons : ~16 Go
   RAM, latence, qualité < frontier, opérations.
 
@@ -73,7 +73,7 @@ C'est exactement là que se joue la question.
 ### C. Inférence managée souveraine
 - Mistral (FR/UE), OVHcloud AI, Scaleway, ou cloud régional africain.
 - Compromis : qualité proche du frontier, egress limité à une juridiction
-  « acceptable » — à valider avec le cadre juridique camerounais.
+  « acceptable »: à valider avec le cadre juridique camerounais.
 
 ### D. Routage hybride par sensibilité
 - Un **policy router** : données sensibles → local ; données ouvertes (bonnes
@@ -83,7 +83,7 @@ C'est exactement là que se joue la question.
 
 ### E. Modèles open-weight (licences permissives)
 - Qwen2.5, Llama 3.1/3.3, Mistral, Gemma, **Aya** (multilingue), BGE-M3.
-- Embeddings souverains : **bge-m3**, multilingual-e5, nomic — via Ollama ou
+- Embeddings souverains : **bge-m3**, multilingual-e5, nomic: via Ollama ou
   **TEI** (Text Embeddings Inference).
 
 ### F. Fine-tuning sans exfiltration
@@ -99,7 +99,7 @@ C'est exactement là que se joue la question.
 | `packages/retrieval` | abstraction embeddings (Voyage → bge-m3 local) | Moyen |
 | `services/transcription` | Whisper local (`faster-whisper`) vs API | Moyen |
 | Docker | service `ollama` (+ modèles) comme dans le dépôt de référence | Petit |
-| **Inchangé** | Qdrant, Mongo, ingestion structure-aware, citations, audit, coordinateur | — |
+| **Inchangé** | Qdrant, Mongo, ingestion structure-aware, citations, audit, coordinateur |: |
 
 Notre `model.ts` est déjà une **factory de providers** : le point d'accroche
 existe. C'est un atout.
@@ -114,7 +114,7 @@ existe. C'est un atout.
 3. **Conserver** Qdrant/Mongo self-hosted (déjà souverains).
 4. **Fine-tuning** : LoRA/QLoRA local ou crédits sandbox verrouillée, dataset on-premise.
 5. **Narratif jury** : « fonctionne entièrement hors ligne dans la sandbox verrouillée,
-   aucune donnée de santé ne quitte l'infrastructure » — argument de souveraineté
+   aucune donnée de santé ne quitte l'infrastructure »: argument de souveraineté
    fort, aligné avec les politiques nationales de protection des données.
 
 ### Table de décision
@@ -127,7 +127,7 @@ existe. C'est un atout.
 
 **En une phrase** : notre architecture est déjà souveraine sauf aux deux
 extrémités (embeddings + LLM) ; le passage à Ollama/bge-m3 est un changement
-**localisé** (factory de providers + un service Docker), pas une refonte — et
+**localisé** (factory de providers + un service Docker), pas une refonte: et
 c'est probablement **le choix le plus aligné** avec les standards internationaux si la sandbox est
 isolée.
 
@@ -138,11 +138,11 @@ Choix retenu : **local-first, cloud entièrement retiré.**
 | Élément | Décision |
 |---------|----------|
 | LLM | **`qwen3.5:9b`** via Ollama (multimodal texte+image, 6,6 Go) ; alternatives `qwen2.5:14b`/`qwen2.5:7b` par env |
-| Embeddings | **`bge-m3`** (Ollama) — 1024-dim, multilingue FR |
+| Embeddings | **`bge-m3`** (Ollama): 1024-dim, multilingue FR |
 | Rerank | **TEI local** (`BAAI/bge-reranker-v2-m3`), profil compose `rerank` ; sinon RRF |
 | Transcription | **faster-whisper** local (profil `full`/`media`) |
 | Providers cloud | **supprimés** (DeepSeek, Groq, OpenAI, Anthropic, Google, Voyage) |
-| Fine-tuning | **unsloth** (LoRA/QLoRA local) — cf. `docs/ROADMAP.md` |
+| Fine-tuning | **unsloth** (LoRA/QLoRA local): cf. `docs/ROADMAP.md` |
 
 Bénéfice direct sur les métriques évaluées : **D10 `d10_m10` Data Sovereignty**
 et **D11 `d11_m06` Edge Privacy** passent au maximum (aucun mouvement de données

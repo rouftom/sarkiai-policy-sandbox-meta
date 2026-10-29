@@ -3,13 +3,13 @@ import { chunkDocument } from './chunk'
 
 const LAW = `# Data protection act
 
-## Article 1 — Purpose
+## Article 1 · Purpose
 This Act governs the processing of personal data in Cameroon.
 
 Article 2: Principles
 Personal data shall be processed lawfully, fairly and transparently. Data must be collected for specified purposes and kept no longer than necessary.
 
-## Section 3 — Rights
+## Section 3 · Rights
 Every data subject has the right to access, rectify and erase their personal data. The controller must answer within thirty days.
 `
 

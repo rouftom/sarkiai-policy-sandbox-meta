@@ -1,5 +1,5 @@
 /**
- * @sps/theme — the SarkiAI admin charter (apps/organization) replicated for the
+ * @sps/theme · the SarkiAI admin charter (apps/organization) replicated for the
  * Policy Sandbox. Theme packs: meta (default, Meta blue), fada, green, ocean,
  * sunset, mono.
  */

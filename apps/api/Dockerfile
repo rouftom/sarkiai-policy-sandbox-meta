@@ -21,7 +21,7 @@ FROM base AS prod
 COPY apps/api ./apps/api
 WORKDIR /app/apps/api
 ENV NODE_ENV=production
-# Render (and most PaaS) inject PORT=10000; keep 8000 as the image default.
+# Most container hosts inject PORT; keep 8000 as the image default.
 ENV PORT=8000
 EXPOSE 8000 10000
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=20s \

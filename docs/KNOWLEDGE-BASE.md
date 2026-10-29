@@ -23,28 +23,28 @@ Search, so `sovereign` and `local` never attempt to create the indexes.
 ## 2. Ingestion, six steps
 
 `POST /v1/kb/ingest/text` and `POST /v1/kb/ingest` (cloud mode) run
-`AtlasIngestor` in-process — the optional Python service is no longer on the
+`AtlasIngestor` in-process: the optional Python service is no longer on the
 cloud path. Each step returns a status, a human detail and a duration, which is
 what the **Vectorise** tab renders as the ingestion journal.
 
-1. **Accept** — trim, size bounds (24 chars … 2,000,000 chars), taxonomy
+1. **Accept**: trim, size bounds (24 chars … 2,000,000 chars), taxonomy
    defaults (`country=global`, `jurisdiction=national`, `docType=policy`).
-2. **Chunk** — `chunkDocument` (`packages/kb/src/chunk.ts`, deterministic, unit
+2. **Chunk**: `chunkDocument` (`packages/kb/src/chunk.ts`, deterministic, unit
    tested). Headings (`#`, `ARTICLE 7`, `SECTION 3`, short ALL-CAPS lines) open a
    section; paragraphs are merged up to `maxChars` (default 1500) with
    `overlapChars` (default 180) carried over; over-long paragraphs are split on
    sentence boundaries. Each chunk keeps the heading path and the article
    number.
-3. **Embed** — only chunks whose content hash is new are sent to Voyage, in
+3. **Embed**: only chunks whose content hash is new are sent to Voyage, in
    batches of 64. Re-ingesting an unchanged document performs **no** embedding
    call and reports `Embedding skipped`.
-4. **Upsert** — `_id` is `sha256(document, version, chunkIndex, text)`, so writes
+4. **Upsert**: `_id` is `sha256(document, version, chunkIndex, text)`, so writes
    are idempotent. A chunk from a previous chunking of the same filename that is
    no longer produced is set `isActive: false` (retired, still auditable).
-5. **Index** — inspect `sps_vector_index` / `sps_text_index`; create or update
+5. **Index**: inspect `sps_vector_index` / `sps_text_index`; create or update
    when missing (unless `autoIndexes: false`). Atlas builds asynchronously, so
    the step distinguishes *present* from *queryable*.
-6. **Verify** — recount active chunks for the document and return the totals.
+6. **Verify**: recount active chunks for the document and return the totals.
 
 Limits: 1500 chunks per document (enough for a 700 KB strategy PDF), 8 MB request
 body. Scanned PDFs have no text layer and must go through the Gazette screen,
@@ -58,9 +58,9 @@ It cannot live only under `deploy/`: the API image ships `packages/` and
 indexes were never created on the host. `deploy/mongo/kb.indexes.json` remains
 the artifact for `bun run kb:indexes`; a test asserts the two are identical.
 
-- `sps_vector_index` — `vectorSearch` on `embedding` (1024 dims, dotProduct),
+- `sps_vector_index`: `vectorSearch` on `embedding` (1024 dims, dotProduct),
   filter fields `isActive`, `country`, `jurisdiction`, `docType`, `namespace`.
-- `sps_text_index` — `search` over `text` with a custom analyser,
+- `sps_text_index`: `search` over `text` with a custom analyser,
   `sps_fr_folded` (`standard` tokenizer → `lowercase` → `asciiFolding`), so an
   unaccented query matches accented French. Filter fields are typed `token`, not
   `string`: with `string` the analyser lowercases `country`, and a filter on

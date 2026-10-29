@@ -1,5 +1,5 @@
 /**
- * N7 — legislative impact on open incidents.
+ * N7 · legislative impact on open incidents.
  *
  * A new decree does not create a new case: it re-opens the ones already running.
  * This module takes the new provision and the citations/facts of the open runs,
@@ -7,7 +7,7 @@
  * has to be re-run (deadlines, notification duties, approvals).
  *
  * Two layers, deliberately separate:
- *   • `matchAffected` is deterministic — same article or same instrument means
+ *   • `matchAffected` is deterministic · same article or same instrument means
  *     the run is a candidate, and that set is never widened by the model;
  *   • the model only *ranks and explains* the candidates it is given. A finding
  *     naming an unknown run is dropped, so the analysis cannot invent a case.
@@ -86,7 +86,7 @@ function normalizeFilename(value: string | undefined): string {
 /**
  * Deterministic candidate set: a case is touched when it cites the same article
  * of the same instrument. When the new provision has no article number (a
- * framework law, a strategy), every open case is a candidate — the model decides
+ * framework law, a strategy), every open case is a candidate · the model decides
  * which ones actually change.
  */
 export function matchAffected(cases: OpenCase[], provision: Provision): OpenCase[] {
@@ -166,7 +166,7 @@ function asStringArray(value: unknown): string[] {
 
 /**
  * Parse the model's JSON, tolerating a code fence or a stray sentence. Findings
- * for unknown runs are dropped — that is the one failure mode that matters,
+ * for unknown runs are dropped · that is the one failure mode that matters,
  * because a fabricated case would be read as a real institutional obligation.
  */
 export function parseImpact(raw: string, knownRunIds: string[]): Omit<ImpactAnalysis, 'provision' | 'model' | 'generatedAt'> {

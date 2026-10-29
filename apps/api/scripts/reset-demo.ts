@@ -42,7 +42,7 @@ if (!uri) {
 
 const dbName = process.env.MONGODB_DB_NAME ?? 'policy_sandbox'
 
-console.log(`Demo reset — database "${dbName}"`)
+console.log(`Demo reset · database "${dbName}"`)
 console.log(`  collections: ${DEMO_RESET_COLLECTIONS.join(', ')}`)
 console.log('  kept: kb_chunks (corpus + vectors), Atlas indexes, configuration')
 console.log('')
@@ -73,7 +73,7 @@ try {
     console.log(`  cleared ${entry.name.padEnd(20)} ${entry.count} document(s)`)
   }
 
-  console.log(`\nDone — ${result.deleted} document(s) deleted. The corpus was left untouched.`)
+  console.log(`\nDone · ${result.deleted} document(s) deleted. The corpus was left untouched.`)
   console.log('Next: open the console, create the root operator from /setup, then enrol TOTP.')
 } catch (error) {
   // Deliberately no connection string, no stack trace with credentials.

@@ -8,7 +8,7 @@
  */
 
 import * as React from 'react'
-import { ExternalLink, X } from 'lucide-react'
+import { Check, Copy, ExternalLink, X } from 'lucide-react'
 import { Button } from '@sps/ui'
 import { useI18n } from '@/lib/i18n'
 
@@ -32,6 +32,22 @@ function hostOf(url: string): string {
 
 export function SourceDrawer({ source, onClose }: { source: WebSourceView | null; onClose: () => void }) {
   const { t, locale } = useI18n()
+  const [copied, setCopied] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!copied) return
+    const id = window.setTimeout(() => setCopied(false), 2200)
+    return () => window.clearTimeout(id)
+  }, [copied])
+
+  const copyUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+    } catch {
+      setCopied(false)
+    }
+  }
 
   React.useEffect(() => {
     if (!source) return
@@ -64,7 +80,18 @@ export function SourceDrawer({ source, onClose }: { source: WebSourceView | null
             <dt className="text-muted-foreground">{t('source.domain')}</dt>
             <dd className="truncate font-medium">{hostOf(source.url)}</dd>
             <dt className="text-muted-foreground">{t('source.url')}</dt>
-            <dd className="truncate font-mono text-[10px]">{source.url}</dd>
+            <dd className="min-w-0">
+              <button
+                type="button"
+                onClick={() => void copyUrl(source.url)}
+                title={t('source.copy')}
+                aria-label={t('source.copy')}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-brand-primary/10 px-2 py-0.5 font-mono text-[10px] text-brand-primary-dark transition-colors hover:bg-brand-primary/20 dark:bg-brand-primary-dark/30 dark:text-brand-primary-light"
+              >
+                {copied ? <Check className="h-3 w-3 shrink-0" /> : <Copy className="h-3 w-3 shrink-0" />}
+                <span className="truncate">{source.url}</span>
+              </button>
+            </dd>
             <dt className="text-muted-foreground">{t('source.published')}</dt>
             <dd>{date(source.publishedAt)}</dd>
             <dt className="text-muted-foreground">{t('source.searched')}</dt>
@@ -84,6 +111,12 @@ export function SourceDrawer({ source, onClose }: { source: WebSourceView | null
 
           <p className="text-[10px] leading-relaxed text-muted-foreground">{t('source.previewNote')}</p>
         </div>
+
+        {copied && (
+          <div role="status" className="pointer-events-none absolute bottom-20 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-foreground px-4 py-2 text-[11px] font-medium text-background shadow-lg">
+            <Check className="h-3.5 w-3.5" /> {t('source.copied')}
+          </div>
+        )}
 
         <footer className="px-5 py-4">
           <a

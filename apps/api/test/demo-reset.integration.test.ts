@@ -3,7 +3,7 @@ import { MongoClient } from 'mongodb'
 import { resetDemoState } from '../src/demo-reset'
 
 /**
- * Integration test — requires MongoDB. Run with:
+ * Integration test · requires MongoDB. Run with:
  *   MONGO_URL=mongodb://localhost:27017 bun test
  * Skipped automatically when MONGO_URL is unset.
  */

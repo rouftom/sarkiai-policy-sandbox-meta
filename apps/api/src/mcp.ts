@@ -13,12 +13,17 @@ export interface McpServerEntry {
   requiresApiKey: boolean
 }
 
-/** Same registry as the console (apps/web/src/lib/mcp-config.ts). Keep the two in sync. */
+/**
+ * Same registry as the console (apps/web/src/lib/mcp-config.ts). Keep the two in sync.
+ * The charts and Word servers run locally (services/mcp-charts, services/mcp-docx,
+ * docker-compose) when MCP_CHARTS_URL and MCP_DOCX_URL point at them; otherwise
+ * the hosted copies are used.
+ */
 export const MCP_SERVERS: McpServerEntry[] = [
   { name: 'tic_tac_toe', url: 'https://tic-tac-toe-mcp-app.vercel.app/mcp', requiresApiKey: true },
-  { name: 'sarkiai_charts', url: 'https://sarkiai-charts-mcp-app.vercel.app/mcp', requiresApiKey: true },
+  { name: 'sarkiai_charts', url: process.env.MCP_CHARTS_URL || 'https://sarkiai-charts-mcp-app.vercel.app/mcp', requiresApiKey: true },
   { name: 'xlab_3d_render', url: 'https://xlab-3d-render-mcp-app.vercel.app/mcp', requiresApiKey: true },
-  { name: 'sea_mcp_excalidraw', url: 'https://sea-mcp-excalidraw.vercel.app/mcp', requiresApiKey: true },
+  { name: 'sea_mcp_docx', url: process.env.MCP_DOCX_URL || 'https://sea-mcp-docx.vercel.app/mcp', requiresApiKey: true },
 ]
 
 export interface McpToolSummary {

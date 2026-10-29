@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for the transcription microservice — LOCAL ONLY.
+"""FastAPI entrypoint for the transcription microservice · LOCAL ONLY.
 
 Uses `faster-whisper` (CTranslate2) fully on-premise: media never leaves the
 infrastructure (data sovereignty and edge privacy). The model
@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 
-app = FastAPI(title="SarkiAI Policy Sandbox — Transcription (local)", version="0.1.0")
+app = FastAPI(title="SarkiAI Policy Sandbox · Transcription (local)", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 

@@ -1,4 +1,4 @@
-# Corpus Cameroun (CM) — collecte et ingestion
+# Corpus Cameroun (CM): collecte et ingestion
 
 Objectif : constituer la base de connaissances nationale **scopée `country=cm`**,
 puis la référence mondiale (`country=global`) pour le moteur d'écarts.
@@ -41,7 +41,7 @@ Chaque entrée a un `status` :
 | `regulation` | ai_policies, human_interface |
 | `policy` | cross_domain, ai_integration |
 | `treaty` | data_marketplace, human_interface |
-| `guidance` / `standard` (global) | toutes — référence d'écart |
+| `guidance` / `standard` (global) | toutes: référence d'écart |
 
 ## 4. Procédure d'ingestion
 
@@ -49,7 +49,7 @@ Chaque entrée a un `status` :
 # 1. placer les fichiers (PDF/TXT) dans data/country/cm/
 cp /chemin/vers/loi.pdf data/country/cm/
 
-# 2. ingérer (Qdrant + bge-m3 local) — le chunking extrait TITRE/CHAPITRE/ARTICLE
+# 2. ingérer (Qdrant + bge-m3 local): le chunking extrait TITRE/CHAPITRE/ARTICLE
 ./scripts/seed.sh --country cm --doc-type law --dir data/country/cm
 
 # 3. corpus mondial

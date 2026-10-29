@@ -3,8 +3,8 @@
  *
  * Meta's search grounding is the `web_search` tool of the Responses API
  * (`POST /v1/responses`). The model decides whether to search, returns an
- * answer with `url_citation` annotations, and — when asked with
- * `include: ["web_search_call.results"]` — the raw hits it saw. Those hits are
+ * answer with `url_citation` annotations, and · when asked with
+ * `include: ["web_search_call.results"]` · the raw hits it saw. Those hits are
  * kept with the answer so a jury can check what the model read.
  *
  * Web sources are not legal sources: the policy corpus stays the only basis for

@@ -28,7 +28,7 @@ export const GUIDE_ORDER = [
 /**
  * Guide shell, styled after the FSM console documentation: a brand hero banner,
  * a sticky section rail, tonal callouts, and real table headers. The guide is an
- * operations handbook — runbooks, flags, gaps and ownership — not a pitch deck.
+ * operations handbook · runbooks, flags, gaps and ownership · not a pitch deck.
  */
 export function GuideShell({
   title,
@@ -294,7 +294,7 @@ export function GuideTable({
               <TableCell className="whitespace-nowrap font-medium text-foreground">{row.a}</TableCell>
               <TableCell className="text-muted-foreground">{row.b}</TableCell>
               {headers.length === 3 && (
-                <TableCell className="font-mono text-[10px] text-muted-foreground">{row.c ?? '—'}</TableCell>
+                <TableCell className="font-mono text-[10px] text-muted-foreground">{row.c ?? 'n/a'}</TableCell>
               )}
             </TableRow>
           ))}

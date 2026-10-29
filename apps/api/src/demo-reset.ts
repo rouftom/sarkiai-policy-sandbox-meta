@@ -3,7 +3,7 @@
  *
  * Shared by `bun run demo:reset` (a laptop that can reach the cluster) and the
  * boot hook (`apps/api/scripts/reset-on-boot.flag`), which is the only route to
- * the database from a host without a shell — Render free instances refuse SSH,
+ * the database from a host without a shell · Render free instances refuse SSH,
  * one-off jobs, pre-deploy commands and start-command overrides.
  *
  * What goes: accounts, pending reset links, the hash-chained audit trail, CoT

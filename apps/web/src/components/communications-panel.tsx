@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * N9 — public-communication drafts in Fulfulde or Hausa.
+ * N9 · public-communication drafts in Fulfulde or Hausa.
  *
  * What the panel shows is deliberately not a publish button. The model drafts,
  * the policy gate can refuse the draft outright, and everything that survives

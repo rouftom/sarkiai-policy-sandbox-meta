@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sps-ingestion"
 version = "0.1.0"
-description = "SarkiAI Policy Sandbox — structure-aware legal ingestion + embeddings"
+description = "SarkiAI Policy Sandbox · structure-aware legal ingestion + embeddings"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

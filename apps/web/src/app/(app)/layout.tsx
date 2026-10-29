@@ -19,7 +19,7 @@ import { WorkspaceProvider } from '@/lib/workspace'
  * Signed-in shell, same geometry as the FSM admin console: rail + app bar, then
  * a resizable group holding the assistant panel on the left and the page panel
  * on the right (stacked top/bottom under `md`). The assistant is a panel, never
- * an overlay — the operator reads the answer next to the workspace.
+ * an overlay · the operator reads the answer next to the workspace.
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()

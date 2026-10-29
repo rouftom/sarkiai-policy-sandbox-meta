@@ -16,7 +16,7 @@
 name: sps-sandbox
 
 services:
-  # Local model server (LLM + embeddings) — the sandbox must also be sovereign.
+  # Local model server (LLM + embeddings) · the sandbox must also be sovereign.
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
@@ -80,7 +80,7 @@ services:
     networks: [sps]
 
   ingestion:
-    image: ${SPS_REGISTRY:-ghcr.io/djotta-org}/sps-ingestion:${SPS_TAG:-latest}
+    image: ${SPS_REGISTRY:?set SPS_REGISTRY}/sps-ingestion:${SPS_TAG:-latest}
     build:
       context: ../..
       dockerfile: services/ingestion/Dockerfile
@@ -106,7 +106,7 @@ services:
     networks: [sps]
 
   ocr:
-    image: ${SPS_REGISTRY:-ghcr.io/djotta-org}/sps-ocr:${SPS_TAG:-latest}
+    image: ${SPS_REGISTRY:?set SPS_REGISTRY}/sps-ocr:${SPS_TAG:-latest}
     build:
       context: ../..
       dockerfile: services/ocr/Dockerfile
@@ -119,7 +119,7 @@ services:
     networks: [sps]
 
   api:
-    image: ${SPS_REGISTRY:-ghcr.io/djotta-org}/sps-api:${SPS_TAG:-latest}
+    image: ${SPS_REGISTRY:?set SPS_REGISTRY}/sps-api:${SPS_TAG:-latest}
     build:
       context: ../..
       dockerfile: apps/api/Dockerfile
@@ -152,7 +152,7 @@ services:
     networks: [sps]
 
   web:
-    image: ${SPS_REGISTRY:-ghcr.io/djotta-org}/sps-web:${SPS_TAG:-latest}
+    image: ${SPS_REGISTRY:?set SPS_REGISTRY}/sps-web:${SPS_TAG:-latest}
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile

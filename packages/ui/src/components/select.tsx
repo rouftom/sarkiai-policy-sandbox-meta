@@ -29,7 +29,7 @@ export interface SelectProps {
 
 /**
  * Tailwind-only select: a button plus a listbox. The console never renders a
- * native `<select>` — the OS menu ignores the charte and the corner treatment.
+ * native `<select>` · the OS menu ignores the charte and the corner treatment.
  * Keyboard: ↑ ↓ Home End to move, Enter/Space to pick, Escape to close.
  */
 export function Select({
@@ -37,7 +37,7 @@ export function Select({
   onValueChange,
   options,
   ariaLabel,
-  placeholder = '—',
+  placeholder = 'n/a',
   id,
   disabled = false,
   size = 'sm',

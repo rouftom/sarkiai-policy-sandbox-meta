@@ -1,5 +1,5 @@
 /**
- * Voyage AI client — cloud embeddings and reranking.
+ * Voyage AI client · cloud embeddings and reranking.
  *
  * Meta does not publish an embedding model, so cloud mode pairs the Meta
  * reasoning/vision models with Voyage (`voyage-4` + `rerank-2`). Local and
@@ -25,8 +25,9 @@ const DEFAULT_BASE_URL = 'https://api.voyageai.com/v1'
 const DEFAULT_EMBEDDING_MODEL = 'voyage-4'
 const DEFAULT_RERANK_MODEL = 'rerank-2'
 
+/** Accepts the host, the `/v1` base, or a full endpoint such as `/v1/embeddings` (the endpoint is then dropped). */
 function normalizeBaseUrl(raw: string): string {
-  const base = raw.trim().replace(/\/+$/, '')
+  const base = raw.trim().replace(/\/+$/, '').replace(/\/(embeddings|rerank)$/, '')
   if (!base) return DEFAULT_BASE_URL
   return /\/v1$/.test(base) ? base : `${base}/v1`
 }

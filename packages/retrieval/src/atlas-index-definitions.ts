@@ -1,5 +1,5 @@
 /**
- * Canonical Atlas index definitions — code, not a file read at boot.
+ * Canonical Atlas index definitions · code, not a file read at boot.
  *
  * The API image only ships `packages/` and `apps/api/`, so reading
  * `deploy/mongo/kb.indexes.json` at startup silently failed in the container and

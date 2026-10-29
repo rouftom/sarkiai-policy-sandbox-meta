@@ -1,8 +1,8 @@
 """Qdrant vector store for policy chunks.
 
 Collection layout:
-  • dense  — named dense vector (local bge-m3, 1024-d, cosine)
-  • text   — named sparse vector (BM25, IDF modifier) for hybrid search
+  • dense  · named dense vector (local bge-m3, 1024-d, cosine)
+  • text   · named sparse vector (BM25, IDF modifier) for hybrid search
 
 Each point payload carries the full jurisdiction taxonomy plus the structural
 breadcrumbs (headingPath, articleNumber, ...). Points are keyed by a

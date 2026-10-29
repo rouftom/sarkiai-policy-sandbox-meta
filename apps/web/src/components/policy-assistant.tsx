@@ -501,7 +501,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="min-w-0 flex-1 truncate">{t('assistant.model')}</span>
-            <span className="max-w-[6rem] truncate font-mono text-[10px] text-muted-foreground">{model || '—'}</span>
+            <span className="max-w-[6rem] truncate font-mono text-[10px] text-muted-foreground">{model || 'n/a'}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuLabel>{t('assistant.modelMeta')}</DropdownMenuLabel>

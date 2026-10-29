@@ -1,4 +1,4 @@
-# WhatsApp templates — `meta_hackathon_*`
+# WhatsApp templates: `meta_hackathon_*`
 
 The API calls the WhatsApp Cloud API directly (`packages/whatsapp`); no
 notification gateway sits in between. Business-initiated messages must use
@@ -28,21 +28,20 @@ with `GET /{WABA}/message_templates?fields=name,status`):
 | `meta_hackathon_deadline_alert` | `1106780912229163` | APPROVED |
 | `meta_hackathon_approval_request` | `1682829429905161` | APPROVED |
 
-`WEB_PUBLIC_URL` is `https://sarkiai-policy-sandbox-meta.vercel.app`, so the
-approval button base is
-`https://sarkiai-policy-sandbox-meta.vercel.app/approve/{{1}}`.
+`WEB_PUBLIC_URL` is the public address of the web app, so the approval button
+base is `<web-public-url>/approve/{{1}}`.
 
 The bodies above are longer than the first draft on purpose: Meta rejects a
 template whose variable-to-word ratio is too high (`error_subcode 2388293`,
 *"Ce modèle comporte trop de variables par rapport à sa longueur"*). Keep at
-least a full sentence of static text per variable when editing them — the
+least a full sentence of static text per variable when editing them: the
 runtime contract is unaffected, `bodyParams` stays positional.
 
 ## Creating them
 
 1. Meta Business Suite → **WhatsApp Manager → Message templates → Create template**.
 2. Category **Utility**, name exactly as above (the prefix is part of the name).
-3. Paste the body; keep the variable order — `packages/whatsapp/src/client.ts`
+3. Paste the body; keep the variable order: `packages/whatsapp/src/client.ts`
    sends `bodyParams` positionally.
 4. For the approval template, add a **Call-to-action → URL** button. Base URL:
    `https://<your-public-host>/approve/`; enable **dynamic URL suffix** so the
@@ -53,7 +52,7 @@ runtime contract is unaffected, `bodyParams` stays positional.
 ## Runtime contract
 
 ```ts
-// apps/api/src/routes/index.ts — /v1/whatsapp/notify
+// apps/api/src/routes/index.ts: /v1/whatsapp/notify
 joint_report      → meta_hackathon_joint_report      body: [runId, tick, summary]
 deadline_alert    → meta_hackathon_deadline_alert    body: [title, deadline, actionUrl ?? 'Open the console']
 approval_request  → meta_hackathon_approval_request  body: [summary, expiresAtISO], button: signed token
@@ -61,7 +60,7 @@ approval_request  → meta_hackathon_approval_request  body: [summary, expiresAt
 
 `WHATSAPP_TEMPLATE_LANGUAGE` selects the language code sent with every message
 (default `en`). `dryRun: true` (or an unconfigured client) returns the rendered
-payload and the signed approval URL instead of calling Meta — this is what the
+payload and the signed approval URL instead of calling Meta: this is what the
 demo uses when no live number is attached.
 
 ## Security notes

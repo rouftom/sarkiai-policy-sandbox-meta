@@ -1,4 +1,4 @@
-/** Theme pack types — mirror the SarkiAI admin `apps/organization` charter. */
+/** Theme pack types · mirror the SarkiAI admin `apps/organization` charter. */
 
 export interface LocalizedString {
   fr: string

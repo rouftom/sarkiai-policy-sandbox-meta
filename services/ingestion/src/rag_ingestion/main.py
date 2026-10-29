@@ -7,7 +7,7 @@ from rag_ingestion.api.routes import router
 from rag_ingestion.config import settings
 
 app = FastAPI(
-    title="SarkiAI Policy Sandbox — Ingestion",
+    title="SarkiAI Policy Sandbox · Ingestion",
     description="Structure-aware legal/policy ingestion into a country-scoped vector knowledge base.",
     version="0.1.0",
 )

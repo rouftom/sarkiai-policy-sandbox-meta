@@ -1,7 +1,7 @@
-# Pipeline mapping — file by file
+# Pipeline mapping: file by file
 
-The engine is a **staged pipeline** — data sources → collection → preprocessing →
-retrieval & model → policy → distribution → consumers — running under a single
+The engine is a **staged pipeline**: data sources → collection → preprocessing →
+retrieval & model → policy → distribution → consumers: running under a single
 orchestrator, with a locked-down sandbox as the validation environment. Every
 stage emits its own audit events.
 
@@ -131,18 +131,18 @@ The readiness engine iterates all 13 dimensions
 | `opensource` | D1, D2, D8 |
 | `sandbox` | D9 Human Impact, D10, D11 AI for Inclusion |
 
-## 10. Hackathon §5 — progressive scenario events
+## 10. Hackathon §5: progressive scenario events
 
 `packages/scenarios/src/index.ts` implements the requirement literally:
 `ScenarioEvent.releaseChunk` groups events into ticks, `ScenarioEngine.release()`
 yields one batch at a time, and `visibleTo` encodes **information asymmetry** so
 each institutional agent receives a different, incomplete picture.
 
-## 11. Hackathon §6 — audit & chain-of-thought
+## 11. Hackathon §6: audit & chain-of-thought
 
 `packages/audit/src/index.ts` stores two artifacts:
-1. `audit_logs` — hash-chained records (`prevHash` → `hash`) for `verifyChain()`.
-2. `cot_traces` — one document per reasoning step, queryable by `runId`.
+1. `audit_logs`: hash-chained records (`prevHash` → `hash`) for `verifyChain()`.
+2. `cot_traces`: one document per reasoning step, queryable by `runId`.
 `apps/api/src/routes/index.ts` exposes `GET /v1/audit/chain` and
 `GET /v1/audit/trace/:runId` for reviewer inspection, and
 `GET /v1/audit/dossier/:runId?format=json|markdown` bundles the whole run

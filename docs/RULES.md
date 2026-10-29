@@ -18,8 +18,8 @@ harness). Adapt-and-reuse is fine; keep this repo publishable.
 
 ## Branches & commits
 
-- `main` — stable.
-- `feat/<scope>` — feature work.
+- `main`: stable.
+- `feat/<scope>`: feature work.
 - Commits: single line, prefixed `feat()`, `fix()`, `docs()`, `refactor()`,
   `chore()`, with a scope: `feat(kb): add jurisdiction filter`.
 
@@ -47,4 +47,5 @@ Reuse the same charter as the main SarkiAI apps:
 ## Boundaries
 
 - Do not import from `@sarkiai/*` or the agentic harness.
-- Keep the public API (chunk shape, index names) stable — the KB is a shared asset.
+- Keep the public API (chunk shape, index names) stable: the KB is a shared asset.
+- Documentation stays generic: never name our cloud spaces, hosted projects, team slugs, deployment ids or live URLs in docs, specs or deploy notes. Use placeholders such as `<api-host>` and `<web-host>`.

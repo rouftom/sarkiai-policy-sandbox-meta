@@ -1,9 +1,9 @@
 /**
- * N8 — table-top crisis exercise.
+ * N8 · table-top crisis exercise.
  *
  * A scenario is a script; an exercise adds a clock and a team. Injects are
  * released at fixed minutes, participants record the actions they take, and the
- * after-action report is derived from that log — deterministic first, narrative
+ * after-action report is derived from that log · deterministic first, narrative
  * second. The model writes the prose, never the facts: every metric below is
  * computed from the log, so a fluent report cannot hide a missed inject.
  */
@@ -210,7 +210,7 @@ export function buildAfterActionPrompt(definition: ExerciseDefinition, evaluatio
     'You are the facilitator writing the after-action report of a crisis exercise.',
     'Use only the facts below. Do not invent an action, an institution, a number or a legal deadline.',
     '',
-    `EXERCISE ${definition.id} — ${definition.title} (${definition.country.toUpperCase()} · ${definition.domain})`,
+    `EXERCISE ${definition.id} · ${definition.title} (${definition.country.toUpperCase()} · ${definition.domain})`,
     `Duration: ${definition.durationMinutes} min. Evaluated at T+${evaluation.evaluatedAtMinute}.`,
     `Coverage: ${Math.round(evaluation.coverage * 100)}% of released injects answered inside the window.`,
     `Average response: ${evaluation.averageResponseMinutes ?? 'n/a'} min. First action: ${evaluation.firstActionMinute === null ? 'none' : `T+${evaluation.firstActionMinute}`}.`,

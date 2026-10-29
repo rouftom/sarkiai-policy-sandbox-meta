@@ -18,19 +18,19 @@ function gazetteMask(): InkMask {
   fill(mask, 180, 40, 640, 40)
   fill(mask, 260, 90, 480, 16)
 
-  // Column 1 — three paragraphs.
+  // Column 1 · three paragraphs.
   fill(mask, 60, 200, 400, 56)
   fill(mask, 60, 300, 400, 76)
   fill(mask, 60, 420, 400, 72)
 
-  // Column 2 — two paragraphs.
+  // Column 2 · two paragraphs.
   fill(mask, 540, 200, 400, 72)
   fill(mask, 540, 320, 400, 72)
 
   return mask
 }
 
-describe('layout — projection profiles', () => {
+describe('layout · projection profiles', () => {
   test('Otsu separates ink from paper on a bimodal page', () => {
     const gray = new Uint8Array(1000)
     gray.fill(240, 0, 700)

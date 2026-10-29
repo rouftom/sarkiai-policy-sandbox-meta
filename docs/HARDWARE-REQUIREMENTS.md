@@ -9,20 +9,20 @@ web sont légers. L'OCR, le reranker et la transcription sont **optionnels**
 
 | Composant | Disque | RAM/VRAM à chaud | CPU | Optionnel |
 |-----------|--------|------------------|-----|-----------|
-| **Ollama — qwen3.5:9b** (Q4, multimodal) | **~6,6 Go** | **~8–10 Go** | oui | non (LLM par défaut) |
-| Ollama — qwen2.5:14b (Q4, texte) | ~9 Go | ~11–16 Go | oui | alternative |
-| Ollama — qwen2.5:7b (Q4) | ~5 Go | ~6–8 Go | oui | alternative légère |
-| **Ollama — bge-m3** (embeddings) | **~1,2 Go** | ~1–2 Go | oui | non |
+| **Ollama: qwen3.5:9b** (Q4, multimodal) | **~6,6 Go** | **~8–10 Go** | oui | non (LLM par défaut) |
+| Ollama: qwen2.5:14b (Q4, texte) | ~9 Go | ~11–16 Go | oui | alternative |
+| Ollama: qwen2.5:7b (Q4) | ~5 Go | ~6–8 Go | oui | alternative légère |
+| **Ollama: bge-m3** (embeddings) | **~1,2 Go** | ~1–2 Go | oui | non |
 | Qdrant (KB vectorielle) | < 1 Go (notre échelle) | ~1–2 Go | non | non |
 | MongoDB (audit + CoT) | < 1 Go | ~0,5–1 Go | non | non |
 | MinIO (pièces jointes image) | ~0,2 Go | ~0,5 Go | non | non |
 | ingestion (FastAPI + PyMuPDF + fastembed) | ~0,5 Go | ~1–2 Go | oui | non |
-| API (Bun/Fastify) | — | ~0,25–0,5 Go | non | non |
-| Web (Next.js) | — | ~0,5–1 Go | non | non |
-| OCR (Tesseract) | — | ~1–2 Go | oui (pic) | oui (`ocr`) |
+| API (Bun/Fastify) |: | ~0,25–0,5 Go | non | non |
+| Web (Next.js) |: | ~0,5–1 Go | non | non |
+| OCR (Tesseract) |: | ~1–2 Go | oui (pic) | oui (`ocr`) |
 | Reranker TEI (bge-reranker-v2-m3) | ~2,3 Go | ~2–4 Go | oui | oui (profil `rerank`) |
 | Transcription (faster-whisper large-v3) | ~3 Go | ~4–6 Go | oui (lent) | oui (profil `media`) |
-| Images Docker (ollama, qdrant, mongo, minio, python, node, tei) | ~7–9 Go | — | — | — |
+| Images Docker (ollama, qdrant, mongo, minio, python, node, tei) | ~7–9 Go |: |: |: |
 
 ## 2. Profils de déploiement
 
@@ -45,7 +45,7 @@ web sont légers. L'OCR, le reranker et la transcription sont **optionnels**
 - **32 Go+** : `qwen3.5:27b` confortable
 
 > Référence croisée : le dépôt de référence officiel indique **~16 Go RAM / ~15 Go disque**
-> pour `qwen2.5:14b` — notre défaut `qwen3.5:9b` est **plus léger**.
+> pour `qwen2.5:14b`: notre défaut `qwen3.5:9b` est **plus léger**.
 
 ## 3. Détail disque (profil B, premier lancement)
 

@@ -3,7 +3,7 @@
  *
  * Implements hackathon §5–§6: run the institutions that are allowed to see a
  * given scenario tick (information asymmetry), collect their independent
- * assessments, then reconcile them into a joint situation report — surfacing
+ * assessments, then reconcile them into a joint situation report · surfacing
  * agreements, mandate conflicts and unresolved questions.
  */
 

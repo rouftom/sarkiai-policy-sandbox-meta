@@ -10,7 +10,7 @@ const SERVER_LABEL_KEYS: Record<string, MessageKey> = {
   tic_tac_toe: 'mcp.server.tic_tac_toe',
   sarkiai_charts: 'mcp.server.sarkiai_charts',
   xlab_3d_render: 'mcp.server.xlab_3d_render',
-  sea_mcp_excalidraw: 'mcp.server.sea_mcp_excalidraw',
+  sea_mcp_docx: 'mcp.server.sea_mcp_docx',
 }
 
 /** List of the registered MCP servers with their live connection state. Reusable in preferences. */

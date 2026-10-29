@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { PolicyRetriever } from './index'
 
 /**
- * Integration test — requires Qdrant and a local Ollama (embeddings).
+ * Integration test · requires Qdrant and a local Ollama (embeddings).
  *   QDRANT_URL=http://localhost:6333 OLLAMA_BASE_URL=http://localhost:11434 bun test
  * Skipped automatically when the endpoints are unset (no infra on this machine).
  */

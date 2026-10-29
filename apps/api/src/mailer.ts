@@ -145,7 +145,7 @@ export function invitationText(invitation: Invitation): string {
     'On first sign-in the console asks you to choose a new password, then to activate two-factor authentication (TOTP).',
     'This temporary password works once: please do not forward it.',
     '',
-    `— ${BRAND}`,
+    `- ${BRAND}`,
   ].join('\n')
 }
 
@@ -254,7 +254,7 @@ export function emailVerificationText(verification: EmailVerification): string {
     'Once the address is confirmed, two-factor authentication (TOTP) is requested at sign-in.',
     'This link expires in 24 hours.',
     '',
-    `— ${BRAND}`,
+    `- ${BRAND}`,
   ].join('\n')
 }
 
@@ -332,7 +332,7 @@ export function passwordResetText(reset: PasswordReset): string {
     `This link expires in ${minutes} minutes and works once.`,
     'If you did not request it, ignore this e-mail: your password stays unchanged.',
     '',
-    `— ${BRAND}`,
+    `- ${BRAND}`,
   ].join('\n')
 }
 

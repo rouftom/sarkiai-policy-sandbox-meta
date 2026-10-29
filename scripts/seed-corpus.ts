@@ -124,7 +124,7 @@ async function ingestDocument(document: ManifestDocument & { file: string }): Pr
       : ''
   const characters = text.trim().length
   if (characters < 200) {
-    console.log(`  ${document.file}: skipped (${characters} chars — no text layer, use the Gazette screen)`)
+    console.log(`  ${document.file}: skipped (${characters} chars · no text layer, use the Gazette screen)`)
     return
   }
 
@@ -195,11 +195,11 @@ if (!dryRun) {
 
 for (const document of manifest.documents) {
   if (!document.file) {
-    console.log(`  (no local file): skipped — ${document.title}`)
+    console.log(`  (no local file): skipped · ${document.title}`)
     continue
   }
   if (document.status === 'to_confirm' && !has('include-unverified')) {
-    console.log(`  ${document.file}: skipped (status=to_confirm — verify the instrument first)`)
+    console.log(`  ${document.file}: skipped (status=to_confirm · verify the instrument first)`)
     continue
   }
   if (!matches(document.file)) continue

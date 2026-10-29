@@ -111,7 +111,7 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Crop a box out of the grayscale page and encode it as a PNG.
  *
- * A small padding keeps ascenders, descenders and cell borders intact — a
+ * A small padding keeps ascenders, descenders and cell borders intact · a
  * clipped quote is exactly the failure mode the citation validator catches.
  */
 export function cropToPng(image: GrayImage, box: { x: number; y: number; width: number; height: number }, padding = 6): Buffer {

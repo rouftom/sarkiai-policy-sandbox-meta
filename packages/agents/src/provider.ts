@@ -1,7 +1,7 @@
 /**
  * Provider layer: one engine, three interchangeable inference backends.
  *
- *   cloud      Meta Model API — Muse Spark (reasoning + vision), SAM 3.1
+ *   cloud      Meta Model API · Muse Spark (reasoning + vision), SAM 3.1
  *              (segmentation), Muse Voice Transcribe (speech).
  *   sovereign  Muse Glimmer (30B, Apache-2.0) served on-premise by Ollama, or a
  *              hosted open-weight provider (Baseten / Modal).
@@ -157,7 +157,7 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
   }
 }
 
-/** API key for a descriptor — read at call time, never stored in the descriptor. */
+/** API key for a descriptor · read at call time, never stored in the descriptor. */
 export function providerApiKey(descriptor: ProviderDescriptor, source: Env = process.env): string {
   if (descriptor.mode === 'cloud') return env(source, 'MODEL_API_KEY')
   if (descriptor.servedBy === 'Baseten') return env(source, 'BASETEN_API_KEY')

@@ -10,7 +10,7 @@ import { PageIntro } from '@/components/page-intro'
 import { readSession } from '@/lib/session'
 
 function formatDate(value: string | undefined, locale: string): string {
-  if (!value) return '—'
+  if (!value) return 'n/a'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', {
@@ -96,7 +96,7 @@ export default function SecurityPage() {
               <div>
                 <p className="text-xs font-semibold text-foreground">{t('security.session')}</p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  {t('security.expires')} {expiresAt ? formatDate(expiresAt, locale) : '—'}
+                  {t('security.expires')} {expiresAt ? formatDate(expiresAt, locale) : 'n/a'}
                 </p>
               </div>
             </div>

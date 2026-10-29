@@ -2,13 +2,13 @@
 
 Trois niveaux : **unitaire** (sans infra), **intégration** (infra requise, *gated*),
 **e2e** (stack en marche, *gated*). Les tests d'intégration/e2e sont **skippés
-automatiquement** si les variables d'environnement ne sont pas définies — ce qui
+automatiquement** si les variables d'environnement ne sont pas définies: ce qui
 permet de les versionner sans dépendre d'une machine particulière.
 
 > ⚠️ **Cette machine de développement ne peut pas lancer l'infra** (pas de Docker
 > runtime / contraintes matérielles). Seuls les tests **unitaires** y tournent.
 
-## Unitaires (sans infra) — exécutables partout
+## Unitaires (sans infra): exécutables partout
 
 ```bash
 bun run test          # turbo: bun test dans chaque package (@sps/*)
@@ -36,7 +36,7 @@ QDRANT_URL=http://localhost:6333 OLLAMA_BASE_URL=http://localhost:11434 \
   bun run test:int                                             # retrieval hybride
 ```
 
-Python (pydantic/fastapi/qdrant requis — via Docker) :
+Python (pydantic/fastapi/qdrant requis: via Docker) :
 
 ```bash
 cd services/ingestion && PYTHONPATH=src pytest tests/ \

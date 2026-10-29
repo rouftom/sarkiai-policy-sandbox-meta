@@ -14,6 +14,7 @@ import {
   api,
   type DimensionScoreDto,
   type ReadinessEventDto,
+  type ReadinessLangDto,
   type ReadinessReportDto,
   type ReadinessReportFileDto,
   type ReadinessRunSummaryDto,
@@ -21,6 +22,14 @@ import {
   type WhatIfResultDto,
 } from '@/lib/api'
 import type { WebSourceView } from '@/components/ai/display/source-drawer'
+import { useI18n } from '@/lib/i18n'
+
+export type ReportFormat = 'markdown' | 'html' | 'docx'
+
+/** Whether every dimension already has its text in `lang`. */
+function hasLanguage(scores: DimensionScoreDto[], lang: ReadinessLangDto): boolean {
+  return scores.every((score) => Boolean(score.localized?.[lang]))
+}
 
 /** What the operator chose for the next assessment (kept on this device). */
 export interface ReadinessSettings {
@@ -28,14 +37,20 @@ export interface ReadinessSettings {
   perDimensionK: number
   useWeb: boolean
   reasoningEffort: 'low' | 'medium' | 'high'
+  /** The chat model per task; an empty value means the operator's default model. */
+  models: { webSearch?: string; evaluate?: string; synthesis?: string; report?: string }
 }
 
 const SETTINGS_KEY = 'sps.readiness.settings'
 const ALL_DIMENSIONS = READINESS_DIMENSIONS.map((dimension) => dimension.shortName)
-const DEFAULT_SETTINGS: ReadinessSettings = { dimensions: ALL_DIMENSIONS, perDimensionK: 5, useWeb: true, reasoningEffort: 'low' }
+const DEFAULT_SETTINGS: ReadinessSettings = { dimensions: ALL_DIMENSIONS, perDimensionK: 5, useWeb: true, reasoningEffort: 'low', models: {} }
 
 function downloadFile(file: ReadinessReportFileDto) {
-  const blob = new Blob([file.content], { type: file.mime })
+  const bytes =
+    file.encoding === 'base64'
+      ? Uint8Array.from(atob(file.content), (char) => char.charCodeAt(0))
+      : new TextEncoder().encode(file.content)
+  const blob = new Blob([bytes], { type: file.mime })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -101,12 +116,25 @@ interface ReadinessState {
   setSettings: (patch: Partial<ReadinessSettings>) => void
   /** The chat model the operator selected: what the agents reason with. */
   model: string
+  /** The chat models the operator may choose for a task. */
+  chatModels: Array<{ id: string }>
   /** The node whose details are open in the popup. */
   selectedNode: string | null
   setSelectedNode: (id: string | null) => void
-  reportBusy: boolean
+  /** The format being generated, so only its button shows the loader. */
+  reportBusy: ReportFormat | null
   reportFile: ReadinessReportFileDto | null
-  generateReport: (format: 'markdown' | 'html') => Promise<void>
+  generateReport: (format: ReportFormat) => Promise<void>
+  /** A saved assessment is being opened. */
+  loading: boolean
+  /** The saved assessment being deleted, while the request runs. */
+  deletingId: string | null
+  /** The dialog for the settings of a new assessment is open. */
+  creating: boolean
+  setCreating: (open: boolean) => void
+  deleteRun: (id: string) => Promise<void>
+  /** A language is being added to a saved assessment. */
+  localizing: boolean
 }
 
 const ReadinessContext = React.createContext<ReadinessState | null>(null)
@@ -154,20 +182,34 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   const [openIds, setOpenIds] = React.useState<Set<string>>(new Set())
   const [settings, setSettingsState] = React.useState<ReadinessSettings>(DEFAULT_SETTINGS)
   const [model, setModel] = React.useState('')
+  const [chatModels, setChatModels] = React.useState<Array<{ id: string }>>([])
   const [selectedNode, setSelectedNode] = React.useState<string | null>(null)
-  const [reportBusy, setReportBusy] = React.useState(false)
+  const [reportBusy, setReportBusy] = React.useState<ReportFormat | null>(null)
   const [reportFile, setReportFile] = React.useState<ReadinessReportFileDto | null>(null)
+  const [loading, setLoading] = React.useState(false)
+  const [localizing, setLocalizing] = React.useState(false)
+  const [deletingId, setDeletingId] = React.useState<string | null>(null)
+  const [creating, setCreating] = React.useState(false)
+  const { locale } = useI18n()
+  const lang: ReadinessLangDto = locale === 'fr' ? 'fr' : 'en'
+  const attempted = React.useRef(new Set<string>())
 
   React.useEffect(() => {
     try {
       const stored = window.localStorage.getItem(SETTINGS_KEY)
-      if (stored) setSettingsState({ ...DEFAULT_SETTINGS, ...(JSON.parse(stored) as Partial<ReadinessSettings>) })
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<ReadinessSettings>
+        setSettingsState({ ...DEFAULT_SETTINGS, ...parsed, models: { ...DEFAULT_SETTINGS.models, ...(parsed.models ?? {}) } })
+      }
     } catch {
       /* malformed: keep the defaults */
     }
     api
       .models()
-      .then((result) => setModel(result.selected))
+      .then((result) => {
+        setModel(result.selected)
+        setChatModels(result.models.map((entry) => ({ id: entry.id })))
+      })
       .catch(() => {})
   }, [])
 
@@ -178,19 +220,19 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       return next
     })
 
-  const generateReport = async (format: 'markdown' | 'html') => {
+  const generateReport = async (format: ReportFormat) => {
     const id = meta?.id ?? runId
-    if (!id) return
-    setReportBusy(true)
+    if (!id || reportBusy) return
+    setReportBusy(format)
     setFailure(null)
     try {
-      const file = await api.readinessReport(id, format)
+      const file = await api.readinessReport(id, format, lang)
       setReportFile(file)
       downloadFile(file)
     } catch (caught) {
       setFailure(caught instanceof Error ? caught.message : String(caught))
     } finally {
-      setReportBusy(false)
+      setReportBusy(null)
     }
   }
 
@@ -250,6 +292,10 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
           perDimensionK: settings.perDimensionK,
           useWeb: settings.useWeb,
           reasoningEffort: settings.reasoningEffort,
+          models: {
+            ...(settings.models.webSearch ? { webSearch: settings.models.webSearch } : {}),
+            ...(settings.models.evaluate ? { evaluate: settings.models.evaluate } : {}),
+          },
         } satisfies { country: string; domain: string; globalCountry: string } & ReadinessSettingsDto,
         onEvent,
       )
@@ -270,6 +316,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   React.useEffect(() => {
     if (!runId) return
     let cancelled = false
+    setLoading(true)
     api
       .readinessRun(runId)
       .then((saved) => {
@@ -284,10 +331,34 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       .catch((caught) => {
         if (!cancelled) setFailure(caught instanceof Error ? caught.message : String(caught))
       })
+      .finally(() => setLoading(false))
     return () => {
       cancelled = true
     }
   }, [runId])
+
+  // An assessment saved before this language existed gets it once, then keeps it.
+  const savedId = meta?.id
+  React.useEffect(() => {
+    if (!savedId || !report || running || hasLanguage(report.scores, lang)) return
+    const key = `${savedId}:${lang}`
+    if (attempted.current.has(key)) return
+    attempted.current.add(key)
+    let cancelled = false
+    setLocalizing(true)
+    api
+      .readinessLocalize(savedId, lang)
+      .then((saved) => {
+        if (!cancelled) setReport(saved.report)
+      })
+      .catch(() => {
+        /* the saved language stays on screen */
+      })
+      .finally(() => setLocalizing(false))
+    return () => {
+      cancelled = true
+    }
+  }, [savedId, lang, report, running])
 
   const loadHistory = React.useCallback(async () => {
     try {
@@ -303,6 +374,25 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   }
 
   const showAssessment = () => setView('assessment')
+
+  const deleteRun = async (id: string) => {
+    setDeletingId(id)
+    setFailure(null)
+    try {
+      await api.readinessDelete(id)
+      setHistory((current) => current?.filter((entry) => entry.id !== id) ?? null)
+      if ((meta?.id ?? runId) === id) {
+        setReport(null)
+        setMeta(null)
+        setSteps([])
+        router.replace('/readiness')
+      }
+    } catch (caught) {
+      setFailure(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const openSaved = (id: string) => {
     setView('assessment')
@@ -359,11 +449,18 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     settings,
     setSettings,
     model,
+    chatModels,
     selectedNode,
     setSelectedNode,
     reportBusy,
     reportFile,
     generateReport,
+    loading,
+    localizing,
+    deletingId,
+    deleteRun,
+    creating,
+    setCreating,
   }
   return <ReadinessContext.Provider value={value}>{children}</ReadinessContext.Provider>
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Provider smoke check — answers "which model is answering, and does it work?"
+ * Provider smoke check · answers "which model is answering, and does it work?"
  * before a demo, for each of the three modes.
  *
  *   bun run check:provider                 # the mode selected by SANDBOX_MODE
@@ -40,7 +40,7 @@ if (realSecret && JSON.stringify(provider).includes(secret)) {
   process.exit(1)
 }
 if (!provider.ready) {
-  console.error('\nNot configured — nothing was sent.')
+  console.error('\nNot configured · nothing was sent.')
   process.exit(1)
 }
 
@@ -75,12 +75,12 @@ try {
   if (!text.trim()) {
     console.error(
       finishReason === 'length'
-        ? '\nFAIL: empty answer — the output cap was consumed by reasoning tokens.'
+        ? '\nFAIL: empty answer · the output cap was consumed by reasoning tokens.'
         : '\nFAIL: empty answer.',
     )
     process.exit(1)
   }
 } catch (error) {
-  console.error(`\nFAIL: ${provider.servedBy} at ${provider.baseURL} — ${redact((error as Error).message)}`)
+  console.error(`\nFAIL: ${provider.servedBy} at ${provider.baseURL} · ${redact((error as Error).message)}`)
   process.exit(1)
 }
