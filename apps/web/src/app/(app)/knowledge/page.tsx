@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n'
 import { PageIntro } from '@/components/page-intro'
 import { KbDocuments } from '@/components/kb-documents'
 import { GazettePanel } from '@/components/gazette-panel'
+import { useToast } from '@/components/shared/toast'
 import { useWorkspace } from '@/lib/workspace'
 
 const COUNTRY_OPTIONS = [
@@ -43,6 +44,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 export default function KnowledgePage() {
   const { t, locale } = useI18n()
+  const toast = useToast()
   const [status, setStatus] = React.useState<KbStatusDto | null>(null)
   const [documents, setDocuments] = React.useState<KbDocumentDto[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -90,8 +92,11 @@ export default function KnowledgePage() {
     try {
       await knowledgeApi.deleteDocument(document.filename)
       await load()
+      toast.success(t('knowledge.corpus.deleted'), document.filename)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
+      const message = caught instanceof Error ? caught.message : String(caught)
+      setError(message)
+      toast.error(t('toast.failed'), message)
       throw caught
     }
   }

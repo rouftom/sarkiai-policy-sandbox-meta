@@ -14,6 +14,7 @@ import {
   type ScenarioRunSummaryDto,
 } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { useToast } from '@/components/shared/toast'
 import { ProcessingBar } from '@/components/processing-bar'
 import { ScenarioHistory } from '@/components/scenario-history'
 import { ScenarioCarousel, type ScenarioBlock } from '@/components/scenario-processes'
@@ -49,6 +50,7 @@ export function ScenarioConsole({
   onRunId?: (runId: string) => void
 }) {
   const { t, locale } = useI18n()
+  const toast = useToast()
   const router = useRouter()
   const lang: 'en' | 'fr' = locale === 'fr' ? 'fr' : 'en'
   const [busy, setBusy] = React.useState(false)
@@ -119,8 +121,10 @@ export function ScenarioConsole({
         onRunId?.(start.runId)
         await driveBlock(index, start.runId)
       }
+      toast.success(t('toast.scenariosFinished', { count: domains.slice(0, maxSectors).length }))
     } catch (e) {
       setError((e as Error).message)
+      toast.error(t('toast.failed'), (e as Error).message)
       setShowHistory(true)
       void loadHistory()
     } finally {
@@ -140,9 +144,11 @@ export function ScenarioConsole({
       const start = await startRun(first)
       onRunId?.(start.runId)
       setBlocks([blockOf(start, [], [])])
+      toast.success(t('toast.scenarioStarted', { sector: t(`domain.${first}` as 'domain.health') }))
       void loadHistory()
     } catch (e) {
       setError((e as Error).message)
+      toast.error(t('toast.failed'), (e as Error).message)
       setShowHistory(true)
     } finally {
       setBusy(false)
@@ -163,8 +169,12 @@ export function ScenarioConsole({
         released: tick.releasedTicks,
         done: tick.done,
       }))
+      if (tick.done) {
+        toast.success(t('toast.scenarioFinished', { sector: t(`domain.${block.domain}` as 'domain.health') }))
+      }
     } catch (e) {
       setError((e as Error).message)
+      toast.error(t('toast.failed'), (e as Error).message)
       void loadHistory()
     } finally {
       setBusy(false)
@@ -189,8 +199,10 @@ export function ScenarioConsole({
       setShowHistory(false)
       onRunId?.(run.id)
       await resumeAt(block, 0)
+      toast.success(t('toast.scenarioResumed', { sector: t(`domain.${block.domain}` as 'domain.health') }))
     } catch (e) {
       setError((e as Error).message)
+      toast.error(t('toast.failed'), (e as Error).message)
     } finally {
       setBusy(false)
       void loadHistory()
@@ -205,8 +217,10 @@ export function ScenarioConsole({
     setError(null)
     try {
       await resumeAt(block, index)
+      toast.success(t('toast.scenarioResumed', { sector: t(`domain.${block.domain}` as 'domain.health') }))
     } catch (e) {
       setError((e as Error).message)
+      toast.error(t('toast.failed'), (e as Error).message)
     } finally {
       setBusy(false)
       void loadHistory()
@@ -219,6 +233,7 @@ export function ScenarioConsole({
     setError(null)
     try {
       await api.scenarioDelete(block.runId)
+      toast.success(t('toast.scenarioDeleted'))
       if (runId) {
         router.replace('/scenarios')
         return
@@ -229,6 +244,7 @@ export function ScenarioConsole({
       void loadHistory()
     } catch (e) {
       setError((e as Error).message)
+      toast.error(t('toast.failed'), (e as Error).message)
       throw e
     } finally {
       setBusy(false)
@@ -241,10 +257,12 @@ export function ScenarioConsole({
     setError(null)
     try {
       await api.scenarioDelete(id)
+      toast.success(t('toast.scenarioDeleted'))
       setHistory((current) => (current ? current.filter((run) => run.id !== id) : current))
       void loadHistory()
     } catch (e) {
       setError((e as Error).message)
+      toast.error(t('toast.failed'), (e as Error).message)
       throw e
     } finally {
       setBusy(false)
@@ -291,7 +309,8 @@ export function ScenarioConsole({
     <section className="space-y-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {busy && <ProcessingBar label={t('scenario.running')} />}
+      {/* The carousel toolbar carries the progress once a process is on screen. */}
+      {busy && blocks.length === 0 && <ProcessingBar label={t('scenario.running')} />}
 
       {blocks.length === 0 ? (
         runId || !showHistory ? null : (

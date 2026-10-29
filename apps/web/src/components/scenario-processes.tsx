@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Download,
   ExternalLink,
   Loader,
@@ -48,6 +49,9 @@ import {
 } from '@/lib/api'
 import { IncidentTimeline, type TimelineItem } from '@/components/incident-timeline'
 import { ICON_BUTTON_OUTLINE } from '@/components/icon-button-styles'
+import { ProcessingBar } from '@/components/processing-bar'
+import { CollapsiblePanel } from '@/components/shared/collapsible-panel'
+import { useToast } from '@/components/shared/toast'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 import { ProcessGraph, type ProcessGraphStep } from '@/components/workflow/process-graph'
@@ -202,16 +206,25 @@ function AssessmentOutput({
   )
 }
 
-function TickReport({ tick, onSource }: { tick: JointReportDto; onSource: (source: WebSourceView) => void }) {
+function TickReport({
+  tick,
+  onSource,
+  defaultOpen,
+}: {
+  tick: JointReportDto
+  onSource: (source: WebSourceView) => void
+  /** The latest batch opens; the earlier ones stay folded until asked for. */
+  defaultOpen: boolean
+}) {
   const { t } = useI18n()
   return (
-    <div className="rounded-xl border border-border p-3">
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] font-semibold text-muted-foreground">
-          {t('scenario.batch', { n: tick.tick + 1 })}
-        </span>
-        <span className="text-xs">{tick.summary}</span>
-      </div>
+    <CollapsiblePanel
+      title={t('scenario.batch', { n: tick.tick + 1 })}
+      meta={tick.summary}
+      defaultOpen={defaultOpen}
+      contentClassName="space-y-2 p-3"
+    >
+      <p className="text-xs leading-relaxed text-foreground">{tick.summary}</p>
 
       {tick.agreements.length > 0 && (
         <div className="mt-2">
@@ -274,7 +287,7 @@ function TickReport({ tick, onSource }: { tick: JointReportDto; onSource: (sourc
       )}
 
       <AgentTimings assessments={tick.assessments} />
-    </div>
+    </CollapsiblePanel>
   )
 }
 
@@ -573,6 +586,7 @@ function downloadExport(file: { filename: string; mime: string; content: string;
 /** The export of one process: HTML, Markdown, Word or JSON, behind an icon. */
 function ProcessExport({ runId, disabled }: { runId: string; disabled: boolean }) {
   const { t } = useI18n()
+  const toast = useToast()
   const [busy, setBusy] = React.useState<ExportFormat | null>(null)
   const [failure, setFailure] = React.useState<string | null>(null)
   const formats: Array<{ id: ExportFormat; label: string }> = [
@@ -588,8 +602,12 @@ function ProcessExport({ runId, disabled }: { runId: string; disabled: boolean }
     setFailure(null)
     try {
       downloadExport(await api.scenarioExport(runId, format))
+      const label = formats.find((entry) => entry.id === format)?.label ?? format
+      toast.success(t('toast.scenarioExported', { format: label }))
     } catch (error) {
-      setFailure((error as Error).message)
+      const message = (error as Error).message
+      setFailure(message)
+      toast.error(t('toast.failed'), message)
     } finally {
       setBusy(null)
     }
@@ -712,8 +730,13 @@ function ProcessSlide({
       )}
 
       <div className="space-y-3">
-        {block.reports.map((tick) => (
-          <TickReport key={tick.tick} tick={tick} onSource={onSource} />
+        {block.reports.map((tick, index) => (
+          <TickReport
+            key={tick.tick}
+            tick={tick}
+            onSource={onSource}
+            defaultOpen={index === block.reports.length - 1}
+          />
         ))}
       </div>
 
@@ -756,6 +779,7 @@ export function ScenarioCarousel({
   const [active, setActive] = React.useState(0)
   const [source, setSource] = React.useState<WebSourceView | null>(null)
   const [pendingDelete, setPendingDelete] = React.useState<ScenarioBlock | null>(null)
+  const [collapsed, setCollapsed] = React.useState(false)
   const previousCount = React.useRef(blocks.length)
 
   // A new process (the next sector of an automatic run) takes the stage; a
@@ -816,7 +840,33 @@ export function ScenarioCarousel({
               : t('scenario.status.running')}
         </span>
 
+        {busy && (
+          <ProcessingBar
+            compact
+            label={t('scenario.running')}
+            className="min-w-[96px] max-w-[180px] flex-1"
+          />
+        )}
+
         <div className="ml-auto flex items-center gap-1.5">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label={collapsed ? t('common.expand') : t('common.collapse')}
+                  onClick={() => setCollapsed((value) => !value)}
+                  className={ICON_BUTTON_OUTLINE}
+                >
+                  {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-md">
+                {collapsed ? t('common.expand') : t('common.collapse')}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {many && (
             <>
               <TooltipProvider>
@@ -918,23 +968,25 @@ export function ScenarioCarousel({
         </div>
       </div>
 
-      <div className="overflow-hidden">
-        <div
-          className="flex items-start transition-transform duration-300 ease-out"
-          style={{ transform: `translateX(-${current * 100}%)` }}
-        >
-          {blocks.map((item, index) => (
-            <div key={item.runId} className="min-w-full" aria-hidden={index !== current}>
-              <ProcessSlide
-                block={item}
-                running={busy && !item.done}
-                onReleaseNext={() => onReleaseNext(index)}
-                onSource={setSource}
-              />
-            </div>
-          ))}
+      {!collapsed && (
+        <div className="overflow-hidden">
+          <div
+            className="flex items-start transition-transform duration-300 ease-out"
+            style={{ transform: `translateX(-${current * 100}%)` }}
+          >
+            {blocks.map((item, index) => (
+              <div key={item.runId} className="min-w-full" aria-hidden={index !== current}>
+                <ProcessSlide
+                  block={item}
+                  running={busy && !item.done}
+                  onReleaseNext={() => onReleaseNext(index)}
+                  onSource={setSource}
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <SourceDrawer source={source} onClose={() => setSource(null)} />
 

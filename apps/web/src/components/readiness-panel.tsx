@@ -39,6 +39,7 @@ import { useWorkspace } from '@/lib/workspace'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 import { ProcessGraph, type ProcessGraphStep, type ProcessGraphView, type ProcessState } from '@/components/workflow/process-graph'
 import { ReadinessHistory } from '@/components/readiness-history'
+import { CollapsiblePanel } from '@/components/shared/collapsible-panel'
 import { ICON_BUTTON_OUTLINE } from '@/components/icon-button-styles'
 import { useReadiness, type ReadinessTab, type ReportFormat, type RunMeta, type SectorResult, type Step } from '@/components/readiness-context'
 
@@ -248,16 +249,18 @@ export function ReadinessPanel() {
       {r.lanes.length > 1 ? (
         <LaneGraphs onOpenSteps={() => setTab('steps')} />
       ) : graphSteps.length > 0 ? (
-        <ProcessGraph
-          steps={graphSteps}
-          views={graphViews}
-          viewLabel={t('readiness.graph.view.label')}
-          summary={progressSummary}
-          onSelect={selectNode}
-          renderPopover={(id, close) => (
-            <NodeCard info={nodeInfo(id)} close={close} onOpenSteps={() => { close(); setTab('steps') }} />
-          )}
-        />
+        <CollapsiblePanel title={t('readiness.graph.title')} meta={progressSummary}>
+          <ProcessGraph
+            steps={graphSteps}
+            views={graphViews}
+            viewLabel={t('readiness.graph.view.label')}
+            onSelect={selectNode}
+            renderPopover={(id, close) => (
+              <NodeCard info={nodeInfo(id)} close={close} onOpenSteps={() => { close(); setTab('steps') }} />
+            )}
+            className="h-[520px] rounded-none"
+          />
+        </CollapsiblePanel>
       ) : (
         <p className="py-16 text-center text-[11px] text-muted-foreground">{t('readiness.empty')}</p>
       )}
@@ -347,9 +350,11 @@ export function ReadinessPanel() {
   return (
     <>
       {assessment}
-      {!r.runId && !assessmentStarted(r) && !r.creating && (
+      {!r.runId && !assessmentStarted(r) && !r.creating && (r.historyTotal === null || r.historyTotal > 0) && (
         <section className="mt-6">
-          <ReadinessHistory version={r.historyVersion} onOpen={r.openSaved} onDelete={r.deleteRun} deletingId={r.deletingId} />
+          <CollapsiblePanel title={t('readiness.history')} contentClassName="p-3">
+            <ReadinessHistory version={r.historyVersion} onOpen={r.openSaved} onDelete={r.deleteRun} deletingId={r.deletingId} />
+          </CollapsiblePanel>
         </section>
       )}
 
@@ -770,13 +775,11 @@ function LaneGraphs({ onOpenSteps }: { onOpenSteps: () => void }) {
           formatDate,
         })
         return (
-          <section key={lane.domain} className="space-y-2">
-            <p className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
-              {t(`domain.${lane.domain}` as 'domain.health')}
-              <span className="font-mono text-[10px] font-normal text-muted-foreground">
-                {lane.report ? t('readiness.process.finished') : t('readiness.process.running')}
-              </span>
-            </p>
+          <CollapsiblePanel
+            key={lane.domain}
+            title={t(`domain.${lane.domain}` as 'domain.health')}
+            meta={lane.report ? t('readiness.process.finished') : t('readiness.process.running')}
+          >
             <ProcessGraph
               steps={graph}
               views={graphViewsOf(graph, t)}
@@ -785,9 +788,9 @@ function LaneGraphs({ onOpenSteps }: { onOpenSteps: () => void }) {
               renderPopover={(id, close) => (
                 <NodeCard info={nodeInfoOf(graph, lane.steps, id)} close={close} onOpenSteps={() => { close(); onOpenSteps() }} />
               )}
-              className="h-[420px]"
+              className="h-[420px] rounded-none"
             />
-          </section>
+          </CollapsiblePanel>
         )
       })}
     </div>
