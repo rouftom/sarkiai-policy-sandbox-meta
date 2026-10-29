@@ -11,9 +11,10 @@ import * as React from 'react'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { TableActionItem } from '@/components/ui/table-actions'
 import { RowActionButton } from '@/components/ui/row-action-button'
-import { Eye, ImageIcon, Pencil, RotateCcw, Search, Upload, X } from 'lucide-react'
+import { Eye, ImageIcon, Pencil, RotateCcw, Search, Trash2, Upload, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { KbImageUploader } from '@/components/kb-image-uploader'
+import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { documentHref } from '@/lib/kb-links'
 import { Badge, Button, DataTablePagination, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Dialog, DialogContent, DialogHeader, DialogTitle } from '@sps/ui'
 import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } from '@/lib/api'
@@ -50,12 +51,15 @@ export function KbDocuments({
   loading,
   onChanged,
   onToggle,
+  onDelete,
   summary,
 }: {
   documents: KbDocumentDto[]
   loading: boolean
   onChanged: () => Promise<void>
   onToggle: (document: KbDocumentDto, active: boolean) => Promise<void>
+  /** Removes the document and its passages for good, once the operator confirms. */
+  onDelete: (document: KbDocumentDto) => Promise<void>
   summary?: KbSummary
 }) {
   const { t, locale } = useI18n()
@@ -106,6 +110,7 @@ export function KbDocuments({
   const rows = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const [uploadOpen, setUploadOpen] = React.useState(false)
+  const [pendingDelete, setPendingDelete] = React.useState<KbDocumentDto | null>(null)
   const router = useRouter()
 
   return (
@@ -245,6 +250,14 @@ export function KbDocuments({
                               >
                                 {retired ? <RotateCcw className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
                               </RowActionButton>
+                              <RowActionButton
+                                label={t('knowledge.corpus.delete')}
+                                tone="danger"
+                                disabled={loading}
+                                onClick={() => setPendingDelete(document)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </RowActionButton>
                             </div>
                           }
                         >
@@ -264,6 +277,9 @@ export function KbDocuments({
                             onClick={() => void onToggle(document, retired)}
                           >
                             {retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
+                          </TableActionItem>
+                          <TableActionItem icon={Trash2} variant="danger" disabled={loading} onClick={() => setPendingDelete(document)}>
+                            {t('knowledge.corpus.delete')}
                           </TableActionItem>
                         </RowActionMenu>
                       </TableCell>
@@ -288,6 +304,23 @@ export function KbDocuments({
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return
+          await onDelete(pendingDelete)
+          setPendingDelete(null)
+        }}
+        title={t('knowledge.corpus.deleteTitle')}
+        description={
+          pendingDelete
+            ? t('knowledge.corpus.deleteBody', { filename: pendingDelete.filename, chunks: pendingDelete.chunks })
+            : ''
+        }
+        confirmText={t('knowledge.corpus.delete')}
+      />
     </div>
   )
 }

@@ -808,6 +808,14 @@ export class AtlasIngestor {
     return result.modifiedCount
   }
 
+  /** Remove one document for good: its passages, its figures and its metadata. */
+  async deleteDocument(filename: string): Promise<{ chunks: number; images: number }> {
+    const chunks = await (await this.chunks()).deleteMany({ filename })
+    const images = await (await this.imageCollection()).deleteMany({ filename })
+    await (await this.db()).collection(DOCUMENT_COLLECTION).deleteOne({ _id: filename as never })
+    return { chunks: chunks.deletedCount, images: images.deletedCount }
+  }
+
   /** Document-level metadata the console edits (title, summary) and the chunk fields it propagates. */
   async updateDocument(
     filename: string,

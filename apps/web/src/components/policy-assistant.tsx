@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import { Check, ChevronDown, History, ImagePlus, ListChecks, Plus, Scale, Shield, Sparkles, X } from 'lucide-react'
+import { Check, ChevronDown, GraduationCap, HeartPulse, History, ImagePlus, Landmark, ListChecks, Plus, RadioTower, Route, Scale, Shield, Sprout, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -69,6 +69,15 @@ const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting']
  * the final assessment replaces the draft with its citations and validation.
  */
 const ASSISTANT_SECTORS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
+
+/** The icon and the tint of each sector, so the menu reads at a glance. */
+const SECTOR_STYLE: Record<Domain, { icon: typeof HeartPulse; color: string; soft: string }> = {
+  health: { icon: HeartPulse, color: 'text-rose-500', soft: 'bg-rose-500/10' },
+  education: { icon: GraduationCap, color: 'text-sky-500', soft: 'bg-sky-500/10' },
+  telecom: { icon: RadioTower, color: 'text-violet-500', soft: 'bg-violet-500/10' },
+  public_services: { icon: Landmark, color: 'text-amber-500', soft: 'bg-amber-500/10' },
+  agriculture: { icon: Sprout, color: 'text-emerald-500', soft: 'bg-emerald-500/10' },
+}
 
 export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const { t, locale } = useI18n()
@@ -558,7 +567,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
               <span className={cn('flex h-3.5 w-3.5 items-center justify-center rounded border', institutionIds.length === 0 ? 'border-brand-primary bg-brand-primary text-white' : 'border-border')}>
                 {institutionIds.length === 0 && <Check className="h-2.5 w-2.5" />}
               </span>
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <Route className="h-3.5 w-3.5 shrink-0 text-brand-primary" />
               <span className="truncate">{t('assistant.institution.auto')}</span>
             </DropdownMenuItem>
             {institutions.map((institution) => {
@@ -591,6 +600,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             <DropdownMenuLabel>{t('app.domains')}</DropdownMenuLabel>
             {ASSISTANT_SECTORS.map((value) => {
               const on = domains.includes(value)
+              const sector = SECTOR_STYLE[value]
+              const Icon = sector.icon
               return (
                 <DropdownMenuItem
                   key={value}
@@ -601,6 +612,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                 >
                   <span className={cn('flex h-3.5 w-3.5 items-center justify-center rounded border', on ? 'border-brand-primary bg-brand-primary text-white' : 'border-border')}>
                     {on && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <span className={cn('grid h-5 w-5 shrink-0 place-items-center rounded-md', sector.soft)}>
+                    <Icon className={cn('h-3.5 w-3.5', sector.color)} />
                   </span>
                   <span className="truncate">{t(`domain.${value}` as 'domain.health')}</span>
                 </DropdownMenuItem>

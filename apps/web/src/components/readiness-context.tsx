@@ -163,6 +163,8 @@ interface ReadinessState {
   /** Every saved assessment, whatever the filters (null while loading). */
   historyTotal: number | null
   whatIf: WhatIfResultDto | null
+  /** The projection is running: its button shows a loader and stays disabled. */
+  simulateBusy: boolean
   change: { dimension: string; delta: number }
   source: WebSourceView | null
   openIds: Set<string>
@@ -171,7 +173,8 @@ interface ReadinessState {
   setSource: (source: WebSourceView | null) => void
   run: () => Promise<void>
   openSaved: (id: string) => void
-  simulate: () => Promise<void>
+  simulate: (report?: ReadinessReportDto | null) => Promise<void>
+  resetWhatIf: () => void
   toggleStep: (id: string) => void
   openAgent: (dimension: string) => void
   settings: ReadinessSettings
@@ -297,6 +300,9 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   const [historyVersion, setHistoryVersion] = React.useState(0)
   const [historyTotal, setHistoryTotal] = React.useState<number | null>(null)
   const [whatIf, setWhatIf] = React.useState<WhatIfResultDto | null>(null)
+  const [simulateBusy, setSimulateBusy] = React.useState(false)
+  /** Identifies the current projection: a late answer for another sector is dropped. */
+  const simulateSeq = React.useRef(0)
   const [change, setChange] = React.useState<{ dimension: string; delta: number }>({ dimension: 'digital_infrastructure', delta: 1 })
   const [source, setSource] = React.useState<WebSourceView | null>(null)
   const [openIds, setOpenIds] = React.useState<Set<string>>(new Set())
@@ -458,6 +464,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     const sectors = startDomains.slice(0, Math.max(1, settings.maxDomains))
     if (sectors.length === 0) return
     setRunning(true)
+    simulateSeq.current += 1
+    setSimulateBusy(false)
     setWhatIf(null)
     setFailure(null)
     setReport(null)
@@ -512,6 +520,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     const { id, dimensions } = resumable
     const kept = report?.scores ?? []
     setRunning(true)
+    simulateSeq.current += 1
+    setSimulateBusy(false)
     setWhatIf(null)
     setFailure(null)
     setReport(null)
@@ -639,13 +649,35 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     router.push(`/readiness/${id}`)
   }
 
-  const simulate = async () => {
-    if (!report) return
+  /**
+   * Projects a policy change through the causal graph. The report defaults to the open
+   * one; a series passes the sector it shows, since it has no single report.
+   */
+  const simulate = async (target?: ReadinessReportDto | null) => {
+    const subject = target ?? report
+    if (!subject) return
+    const dimension = subject.scores?.some((score) => score.dimension === change.dimension)
+      ? change.dimension
+      : subject.scores?.[0]?.dimension
+    if (!dimension) return
+    const seq = ++simulateSeq.current
+    setSimulateBusy(true)
+    setFailure(null)
     try {
-      setWhatIf(await api.whatIf({ country, domain: report.domain || domain, changes: { [change.dimension]: change.delta }, scores: report.scores }))
+      const result = await api.whatIf({ country, domain: subject.domain || domain, changes: { [dimension]: change.delta }, scores: subject.scores })
+      if (seq === simulateSeq.current) setWhatIf(result)
     } catch (caught) {
-      setFailure(caught instanceof Error ? caught.message : String(caught))
+      if (seq === simulateSeq.current) setFailure(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      if (seq === simulateSeq.current) setSimulateBusy(false)
     }
+  }
+
+  /** Drops the projection of the sector that was showing: another sector is being read. */
+  const resetWhatIf = () => {
+    simulateSeq.current += 1
+    setSimulateBusy(false)
+    setWhatIf(null)
   }
 
   const toggleStep = (id: string) =>
@@ -673,6 +705,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     historyVersion,
     historyTotal,
     whatIf,
+    simulateBusy,
     change,
     source,
     openIds,
@@ -682,6 +715,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     run,
     openSaved,
     simulate,
+    resetWhatIf,
     toggleStep,
     openAgent,
     settings,

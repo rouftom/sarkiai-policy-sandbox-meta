@@ -33,7 +33,7 @@ import {
   type TabItem,
 } from '@sps/ui'
 import { READINESS_DIMENSIONS, flagOf, type Domain } from '@sps/shared'
-import { type DimensionScoreDto, type ReadinessReportDto } from '@/lib/api'
+import { type DimensionScoreDto, type ReadinessReportDto, type ReadinessReportFileDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
@@ -177,11 +177,28 @@ export function ReadinessPanel() {
   const { tab, setTab } = r
   const lang: 'fr' | 'en' = locale === 'fr' ? 'fr' : 'en'
   const busy = r.loading || r.localizing
-  const situation = r.report?.situation?.[lang] ?? r.report?.situation?.en ?? r.report?.situation?.fr
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })
   const liveTotal = r.startedAt !== null && r.running ? r.now - r.startedAt : r.totalMs
   const doneSteps = r.steps.filter((step) => step.status === 'done' || step.status === 'error')
+
+  /**
+   * A series has one report per sector: the Result tab shows the comparison and the
+   * report of the sector picked in a selector, since `report` is null for a series.
+   */
+  const series = r.lanes.length > 1
+  /** A saved run of a series brings its sectors, even though it opens on one report. */
+  const showComparison = r.batch.length > 1
+  const [sectorView, setSectorView] = React.useState('')
+  const lane = series ? r.lanes.find((entry) => entry.domain === sectorView) ?? r.lanes[0] : undefined
+  const shownReport = series ? lane?.report ?? null : r.report
+  const shownSteps = series ? lane?.steps ?? [] : r.steps
+  const shownRunning = series ? r.running && !lane?.report : r.running
+  React.useEffect(() => {
+    if (series) r.resetWhatIf()
+    // A projection belongs to the sector it was run on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectorView, series])
 
   const graphSteps: ProcessGraphStep[] = React.useMemo(
     () => processGraphOf({ steps: r.steps, report: r.report, meta: r.meta, running: r.running, now: r.now, country, t, formatDate }),
@@ -264,8 +281,7 @@ export function ReadinessPanel() {
 
   const stepsTab = busy ? <ShimmerLines rows={6} /> : (
     <section className="space-y-2">
-      {r.steps.length === 0 && <p className="py-16 text-center text-[11px] text-muted-foreground">{t('readiness.empty')}</p>}
-      {r.lanes.length > 1 ? (
+      {series ? (
         r.lanes.map((lane) => (
           <section key={lane.domain} className="space-y-1">
             <p className="text-[12px] font-semibold text-foreground">{t(`domain.${lane.domain}` as 'domain.health')}</p>
@@ -280,133 +296,33 @@ export function ReadinessPanel() {
 
   const resultTab = busy ? <ShimmerLines rows={6} /> : (
     <section className="space-y-4">
-      {r.batch.length > 1 && <SectorComparison batch={r.batch} />}
-      {!r.report && r.steps.some((step) => step.score) ? (
-        <LiveScores steps={r.steps} />
-      ) : !r.report && r.running ? (
-        <ProcessingState />
-      ) : !r.report ? (
-        <p className="py-16 text-center text-[11px] text-muted-foreground">{t('readiness.empty')}</p>
-      ) : (
-        <>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-            {r.meta && <span>{formatDate(r.meta.createdAt)}</span>}
-            {r.meta?.runBy && (
-              <>
-                <span>·</span>
-                <span>{t('readiness.runBy', { who: r.meta.runBy })}</span>
-              </>
-            )}
-            {r.totalMs !== undefined && (
-              <>
-                <span>·</span>
-                <span>{t('readiness.duration', { seconds: (r.totalMs / 1000).toFixed(1) })}</span>
-              </>
-            )}
-          </div>
-          <div className="space-y-2 rounded-xl bg-secondary/40 p-4">
-            <p className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
-              <span className="text-base leading-none" aria-hidden="true">{flagOf(r.report.country)}</span>
-              {situation?.headline || t('readiness.situation.missing')}
-            </p>
-            {situation && <p className="text-xs leading-relaxed text-foreground/90">{situation.situation}</p>}
-            {situation && <p className="text-[11px] leading-relaxed text-muted-foreground">{situation.context}</p>}
-          </div>
-          <div className="flex flex-wrap gap-4 text-[11px]">
-            <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 dark:bg-brand-primary-dark/30">
-              {t('readiness.composite')}: <strong>{r.report.scenario?.composite ?? 'n/a'}/5</strong>
-            </span>
-            <span className="rounded-full bg-secondary px-2 py-0.5">
-              {t('readiness.average')}: <strong>{r.report.scenario?.overall ?? 'n/a'}/5</strong>
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            {r.report.scores?.map((score) => (
-              <details key={score.dimension} className="group rounded-xl bg-secondary/40 p-2 text-[11px]">
-                <summary className="flex cursor-pointer list-none items-center gap-2">
-                  <span className="w-8 shrink-0 text-muted-foreground">D{score.dimensionId}</span>
-                  <span className="min-w-0 flex-1 truncate">{score.dimensionName}</span>
-                  <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-secondary">
-                    <span className="block h-full rounded-full bg-brand-primary dark:bg-brand-primary-light" style={{ width: `${(score.score / 5) * 100}%` }} />
-                  </span>
-                  <span className="w-8 shrink-0 text-right font-semibold">{score.score}/5</span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="mt-2 space-y-2 pl-10 text-[11px]">
-                  <p className="text-muted-foreground">{score.maturity}</p>
-                  {textOf(score, lang).recommendations?.length > 0 && (
-                    <div>
-                      <p className="font-semibold">{t('readiness.recommendations')}</p>
-                      <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground">
-                        {textOf(score, lang).recommendations.map((item, index) => (
-                          <li key={index}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {textOf(score, lang).gaps?.length > 0 && (
-                    <div>
-                      <p className="font-semibold">{t('readiness.gaps')}</p>
-                      <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground">
-                        {textOf(score, lang).gaps.map((item, index) => (
-                          <li key={index}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </details>
-            ))}
-          </div>
-
-          {r.reportFile && (
-            <div className="rounded-xl bg-secondary/40 p-3">
-              <p className="text-[12px] font-semibold text-foreground">{t('readiness.report.title')}</p>
-              <ul className="mt-3 space-y-1 text-[11px]">
-                {r.reportFile.assets.map((asset) => (
-                  <li key={asset.kind} className="flex flex-wrap items-center gap-2">
-                    <Badge tone={asset.status === 'included' ? 'success' : asset.status === 'fallback' ? 'warning' : 'neutral'}>{asset.status}</Badge>
-                    <span className="font-medium">{t(`readiness.report.asset.${asset.kind}` as 'readiness.report.asset.chart')}</span>
-                    <span className="text-muted-foreground">{asset.tool ? `${asset.tool} · ` : ''}{asset.message}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="rounded-lg border border-border bg-secondary/40 p-3">
-            <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
-              <Waypoints className="h-3.5 w-3.5" /> {t('readiness.whatIf')}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Select
-                ariaLabel={t('readiness.dimension')}
-                value={r.change.dimension}
-                onValueChange={(value) => r.setChange((state) => ({ ...state, dimension: value }))}
-                options={(r.report.scores ?? []).map((score) => ({ value: score.dimension, label: score.dimensionName }))}
-                className="min-w-0 flex-1 sm:w-56 sm:flex-none"
-              />
-              <Input
-                type="number"
-                step="0.5"
-                value={r.change.delta}
-                onChange={(event) => r.setChange((state) => ({ ...state, delta: Number(event.target.value) }))}
-                className="h-8 w-20 text-[11px]"
-                aria-label={t('readiness.delta')}
-              />
-              <Button onClick={() => void r.simulate()} disabled={r.running} size="sm" variant="secondary">
-                {t('readiness.simulate')}
-              </Button>
-            </div>
-            {r.whatIf && (
-              <div className="mt-2 space-y-1 text-[11px]">
-                <pre className="whitespace-pre-wrap font-sans text-muted-foreground">{r.whatIf.narrative}</pre>
-              </div>
-            )}
-          </div>
-        </>
+      {showComparison && <SectorComparison batch={r.batch} />}
+      {series && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">{t('readiness.result.sector')}</span>
+          <Select
+            ariaLabel={t('readiness.result.sector')}
+            value={lane?.domain ?? ''}
+            onValueChange={setSectorView}
+            options={r.lanes.map((entry) => ({ value: entry.domain, label: t(`domain.${entry.domain}` as 'domain.health') }))}
+            size="sm"
+            className="w-48"
+          />
+        </div>
       )}
+      {!shownReport && shownSteps.some((step) => step.score) ? (
+        <LiveScores steps={shownSteps} />
+      ) : !shownReport && shownRunning ? (
+        <ProcessingState />
+      ) : shownReport ? (
+        <ReportBody
+          report={shownReport}
+          meta={series ? null : r.meta}
+          totalMs={series ? lane?.totalMs : r.totalMs}
+          running={shownRunning}
+          reportFile={series ? null : r.reportFile}
+        />
+      ) : null}
     </section>
   )
 
@@ -438,6 +354,149 @@ export function ReadinessPanel() {
       )}
 
       <SourceDrawer source={r.source} onClose={() => r.setSource(null)} />
+    </>
+  )
+}
+
+/** The report of one assessment or one sector of a series: situation, scores, generated file, what-if. */
+function ReportBody({
+  report,
+  meta,
+  totalMs,
+  running,
+  reportFile,
+}: {
+  report: ReadinessReportDto
+  meta: RunMeta | null
+  totalMs: number | undefined
+  running: boolean
+  reportFile: ReadinessReportFileDto | null
+}) {
+  const { t, locale } = useI18n()
+  const r = useReadiness()
+  const lang: 'fr' | 'en' = locale === 'fr' ? 'fr' : 'en'
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })
+  const situation = report.situation?.[lang] ?? report.situation?.en ?? report.situation?.fr
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        {meta && <span>{formatDate(meta.createdAt)}</span>}
+        {meta?.runBy && (
+          <>
+            <span>·</span>
+            <span>{t('readiness.runBy', { who: meta.runBy })}</span>
+          </>
+        )}
+        {totalMs !== undefined && (
+          <>
+            <span>·</span>
+            <span>{t('readiness.duration', { seconds: (totalMs / 1000).toFixed(1) })}</span>
+          </>
+        )}
+      </div>
+      <div className="space-y-2 rounded-xl bg-secondary/40 p-4">
+        <p className="flex items-center gap-2 text-[12px] font-semibold text-foreground">
+          <span className="text-base leading-none" aria-hidden="true">{flagOf(report.country)}</span>
+          {situation?.headline || t('readiness.situation.missing')}
+        </p>
+        {situation && <p className="text-xs leading-relaxed text-foreground/90">{situation.situation}</p>}
+        {situation && <p className="text-[11px] leading-relaxed text-muted-foreground">{situation.context}</p>}
+      </div>
+      <div className="flex flex-wrap gap-4 text-[11px]">
+        <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 dark:bg-brand-primary-dark/30">
+          {t('readiness.composite')}: <strong>{report.scenario?.composite ?? 'n/a'}/5</strong>
+        </span>
+        <span className="rounded-full bg-secondary px-2 py-0.5">
+          {t('readiness.average')}: <strong>{report.scenario?.overall ?? 'n/a'}/5</strong>
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {report.scores?.map((score) => (
+          <details key={score.dimension} className="group rounded-xl bg-secondary/40 p-2 text-[11px]">
+            <summary className="flex cursor-pointer list-none items-center gap-2">
+              <span className="w-8 shrink-0 text-muted-foreground">D{score.dimensionId}</span>
+              <span className="min-w-0 flex-1 truncate">{score.dimensionName}</span>
+              <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-secondary">
+                <span className="block h-full rounded-full bg-brand-primary dark:bg-brand-primary-light" style={{ width: `${(score.score / 5) * 100}%` }} />
+              </span>
+              <span className="w-8 shrink-0 text-right font-semibold">{score.score}/5</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-2 space-y-2 pl-10 text-[11px]">
+              <p className="text-muted-foreground">{score.maturity}</p>
+              {textOf(score, lang).recommendations?.length > 0 && (
+                <div>
+                  <p className="font-semibold">{t('readiness.recommendations')}</p>
+                  <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground">
+                    {textOf(score, lang).recommendations.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {textOf(score, lang).gaps?.length > 0 && (
+                <div>
+                  <p className="font-semibold">{t('readiness.gaps')}</p>
+                  <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground">
+                    {textOf(score, lang).gaps.map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </details>
+        ))}
+      </div>
+
+      {reportFile && (
+        <div className="rounded-xl bg-secondary/40 p-3">
+          <p className="text-[12px] font-semibold text-foreground">{t('readiness.report.title')}</p>
+          <ul className="mt-3 space-y-1 text-[11px]">
+            {reportFile.assets.map((asset) => (
+              <li key={asset.kind} className="flex flex-wrap items-center gap-2">
+                <Badge tone={asset.status === 'included' ? 'success' : asset.status === 'fallback' ? 'warning' : 'neutral'}>{asset.status}</Badge>
+                <span className="font-medium">{t(`readiness.report.asset.${asset.kind}` as 'readiness.report.asset.chart')}</span>
+                <span className="text-muted-foreground">{asset.tool ? `${asset.tool} · ` : ''}{asset.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="rounded-lg border border-border bg-secondary/40 p-3">
+        <p className="mb-2 flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
+          <Waypoints className="h-3.5 w-3.5" /> {t('readiness.whatIf')}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            ariaLabel={t('readiness.dimension')}
+            value={report.scores?.some((score) => score.dimension === r.change.dimension) ? r.change.dimension : report.scores?.[0]?.dimension ?? ''}
+            onValueChange={(value) => r.setChange((state) => ({ ...state, dimension: value }))}
+            options={(report.scores ?? []).map((score) => ({ value: score.dimension, label: score.dimensionName }))}
+            className="min-w-0 flex-1 sm:w-56 sm:flex-none"
+          />
+          <Input
+            type="number"
+            step="0.5"
+            value={r.change.delta}
+            onChange={(event) => r.setChange((state) => ({ ...state, delta: Number(event.target.value) }))}
+            className="h-8 w-20 text-[11px]"
+            aria-label={t('readiness.delta')}
+          />
+          <Button onClick={() => void r.simulate(report)} disabled={running || r.simulateBusy} size="sm" variant="secondary">
+            {r.simulateBusy ? <Loader className="h-3.5 w-3.5 animate-spin" /> : null}
+            {t('readiness.simulate')}
+          </Button>
+        </div>
+        {r.whatIf && (
+          <div className="mt-2 space-y-1 text-[11px]">
+            <pre className="whitespace-pre-wrap font-sans text-muted-foreground">{r.whatIf.narrative}</pre>
+          </div>
+        )}
+      </div>
     </>
   )
 }

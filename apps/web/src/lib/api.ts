@@ -1357,6 +1357,12 @@ export const knowledgeApi = {
       body: JSON.stringify({ filename, active }),
     }),
 
+  /** Removes one document for good: its passages, its figures and its metadata. */
+  deleteDocument: (filename: string) =>
+    request<{ filename: string; chunks: number; images: number }>(`/v1/kb/documents?${new URLSearchParams({ filename }).toString()}`, {
+      method: 'DELETE',
+    }),
+
   /** One document with its passages (the selected one first) and figures, for the citation modal. */
   preview: (filename: string, chunkIndex?: number) => {
     const params = new URLSearchParams({ filename })

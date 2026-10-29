@@ -85,6 +85,17 @@ export default function KnowledgePage() {
     }
   }
 
+  /** Deletes one document for good; the dialog stays open if the API refuses. */
+  const deleteDocument = async (document: KbDocumentDto) => {
+    try {
+      await knowledgeApi.deleteDocument(document.filename)
+      await load()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      throw caught
+    }
+  }
+
   const corpus = status?.totals
 
   return (
@@ -134,6 +145,7 @@ export default function KnowledgePage() {
               loading={loading}
               onChanged={load}
               onToggle={toggleDocument}
+              onDelete={deleteDocument}
               summary={{
                 documents: corpus?.documents ?? 0,
                 chunks: corpus?.activeChunks ?? 0,

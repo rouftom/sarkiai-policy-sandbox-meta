@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronRight, Download, FileCheck2, GitMerge, Play, Settings2, TriangleAlert, Workflow } from 'lucide-react'
-import { AnimatedTabsList, Button, Card, CardContent, CardHeader, CardTitle, Select, cn, type TabItem } from '@sps/ui'
+import { ArrowLeft, ChevronRight, Download, TriangleAlert } from 'lucide-react'
+import { Button, cn } from '@sps/ui'
 import type { Domain } from '@sps/shared'
 import {
   api,
@@ -14,6 +14,7 @@ import {
 import { IncidentTimeline, type TimelineItem } from '@/components/incident-timeline'
 import { useI18n } from '@/lib/i18n'
 import { ProcessingBar } from '@/components/processing-bar'
+import { ScenarioHistory } from '@/components/scenario-history'
 import { ProcessGraph, type ProcessGraphStep } from '@/components/workflow/process-graph'
 
 const SEVERITY: Record<string, string> = {
@@ -159,8 +160,6 @@ function timelineOf(block: ScenarioBlock): TimelineItem[] {
   }))
 }
 
-type ScenarioView = 'process' | 'result' | 'settings'
-
 const MAX_SECTORS_KEY = 'sps.scenarios.maxSectors'
 
 /** Starting data of one run, as the start and resume routes give it. */
@@ -175,8 +174,9 @@ interface RunStart {
 /**
  * Plays the scenario of each chosen sector, one after another (auto), or releases
  * the first sector's batches one at a time (facilitator). Each sector is a block.
- * Past runs are listed below: a finished one opens read-only, a failed one resumes
- * from its last released tick.
+ * The page shows the saved runs while nothing is played, and the run as soon as one
+ * starts · opening a saved one hides the table too. A block that finished is
+ * read-only, a failed one resumes from its last released tick.
  */
 export function ScenarioConsole({
   country,
@@ -267,6 +267,7 @@ export function ScenarioConsole({
     setBusy(true)
     setError(null)
     setBlocks([])
+    setShowHistory(false)
     try {
       for (const [index, domain] of domains.slice(0, maxSectors).entries()) {
         const start = await startRun(domain)
@@ -276,6 +277,7 @@ export function ScenarioConsole({
       }
     } catch (e) {
       setError((e as Error).message)
+      setShowHistory(true)
       void loadHistory()
     } finally {
       setBusy(false)
@@ -289,6 +291,7 @@ export function ScenarioConsole({
     setBusy(true)
     setError(null)
     setBlocks([])
+    setShowHistory(false)
     try {
       const start = await startRun(first)
       onRunId?.(start.runId)
@@ -296,6 +299,7 @@ export function ScenarioConsole({
       void loadHistory()
     } catch (e) {
       setError((e as Error).message)
+      setShowHistory(true)
     } finally {
       setBusy(false)
     }
@@ -374,172 +378,128 @@ export function ScenarioConsole({
   }
 
   const allDone = blocks.length > 0 && blocks.every((block) => block.done)
-  const [view, setView] = React.useState<ScenarioView>('process')
-  const views: TabItem[] = [
-    { id: 'process', label: t('scenario.tab.process'), icon: Workflow },
-    { id: 'result', label: t('scenario.tab.result'), icon: FileCheck2 },
-    { id: 'settings', label: t('scenario.tab.settings'), icon: Settings2 },
-  ]
+
+  /** A run is played here: the table of past runs gives way to it. */
+  const [showHistory, setShowHistory] = React.useState(true)
+  const backToRuns = () => {
+    setBlocks([])
+    setError(null)
+    setShowHistory(true)
+    void loadHistory()
+  }
+
+  const graphs = blocks.map((block, index) => (
+    <section key={`graph-${block.runId}`} className="space-y-2">
+      {blocks.length > 1 && (
+        <p className="text-[11px] font-semibold text-muted-foreground">
+          {index + 1}/{blocks.length} · {t(`domain.${block.domain}` as 'domain.health')}
+        </p>
+      )}
+      <ProcessGraph
+        steps={graphOf(
+          block,
+          busy && !block.done,
+          (key) => t(key),
+          (n) => t('scenario.graph.batch', { n }),
+          t('scenario.graph.report'),
+        )}
+        className="h-[360px]"
+      />
+    </section>
+  ))
+
+  const results = blocks.map((block, index) => {
+    const items = timelineOf(block)
+    const nextAgenda = block.agenda.find((item) => item.releaseChunk === block.released)
+    return (
+      <section key={block.runId} className="space-y-3 rounded-xl border border-border p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[12px] font-semibold text-foreground">
+            {t(`domain.${block.domain}` as 'domain.health')}
+            {blocks.length > 1 && <span className="ml-2 font-mono text-[10px] text-muted-foreground">{index + 1}/{blocks.length}</span>}
+          </p>
+          {block.done && (
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="outline" size="md" onClick={() => void downloadDossier(block.runId, 'markdown')}>
+                <Download className="h-3.5 w-3.5" /> {t('scenario.dossier')}
+              </Button>
+              <Button variant="ghost" size="md" onClick={() => void downloadDossier(block.runId, 'json')}>
+                JSON
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {block.failure && <p className="text-[11px] text-destructive">{block.failure}</p>}
+
+        {!block.done && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl bg-secondary/60 p-2">
+            <span className="text-xs text-muted-foreground">
+              {t('scenario.progress', { released: block.released, total: block.total })}
+              {nextAgenda ? `, ${t('scenario.upNext', { title: nextAgenda.title })}` : ''}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {nextAgenda ? t('scenario.seenBy', { agents: nextAgenda.visibleTo.join(', ') }) : ''}
+            </span>
+            {!busy && block.released > 0 && block.agenda.length > 0 && block.released < block.total && block.runId && (
+              <Button onClick={() => void releaseNext(index)} disabled={busy} size="md" className="ml-auto">
+                <ChevronRight className="h-3.5 w-3.5" /> {t('scenario.next')}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {items.length > 0 && (
+          <div className="rounded-xl border border-border p-3">
+            <p className="mb-2 text-[10px] font-semibold text-primary">{t('scenario.timeline')}</p>
+            <IncidentTimeline items={items} releasedChunks={block.released} totalTicks={block.total} domain={block.domain} />
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {block.reports.map((tick) => (
+            <TickReport key={tick.tick} tick={tick} />
+          ))}
+        </div>
+      </section>
+    )
+  })
 
   return (
-    <Card>
-      <CardHeader>
-        <GitMerge className="h-4 w-4 text-primary" />
-        <CardTitle>{t('scenario.title')}</CardTitle>
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" onClick={startFacilitated} disabled={busy || domains.length === 0} size="md">
-            {t('scenario.facilitated')}
-          </Button>
-          <Button onClick={runAll} disabled={busy || domains.length === 0} size="md">
-            <Play className="h-3.5 w-3.5" /> {busy ? t('scenario.running') : t('scenario.auto')}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {error && <p className="text-sm text-destructive">{error}</p>}
+    <section className="space-y-4">
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-        {busy && <ProcessingBar label={t('scenario.running')} />}
+      {busy && <ProcessingBar label={t('scenario.running')} />}
 
-        <AnimatedTabsList items={views} value={view} onValueChange={(value) => setView(value as ScenarioView)} dense />
-
-        {view === 'settings' && (
-          <div className="max-w-sm space-y-1 text-[11px]">
-            <span className="text-muted-foreground">{t('scenario.settings.maxSectors')}</span>
-            <Select
-              ariaLabel={t('scenario.settings.maxSectors')}
-              value={String(maxSectors)}
-              onValueChange={(value) => changeMaxSectors(Number(value))}
-              options={[1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: String(value) }))}
-              size="md"
-              className="w-full"
-            />
+      {blocks.length === 0 ? (
+        !showHistory ? null : (
+          <ScenarioHistory
+            runs={history}
+            busy={busy}
+            canStart={domains.length > 0}
+            maxSectors={maxSectors}
+            onMaxSectorsChange={changeMaxSectors}
+            onOpen={(run) => void openRun(run)}
+            onResume={(run) => void resumeRun(run)}
+            onFacilitate={() => void startFacilitated()}
+            onAuto={() => void runAll()}
+          />
+        )
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={backToRuns} disabled={busy}>
+              <ArrowLeft className="h-3.5 w-3.5" /> {t('scenario.back')}
+            </Button>
+            {allDone && blocks.length > 1 && (
+              <p className="text-[11px] text-muted-foreground">{t('scenario.allDone', { count: blocks.length })}</p>
+            )}
           </div>
-        )}
-
-        {blocks.length === 0 && !busy && view !== 'settings' && <p className="text-sm text-muted-foreground">{t('scenario.intro')}</p>}
-
-        {blocks.length > 0 && view === 'process' && (
-          <div className="space-y-4">
-            {blocks.map((block, index) => (
-              <section key={`graph-${block.runId}`} className="space-y-2">
-                {blocks.length > 1 && (
-                  <p className="text-[11px] font-semibold text-muted-foreground">
-                    {index + 1}/{blocks.length} · {t(`domain.${block.domain}` as 'domain.health')}
-                  </p>
-                )}
-                <ProcessGraph
-                  steps={graphOf(
-                    block,
-                    busy && !block.done,
-                    (key) => t(key),
-                    (n) => t('scenario.graph.batch', { n }),
-                    t('scenario.graph.report'),
-                  )}
-                  className="h-[360px]"
-                />
-              </section>
-            ))}
-          </div>
-        )}
-
-        {blocks.length > 0 && view === 'result' && blocks.map((block, index) => {
-          const items = timelineOf(block)
-          const nextAgenda = block.agenda.find((item) => item.releaseChunk === block.released)
-          return (
-            <section key={block.runId} className="space-y-3 rounded-xl border border-border p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[12px] font-semibold text-foreground">
-                  {t(`domain.${block.domain}` as 'domain.health')}
-                  {blocks.length > 1 && <span className="ml-2 font-mono text-[10px] text-muted-foreground">{index + 1}/{blocks.length}</span>}
-                </p>
-                {block.done && (
-                  <div className="ml-auto flex items-center gap-2">
-                    <Button variant="outline" size="md" onClick={() => void downloadDossier(block.runId, 'markdown')}>
-                      <Download className="h-3.5 w-3.5" /> {t('scenario.dossier')}
-                    </Button>
-                    <Button variant="ghost" size="md" onClick={() => void downloadDossier(block.runId, 'json')}>
-                      JSON
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {block.failure && <p className="text-[11px] text-destructive">{block.failure}</p>}
-
-              {!block.done && (
-                <div className="flex flex-wrap items-center gap-2 rounded-xl bg-secondary/60 p-2">
-                  <span className="text-xs text-muted-foreground">
-                    {t('scenario.progress', { released: block.released, total: block.total })}
-                    {nextAgenda ? `, ${t('scenario.upNext', { title: nextAgenda.title })}` : ''}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {nextAgenda ? t('scenario.seenBy', { agents: nextAgenda.visibleTo.join(', ') }) : ''}
-                  </span>
-                  {!busy && block.released > 0 && block.agenda.length > 0 && block.released < block.total && block.runId && (
-                    <Button onClick={() => void releaseNext(index)} disabled={busy} size="md" className="ml-auto">
-                      <ChevronRight className="h-3.5 w-3.5" /> {t('scenario.next')}
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {items.length > 0 && (
-                <div className="rounded-xl border border-border p-3">
-                  <p className="mb-2 text-[10px] font-semibold text-primary">{t('scenario.timeline')}</p>
-                  <IncidentTimeline items={items} releasedChunks={block.released} totalTicks={block.total} domain={block.domain} />
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {block.reports.map((tick) => (
-                  <TickReport key={tick.tick} tick={tick} />
-                ))}
-              </div>
-            </section>
-          )
-        })}
-        {allDone && blocks.length > 1 && <p className="text-[11px] text-muted-foreground">{t('scenario.allDone', { count: blocks.length })}</p>}
-
-        {history && history.length > 0 && (
-          <section className="space-y-2 border-t border-border pt-4">
-            <p className="text-[12px] font-semibold text-foreground">{t('scenario.history')}</p>
-            <ul className="space-y-1">
-              {history.map((entry) => (
-                <li key={entry.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-secondary/40 px-3 py-2 text-[11px]">
-                  <span className="min-w-0 flex-1 truncate">
-                    {entry.title}
-                    <span className="ml-2 text-muted-foreground">
-                      {new Date(entry.updatedAt).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
-                    </span>
-                  </span>
-                  <span className="font-mono text-muted-foreground">
-                    {entry.released}/{entry.total}
-                  </span>
-                  <span
-                    className={cn(
-                      'rounded-full px-1.5 py-px text-[9px] font-semibold',
-                      entry.status === 'complete' && 'bg-emerald-500/10 text-emerald-600',
-                      entry.status === 'failed' && 'bg-destructive/10 text-destructive',
-                      entry.status === 'running' && 'bg-brand-primary/10 text-brand-primary',
-                    )}
-                  >
-                    {t(`scenario.status.${entry.status}` as 'scenario.status.complete')}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={() => void openRun(entry)} disabled={busy}>
-                    {t('scenario.open')}
-                  </Button>
-                  {entry.status !== 'complete' && (
-                    <Button variant="outline" size="sm" onClick={() => void resumeRun(entry)} disabled={busy}>
-                      {t('scenario.resume')}
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </CardContent>
-    </Card>
+          <div className="space-y-4">{graphs}</div>
+          <div className="space-y-4">{results}</div>
+        </>
+      )}
+    </section>
   )
 }
 

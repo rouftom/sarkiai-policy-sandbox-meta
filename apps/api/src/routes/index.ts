@@ -440,6 +440,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   })
 
+  /** Remove one document from the knowledge base: its passages, its figures and its metadata. */
+  app.delete('/v1/kb/documents', async (request, reply) => {
+    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
+    const query = z.object({ filename: z.string().min(1).max(300) }).safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    try {
+      const deleted = await knowledge.deleteDocument(query.data.filename)
+      return { filename: query.data.filename, ...deleted }
+    } catch (error) {
+      request.log.error(error)
+      return reply.status(502).send({ error: (error as Error).message })
+    }
+  })
+
   /** Preview of one document: its passages (chunk selected) and figures. */
   app.get('/v1/kb/documents/preview', async (request, reply) => {
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })

@@ -17,8 +17,10 @@ import {
   Panel,
   Position,
   ReactFlow,
+  ReactFlowProvider,
   useReactFlow,
   useStore,
+  useStoreApi,
   getBezierPath,
   type Edge,
   type EdgeProps,
@@ -206,34 +208,48 @@ function ViewportControls({
   stepIds: string
 }) {
   const { fitView, getViewport, setViewport } = useReactFlow()
+  const store = useStoreApi()
   /**
    * `useNodesInitialized` only flips when the node set is written again, so a canvas
-   * whose nodes never change identity (as ours, cached) never reports itself measured
-   * and never gets framed. Reading the measured sizes straight from the store follows
-   * every measurement pass instead.
+   * whose nodes are given back unchanged never reports itself measured and never gets
+   * framed. Reading the measured sizes straight from the store follows every
+   * measurement pass instead.
    */
   const measured = useStore((state) => {
     const nodes = Array.from(state.nodeLookup.values())
     return nodes.length > 0 && nodes.every((node) => Boolean(node.measured?.width && node.measured?.height))
   })
   const viewKey = (views?.find((entry) => entry.id === view)?.nodes ?? []).join('|')
-  // Nothing is fitted until the nodes are measured (there is nothing to fit yet).
-  const ready = React.useRef(false)
+  /** A frame was asked for but could not be applied yet: it runs once the nodes are measured. */
+  const pending = React.useRef(true)
 
   const frame = React.useCallback(
     async (duration = 300) => {
       const element = target.current
-      if (!ready.current || !element || element.clientWidth < 8 || element.clientHeight < 8) return
-      const known = new Set(stepIds.split('|'))
-      const wanted = viewKey ? viewKey.split('|').filter((id) => known.has(id)) : []
-      await fitView({ padding: 0.2, duration, ...(wanted.length > 0 ? { nodes: wanted.map((id) => ({ id })) } : {}) })
+      if (!element || element.clientWidth < 8 || element.clientHeight < 8) return
+      const lookup = store.getState().nodeLookup
+      const known = stepIds.split('|').filter(Boolean)
+      const ids = (viewKey ? viewKey.split('|').filter((id) => known.includes(id)) : known).filter((id) => lookup.has(id))
+      const targets = ids.length > 0 ? ids : Array.from(lookup.keys())
+      /**
+       * Fitting nodes that have no measured size computes empty bounds and a viewport
+       * that shows nothing: only the measured ones are fitted, and a partial frame stays
+       * pending so the full one runs when the rest has been measured.
+       */
+      const sized = targets.filter((id) => {
+        const node = lookup.get(id)
+        return Boolean(node?.measured?.width && node?.measured?.height)
+      })
+      if (sized.length === 0) return
+      pending.current = sized.length < targets.length
+      await fitView({ padding: 0.2, duration, nodes: sized.map((id) => ({ id })) })
       // A viewport computed on nothing is not finite (or sits at zoom zero): put the canvas back on a sane frame.
       const { x, y, zoom } = getViewport()
       if (![x, y, zoom].every(Number.isFinite) || zoom <= 0) {
         void setViewport({ x: 24, y: 24, zoom: 0.7 })
       }
     },
-    [fitView, getViewport, setViewport, stepIds, target, viewKey],
+    [fitView, getViewport, setViewport, stepIds, store, target, viewKey],
   )
 
   /**
@@ -243,13 +259,10 @@ function ViewportControls({
    * just joined the canvas is framed with the others instead of being left out.
    */
   const signature = `${viewKey}#${stepIds}`
-  const framed = React.useRef(false)
   const lastSignature = React.useRef(signature)
   React.useEffect(() => {
     if (!measured) return
-    ready.current = true
-    if (framed.current && lastSignature.current === signature) return
-    framed.current = true
+    if (!pending.current && lastSignature.current === signature) return
     lastSignature.current = signature
     void frame()
   }, [frame, measured, signature])
@@ -311,16 +324,19 @@ const POPOVER_HEIGHT = 380
 /**
  * The canvas. A click on a node opens `renderPopover` next to the node, as a
  * dropdown does: no overlay, closed by a click on the canvas or Escape.
+ *
+ * The provider is here so the canvas can read the measured node sizes from the store
+ * while it builds the nodes; `<ReactFlow>` then reuses that store.
  */
-export function ProcessGraph({
-  steps,
-  onSelect,
-  renderPopover,
-  className,
-  views,
-  viewLabel,
-  summary,
-}: {
+export function ProcessGraph(props: ProcessGraphProps) {
+  return (
+    <ReactFlowProvider>
+      <ProcessGraphCanvas {...props} />
+    </ReactFlowProvider>
+  )
+}
+
+interface ProcessGraphProps {
   steps: ProcessGraphStep[]
   onSelect?: (id: string) => void
   renderPopover?: (id: string, close: () => void) => React.ReactNode
@@ -329,34 +345,50 @@ export function ProcessGraph({
   viewLabel?: string
   /** Plain text in the bottom right corner of the canvas. */
   summary?: React.ReactNode
-}) {
+}
+
+function ProcessGraphCanvas({
+  steps,
+  onSelect,
+  renderPopover,
+  className,
+  views,
+  viewLabel,
+  summary,
+}: ProcessGraphProps) {
   const container = React.useRef<HTMLDivElement>(null)
+  const store = useStoreApi()
   const [view, setView] = React.useState<string>(views?.[0]?.id ?? '')
   const stepIds = steps.map((step) => step.id).join('|')
   const [anchor, setAnchor] = React.useState<{ id: string; x: number; y: number } | null>(null)
   const close = React.useCallback(() => setAnchor(null), [])
   const handle = React.useCallback((id: string) => onSelect?.(id), [onSelect])
   /**
-   * React Flow compares nodes by object identity: a node given again as a new object is
-   * adopted from scratch, which drops its measured size and hides it until it is measured
-   * again. Rebuilding every node on every progress tick therefore blinks the whole canvas.
-   * The cache hands back the previous object while a node's content is unchanged.
+   * React Flow adopts a node given again as a new object from scratch, which drops its
+   * measured size and hides it until it is measured again: rebuilding every node on every
+   * progress tick therefore blinks the canvas, and a fit computed on that gap frames
+   * nothing. Two guards: unchanged nodes are given back as the same object, and a node
+   * whose content changed is handed the size the canvas already measured for it, so it is
+   * never hidden. A real box change is still measured by the resize observer.
    */
   const nodeCache = React.useRef(new Map<string, ProcessFlowNode>())
   const { nodes, edges } = React.useMemo(() => {
     const next = layout(steps, handle)
+    const lookup = store.getState().nodeLookup
     const cache = nodeCache.current
     const seen = new Set<string>()
     const nodes = next.nodes.map((node) => {
       seen.add(node.id)
       const previous = cache.get(node.id)
-      const stable = previous && sameNode(previous, node) ? previous : node
-      cache.set(node.id, stable)
-      return stable
+      if (previous && sameNode(previous, node)) return previous
+      const measured = lookup.get(node.id)?.measured
+      const sized = measured?.width && measured?.height ? { ...node, measured } : node
+      cache.set(node.id, sized)
+      return sized
     })
     for (const id of cache.keys()) if (!seen.has(id)) cache.delete(id)
     return { nodes, edges: next.edges }
-  }, [steps, handle])
+  }, [steps, handle, store])
 
   React.useEffect(() => {
     if (!anchor) return
