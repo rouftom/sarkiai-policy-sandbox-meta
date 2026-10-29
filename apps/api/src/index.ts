@@ -59,7 +59,14 @@ export async function buildServer() {
     }
   })
 
-  await app.register(cors, { origin: true })
+  // Browser calls come from the console: the canonical origin, its aliases,
+  // loopback and Vercel previews. A self-hosted install with no configured
+  // origin keeps the historical permissive policy, so a LAN name or a remapped
+  // port never breaks it (see config.web.isAllowedOrigin). Server-to-server
+  // calls (Meta webhook, curl) send no Origin and are unaffected.
+  await app.register(cors, {
+    origin: (origin, callback) => callback(null, config.web.isAllowedOrigin(origin)),
+  })
   await registerRoutes(app)
   return app
 }

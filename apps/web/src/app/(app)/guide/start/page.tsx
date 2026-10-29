@@ -68,13 +68,6 @@ export default function GuideStartPage() {
                 : 'Confirms its agency position, flags a mandate conflict.',
               c: fr ? 'Périmètre limité à son mandat' : 'Scoped to its mandate',
             },
-            {
-              a: fr ? 'Communication' : 'Communications',
-              b: fr
-                ? 'Relit les brouillons fulfuldé / haoussa avant diffusion.'
-                : 'Reviews Fulfulde / Hausa drafts before release.',
-              c: fr ? 'Locuteur natif requis' : 'Native speaker required',
-            },
           ]}
         />
       </GuideSection>

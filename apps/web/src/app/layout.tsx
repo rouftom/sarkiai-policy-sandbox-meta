@@ -25,7 +25,30 @@ const montserrat = Montserrat({
   weight: ['500', '600', '700', '800'],
 })
 
+/**
+ * Canonical origin, from configuration only: the console's own URL when given,
+ * otherwise the host's production URL, otherwise local development. Empty
+ * values (an unset compose variable, for instance) are ignored, never parsed.
+ */
+function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
+const canonicalUrl =
+  firstNonEmpty(
+    process.env.NEXT_PUBLIC_WEB_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : undefined,
+  ) ?? `http://localhost:${firstNonEmpty(process.env.NEXT_PUBLIC_WEB_PORT) ?? '3000'}`
+
 export const metadata: Metadata = {
+  metadataBase: new URL(canonicalUrl),
+  applicationName: 'SPS',
   title: 'SarkiAI Policy Sandbox',
   description:
     'Policy-grounded multi-agent engine: error-scenario simulation and AI-readiness assessment. Runs on Meta models, or on open weights on-premise.',

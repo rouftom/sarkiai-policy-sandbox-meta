@@ -36,14 +36,52 @@ Once the API has a public address, set it as `NEXT_PUBLIC_API_URL` in the web
 app's settings and rebuild the web app. `NEXT_PUBLIC_*` values are inlined at
 build time, so a rebuild is required after any change.
 
-## 3. Wire the messaging webhook
+## 3. Set the console's public origin
+
+`WEB_PUBLIC_URL` is the origin used in every link the API sends (invitation,
+e-mail confirmation, password reset, WhatsApp approval button). Point it at the
+custom domain; the Vercel deployment address stays accepted by the CORS layer,
+so the app keeps working during a domain switch and in previews:
+
+```bash
+WEB_PUBLIC_URL=https://<web-host>
+WEB_PUBLIC_URL_ALIASES=https://<project>.vercel.app
+```
+
+Both are origins (scheme + host, no path). `WEB_PUBLIC_URL_ALIASES` accepts a
+comma-separated list; `*.vercel.app` previews are always accepted.
+
+### Self-hosted and on-premise installs
+
+Nothing breaks without configuration, which matters when the host cannot know
+its own public origin (LAN address, reverse proxy, remapped port):
+
+- `WEB_PUBLIC_URL` empty → links point at `http://localhost:3000`, and the API
+  keeps the previous permissive CORS policy, so any console origin can call it.
+- local-network origins are **always** accepted, whatever the mode: loopback on
+  any port, private IPv4 ranges (`10/8`, `172.16/12`, `192.168/16`,
+  `169.254/16`), single-label hostnames (a container or NetBIOS name) and the
+  `.local`, `.internal`, `.lan`, `.home.arpa` suffixes. A remapped `WEB_PORT`, a
+  LAN address or an internal DNS entry therefore needs no configuration.
+- setting `WEB_PUBLIC_URL` closes the allowlist to that origin, its aliases,
+  local-network origins and Vercel previews. If the console is opened through a
+  *public* name that differs from `WEB_PUBLIC_URL`, list it in
+  `WEB_PUBLIC_URL_ALIASES`.
+- `WEB_ALLOW_ANY_ORIGIN=true` accepts every origin, for a proxy setup that
+  cannot be expressed as a list.
+
+The API authenticates with a Bearer token and sets no session cookies, so a
+permissive origin cannot leak an operator session; the allow-list exists to make
+the exposure explicit.
+
+## 4. Wire the messaging webhook
 
 In the messaging provider's dashboard, set the webhook callback to
 `https://<api-host>/v1/whatsapp/webhook`, with the verify token of
 `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, and subscribe to the messages field. The API
 checks the request signature when `WHATSAPP_APP_SECRET` is set.
 
-## 4. Keep it warm
+## 5. Keep it warm
 
 Many free tiers stop idle instances. A scheduled request to `GET /health` keeps
 the instance awake. The workflow `.github/workflows/keep-warm.yml` does this
@@ -53,7 +91,7 @@ address.
 `GET /health` returns `{ ok: true }` and is the health check used by the
 blueprint.
 
-## 5. Limits to plan for
+## 6. Limits to plan for
 
 - Small instances have little memory: keep the heavy work with the model and
   embeddings providers, and bound long runs with the run budget.

@@ -21,6 +21,7 @@
     "framer-motion": "^12",
     "input-otp": "^1.5.0",
     "katex": "^0.16",
+    "libphonenumber-js": "^1.13.15",
     "lucide-react": "^0.460.0",
     "next": "^16.0.0",
     "qrcode.react": "^4.2.0",

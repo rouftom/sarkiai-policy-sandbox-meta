@@ -159,13 +159,6 @@ export default function GuideOperationsPage() {
               c: fr ? 'Maîtrisé' : 'Contained',
             },
             {
-              a: fr ? 'Langues nationales' : 'National languages',
-              b: fr
-                ? 'Brouillons fulfuldé / haoussa marqués « relecture native requise », jamais publiés automatiquement.'
-                : 'Fulfulde / Hausa drafts flagged “native review required”, never auto-published.',
-              c: fr ? 'Ouvert' : 'Open',
-            },
-            {
               a: fr ? 'Canal WhatsApp non vérifié' : 'Unverified WhatsApp channel',
               b: fr
                 ? 'Le webhook doit être déclaré dans le compte WhatsApp Business avant toute livraison entrante.'
