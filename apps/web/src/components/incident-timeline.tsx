@@ -10,7 +10,7 @@
  */
 
 import * as React from 'react'
-import { Clock, Eye, Lock } from 'lucide-react'
+import { Clock, Eye, Lock, Play } from 'lucide-react'
 import { cn } from '@sps/ui'
 import { institutionsForDomain, type Domain } from '@sps/shared'
 import { useI18n } from '@/lib/i18n'
@@ -28,12 +28,18 @@ export function IncidentTimeline({
   releasedChunks,
   totalTicks,
   domain,
+  onStartChunk,
+  starting = false,
 }: {
   items: TimelineItem[]
   /** Chunks (ticks) already released. */
   releasedChunks: number
   totalTicks: number
   domain: Domain
+  /** Facilitator mode: releases the next batch from the timeline itself. */
+  onStartChunk?: () => void
+  /** A batch is being released: the start buttons wait. */
+  starting?: boolean
 }) {
   const { t } = useI18n()
 
@@ -78,6 +84,18 @@ export function IncidentTimeline({
                   <Lock className="h-3 w-3" aria-hidden="true" />
                   {t('timeline.pending')}
                 </span>
+              )}
+              {current && onStartChunk && (
+                <button
+                  type="button"
+                  onClick={onStartChunk}
+                  disabled={starting}
+                  aria-label={t('scenario.timeline.start')}
+                  title={t('scenario.timeline.start')}
+                  className="ml-auto inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-brand-primary transition-colors hover:bg-secondary disabled:opacity-50"
+                >
+                  <Play className="h-3 w-3" aria-hidden="true" />
+                </button>
               )}
             </div>
 

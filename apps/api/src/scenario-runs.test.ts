@@ -40,4 +40,15 @@ describe('scenario runs', () => {
     expect(await store.get(base.id, 'other')).toBeNull()
     expect(await store.update(base.id, 'other', { status: 'failed', failure: 'x' })).toBeNull()
   })
+
+  test('deleting a run removes it for its operator only', async () => {
+    const store = new ScenarioRunStore({})
+    await store.create(base)
+    expect(await store.delete(base.id, 'other')).toBe(false)
+    expect(await store.get(base.id, 'op')).not.toBeNull()
+    expect(await store.delete(base.id, 'op')).toBe(true)
+    expect(await store.get(base.id, 'op')).toBeNull()
+    expect(await store.list('op')).toEqual([])
+    expect(await store.delete(base.id, 'op')).toBe(false)
+  })
 })

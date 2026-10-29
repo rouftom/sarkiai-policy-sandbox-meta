@@ -914,6 +914,10 @@ export const api = {
   resumeScenarioRun: (runId: string) =>
     request<ScenarioStartDto & { released: number }>(`/v1/scenarios/runs/${encodeURIComponent(runId)}/resume`, { method: 'POST' }),
 
+  /** Deletes a saved run of the operator; its audit trail stays in the journal. */
+  scenarioDelete: (runId: string) =>
+    request<{ deleted: boolean; id: string }>(`/v1/scenarios/runs/${encodeURIComponent(runId)}`, { method: 'DELETE' }),
+
   whatIf: (body: { country: string; domain: string; changes: Record<string, number>; scores?: DimensionScoreDto[] }) =>
     request<WhatIfResultDto>('/v1/readiness/whatif', { method: 'POST', body: JSON.stringify(body) }),
 

@@ -115,7 +115,7 @@ export function ChatMessage({
       )}
 
       <div className="-mt-1.5 flex w-full min-w-0 flex-col gap-2 sm:gap-3">
-        <div className="bg-transparent text-xs font-medium text-foreground sm:text-[13px]">
+        <div className="min-w-0 break-words bg-transparent text-xs font-medium text-foreground sm:text-[13px]">
           {hasText && <AnimatedTextCompletion isLast={isLast} text={turn.content} isStreaming={!!turn.active} />}
 
           {turn.active && (
@@ -156,15 +156,15 @@ export function ChatMessage({
           <SourceDrawer source={openSource} onClose={() => setOpenSource(null)} />
 
           {turn.webSources && turn.webSources.length > 0 && !turn.active && (
-            <div className="mt-2 space-y-1 border-t border-border/60 pt-2 text-[10px]">
+            <div className="mt-2 min-w-0 space-y-1 border-t border-border/60 pt-2 text-[10px]">
               <p className="font-semibold text-muted-foreground">{t('assistant.webSources')}</p>
-              <ul className="space-y-0.5">
+              <ul className="min-w-0 space-y-0.5">
                 {turn.webSources.slice(0, 6).map((source) => (
-                  <li key={source.url} className="truncate">
+                  <li key={source.url} className="min-w-0 truncate" title={source.title}>
                     <button
                       type="button"
                       onClick={() => setOpenSource({ ...source, searchedAt: turn.startedAt ? new Date(turn.startedAt).toISOString() : undefined })}
-                      className="truncate text-left text-brand-primary-dark hover:underline dark:text-brand-primary-light"
+                      className="block max-w-full truncate text-left text-brand-primary-dark hover:underline dark:text-brand-primary-light"
                     >
                       {source.title}
                     </button>
@@ -236,10 +236,12 @@ function CitationStrip({ citations, onOpen }: { citations: CitationItem[]; onOpe
       key={index}
       type="button"
       onClick={() => onOpen(citation)}
-      className="group block w-full rounded-xl bg-card px-3 py-2 text-left shadow-sm transition-colors hover:bg-brand-primary/5"
+      className="group block w-full min-w-0 overflow-hidden rounded-xl bg-card px-3 py-2 text-left shadow-sm transition-colors hover:bg-brand-primary/5"
     >
-      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-primary-dark group-hover:underline dark:text-brand-primary-light">
-        <span className="truncate">{label(citation)}</span>
+      <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-brand-primary-dark group-hover:underline dark:text-brand-primary-light">
+        <span className="min-w-0 flex-1 truncate" title={label(citation)}>
+          {label(citation)}
+        </span>
         {citation.images && citation.images.length > 0 && (
           <span className="shrink-0 rounded bg-brand-primary/10 px-1 font-normal">{citation.images.length}</span>
         )}

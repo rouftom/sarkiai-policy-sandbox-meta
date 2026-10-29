@@ -155,6 +155,24 @@ export class ScenarioRunStore {
       .map(summaryOf)
   }
 
+  /**
+   * Deletes one run of this operator. The audit trail and the chain-of-thought
+   * traces stay in the journal: they are the record of what was played, and the
+   * journal is append-only. False when the run does not exist for them.
+   */
+  async delete(id: string, userId: string): Promise<boolean> {
+    const known = await this.get(id, userId)
+    if (!known) return false
+    this.memory.delete(id)
+    const col = await this.col()
+    if (col) {
+      // A failed delete is reported to the operator, never silently kept.
+      const result = await col.deleteOne({ _id: id as unknown as Document['_id'], userId })
+      if (result.deletedCount !== 1) throw new Error('The scenario run could not be deleted.')
+    }
+    return true
+  }
+
   async get(id: string, userId: string): Promise<ScenarioRunRecord | null> {
     const col = await this.col()
     if (col) {

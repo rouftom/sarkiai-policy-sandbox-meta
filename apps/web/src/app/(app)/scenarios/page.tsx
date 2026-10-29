@@ -1,6 +1,8 @@
 'use client'
 
 import * as React from 'react'
+import { ArrowLeft } from 'lucide-react'
+import { Button } from '@sps/ui'
 import { ScenarioConsole } from '@/components/scenario-console'
 import { AuditPanel } from '@/components/audit-panel'
 import { PageIntro } from '@/components/page-intro'
@@ -15,7 +17,22 @@ export default function ScenariosPage() {
 
   return (
     <>
-      <PageIntro title={t('scenarios.pageTitle')} subtitle={t('scenarios.pageSubtitle')}>
+      <PageIntro
+        title={t('scenarios.pageTitle')}
+        subtitle={t('scenarios.pageSubtitle')}
+        leading={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="h-8 w-8 shrink-0 rounded-lg"
+            aria-label={t('scenario.backPage')}
+            title={t('scenario.backPage')}
+            onClick={() => history.back()}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        }
+      >
         <WorkspaceControls />
       </PageIntro>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { ClipboardList, Clock, Flag, LifeBuoy, ScrollText } from 'lucide-react'
+import { ClipboardList, Clock, Flag, LifeBuoy, ScrollText, Workflow } from 'lucide-react'
 import {
   GuideBanner,
   GuideChecklist,
@@ -41,15 +41,15 @@ export default function GuideOperationsPage() {
             {
               a: 'T+0',
               b: fr
-                ? 'Cadrage : pays, domaine, lentille simulation. Le facilitateur annonce le scénario et le périmètre.'
-                : 'Framing: country, domain, simulation lens. The facilitator states the scenario and the scope.',
+                ? 'Cadrage : pays, secteur, mode facilitateur ou automatique. Le facilitateur annonce le scénario et le périmètre.'
+                : 'Framing: country, sector, facilitator or automatic mode. The facilitator states the scenario and the scope.',
               c: fr ? 'Facilitateur' : 'Facilitator',
             },
             {
               a: 'T+5',
               b: fr
-                ? 'Libération du lot 1 de faits. Chaque agence rend une position à partir de ce qu’elle voit seulement.'
-                : 'Release fact batch 1. Each agency returns a position based only on what it can see.',
+                ? 'Libération du lot 1 : bouton « Libérer le bloc suivant », ou icône play sur un fait de la chronologie. Chaque agence rend une position à partir de ce qu’elle voit seulement.'
+                : 'Release batch 1: “Release next batch”, or the play icon on a timeline fact. Each agency returns a position based only on what it can see.',
               c: fr ? 'Agences' : 'Agencies',
             },
             {
@@ -75,6 +75,64 @@ export default function GuideOperationsPage() {
             },
           ]}
         />
+      </GuideSection>
+
+      <GuideSection title={fr ? 'Console des scénarios : du run à la preuve' : 'Scenario console: from run to evidence'} icon={Workflow}>
+        <GuideTable
+          headers={[fr ? 'Élément' : 'Element', fr ? 'Ce qu’on y fait' : 'What you do there', fr ? 'Ce qui reste' : 'What stays']}
+          rows={[
+            {
+              a: fr ? 'Table des runs' : 'Run table',
+              b: fr
+                ? 'Recherche, filtre secteur ou statut, ouverture d’un run à sa propre adresse. Le retour ramène à la liste.'
+                : 'Search, sector or status filter, open a run at its own address. Back returns to the list.',
+              c: fr ? 'Progression, statut, motif d’échec' : 'Progress, status, failure reason',
+            },
+            {
+              a: fr ? 'Carrousel de processus' : 'Process carousel',
+              b: fr
+                ? 'Un processus par secteur : graphe du run, chronologie de l’incident, résultats des agents et sources citées.'
+                : 'One process per sector: run graph, incident timeline, agent outputs and cited sources.',
+              c: fr ? 'Rapports joints et citations' : 'Joint reports and citations',
+            },
+            {
+              a: fr ? 'Pas à pas (facilitateur)' : 'Step by step (facilitator)',
+              b: fr
+                ? 'Icône play sur un fait de la chronologie, ou « Libérer le bloc suivant ». Un clic sur un nœud du graphe ouvre son détail : état, faits, audience, sortie réconciliée.'
+                : 'Play icon on a timeline fact, or “Release next batch”. A click on a graph node opens its detail: state, facts, audience, reconciled output.',
+              c: fr ? 'Un rapport par bloc libéré' : 'One report per released batch',
+            },
+            {
+              a: fr ? 'Reprise' : 'Resume',
+              b: fr
+                ? 'Un run interrompu ou en échec repart du dernier lot validé ; les tours déjà joués ne sont pas rejoués.'
+                : 'An interrupted or failed run resumes from the last released batch; earlier rounds are not replayed.',
+              c: fr ? 'État du run et rapports existants' : 'Run state and existing reports',
+            },
+            {
+              a: fr ? 'Export' : 'Export',
+              b: fr ? 'HTML, Markdown, Word ou JSON depuis la barre du processus.' : 'HTML, Markdown, Word or JSON from the process toolbar.',
+              c: fr ? 'Fichier téléchargé, run inchangé' : 'Downloaded file, run unchanged',
+            },
+            {
+              a: fr ? 'CoT et audit' : 'CoT and audit',
+              b: fr ? 'Panneau sous le run : raisonnement par agent, intégrité de la chaîne.' : 'Panel below the run: reasoning per agent, chain integrity.',
+              c: fr ? 'Journal chaîné, en ajout seul' : 'Append-only hash chain',
+            },
+            {
+              a: fr ? 'Suppression' : 'Delete',
+              b: fr
+                ? 'Icône corbeille et confirmation. Le run et ses rapports disparaissent de la liste.'
+                : 'Trash icon and confirmation. The run and its reports leave the list.',
+              c: fr ? 'Traces d’audit et CoT conservées' : 'Audit and CoT traces kept',
+            },
+          ]}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {fr
+            ? 'La suppression efface le run et ses rapports, jamais la preuve : le raisonnement et les entrées d’audit restent dans le journal, avec leur hash. Un run se rejoue donc encore après sa suppression.'
+            : 'Deletion removes the run and its reports, never the evidence: reasoning and audit entries stay in the journal with their hash. A run can still be replayed after it is deleted.'}
+        </p>
       </GuideSection>
 
       <GuideSection title={fr ? 'Registre des écarts' : 'Gap register'} icon={ClipboardList}>

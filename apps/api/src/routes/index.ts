@@ -41,7 +41,7 @@ import {
 import { createEngine, createKnowledgeIngestor, createScenario, recordProviderSwitch } from '../engine.js'
 import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { scenarioFor, type ScenarioLang } from '../scenarios.js'
-import { ScenarioRunStore } from '../scenario-runs.js'
+import { ScenarioRunStore, type ScenarioRunRecord } from '../scenario-runs.js'
 import { buildScenarioExport } from '../scenario-report.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
@@ -1032,6 +1032,22 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   }
 
+  /**
+   * Rebuilds a facilitator session from its saved run.
+   *
+   * The session map lives in memory: after a restart, or on another instance, the
+   * entry is gone while the run itself is saved. Rebuilding it from the record keeps
+   * the next batch, the read and the resume working instead of answering 404.
+   */
+  function sessionFromRecord(record: ScenarioRunRecord): ScenarioSession {
+    const session = buildSession(record.country, record.domain as Domain, record.userId, record.lang)
+    session.runId = record.id
+    session.released = record.released
+    session.reports = [...record.reports]
+    session.history = session.events.filter((event) => session.ticks.slice(0, record.released).includes(event.releaseChunk))
+    return session
+  }
+
   /** Release the next tick (facilitator gate) and reconcile it. */
   async function releaseNext(session: ScenarioSession) {
     if (session.released >= session.ticks.length) return { done: true as const, tick: null, report: null }
@@ -1149,9 +1165,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Release the next tick (the `onBeforeRelease` facilitator gate).
   app.post('/v1/scenarios/:runId/next', async (request, reply) => {
     const { runId } = z.object({ runId: z.string() }).parse(request.params)
-    const session = scenarioSessions.get(runId)
-    if (!session || session.userId !== operatorOf(request).email) {
-      return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+    const userId = operatorOf(request).email
+    let session = scenarioSessions.get(runId)
+    if (!session || session.userId !== userId) {
+      const record = await scenarioRuns.get(runId, userId)
+      if (!record) return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+      if (record.status === 'complete') return reply.status(409).send({ error: 'This run is already complete.' })
+      session = sessionFromRecord(record)
+      scenarioSessions.set(session.runId, session)
+      if (record.status === 'failed') await scenarioRuns.update(record.id, userId, { status: 'running' })
     }
 
     let result: Awaited<ReturnType<typeof releaseNext>>
@@ -1192,6 +1214,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   /**
+   * Deletes a saved run of the operator. The chain-of-thought traces and the audit
+   * entries stay in the journal: the journal is the record of what was played, and
+   * it is append-only.
+   */
+  app.delete('/v1/scenarios/runs/:runId', async (request, reply) => {
+    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const userId = operatorOf(request).email
+    const deleted = await scenarioRuns.delete(runId, userId)
+    if (!deleted) return reply.status(404).send({ error: 'Scenario run not found.' })
+    scenarioSessions.delete(runId)
+    return { deleted: true, id: runId }
+  })
+
+  /**
    * One saved run as a file: the raw JSON, Markdown, a self-contained HTML page,
    * or a Word document. The Word file is built by the docx MCP server, like the
    * readiness report.
@@ -1229,11 +1265,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
     if (record.status === 'complete') return reply.status(409).send({ error: 'This run is already complete.' })
 
-    const session = buildSession(record.country, record.domain as Domain, userId, record.lang)
-    session.runId = record.id
-    session.released = record.released
-    session.reports = [...record.reports]
-    session.history = session.events.filter((event) => session.ticks.slice(0, record.released).includes(event.releaseChunk))
+    const session = sessionFromRecord(record)
     scenarioSessions.set(session.runId, session)
     await scenarioRuns.update(record.id, userId, { status: 'running' })
     return {
@@ -1250,9 +1282,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Current state of a session.
   app.get('/v1/scenarios/:runId', async (request, reply) => {
     const { runId } = z.object({ runId: z.string() }).parse(request.params)
-    const session = scenarioSessions.get(runId)
-    if (!session || session.userId !== operatorOf(request).email) {
-      return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+    const userId = operatorOf(request).email
+    let session = scenarioSessions.get(runId)
+    if (!session || session.userId !== userId) {
+      const record = await scenarioRuns.get(runId, userId)
+      if (!record) return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+      session = sessionFromRecord(record)
+      scenarioSessions.set(runId, session)
     }
     return {
       runId,

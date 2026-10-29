@@ -36,27 +36,32 @@ export default function GuideMetaPage() {
 
       <GuideSection title={fr ? 'Capacités Meta utilisées, et où' : 'Meta capabilities, and where'} icon={Sparkles}>
         <GuideTable
-          headers={[fr ? 'Capacité' : 'Capability', fr ? 'Usage opérationnel' : 'Operational use', fr ? 'Variable / modèle' : 'Variable / model']}
+          headers={[fr ? 'Capacité' : 'Capability', fr ? 'Usage opérationnel' : 'Operational use', fr ? 'Modèle / endpoint' : 'Model / endpoint']}
           rows={[
             {
-              a: fr ? 'Raisonnement' : 'Reasoning',
-              b: fr ? 'Évaluation, coordination, what-if, rédaction des brouillons.' : 'Assessment, coordination, what-if, draft writing.',
+              a: fr ? 'Raisonnement et chat' : 'Reasoning and chat',
+              b: fr ? 'Évaluation, coordination, what-if, rédaction des brouillons, assistant.' : 'Assessment, coordination, what-if, draft writing, assistant.',
               c: 'muse-spark-1.3-contributor',
             },
             {
               a: fr ? 'Vision' : 'Vision',
               b: fr ? 'Transcription des zones du journal officiel scanné.' : 'Zone transcription of the scanned gazette.',
-              c: fr ? 'Modèle de chat choisi dans le composeur' : 'Chat model picked in the composer',
+              c: 'muse-spark-1.3-contributor',
             },
             {
               a: 'SAM',
               b: fr ? 'Détourage des tampons, signatures et tableaux.' : 'Segmentation of stamps, signatures and tables.',
-              c: 'META_SAM_MODEL',
+              c: 'sam-3.1',
             },
             {
               a: fr ? 'Voix' : 'Voice',
               b: fr ? 'Notes vocales transformées en faits horodatés.' : 'Voice notes turned into timed facts.',
-              c: 'META_VOICE_MODEL',
+              c: 'muse-voice-transcribe-1.0',
+            },
+            {
+              a: fr ? 'Image' : 'Image',
+              b: fr ? 'Couvertures et figures des rapports générés.' : 'Covers and figures of the generated reports.',
+              c: 'muse-image-1.0',
             },
             {
               a: 'WhatsApp Cloud API',
@@ -65,6 +70,11 @@ export default function GuideMetaPage() {
             },
           ]}
         />
+        <p className="text-[11px] text-muted-foreground">
+          {fr
+            ? 'Le modèle de chat est choisi au démarrage dans la liste Meta ; le composeur de l’assistant peut en retenir un autre parmi les modèles éligibles. Les noms ci-dessus sont ceux avec lesquels cette instance tourne, sans variable d’environnement intermédiaire.'
+            : 'The chat model is selected at boot from the Meta model list; the assistant composer can keep another eligible one. The names above are the ones this instance runs with, with no environment variable in between.'}
+        </p>
       </GuideSection>
 
       <GuideSection title={fr ? 'Chaîne de décision WhatsApp' : 'WhatsApp decision chain'} icon={Workflow}>

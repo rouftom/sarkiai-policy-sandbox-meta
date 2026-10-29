@@ -8,7 +8,7 @@
  */
 
 import * as React from 'react'
-import { Eye, Play, RotateCcw, Search, Siren } from 'lucide-react'
+import { Eye, Play, RotateCcw, Search, Siren, Trash2 } from 'lucide-react'
 import {
   Button,
   Checkbox,
@@ -27,6 +27,7 @@ import { FilterPopover } from '@/components/filter-popover'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { RowActionButton } from '@/components/ui/row-action-button'
 import { TableActionItem } from '@/components/ui/table-actions'
+import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import type { ScenarioRunSummaryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 
@@ -59,6 +60,7 @@ export function ScenarioHistory({
   onMaxSectorsChange,
   onOpen,
   onResume,
+  onDelete,
   onFacilitate,
   onAuto,
 }: {
@@ -73,10 +75,13 @@ export function ScenarioHistory({
   onMaxSectorsChange: (value: number) => void
   onOpen: (run: ScenarioRunSummaryDto) => void
   onResume: (run: ScenarioRunSummaryDto) => void
+  /** Deletes a saved run; rejects when the server refused, so the dialog stays open. */
+  onDelete: (id: string) => Promise<void>
   onFacilitate: () => void
   onAuto: () => void
 }) {
   const { t, locale } = useI18n()
+  const [pending, setPending] = React.useState<ScenarioRunSummaryDto | null>(null)
   const [query, setQuery] = React.useState('')
   const [search, setSearch] = React.useState('')
   const [filters, setFilters] = React.useState<Filters>(NO_FILTERS)
@@ -101,6 +106,12 @@ export function ScenarioHistory({
     checked === true ? [...list, value] : list.filter((entry) => entry !== value)
 
   const statusLabel = (status: Status) => t(`scenario.status.${status}` as 'scenario.status.complete')
+
+  const confirm = async () => {
+    if (!pending) return
+    await onDelete(pending.id)
+    setPending(null)
+  }
 
   const filtered = React.useMemo(() => {
     const needle = fold(search)
@@ -300,6 +311,14 @@ export function ScenarioHistory({
                               <RotateCcw className="h-3.5 w-3.5" />
                             </RowActionButton>
                           )}
+                          <RowActionButton
+                            label={t('scenario.delete.action')}
+                            tone="danger"
+                            disabled={busy}
+                            onClick={() => setPending(entry)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </RowActionButton>
                         </div>
                       }
                     >
@@ -311,6 +330,9 @@ export function ScenarioHistory({
                           {t('scenario.resume')}
                         </TableActionItem>
                       )}
+                      <TableActionItem icon={Trash2} variant="danger" disabled={busy} onClick={() => setPending(entry)}>
+                        {t('scenario.delete.action')}
+                      </TableActionItem>
                     </RowActionMenu>
                   </TableCell>
                 </TableRow>
@@ -335,6 +357,24 @@ export function ScenarioHistory({
           />
         </div>
       )}
+
+      <ConfirmDialog
+        open={pending !== null}
+        onOpenChange={(open) => !open && setPending(null)}
+        onConfirm={confirm}
+        title={t('scenario.delete.title')}
+        description={
+          pending
+            ? t('scenario.delete.body', {
+                date: formatDate(pending.updatedAt),
+                sector: t(`domain.${pending.domain}` as 'domain.health'),
+                country: pending.country.toUpperCase(),
+              })
+            : ''
+        }
+        confirmText={t('scenario.delete.confirm')}
+        cancelText={t('common.cancel')}
+      />
     </section>
   )
 }

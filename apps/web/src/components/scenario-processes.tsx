@@ -16,6 +16,8 @@ import {
   Download,
   ExternalLink,
   Loader,
+  RotateCcw,
+  Trash2,
   TriangleAlert,
 } from 'lucide-react'
 import {
@@ -35,6 +37,7 @@ import {
   cn,
 } from '@sps/ui'
 import type { Domain } from '@sps/shared'
+import { institutionsForDomain } from '@sps/shared'
 import {
   api,
   type AssessmentDto,
@@ -45,6 +48,7 @@ import {
 } from '@/lib/api'
 import { IncidentTimeline, type TimelineItem } from '@/components/incident-timeline'
 import { ICON_BUTTON_OUTLINE } from '@/components/icon-button-styles'
+import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 import { ProcessGraph, type ProcessGraphStep } from '@/components/workflow/process-graph'
 import { useI18n } from '@/lib/i18n'
@@ -356,6 +360,132 @@ function graphOf(
   return steps
 }
 
+/** Details of one node of a process graph, shown in a popup when the node is clicked. */
+function ProcessNodeCard({
+  block,
+  node,
+  close,
+}: {
+  block: ScenarioBlock
+  node: ProcessGraphStep
+  close: () => void
+}) {
+  const { t } = useI18n()
+  const names = React.useMemo(() => {
+    const map = new Map<string, string>()
+    for (const institution of institutionsForDomain(block.domain)) map.set(institution.id, institution.name)
+    return map
+  }, [block.domain])
+
+  const batch = node.kind === 'agent' && node.id.startsWith('batch-') ? Number(node.id.slice('batch-'.length)) : null
+  const facts = batch === null ? [] : block.agenda.filter((item) => item.releaseChunk === batch)
+  const released = batch === null ? block.done : batch < block.released
+  const report =
+    batch === null
+      ? block.done
+        ? (block.reports[block.reports.length - 1] ?? null)
+        : null
+      : (block.reports.find((entry) => entry.tick === batch) ?? null)
+  const audience = [...new Set(facts.flatMap((fact) => fact.visibleTo))]
+  const stateLabel =
+    node.state === 'success'
+      ? t('scenario.status.complete')
+      : node.state === 'running'
+        ? t('scenario.status.running')
+        : node.state === 'failed'
+          ? t('scenario.status.failed')
+          : t('scenario.node.waiting')
+
+  return (
+    <>
+      <div className="flex items-start gap-2 border-b border-border px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12px] font-semibold text-foreground">{node.label}</p>
+          <p className="text-[10px] text-muted-foreground">{t(`scenario.node.kind.${node.kind}` as 'scenario.node.kind.start')}</p>
+        </div>
+        <button
+          type="button"
+          onClick={close}
+          aria-label={t('common.close')}
+          className="rounded-md px-1.5 text-[14px] leading-none text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          ×
+        </button>
+      </div>
+      <div className="custom-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 text-[11px]">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 rounded-xl bg-secondary/60 p-2.5">
+          <dt className="text-muted-foreground">{t('scenario.node.state')}</dt>
+          <dd className="font-medium">{stateLabel}</dd>
+          {node.duration && (
+            <>
+              <dt className="text-muted-foreground">{t('scenario.node.duration')}</dt>
+              <dd className="font-mono">{node.duration}</dd>
+            </>
+          )}
+          <dt className="text-muted-foreground">{t('scenario.node.sector')}</dt>
+          <dd>{t(`domain.${block.domain}` as 'domain.health')}</dd>
+          {node.kind === 'start' ? (
+            <>
+              <dt className="text-muted-foreground">{t('scenario.node.batches')}</dt>
+              <dd className="font-mono">{block.total}</dd>
+              <dt className="text-muted-foreground">{t('scenario.node.agents', { count: institutionsForDomain(block.domain).length })}</dt>
+              <dd className="font-mono">
+                {block.released}/{block.total}
+              </dd>
+            </>
+          ) : (
+            batch !== null && (
+              <>
+                <dt className="text-muted-foreground">{t('scenario.node.visibleTo')}</dt>
+                <dd>{audience.map((id) => names.get(id) ?? id).join(', ') || '—'}</dd>
+              </>
+            )
+          )}
+        </dl>
+
+        {batch !== null && (
+          <section className="space-y-1">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('scenario.node.facts')}</h3>
+            {facts.length === 0 ? (
+              <p className="text-muted-foreground">{t('scenario.node.noFacts')}</p>
+            ) : (
+              <ul className="space-y-1">
+                {facts.map((fact) => {
+                  const payload = released ? block.events.find((event) => event.sequence === fact.sequence)?.payload : undefined
+                  return (
+                    <li key={fact.sequence} className="rounded-lg bg-secondary/50 p-2">
+                      <p className="font-medium text-foreground">{fact.title}</p>
+                      {payload && <p className="mt-0.5 leading-relaxed text-muted-foreground">{payload}</p>}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {node.kind !== 'start' && (
+          <section className="space-y-1">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('scenario.node.output')}</h3>
+            {report ? (
+              <>
+                <p className="leading-relaxed text-foreground/90">{report.summary}</p>
+                <p className="text-muted-foreground">
+                  {t('scenario.node.agreements', { count: report.agreements.length })} ·{' '}
+                  {t('scenario.node.conflicts', { count: report.conflicts.length })} ·{' '}
+                  {t('scenario.node.questions', { count: report.openQuestions.length })}
+                </p>
+              </>
+            ) : (
+              <p className="text-muted-foreground">{t('scenario.node.notReleased')}</p>
+            )}
+          </section>
+        )}
+      </div>
+    </>
+  )
+}
+
 /** The chain-of-thought trail of one process, loaded when the panel is opened. */
 function ProcessCot({ runId, revision }: { runId: string; revision: number }) {
   const { t } = useI18n()
@@ -524,17 +654,27 @@ function ProcessSlide({
   const [cotSeen, setCotSeen] = React.useState(false)
   const items = timelineOf(block)
   const nextAgenda = block.agenda.find((item) => item.releaseChunk === block.released)
+  const graph = React.useMemo(
+    () =>
+      graphOf(
+        block,
+        running,
+        (key) => t(key),
+        (n) => t('scenario.graph.batch', { n }),
+        t('scenario.graph.report'),
+      ),
+    [block, running, t],
+  )
+  const canStart = !running && !block.failure && block.agenda.length > 0 && block.released < block.total
 
   return (
     <div className="space-y-3 rounded-xl border border-border p-3">
       <ProcessGraph
-        steps={graphOf(
-          block,
-          running,
-          (key) => t(key),
-          (n) => t('scenario.graph.batch', { n }),
-          t('scenario.graph.report'),
-        )}
+        steps={graph}
+        renderPopover={(id, close) => {
+          const node = graph.find((step) => step.id === id)
+          return node ? <ProcessNodeCard block={block} node={node} close={close} /> : null
+        }}
         className="h-[360px]"
       />
 
@@ -565,6 +705,8 @@ function ProcessSlide({
             releasedChunks={block.released}
             totalTicks={block.total}
             domain={block.domain}
+            onStartChunk={canStart ? onReleaseNext : undefined}
+            starting={running}
           />
         </div>
       )}
@@ -601,14 +743,19 @@ export function ScenarioCarousel({
   blocks,
   busy,
   onReleaseNext,
+  onDelete,
+  onResume,
 }: {
   blocks: ScenarioBlock[]
   busy: boolean
   onReleaseNext: (index: number) => void
+  onDelete: (block: ScenarioBlock) => Promise<void>
+  onResume: (block: ScenarioBlock) => Promise<void>
 }) {
   const { t } = useI18n()
   const [active, setActive] = React.useState(0)
   const [source, setSource] = React.useState<WebSourceView | null>(null)
+  const [pendingDelete, setPendingDelete] = React.useState<ScenarioBlock | null>(null)
   const previousCount = React.useRef(blocks.length)
 
   // A new process (the next sector of an automatic run) takes the stage; a
@@ -728,6 +875,46 @@ export function ScenarioCarousel({
             </>
           )}
           <ProcessExport runId={block.runId} disabled={block.reports.length === 0} />
+          {!block.done && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label={t('scenario.process.resume')}
+                    disabled={busy}
+                    onClick={() => void onResume(block)}
+                    className={ICON_BUTTON_OUTLINE}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-md">
+                  {t('scenario.process.resume')}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label={t('scenario.process.delete')}
+                  disabled={busy}
+                  onClick={() => setPendingDelete(block)}
+                  className={ICON_BUTTON_OUTLINE}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-md">
+                {t('scenario.process.delete')}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -750,6 +937,20 @@ export function ScenarioCarousel({
       </div>
 
       <SourceDrawer source={source} onClose={() => setSource(null)} />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return
+          await onDelete(pendingDelete)
+          setPendingDelete(null)
+        }}
+        title={t('scenario.delete.title')}
+        description={t('scenario.delete.bodyShort')}
+        confirmText={t('scenario.delete.confirm')}
+        cancelText={t('common.cancel')}
+      />
     </div>
   )
 }
