@@ -49,6 +49,33 @@ export interface ReadinessInput {
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
   /** Models chosen per task (ids of the operator's chat models); absent means the default. */
   models?: { webSearch?: string; evaluate?: string; synthesis?: string }
+  /** Dimensions already scored by an interrupted run: they are kept, not evaluated again. */
+  completed?: DimensionScore[]
+}
+
+/** An assessment stopped by an error. `completed` holds the dimensions scored before it. */
+export class ReadinessInterrupted extends Error {
+  constructor(
+    message: string,
+    readonly completed: DimensionScore[],
+  ) {
+    super(message)
+    this.name = 'ReadinessInterrupted'
+  }
+}
+
+/** Retries a call that fails transiently (the embeddings provider answers 5xx now and then). */
+async function withRetry<T>(call: () => Promise<T>, attempts = 3, delayMs = 1500): Promise<T> {
+  let last: unknown
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await call()
+    } catch (error) {
+      last = error
+      if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, delayMs * attempt))
+    }
+  }
+  throw last
 }
 
 /** Progress of one assessment, in the order it happens. */
@@ -74,6 +101,7 @@ export type ReadinessEvent =
       globalPassages: number
     }
   | { type: 'error'; dimension: ReadinessDimension; dimensionId: number; durationMs: number; message: string }
+  | { type: 'restored'; dimension: ReadinessDimension; dimensionId: number; score: DimensionScore }
   | { type: 'done'; report: ReadinessReport }
 
 export interface ReadinessReport {
@@ -161,6 +189,8 @@ export class ReadinessEngine {
     const dimensions = input.dimensions ?? READINESS_DIMENSION_IDS
     const globalCountry = input.globalCountry ?? 'global'
     const perDimensionK = input.perDimensionK ?? 5
+    const kept = new Map((input.completed ?? []).map((score) => [score.dimension, score]))
+    const pending = dimensions.filter((dimension) => !kept.has(dimension))
 
     const results: ReadinessReport['dimensions'] = []
     const scores: DimensionScore[] = []
@@ -179,7 +209,7 @@ export class ReadinessEngine {
     // failed search leaves the dimension to the corpus alone, it never fails the report.
     const web = new Map<ReadinessDimension, WebAnswer | null>(
       await Promise.all(
-        dimensions.map(async (dimension) => {
+        pending.map(async (dimension) => {
           const chosen = input.models?.webSearch && this.deps.webSearchFor ? this.deps.webSearchFor(input.models.webSearch) : undefined
           const search = input.useWeb === false ? undefined : (chosen ?? this.deps.webSearch)
           const def = dimensionMeta(dimension)
@@ -199,14 +229,23 @@ export class ReadinessEngine {
 
     for (const dimension of dimensions) {
       const def = dimensionMeta(dimension)
+      const keptScore = kept.get(dimension)
+      if (keptScore) {
+        scores.push(keptScore)
+        results.push({ dimension, dimensionId: def.id, gaps: [], countryChunks: [], globalChunks: [] })
+        emit?.({ type: 'restored', dimension, dimensionId: def.id, score: keptScore })
+        continue
+      }
       const live = web.get(dimension) ?? null
       const started = Date.now()
       emit?.({ type: 'running', dimension, dimensionId: def.id, name: def.name })
       try {
-        const [countryChunks, globalChunks] = await Promise.all([
-          this.deps.retriever.search({ text: def.name, country: input.country, topK: perDimensionK }),
-          this.deps.retriever.search({ text: def.name, country: globalCountry, topK: perDimensionK }),
-        ])
+        const [countryChunks, globalChunks] = await withRetry(() =>
+          Promise.all([
+            this.deps.retriever.search({ text: def.name, country: input.country, topK: perDimensionK }),
+            this.deps.retriever.search({ text: def.name, country: globalCountry, topK: perDimensionK }),
+          ]),
+        )
         const attempts: Array<{ attempt: number; reasoning: string; valid: boolean }> = []
 
         const evaluator = input.models?.evaluate && this.deps.modelFor ? this.deps.modelFor(input.models.evaluate) : this.deps.model
@@ -268,9 +307,10 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
         })
       } catch (error) {
         emit?.({ type: 'error', dimension, dimensionId: def.id, durationMs: Date.now() - started, message: (error as Error).message })
-        throw error
+        throw new ReadinessInterrupted((error as Error).message, [...scores])
       }
     }
+    scores.sort((a, b) => a.dimensionId - b.dimensionId)
 
     const scenario = buildScenario(input.country, input.domain, scores, input.weights)
     const totalGaps = results.reduce((sum, r) => sum + r.gaps.length, 0)

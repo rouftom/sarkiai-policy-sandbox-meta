@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Circle, Download, FileCheck2, History, ListChecks, Loader, Play, Plus, Settings2, Waypoints, Workflow } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, Circle, Download, FileCheck2, History, ListChecks, Loader, Play, Plus, RotateCcw, Settings2, Waypoints, Workflow } from 'lucide-react'
 import {
   AnimatedTabsList,
   Badge,
@@ -46,7 +46,7 @@ function seconds(ms: number | undefined): string {
  */
 export function ReadinessActions() {
   const { t } = useI18n()
-  const { view, running, run, showHistory, showAssessment, creating, setCreating } = useReadiness()
+  const { view, running, run, showHistory, showAssessment, creating, setCreating, resumable, resume } = useReadiness()
   const inHistory = view === 'history'
   const start = () => {
     setCreating(false)
@@ -74,6 +74,24 @@ export function ReadinessActions() {
         </TooltipTrigger>
         <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-md">{t('readiness.history')}</TooltipContent>
       </Tooltip>
+      {resumable && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon-sm"
+              aria-label={t('readiness.resume')}
+              disabled={running}
+              onClick={() => void resume()}
+              className="h-8 w-8 rounded-lg bg-transparent text-brand-primary hover:bg-brand-primary/10"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-md">
+            {t('readiness.resume')} · {resumable.completed}/{resumable.total}
+          </TooltipContent>
+        </Tooltip>
+      )}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

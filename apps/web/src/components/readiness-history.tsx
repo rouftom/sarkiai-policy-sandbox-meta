@@ -68,6 +68,9 @@ export function ReadinessHistory({
                   <span className="min-w-0 flex-1">
                     <span className="block text-[12px] font-medium text-foreground">
                       {formatDate(entry.createdAt)} · {entry.country.toUpperCase()}
+                      {entry.status === 'failed' && (
+                        <span className="ml-2 rounded-full bg-destructive/10 px-1.5 py-px text-[9px] font-semibold text-destructive">{t('readiness.status.failed')}</span>
+                      )}
                     </span>
                     <span className="block truncate text-[10px] text-muted-foreground">
                       {entry.runBy} · {t('readiness.composite')} {entry.composite ?? 'n/a'}/5 · {entry.dimensions} {t('readiness.dimensionsWord')}

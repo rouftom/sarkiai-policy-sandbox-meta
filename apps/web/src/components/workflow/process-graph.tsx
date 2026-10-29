@@ -59,27 +59,43 @@ const STATE_RING: Record<ProcessState, string> = {
 
 function ProcessNodeComponent({ id, data, selected }: NodeProps<ProcessFlowNode>) {
   const Icon = KIND_ICON[data.kind]
+  const active = data.state === 'running'
   const StateIcon = data.state === 'success' ? CheckCircle2 : data.state === 'failed' ? AlertTriangle : data.state === 'running' ? Loader : Circle
   return (
     <div
       onClick={() => data.onSelect?.(id)}
       className={cn(
-        'flex w-64 cursor-pointer items-center gap-3 rounded-2xl border-2 bg-white px-3.5 py-3 text-left shadow-sm transition-colors hover:shadow-md dark:bg-brand-ink',
-        STATE_RING[data.state],
+        'flex w-64 cursor-pointer items-center gap-3 rounded-2xl border-2 px-3.5 py-3 text-left shadow-sm transition-colors hover:shadow-md',
+        active ? 'border-brand-primary bg-brand-primary shadow-md' : 'bg-white dark:bg-brand-ink',
+        !active && STATE_RING[data.state],
         selected && 'ring-2 ring-brand-primary/40',
       )}
     >
       <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0" style={{ background: KIND_ACCENT[data.kind] }} />
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl" style={{ backgroundColor: `${KIND_ACCENT[data.kind]}22`, color: KIND_ACCENT[data.kind] }}>
-        <Icon className="h-4 w-4" />
+      <span
+        className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-xl', active && 'bg-white/20')}
+        style={active ? undefined : { backgroundColor: `${KIND_ACCENT[data.kind]}22`, color: KIND_ACCENT[data.kind] }}
+      >
+        <Icon className={cn('h-4 w-4', active && 'text-white')} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[12px] font-semibold text-foreground">{data.label}</span>
-        {data.detail && <span className="block truncate text-[10px] text-muted-foreground">{data.detail}</span>}
+        <span className={cn('block truncate text-[13px] font-bold', active ? 'text-white' : 'text-foreground')}>{data.label}</span>
+        {data.detail && (
+          <span className={cn('block truncate text-[11px] font-semibold', active ? 'text-white/90' : 'text-brand-primary-dark dark:text-brand-primary-light')}>
+            {data.detail}
+          </span>
+        )}
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">
-        <StateIcon className={cn('h-3.5 w-3.5', data.state === 'running' && 'animate-spin', data.state === 'success' && 'text-emerald-600', data.state === 'failed' && 'text-destructive', data.state === 'running' && 'text-brand-primary')} />
-        {data.duration && <span className="font-mono text-[9px] text-muted-foreground">{data.duration}</span>}
+        <StateIcon
+          className={cn(
+            'h-3.5 w-3.5',
+            data.state === 'running' && 'animate-spin text-white',
+            data.state === 'success' && 'text-emerald-600',
+            data.state === 'failed' && 'text-destructive',
+          )}
+        />
+        {data.duration && <span className={cn('font-mono text-[9px]', active ? 'text-white/90' : 'text-muted-foreground')}>{data.duration}</span>}
       </span>
       <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0" style={{ background: KIND_ACCENT[data.kind] }} />
     </div>

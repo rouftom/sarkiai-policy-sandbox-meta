@@ -142,9 +142,10 @@ export type ReadinessEventDto =
       globalPassages: number
     }
   | { type: 'error'; dimension: string; dimensionId: number; durationMs: number; message: string }
+  | { type: 'restored'; dimension: string; dimensionId: number; score: DimensionScoreDto }
   | { type: 'done'; report: ReadinessReportDto & { generatedAt?: string } }
   | { type: 'saved'; run: ReadinessRunSummaryDto }
-  | { type: 'failed'; message: string }
+  | { type: 'failed'; message: string; runId?: string; completed?: number; total?: number }
 
 export interface ReadinessRunSummaryDto {
   id: string
@@ -154,6 +155,11 @@ export interface ReadinessRunSummaryDto {
   runBy: string
   composite: number | null
   dimensions: number
+  /** An interrupted assessment can be resumed. */
+  status: 'complete' | 'failed'
+  failure?: string
+  /** The settings it ran with (on the opened run). */
+  input?: { dimensions?: string[] }
 }
 
 export interface WhatIfResultDto {
@@ -698,8 +704,17 @@ async function streamReadiness(
   body: { country: string; domain: string; globalCountry?: string } & ReadinessSettingsDto,
   onEvent: (event: ReadinessEventDto) => void,
 ): Promise<ReadinessRunSummaryDto | null> {
+  return streamReadinessFrom('/v1/readiness/stream', body, onEvent)
+}
+
+/** Resumes an interrupted assessment where it stopped. */
+async function streamReadinessFrom(
+  path: string,
+  body: object,
+  onEvent: (event: ReadinessEventDto) => void,
+): Promise<ReadinessRunSummaryDto | null> {
   const token = readToken()
-  const response = await fetch(`${API_URL}/v1/readiness/stream`, {
+  const response = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body),
@@ -726,7 +741,6 @@ async function streamReadiness(
       if (data) {
         const event = JSON.parse(data) as ReadinessEventDto
         if (event.type === 'saved') saved = event.run
-        if (event.type === 'failed') throw new Error(event.message)
         onEvent(event)
       }
       boundary = buffer.indexOf('\n\n')
@@ -787,6 +801,9 @@ export const api = {
   readinessRun: (id: string) => request<ReadinessRunSummaryDto & { report: ReadinessReportDto & { generatedAt?: string } }>(`/v1/readiness/runs/${encodeURIComponent(id)}`),
 
   /** Deletes a saved assessment of the operator. */
+  readinessResume: (id: string, onEvent: (event: ReadinessEventDto) => void) =>
+    streamReadinessFrom(`/v1/readiness/runs/${encodeURIComponent(id)}/resume`, {}, onEvent),
+
   readinessDelete: (id: string) => request<{ deleted: boolean; id: string }>(`/v1/readiness/runs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   /** Adds a language to a saved assessment (translated once, then kept with it). */

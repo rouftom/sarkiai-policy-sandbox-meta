@@ -26,6 +26,7 @@ export const AUDIT_ACTION_KEYS: Record<string, string> = {
   'readiness.report.generated': 'audit.action.readinessReportGenerated',
   'readiness.localized': 'audit.action.readinessLocalized',
   'readiness.deleted': 'audit.action.readinessDeleted',
+  'readiness.resumed': 'audit.action.readinessResumed',
 }
 
 /** `gap_recorded` → `Gap recorded`: the fallback for an action without a translation. */

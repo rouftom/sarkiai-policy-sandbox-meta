@@ -87,6 +87,34 @@ export interface RunMeta {
 
 export type ReadinessView = 'assessment' | 'history'
 
+/** An interrupted assessment that can be resumed where it stopped. */
+export interface Resumable {
+  id: string
+  completed: number
+  total: number
+  dimensions: string[]
+}
+
+/** One step per selected dimension, all waiting: the process is drawn before the first event. */
+function pendingSteps(dimensions: string[]): Step[] {
+  return READINESS_DIMENSIONS.filter((dimension) => dimensions.includes(dimension.shortName)).map((dimension) => ({
+    dimension: dimension.shortName,
+    dimensionId: dimension.id,
+    name: dimension.name,
+    status: 'pending',
+    webSources: [],
+    reasoning: '',
+  }))
+}
+
+/** The steps of an interrupted run: the dimensions already scored are done, the others wait. */
+function stepsFromScores(scores: DimensionScoreDto[], dimensions: string[]): Step[] {
+  return pendingSteps(dimensions).map((step) => {
+    const score = scores.find((entry) => entry.dimension === step.dimension)
+    return score ? { ...step, status: 'done' as const, score, webSources: score.webSources ?? [] } : step
+  })
+}
+
 interface ReadinessState {
   report: ReadinessReportDto | null
   meta: RunMeta | null
@@ -124,6 +152,9 @@ interface ReadinessState {
   /** The format being generated, so only its button shows the loader. */
   reportBusy: ReportFormat | null
   reportFile: ReadinessReportFileDto | null
+  /** The interrupted assessment that can be resumed, if any. */
+  resumable: Resumable | null
+  resume: () => Promise<void>
   generateReport: (format: ReportFormat) => Promise<void>
   /** A saved assessment is being opened. */
   loading: boolean
@@ -190,6 +221,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   const [localizing, setLocalizing] = React.useState(false)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
   const [creating, setCreating] = React.useState(false)
+  const [resumable, setResumable] = React.useState<Resumable | null>(null)
   const { locale } = useI18n()
   const lang: ReadinessLangDto = locale === 'fr' ? 'fr' : 'en'
   const attempted = React.useRef(new Set<string>())
@@ -266,6 +298,18 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       })
     } else if (event.type === 'error') {
       patchStep(event.dimension, { status: 'error', durationMs: event.durationMs, error: event.message })
+    } else if (event.type === 'restored') {
+      patchStep(event.dimension, { status: 'done', score: event.score, webSources: event.score.webSources ?? [], reasoning: '' })
+    } else if (event.type === 'failed') {
+      if (event.runId) {
+        setResumable({
+          id: event.runId,
+          completed: event.completed ?? 0,
+          total: event.total ?? ALL_DIMENSIONS.length,
+          dimensions: settings.dimensions,
+        })
+      }
+      setFailure(event.message)
     } else if (event.type === 'done') {
       setReport(event.report as ReadinessReportDto)
     }
@@ -278,7 +322,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setFailure(null)
     setReport(null)
     setMeta(null)
-    setSteps([])
+    setResumable(null)
+    setSteps(pendingSteps(settings.dimensions))
     setOpenIds(new Set())
     const started = Date.now()
     setStartedAt(started)
@@ -312,6 +357,37 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     }
   }
 
+  /** Continues an interrupted assessment: the dimensions already scored are kept. */
+  const resume = async () => {
+    if (!resumable || running) return
+    const { id, dimensions } = resumable
+    const kept = report?.scores ?? []
+    setRunning(true)
+    setView('assessment')
+    setWhatIf(null)
+    setFailure(null)
+    setReport(null)
+    setMeta(null)
+    setSteps(stepsFromScores(kept, dimensions))
+    setOpenIds(new Set())
+    const started = Date.now()
+    setStartedAt(started)
+    try {
+      const saved = await api.readinessResume(id, onEvent)
+      setTotalMs(Date.now() - started)
+      if (saved) {
+        setMeta({ id: saved.id, createdAt: saved.createdAt, runBy: saved.runBy })
+        setResumable(null)
+        router.replace(`/readiness/${saved.id}`)
+      }
+      setHistory(null)
+    } catch (caught) {
+      setFailure(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setRunning(false)
+    }
+  }
+
   // A saved assessment, opened at its own address.
   React.useEffect(() => {
     if (!runId) return
@@ -323,10 +399,18 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
         if (cancelled) return
         setReport(saved.report)
         setMeta({ id: saved.id, createdAt: saved.createdAt, runBy: saved.runBy })
-        setSteps(stepsFromReport(saved.report))
         setTotalMs(undefined)
         setWhatIf(null)
         setView('assessment')
+        if (saved.status === 'failed') {
+          const dimensions = saved.input?.dimensions ?? ALL_DIMENSIONS
+          setSteps(stepsFromScores(saved.report.scores, dimensions))
+          setResumable({ id: saved.id, completed: saved.report.scores.length, total: dimensions.length, dimensions })
+          setFailure(saved.failure ?? null)
+        } else {
+          setSteps(stepsFromReport(saved.report))
+          setResumable(null)
+        }
       })
       .catch((caught) => {
         if (!cancelled) setFailure(caught instanceof Error ? caught.message : String(caught))
@@ -381,6 +465,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     try {
       await api.readinessDelete(id)
       setHistory((current) => current?.filter((entry) => entry.id !== id) ?? null)
+      setResumable((current) => (current?.id === id ? null : current))
       if ((meta?.id ?? runId) === id) {
         setReport(null)
         setMeta(null)
@@ -455,6 +540,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     reportBusy,
     reportFile,
     generateReport,
+    resumable,
+    resume,
     loading,
     localizing,
     deletingId,

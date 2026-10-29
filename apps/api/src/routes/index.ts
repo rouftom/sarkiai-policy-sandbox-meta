@@ -2,7 +2,7 @@
 
 import { correctTranscript, generateStructured, providerAccess, providerApiKey, describeProvider, referenceImage } from '@sps/agents'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import {
   analyzeGazettePage,
@@ -16,7 +16,7 @@ import { evaluateExercise, writeAfterAction, type ExerciseDefinition } from '@sp
 import { analyzeImpact } from '@sps/impact'
 import { IngestionClient } from '@sps/kb'
 import type { AtlasIngestor } from '@sps/retrieval'
-import { whatIf } from '@sps/readiness'
+import { ReadinessInterrupted, buildScenario, whatIf, type ReadinessReport } from '@sps/readiness'
 import {
   WhatsAppClient,
   WHATSAPP_TEMPLATES,
@@ -46,7 +46,7 @@ import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
 import { McpGateway } from '../mcp.js'
 import { ChatSessionStore } from '../chat-sessions.js'
-import { ReadinessRunStore } from '../readiness-runs.js'
+import { ReadinessRunStore, type ReadinessRun, type ReadinessRunInput, type ReadinessRunSummary } from '../readiness-runs.js'
 import { buildReadinessReport } from '../readiness-report.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
@@ -1167,6 +1167,100 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   /**
+   * Runs an assessment and streams its steps (Server-Sent Events). A run stopped by an
+   * error is kept as `failed`, with the dimensions it had scored and the settings it ran
+   * with, so it can be resumed. A resumed run keeps its identifier.
+   */
+  async function streamAssessment(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    input: ReadinessRunInput,
+    resume?: ReadinessRun,
+  ): Promise<void> {
+    const operator = operatorOf(request)
+    const total = input.dimensions?.length ?? 13
+    const toSummary = (run: ReadinessRun): ReadinessRunSummary => {
+      const { report: _report, input: _input, ...rest } = run
+      return rest
+    }
+    reply.hijack()
+    const raw = reply.raw
+    raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': request.headers.origin ?? '*',
+      Vary: 'Origin',
+    })
+    raw.flushHeaders?.()
+    const send = (payload: unknown) => {
+      if (raw.writableEnded || raw.destroyed) return
+      raw.write(`data: ${JSON.stringify(payload)}\n\n`)
+    }
+    const heartbeat = setInterval(() => {
+      if (!raw.writableEnded && !raw.destroyed) raw.write(': ping\n\n')
+    }, 15_000)
+
+    try {
+      const report = await engine.readiness.assess(
+        {
+          country: input.country,
+          domain: input.domain as Domain,
+          globalCountry: input.globalCountry,
+          ...(input.dimensions?.length ? { dimensions: input.dimensions as ReadinessDimension[] } : {}),
+          ...(input.perDimensionK ? { perDimensionK: input.perDimensionK } : {}),
+          ...(input.useWeb !== undefined ? { useWeb: input.useWeb } : {}),
+          ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+          ...(input.models ? { models: input.models } : {}),
+          ...(resume ? { completed: resume.report.scores } : {}),
+        },
+        (event) => send(event),
+      )
+      let summary: ReadinessRunSummary
+      if (resume) {
+        const updated = await readinessRuns.updateRun(resume.id, operator.email, { report, status: 'complete' })
+        if (!updated) throw new Error('The assessment could not be saved.')
+        summary = toSummary(updated)
+      } else {
+        summary = await readinessRuns.save({ userId: operator.email, runBy: operator.email, report, input })
+      }
+      await engine.audit.logAction({
+        actor: operator.email,
+        action: resume ? 'readiness.resumed' : 'readiness.assessed',
+        target: `${report.country.toUpperCase()} · ${report.domain} · composite ${report.scenario?.composite ?? 'n/a'}/5`,
+        lens: 'readiness',
+        runId: summary.id,
+        userId: operator.email,
+      })
+      send({ type: 'saved', run: summary })
+    } catch (error) {
+      if (error instanceof ReadinessInterrupted) {
+        const scores = error.completed
+        const partial: ReadinessReport = {
+          country: input.country,
+          domain: input.domain as Domain,
+          generatedAt: new Date().toISOString(),
+          dimensions: [],
+          scores,
+          scenario: buildScenario(input.country, input.domain as Domain, scores),
+          summary: `Interrupted: ${scores.length} of ${total} dimensions scored.`,
+        }
+        const kept = resume
+          ? await readinessRuns.updateRun(resume.id, operator.email, { report: partial, status: 'failed', failure: error.message })
+          : await readinessRuns.save({ userId: operator.email, runBy: operator.email, report: partial, status: 'failed', failure: error.message, input })
+        send({ type: 'failed', message: error.message, runId: kept?.id, completed: scores.length, total })
+      } else {
+        request.log.error(error)
+        send({ type: 'failed', message: (error as Error).message })
+      }
+    } finally {
+      clearInterval(heartbeat)
+      if (!raw.writableEnded) raw.end()
+    }
+  }
+
+  /**
    * Live assessment (Server-Sent Events): every step is sent as it happens, so the
    * console shows the process rather than a spinner. The finished run is saved to
    * the operator's history and announced with its id.
@@ -1191,60 +1285,28 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
-    const operator = operatorOf(request)
-
-    reply.hijack()
-    const raw = reply.raw
-    raw.writeHead(200, {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-      'Access-Control-Allow-Origin': request.headers.origin ?? '*',
-      Vary: 'Origin',
+    const known = new Set(READINESS_DIMENSIONS.map((dimension) => dimension.shortName))
+    const dimensions = body.data.dimensions?.filter((id) => known.has(id as ReadinessDimension))
+    await streamAssessment(request, reply, {
+      country: body.data.country,
+      domain: body.data.domain,
+      globalCountry: body.data.globalCountry,
+      ...(dimensions?.length ? { dimensions } : {}),
+      ...(body.data.perDimensionK ? { perDimensionK: body.data.perDimensionK } : {}),
+      ...(body.data.useWeb !== undefined ? { useWeb: body.data.useWeb } : {}),
+      ...(body.data.reasoningEffort ? { reasoningEffort: body.data.reasoningEffort } : {}),
+      ...(body.data.models ? { models: body.data.models } : {}),
     })
-    raw.flushHeaders?.()
-    const send = (payload: unknown) => {
-      if (raw.writableEnded || raw.destroyed) return
-      raw.write(`data: ${JSON.stringify(payload)}\n\n`)
-    }
-    const heartbeat = setInterval(() => {
-      if (!raw.writableEnded && !raw.destroyed) raw.write(': ping\n\n')
-    }, 15_000)
+  })
 
-    try {
-      const known = new Set(READINESS_DIMENSIONS.map((dimension) => dimension.shortName))
-      const dimensions = body.data.dimensions?.filter((id) => known.has(id as ReadinessDimension)) as ReadinessDimension[] | undefined
-      const report = await engine.readiness.assess(
-        {
-          country: body.data.country,
-          domain: body.data.domain as Domain,
-          globalCountry: body.data.globalCountry,
-          ...(dimensions?.length ? { dimensions } : {}),
-          ...(body.data.perDimensionK ? { perDimensionK: body.data.perDimensionK } : {}),
-          ...(body.data.useWeb !== undefined ? { useWeb: body.data.useWeb } : {}),
-          ...(body.data.reasoningEffort ? { reasoningEffort: body.data.reasoningEffort } : {}),
-          ...(body.data.models ? { models: body.data.models } : {}),
-        },
-        (event) => send(event),
-      )
-      const saved = await readinessRuns.save({ userId: operator.email, runBy: operator.email, report })
-      await engine.audit.logAction({
-        actor: operator.email,
-        action: 'readiness.assessed',
-        target: `${report.country.toUpperCase()} · ${report.domain} · composite ${report.scenario?.composite ?? 'n/a'}/5`,
-        lens: 'readiness',
-        runId: saved.id,
-        userId: operator.email,
-      })
-      send({ type: 'saved', run: saved })
-    } catch (error) {
-      request.log.error(error)
-      send({ type: 'failed', message: (error as Error).message })
-    } finally {
-      clearInterval(heartbeat)
-      if (!raw.writableEnded) raw.end()
-    }
+  /** Resumes an interrupted assessment where it stopped: the dimensions already scored are kept. */
+  app.post('/v1/readiness/runs/:id/resume', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const operator = operatorOf(request)
+    const run = await readinessRuns.get(id, operator.email)
+    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    if (run.status !== 'failed' || !run.input) return reply.status(409).send({ error: 'Only an interrupted assessment can be resumed.' })
+    await streamAssessment(request, reply, run.input, run)
   })
 
   /** Past assessments of this operator, newest first. */
@@ -1308,7 +1370,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
     if (hasLanguage(run.report.scores, body.data.lang)) return run
     const localized = await engine.readiness.localize(run.report, body.data.lang)
-    const updated = await readinessRuns.updateReport(id, operator.email, localized)
+    const updated = await readinessRuns.updateRun(id, operator.email, { report: localized, status: run.status })
     await engine.audit.logAction({
       actor: operator.email,
       action: 'readiness.localized',

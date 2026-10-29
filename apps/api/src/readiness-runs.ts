@@ -2,11 +2,28 @@
  * Saved readiness assessments, so the console can list past runs and reopen one
  * with its date, the operator who ran it, and every score and recommendation.
  *
+ * A run that stopped on an error is kept too, as `failed`, with the dimensions it
+ * had scored and the settings it ran with: it can then be resumed where it stopped.
+ *
  * Mongo when it is reachable, memory otherwise; always scoped to the operator.
  */
 import { randomUUID } from 'node:crypto'
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { ReadinessReport } from '@sps/readiness'
+
+export type ReadinessRunStatus = 'complete' | 'failed'
+
+/** The settings an assessment ran with, so an interrupted one can be resumed. */
+export interface ReadinessRunInput {
+  country: string
+  domain: string
+  globalCountry: string
+  dimensions?: string[]
+  perDimensionK?: number
+  useWeb?: boolean
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
+  models?: { webSearch?: string; evaluate?: string; synthesis?: string }
+}
 
 export interface ReadinessRunSummary {
   id: string
@@ -16,10 +33,14 @@ export interface ReadinessRunSummary {
   runBy: string
   composite: number | null
   dimensions: number
+  status: ReadinessRunStatus
+  /** Why a failed run stopped, in the provider's words. */
+  failure?: string
 }
 
 export interface ReadinessRun extends ReadinessRunSummary {
   report: ReadinessReport
+  input?: ReadinessRunInput
 }
 
 export class ReadinessRunStore {
@@ -46,11 +67,18 @@ export class ReadinessRunStore {
   }
 
   private summary(run: ReadinessRun): ReadinessRunSummary {
-    const { report: _report, ...rest } = run
+    const { report: _report, input: _input, ...rest } = run
     return rest
   }
 
-  async save(input: { userId: string; runBy: string; report: ReadinessReport }): Promise<ReadinessRunSummary> {
+  async save(input: {
+    userId: string
+    runBy: string
+    report: ReadinessReport
+    status?: ReadinessRunStatus
+    failure?: string
+    input?: ReadinessRunInput
+  }): Promise<ReadinessRunSummary> {
     const run: ReadinessRun = {
       id: `rr_${randomUUID()}`,
       country: input.report.country,
@@ -59,7 +87,10 @@ export class ReadinessRunStore {
       runBy: input.runBy,
       composite: input.report.scenario?.composite ?? null,
       dimensions: input.report.scores.length,
+      status: input.status ?? 'complete',
+      ...(input.failure ? { failure: input.failure } : {}),
       report: input.report,
+      ...(input.input ? { input: input.input } : {}),
     }
     this.memory.set(run.id, { ...run, userId: input.userId })
     const col = await this.col()
@@ -73,7 +104,7 @@ export class ReadinessRunStore {
     const col = await this.col()
     if (col) {
       const docs = await col
-        .find({ userId }, { projection: { report: 0, userId: 0 } })
+        .find({ userId }, { projection: { report: 0, input: 0, userId: 0 } })
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray()
@@ -87,6 +118,8 @@ export class ReadinessRunStore {
           runBy: String(doc.runBy ?? ''),
           composite: typeof doc.composite === 'number' ? doc.composite : null,
           dimensions: Number(doc.dimensions ?? 0),
+          status: doc.status === 'failed' ? 'failed' : 'complete',
+          ...(typeof doc.failure === 'string' ? { failure: doc.failure } : {}),
         }))
       }
     }
@@ -111,16 +144,45 @@ export class ReadinessRunStore {
     return true
   }
 
-  /** Replaces the report of a saved run (e.g. once a language has been added to it). */
-  async updateReport(id: string, userId: string, report: ReadinessReport): Promise<ReadinessRun | null> {
+  /**
+   * Replaces the report of a saved run, and its status: a language added to a
+   * complete run, or a failed run that has been resumed and finished.
+   */
+  async updateRun(
+    id: string,
+    userId: string,
+    patch: { report: ReadinessReport; status: ReadinessRunStatus; failure?: string },
+  ): Promise<ReadinessRun | null> {
     const current = await this.get(id, userId)
     if (!current) return null
-    const updated: ReadinessRun = { ...current, report }
+    const { failure: _previous, ...rest } = current
+    const updated: ReadinessRun = {
+      ...rest,
+      report: patch.report,
+      status: patch.status,
+      composite: patch.report.scenario?.composite ?? null,
+      dimensions: patch.report.scores.length,
+      ...(patch.failure ? { failure: patch.failure } : {}),
+    }
     const cached = this.memory.get(id)
     if (cached && cached.userId === userId) this.memory.set(id, { ...updated, userId })
     const col = await this.col()
     if (col) {
-      await col.updateOne({ _id: id as unknown as Document['_id'], userId }, { $set: { report } }).catch(() => undefined)
+      await col
+        .updateOne(
+          { _id: id as unknown as Document['_id'], userId },
+          {
+            $set: {
+              report: updated.report,
+              status: updated.status,
+              composite: updated.composite,
+              dimensions: updated.dimensions,
+              ...(patch.failure ? { failure: patch.failure } : {}),
+            },
+            ...(patch.failure ? {} : { $unset: { failure: '' } }),
+          },
+        )
+        .catch(() => undefined)
     }
     return updated
   }
@@ -131,7 +193,7 @@ export class ReadinessRunStore {
       const doc = await col.findOne({ _id: id as unknown as Document['_id'], userId }).catch(() => null)
       if (doc) {
         const { _id, userId: _owner, ...rest } = doc
-        return { id: String(_id), ...(rest as unknown as Omit<ReadinessRun, 'id'>) }
+        return { id: String(_id), ...(rest as unknown as Omit<ReadinessRun, 'id'>), status: rest.status === 'failed' ? 'failed' : 'complete' }
       }
     }
     const cached = this.memory.get(id)
