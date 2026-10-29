@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronRight, Download, FileCheck2, GitMerge, Play, TriangleAlert, Workflow } from 'lucide-react'
-import { AnimatedTabsList, Button, Card, CardContent, CardHeader, CardTitle, cn, type TabItem } from '@sps/ui'
+import { ChevronRight, Download, FileCheck2, GitMerge, Play, Settings2, TriangleAlert, Workflow } from 'lucide-react'
+import { AnimatedTabsList, Button, Card, CardContent, CardHeader, CardTitle, Select, cn, type TabItem } from '@sps/ui'
 import type { Domain } from '@sps/shared'
 import {
   api,
@@ -159,6 +159,10 @@ function timelineOf(block: ScenarioBlock): TimelineItem[] {
   }))
 }
 
+type ScenarioView = 'process' | 'result' | 'settings'
+
+const MAX_SECTORS_KEY = 'sps.scenarios.maxSectors'
+
 /** Starting data of one run, as the start and resume routes give it. */
 interface RunStart {
   runId: string
@@ -189,6 +193,17 @@ export function ScenarioConsole({
   const [error, setError] = React.useState<string | null>(null)
   const [blocks, setBlocks] = React.useState<ScenarioBlock[]>([])
   const [history, setHistory] = React.useState<ScenarioRunSummaryDto[] | null>(null)
+  const [maxSectors, setMaxSectors] = React.useState(5)
+
+  React.useEffect(() => {
+    const saved = Number(window.localStorage.getItem(MAX_SECTORS_KEY))
+    if (saved >= 1 && saved <= 5) setMaxSectors(saved)
+  }, [])
+
+  const changeMaxSectors = (value: number) => {
+    setMaxSectors(value)
+    window.localStorage.setItem(MAX_SECTORS_KEY, String(value))
+  }
 
   const patchBlock = (index: number, patch: (block: ScenarioBlock) => ScenarioBlock) =>
     setBlocks((previous) => previous.map((block, position) => (position === index ? patch(block) : block)))
@@ -253,7 +268,7 @@ export function ScenarioConsole({
     setError(null)
     setBlocks([])
     try {
-      for (const [index, domain] of domains.entries()) {
+      for (const [index, domain] of domains.slice(0, maxSectors).entries()) {
         const start = await startRun(domain)
         setBlocks((previous) => [...previous, blockOf(start, [], [])])
         onRunId?.(start.runId)
@@ -359,10 +374,11 @@ export function ScenarioConsole({
   }
 
   const allDone = blocks.length > 0 && blocks.every((block) => block.done)
-  const [view, setView] = React.useState<'process' | 'result'>('process')
+  const [view, setView] = React.useState<ScenarioView>('process')
   const views: TabItem[] = [
     { id: 'process', label: t('scenario.tab.process'), icon: Workflow },
     { id: 'result', label: t('scenario.tab.result'), icon: FileCheck2 },
+    { id: 'settings', label: t('scenario.tab.settings'), icon: Settings2 },
   ]
 
   return (
@@ -384,9 +400,23 @@ export function ScenarioConsole({
 
         {busy && <ProcessingBar label={t('scenario.running')} />}
 
-        {blocks.length === 0 && !busy && <p className="text-sm text-muted-foreground">{t('scenario.intro')}</p>}
+        <AnimatedTabsList items={views} value={view} onValueChange={(value) => setView(value as ScenarioView)} dense />
 
-        {blocks.length > 0 && <AnimatedTabsList items={views} value={view} onValueChange={(value) => setView(value as 'process' | 'result')} dense />}
+        {view === 'settings' && (
+          <div className="max-w-sm space-y-1 text-[11px]">
+            <span className="text-muted-foreground">{t('scenario.settings.maxSectors')}</span>
+            <Select
+              ariaLabel={t('scenario.settings.maxSectors')}
+              value={String(maxSectors)}
+              onValueChange={(value) => changeMaxSectors(Number(value))}
+              options={[1, 2, 3, 4, 5].map((value) => ({ value: String(value), label: String(value) }))}
+              size="md"
+              className="w-full"
+            />
+          </div>
+        )}
+
+        {blocks.length === 0 && !busy && view !== 'settings' && <p className="text-sm text-muted-foreground">{t('scenario.intro')}</p>}
 
         {blocks.length > 0 && view === 'process' && (
           <div className="space-y-4">
