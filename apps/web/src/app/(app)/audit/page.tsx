@@ -17,12 +17,20 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@sps/ui'
 import { authApi, type AuditEventDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { auditActionLabel, auditActorLabel } from '@/lib/audit-labels'
 import { PageIntro } from '@/components/page-intro'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { TableActionItem } from '@/components/ui/table-actions'
+import { AuditEventDrawer } from '@/components/audit-event-drawer'
+import { ICON_BUTTON_OUTLINE } from '@/components/icon-button-styles'
+import { useToast } from '@/components/shared/toast'
 import { Skeleton } from '@sps/ui'
 
 /** The API caps a page at 500 records; the table pages through them locally. */
@@ -39,6 +47,7 @@ function formatTime(value: string, locale: string): string {
 
 export default function AuditPage() {
   const { t, locale } = useI18n()
+  const toast = useToast()
   const [events, setEvents] = React.useState<AuditEventDto[]>([])
   const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string; forks?: number } | null>(null)
   const [loading, setLoading] = React.useState(true)
@@ -46,22 +55,28 @@ export default function AuditPage() {
   const [query, setQuery] = React.useState('')
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(10)
+  const [selected, setSelected] = React.useState<AuditEventDto | null>(null)
 
-  const load = React.useCallback(async () => {
-    setLoading(true)
-    setUnreachable(false)
-    try {
-      const response = await authApi.auditEvents(FETCH_SIZE)
-      setEvents(response.events)
-      setChain(response.chain)
-    } catch {
-      setUnreachable(true)
-      setEvents([])
-      setChain(null)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const load = React.useCallback(
+    async (notify = false) => {
+      setLoading(true)
+      setUnreachable(false)
+      try {
+        const response = await authApi.auditEvents(FETCH_SIZE)
+        setEvents(response.events)
+        setChain(response.chain)
+        if (notify) toast.success(t('toast.auditRefreshed', { count: response.events.length }))
+      } catch {
+        setUnreachable(true)
+        setEvents([])
+        setChain(null)
+        if (notify) toast.error(t('toast.auditFailed'))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [toast, t],
+  )
 
   React.useEffect(() => {
     void load()
@@ -71,9 +86,15 @@ export default function AuditPage() {
     const needle = query.trim().toLowerCase()
     if (!needle) return events
     return events.filter((event) =>
-      [event.actor, event.action, event.target ?? ''].some((value) => value.toLowerCase().includes(needle)),
+      [
+        event.actor,
+        event.action,
+        event.target ?? '',
+        auditActorLabel(event.actor, t),
+        auditActionLabel(event.action, t),
+      ].some((value) => value.toLowerCase().includes(needle)),
     )
-  }, [events, query])
+  }, [events, query, t])
 
   React.useEffect(() => {
     setPage(1)
@@ -91,8 +112,18 @@ export default function AuditPage() {
         <CardHeader className="h-auto flex-wrap gap-x-3 gap-y-2 py-2">
           <ScrollText className="h-4 w-4 text-brand-primary dark:text-brand-primary-light" />
           <CardTitle>{t('audit.title')}</CardTitle>
-          <span className="text-[10px] text-muted-foreground">{t('audit.count', { count: filtered.length })}</span>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {chain && (
+              <span className="inline-flex items-center gap-1.5">
+                <Badge tone={chain.valid ? 'success' : 'danger'} className="max-w-full whitespace-nowrap">
+                  {chain.valid ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                  {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? 'n/a' })}
+                </Badge>
+                {chain.valid && (chain.forks ?? 0) > 0 && (
+                  <span className="text-[10px] text-muted-foreground">{t('audit.forks', { count: chain.forks ?? 0 })}</span>
+                )}
+              </span>
+            )}
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -100,24 +131,27 @@ export default function AuditPage() {
               aria-label={t('audit.filter')}
               className="h-8 w-40 text-[11px] sm:w-56"
             />
-            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-              {loading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              {t('audit.refresh')}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label={t('audit.refresh')}
+                    onClick={() => void load(true)}
+                    disabled={loading}
+                    className={ICON_BUTTON_OUTLINE}
+                  >
+                    {loading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-lg">
+                  {t('audit.refresh')}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </CardHeader>
-
-        {chain && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
-            <Badge tone={chain.valid ? 'success' : 'danger'} className="max-w-full whitespace-nowrap">
-              {chain.valid ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-              {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? 'n/a' })}
-            </Badge>
-            {chain.valid && (chain.forks ?? 0) > 0 && (
-              <span className="text-[10px] text-muted-foreground">{t('audit.forks', { count: chain.forks ?? 0 })}</span>
-            )}
-          </div>
-        )}
 
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
           {loading && events.length === 0 && (
@@ -155,14 +189,31 @@ export default function AuditPage() {
                   </TableHeader>
                   <TableBody>
                     {visible.map((event) => (
-                      <TableRow key={event.id}>
+                      <TableRow
+                        key={event.id}
+                        tabIndex={0}
+                        onClick={() => setSelected(event)}
+                        onKeyDown={(keyboard) => {
+                          if (keyboard.key === 'Enter' || keyboard.key === ' ') {
+                            keyboard.preventDefault()
+                            setSelected(event)
+                          }
+                        }}
+                        aria-label={t('audit.drawer.open')}
+                        className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary/40"
+                      >
                         <TableCell className="whitespace-nowrap text-muted-foreground">
                           {formatTime(event.ts, locale)}
                         </TableCell>
-                        <TableCell className="max-w-[180px] truncate font-medium">{event.actor}</TableCell>
+                        <TableCell className="max-w-[180px] truncate font-medium">
+                          {auditActorLabel(event.actor, t)}
+                        </TableCell>
                         <TableCell>
-                          <span className="bg-brand-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-brand-primary-dark dark:text-brand-primary-light">
-                            {event.action}
+                          <span
+                            title={event.action}
+                            className="inline-block max-w-[220px] truncate bg-brand-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-primary-dark dark:text-brand-primary-light"
+                          >
+                            {auditActionLabel(event.action, t)}
                           </span>
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate text-muted-foreground">
@@ -171,7 +222,7 @@ export default function AuditPage() {
                         <TableCell className="font-mono text-[10px] text-muted-foreground">
                           {event.hash.slice(0, 12)}…
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(click) => click.stopPropagation()}>
                           <RowActionMenu
                             overlay
                             inline={
@@ -214,6 +265,8 @@ export default function AuditPage() {
           )}
         </CardContent>
       </Card>
+
+      <AuditEventDrawer event={selected} onClose={() => setSelected(null)} />
     </>
   )
 }

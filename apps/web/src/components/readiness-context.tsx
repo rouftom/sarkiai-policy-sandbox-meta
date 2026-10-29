@@ -22,6 +22,7 @@ import {
   type WhatIfResultDto,
 } from '@/lib/api'
 import type { WebSourceView } from '@/components/ai/display/source-drawer'
+import { useToast } from '@/components/shared/toast'
 import { useI18n } from '@/lib/i18n'
 
 export type ReportFormat = 'markdown' | 'html' | 'docx'
@@ -323,7 +324,8 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
   /** The report the last `done` event carried, read when the sector is saved. */
   const doneReport = React.useRef<ReadinessReportDto | null>(null)
   const [resumable, setResumable] = React.useState<Resumable | null>(null)
-  const { locale } = useI18n()
+  const { locale, t } = useI18n()
+  const toast = useToast()
   const lang: ReadinessLangDto = locale === 'fr' ? 'fr' : 'en'
   const attempted = React.useRef(new Set<string>())
 
@@ -362,8 +364,12 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       const file = await api.readinessReport(id, format, lang)
       setReportFile(file)
       downloadFile(file)
+      const label = format === 'docx' ? 'Word' : format === 'html' ? 'HTML' : 'Markdown'
+      toast.success(t('toast.reportReady', { format: label }))
     } catch (caught) {
-      setFailure(caught instanceof Error ? caught.message : String(caught))
+      const message = caught instanceof Error ? caught.message : String(caught)
+      setFailure(message)
+      toast.error(t('toast.failed'), message)
     } finally {
       setReportBusy(null)
     }
@@ -506,8 +512,11 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       }
       if (batchId) setMeta(null)
       refreshHistory()
+      if (saved.length > 0) toast.success(t('toast.readinessFinished', { count: saved.length }))
     } catch (caught) {
-      setFailure(caught instanceof Error ? caught.message : String(caught))
+      const message = caught instanceof Error ? caught.message : String(caught)
+      setFailure(message)
+      toast.error(t('toast.failed'), message)
     } finally {
       setSectorProgress(null)
       setRunning(false)
@@ -541,8 +550,11 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
         router.replace(`/readiness/${saved.id}`)
       }
       refreshHistory()
+      toast.success(t('toast.readinessResumed'))
     } catch (caught) {
-      setFailure(caught instanceof Error ? caught.message : String(caught))
+      const message = caught instanceof Error ? caught.message : String(caught)
+      setFailure(message)
+      toast.error(t('toast.failed'), message)
     } finally {
       setRunning(false)
     }
@@ -630,6 +642,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setFailure(null)
     try {
       await api.readinessDelete(id)
+      toast.success(t('toast.readinessDeleted'))
       refreshHistory()
       setResumable((current) => (current?.id === id ? null : current))
       if ((meta?.id ?? runId) === id) {
@@ -639,7 +652,9 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
         router.replace('/readiness')
       }
     } catch (caught) {
-      setFailure(caught instanceof Error ? caught.message : String(caught))
+      const message = caught instanceof Error ? caught.message : String(caught)
+      setFailure(message)
+      toast.error(t('toast.failed'), message)
     } finally {
       setDeletingId(null)
     }

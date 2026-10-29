@@ -13,11 +13,23 @@ export function ProcessingBar({
   label,
   detail,
   className,
+  compact = false,
 }: {
   label: string
   detail?: string
   className?: string
+  /** One line, for a toolbar: the same bar without the card around it. */
+  compact?: boolean
 }) {
+  if (compact) {
+    return (
+      <div role="status" aria-live="polite" className={cn('flex min-w-0 items-center gap-2', className)}>
+        <p className="shrink-0 text-[10px] font-medium text-foreground">{label}</p>
+        <IndeterminateBar label={label} className="min-w-0 flex-1" />
+      </div>
+    )
+  }
+
   return (
     <div
       role="status"
