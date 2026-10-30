@@ -124,16 +124,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <div className="relative isolate flex min-h-dvh w-full overflow-hidden">
+    <div className="relative isolate flex min-h-dvh w-full overflow-hidden bg-white dark:bg-brand-ink">
       <div className="relative z-10 flex min-h-dvh w-full">
         <WorkspaceProvider>
           <AppSidebar />
           <div className="flex h-dvh flex-1 flex-col overflow-hidden">
             <AppHeader />
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden pr-2 sm:pr-4">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-4 pl-4 pr-4 md:pl-0 md:pr-8">
               <Group
                 orientation={isMobile ? 'vertical' : 'horizontal'}
-                className="relative m-4 mt-0 min-h-0 flex-1 overflow-hidden rounded-3xl bg-[var(--app-panel-bg)] md:ml-0"
+                className="relative mt-0 min-h-0 min-w-0 flex-1 overflow-hidden rounded-3xl bg-[var(--app-panel-bg)]"
               >
                 {!isMobile && (
                   <>
@@ -148,7 +148,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 >
                   <div
                     className={cn(
-                      'custom-scrollbar h-full overflow-y-auto p-2 py-2 sm:px-2 sm:pl-3',
+                      'custom-scrollbar h-full overflow-y-auto overflow-x-hidden p-2 py-2 sm:px-2 sm:pl-3',
                       isMobile && assistantOpen && 'h-full',
                     )}
                   >

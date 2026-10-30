@@ -113,7 +113,7 @@ export function messageFor(
   t?: (key: MessageKey, vars?: Record<string, string | number>) => string,
 ): string {
   // Never report a network failure as a wrong password.
-  if (cause instanceof NetworkError) return t ? t('login.unreachable', { url: cause.url }) : fallback
+  if (cause instanceof NetworkError) return t ? t('login.unreachable') : fallback
   if (!(cause instanceof ApiError)) return fallback
   const body = cause.json<{ error?: string }>()
   if (cause.status === 503) return t ? t('login.unavailable') : fallback

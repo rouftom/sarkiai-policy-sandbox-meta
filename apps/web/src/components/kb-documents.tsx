@@ -19,6 +19,8 @@ import { documentHref } from '@/lib/kb-links'
 import { Badge, Button, DataTablePagination, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Dialog, DialogContent, DialogHeader, DialogTitle } from '@sps/ui'
 import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { countryOptions } from '@/lib/country-options'
+import { useWorkspace } from '@/lib/workspace'
 import { MediaUploader, UploadFailure, type UploadOutcome } from '@/components/media-uploader'
 import { KbMiniStats, type KbSummary } from '@/components/kb-mini-stats'
 import { formatSize } from '@/lib/format'
@@ -27,11 +29,6 @@ const ACCEPT = '.pdf,.txt,.md,.markdown,.csv,.json'
 const ACCEPT_PATTERN = /\.(pdf|txt|md|markdown|csv|json)$/i
 const MAX_BYTES = 25 * 1024 * 1024
 const DEFAULT_PAGE_SIZE = 10
-/** Country codes are data identifiers, shown as they are stored. */
-const COUNTRY_OPTIONS = [
-  { value: 'cm', label: 'CM' },
-  { value: 'global', label: 'Global' },
-]
 const DOC_TYPES = ['law', 'policy', 'regulation', 'strategy', 'report', 'guidance']
 
 function toBase64(file: File): Promise<string> {
@@ -63,6 +60,7 @@ export function KbDocuments({
   summary?: KbSummary
 }) {
   const { t, locale } = useI18n()
+  const { countries } = useWorkspace()
   const [country, setCountry] = React.useState('cm')
   const [docType, setDocType] = React.useState('policy')
   /** The documents added in this dialog: the figures attach to each of them. */
@@ -70,6 +68,11 @@ export function KbDocuments({
   const [query, setQuery] = React.useState('')
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE)
+
+  const countrySelectOptions = React.useMemo(
+    () => countryOptions(countries, locale, country),
+    [countries, country, locale],
+  )
 
   const upload = React.useCallback(
     async (file: File): Promise<UploadOutcome> => {
@@ -132,7 +135,7 @@ export function KbDocuments({
                   <Select
                     value={country}
                     onValueChange={setCountry}
-                    options={COUNTRY_OPTIONS}
+                    options={countrySelectOptions}
                     ariaLabel={t('knowledge.vectorise.country')}
                     size="sm"
                     className="w-40"

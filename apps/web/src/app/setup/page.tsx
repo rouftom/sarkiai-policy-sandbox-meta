@@ -185,6 +185,10 @@ export default function SetupPage() {
             id="setup-email"
             type="email"
             autoComplete="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            inputMode="email"
             placeholder="name@institution.org"
             {...form.register('email')}
             aria-invalid={Boolean(form.formState.errors.email)}

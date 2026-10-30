@@ -293,6 +293,10 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="email"
                 autoFocus
                 {...credentialsForm.register('email')}
                 aria-invalid={Boolean(credentialsForm.formState.errors.email)}

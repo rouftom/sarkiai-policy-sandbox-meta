@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
+import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   ChevronDown,
@@ -11,6 +11,7 @@ import {
   Gauge,
   Globe2,
   LayoutDashboard,
+  Loader,
   Megaphone,
   Newspaper,
   Network,
@@ -31,6 +32,23 @@ import { OperatorMenu } from './operator-menu'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 
 const COLLAPSE_KEY = 'sps-sidebar-collapsed'
+
+/**
+ * The icon of a nav item, replaced by a spinner while its route is being
+ * fetched. `useLinkStatus` reports the pending state of the enclosing `Link`,
+ * so the loader belongs to the item that was actually clicked.
+ */
+function NavIcon({
+  icon: Icon,
+  className,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  className?: string
+}) {
+  const { pending } = useLinkStatus()
+  if (pending) return <Loader className={cn(className, 'animate-spin')} aria-hidden="true" />
+  return <Icon className={className} />
+}
 
 interface NavEntry {
   href: string
@@ -85,7 +103,6 @@ export function AdminSidebar() {
 
   const renderItem = (entry: NavEntry) => {
     const active = isActive(entry.href)
-    const Icon = entry.icon
     const link = (
       <Link
         key={entry.href}
@@ -98,7 +115,7 @@ export function AdminSidebar() {
             : 'text-sidebar-foreground/70 hover:bg-brand-primary/5 hover:text-sidebar-foreground',
         )}
       >
-        <Icon className={cn('h-4 w-4 shrink-0', !collapsed && 'mr-2')} />
+        <NavIcon icon={entry.icon} className={cn('h-4 w-4 shrink-0', !collapsed && 'mr-2')} />
         {!collapsed && <span className="truncate">{t(entry.labelKey)}</span>}
       </Link>
     )
@@ -115,7 +132,6 @@ export function AdminSidebar() {
 
   const renderChild = (entry: NavEntry) => {
     const active = isActive(entry.href)
-    const Icon = entry.icon
     return (
       <Link
         key={entry.href}
@@ -127,7 +143,7 @@ export function AdminSidebar() {
             : 'text-sidebar-foreground/60 hover:bg-brand-primary/5 hover:text-sidebar-foreground',
         )}
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <NavIcon icon={entry.icon} className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{t(entry.labelKey)}</span>
       </Link>
     )

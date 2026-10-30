@@ -444,7 +444,7 @@ function ProcessGraphCanvas({
         <div
           role="dialog"
           aria-label={anchor.id}
-          className="absolute z-30 flex max-h-[380px] w-80 flex-col overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-black/5 dark:ring-white/10"
+          className="absolute z-30 flex max-h-[380px] w-80 max-w-[calc(100%-1rem)] flex-col overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-black/5 dark:ring-white/10"
           style={place(anchor.x, anchor.y)}
         >
           {renderPopover(anchor.id, close)}

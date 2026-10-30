@@ -409,7 +409,7 @@ export function NotificationsPanel({ country }: { country: string }) {
             )}
 
             {channel === 'whatsapp' ? (
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-2">
                 <label className="space-y-1">
                   <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.whatsapp.kind')}</span>
                   <Select
@@ -429,8 +429,8 @@ export function NotificationsPanel({ country }: { country: string }) {
 
                 {(kind === 'joint_report' || kind === 'approval_request') && (
                   <>
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.whatsapp.runId')}</span>
+                    <div className="min-w-0 space-y-1">
+                      <span className="block truncate text-[10px] font-semibold text-muted-foreground">{t('notify.whatsapp.runId')}</span>
                       <SearchSelect
                         ariaLabel={t('notify.whatsapp.runId')}
                         value={runId}
@@ -439,7 +439,7 @@ export function NotificationsPanel({ country }: { country: string }) {
                         searchPlaceholder={t('notify.whatsapp.runSearch')}
                         emptyLabel={t('notify.whatsapp.runEmpty')}
                         options={runOptions}
-                        className="font-mono"
+                        className="min-w-0 font-mono"
                       />
                     </div>
                     <div className="space-y-1">
@@ -521,7 +521,7 @@ export function NotificationsPanel({ country }: { country: string }) {
                 )}
               </div>
             ) : (
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-2">
                 <label className="space-y-1">
                   <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.email.subject')}</span>
                   <input
@@ -531,8 +531,8 @@ export function NotificationsPanel({ country }: { country: string }) {
                     className="h-7 w-full rounded-lg border border-border bg-transparent px-2 text-[11px]"
                   />
                 </label>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.whatsapp.runId')}</span>
+                <div className="min-w-0 space-y-1">
+                  <span className="block truncate text-[10px] font-semibold text-muted-foreground">{t('notify.whatsapp.runId')}</span>
                   <SearchSelect
                     ariaLabel={t('notify.whatsapp.runId')}
                     value={runId}
@@ -541,7 +541,7 @@ export function NotificationsPanel({ country }: { country: string }) {
                     searchPlaceholder={t('notify.whatsapp.runSearch')}
                     emptyLabel={t('notify.whatsapp.runEmpty')}
                     options={runOptions}
-                    className="font-mono"
+                    className="min-w-0 font-mono"
                   />
                 </div>
                 <div className="space-y-1">
@@ -853,6 +853,10 @@ function ContactDialog({
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               type="email"
+              inputMode="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               maxLength={200}
               placeholder="focal.point@example.org"
               className="h-8 w-full rounded-lg border border-border bg-transparent px-2 text-[11px]"

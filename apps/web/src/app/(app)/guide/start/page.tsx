@@ -97,6 +97,13 @@ export default function GuideStartPage() {
               owner: fr ? 'Analyste' : 'Analyst',
             },
             {
+              title: fr ? 'Vérifier le référentiel pays et secteurs' : 'Check the country and sector registry',
+              body: fr
+                ? 'Ouvrez Pays et secteurs : chaque ligne porte le drapeau du pays, son code ISO, sa région, son autorité, ses secteurs actifs et son statut. La recherche ignore casse et accents, l’entonnoir filtre par statut et par région, et la liste se pagine. Un pays « prévu » reste enregistré mais n’est pas proposé dans l’espace de travail.'
+                : 'Open Countries and sectors: every row carries the country flag, its ISO code, region, authority, active sectors and status. Search ignores case and accents, the funnel filters by status and region, and the list is paginated. A “planned” country stays registered but is not offered in the workspace.',
+              owner: fr ? 'Analyste' : 'Analyst',
+            },
+            {
               title: fr ? 'Chauffer l’API avant le premier run' : 'Warm the API before the first run',
               body: fr
                 ? 'Le service gratuit s’endort : le premier appel peut prendre 40 secondes. Ouvrez la vue d’ensemble une fois, attendez le badge fournisseur, puis lancez le scénario.'

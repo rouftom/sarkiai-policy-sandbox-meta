@@ -31,12 +31,16 @@ export class ApiError extends Error {
 }
 
 /**
- * The API could not be reached at all (wrong `NEXT_PUBLIC_API_URL`, server
- * asleep, offline). Kept apart from `ApiError`: it is not a wrong password.
+ * The service could not be reached at all (server asleep, offline, blocked
+ * network). Kept apart from `ApiError`: it is not a wrong password.
+ *
+ * The message is deliberately bare: the endpoint, the deployment host and the
+ * variable that configures it never reach the browser, so a screenshot of the
+ * sign-in screen cannot leak infrastructure.
  */
 export class NetworkError extends Error {
-  constructor(readonly url: string) {
-    super(`The API at ${url} did not answer.`)
+  constructor() {
+    super('Network request failed.')
     this.name = 'NetworkError'
   }
 }
@@ -45,7 +49,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
   try {
     return await fetch(`${API_URL}${path}`, init)
   } catch {
-    throw new NetworkError(API_URL)
+    throw new NetworkError()
   }
 }
 

@@ -54,7 +54,7 @@ function seconds(ms: number | undefined): string {
 export function ReadinessActions() {
   const { t } = useI18n()
   const { running, run, creating, setCreating, openCreate, startDomains, setStartDomains, settings, resumable, resume } = useReadiness()
-  const sectorOptions: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
+  const { sectors: sectorOptions } = useWorkspace()
   const start = () => {
     setCreating(false)
     void run()

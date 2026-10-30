@@ -8,6 +8,7 @@ describe('CountryStore', () => {
     const seeded = await store.list()
     expect(seeded.map((country) => country.code)).toEqual(['cm'])
     expect(seeded[0]?.status).toBe('active')
+    expect(seeded[0]?.notes).toBeUndefined()
     expect(seeded[0]?.sectors).toEqual([...COUNTRY_SECTORS])
 
     expect(await store.add({ code: 'CM', name: 'Duplicate', createdBy: 'operator@example.org' })).toBeNull()

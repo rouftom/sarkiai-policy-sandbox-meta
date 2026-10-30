@@ -817,7 +817,7 @@ export function ScenarioCarousel({
         }}
         className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
       >
-        <p className="text-[12px] font-semibold text-foreground">
+        <p className="min-w-0 flex-1 basis-40 truncate text-[12px] font-semibold text-foreground">
           {many ? t('scenario.process', { index: current + 1, total: blocks.length }) : t('scenario.process.single')}
           <span className="ml-2 text-[11px] font-normal text-muted-foreground">
             {t(`domain.${block.domain}` as 'domain.health')}
@@ -848,7 +848,7 @@ export function ScenarioCarousel({
           />
         )}
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

@@ -30,21 +30,49 @@ const TITLES: Array<{ href: string; labelKey: MessageKey }> = [
   { href: '/', labelKey: 'overview.title' },
 ]
 
-const MOBILE_NAV: Array<{ href: string; labelKey: MessageKey; icon: React.ComponentType<{ className?: string }> }> = [
-  { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
-  { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
-  { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
-  { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
-  { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
-  { href: '/communications', labelKey: 'nav.communication', icon: Megaphone },
-  { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },
-  { href: '/guide', labelKey: 'nav.guide', icon: Compass },
-  { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
-  { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
-  { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
-  { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Sparkles },
-  { href: '/preferences', labelKey: 'nav.settings', icon: Settings },
-  { href: '/security', labelKey: 'nav.security', icon: ShieldCheck },
+interface MobileNavEntry {
+  href: string
+  labelKey: MessageKey
+  icon: React.ComponentType<{ className?: string }>
+}
+
+/** Same sections, same order as the desktop rail: the drawer is not a second navigation. */
+const MOBILE_NAV: Array<{ groupKey: MessageKey; entries: MobileNavEntry[]; children?: MobileNavEntry[] }> = [
+  {
+    groupKey: 'nav.group_guide',
+    entries: [{ href: '/guide', labelKey: 'nav.guide', icon: Compass }],
+    children: [
+      { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
+      { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
+      { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
+      { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Sparkles },
+    ],
+  },
+  {
+    groupKey: 'nav.group_general',
+    entries: [
+      { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
+      { href: '/countries', labelKey: 'nav.countries', icon: Globe },
+      { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
+      { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
+      { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
+    ],
+  },
+  {
+    groupKey: 'nav.group_operations',
+    entries: [
+      { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
+      { href: '/communications', labelKey: 'nav.communication', icon: Megaphone },
+      { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },
+    ],
+  },
+  {
+    groupKey: 'nav.group_settings',
+    entries: [
+      { href: '/preferences', labelKey: 'nav.settings', icon: Settings },
+      { href: '/security', labelKey: 'nav.security', icon: ShieldCheck },
+    ],
+  },
 ]
 
 /**
@@ -64,7 +92,6 @@ export function AppHeader() {
   }
 
   const titleKey = TITLES.find((entry) => entry.href === pathname)?.labelKey ?? 'app.name'
-  const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href))
 
   return (
     <>
@@ -102,7 +129,7 @@ export function AppHeader() {
       </header>
 
       {menuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-[70] md:hidden">
           <button
             type="button"
             aria-label={t('nav.collapse')}
@@ -124,22 +151,64 @@ export function AppHeader() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <nav className="flex-1 space-y-1 px-2 py-4">
-              {MOBILE_NAV.map(({ href, labelKey, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={() => setMenuOpen(false)}
-                  className={cn(
-                    'flex h-9 items-center rounded-lg px-3 text-xs transition-colors',
-                    isActive(href)
-                      ? 'bg-sidebar-accent font-medium text-sidebar-primary'
-                      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                  )}
+            <nav className="custom-scrollbar flex-1 overflow-y-auto px-3 py-3">
+              {MOBILE_NAV.map(({ groupKey, entries, children }, index) => (
+                <div
+                  key={groupKey}
+                  className={index > 0 ? 'mt-3 border-t border-border/70 pt-3' : undefined}
                 >
-                  <Icon className="mr-2 h-4 w-4" />
-                  {t(labelKey)}
-                </Link>
+                  <p className="px-2 pb-1 text-[11px] font-medium text-sidebar-foreground/55">
+                    {t(groupKey)}
+                  </p>
+                  {entries.map(({ href, labelKey, icon: Icon }) => {
+                    const isGuide = href === '/guide'
+                    const active = isGuide
+                      ? pathname === '/guide'
+                      : href === '/'
+                        ? pathname === '/'
+                        : pathname === href || pathname.startsWith(`${href}/`)
+                    return (
+                      <React.Fragment key={href}>
+                        <Link
+                          href={href}
+                          onClick={() => setMenuOpen(false)}
+                          className={cn(
+                            'flex h-9 items-center rounded-lg px-2 text-xs transition-colors',
+                            active
+                              ? 'bg-sidebar-accent font-medium text-sidebar-primary'
+                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                          )}
+                        >
+                          <Icon className="mr-2 h-4 w-4 shrink-0" />
+                          <span className="truncate">{t(labelKey)}</span>
+                        </Link>
+                        {isGuide && children && (
+                          <div className="ml-4 mt-1 space-y-0.5 border-l border-border/70 pl-2">
+                            {children.map((child) => {
+                              const ChildIcon = child.icon
+                              return (
+                                <Link
+                                  key={child.href}
+                                  href={child.href}
+                                  onClick={() => setMenuOpen(false)}
+                                  className={cn(
+                                    'flex h-8 items-center rounded-lg px-2 text-[11px] transition-colors',
+                                    pathname === child.href
+                                      ? 'bg-sidebar-accent font-medium text-sidebar-primary'
+                                      : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                                  )}
+                                >
+                                  <ChildIcon className="mr-2 h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">{t(child.labelKey)}</span>
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </div>
               ))}
             </nav>
           </aside>
