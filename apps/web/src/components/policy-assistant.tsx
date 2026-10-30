@@ -45,6 +45,7 @@ import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
+import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
 import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 
 interface Attachment {
@@ -524,6 +525,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }
 
   const suggestions = [t('assistant.suggest1'), t('assistant.suggest2'), t('assistant.suggest3')]
+  const [loader, setLoader] = useStreamLoader()
 
   const optionsMenu = (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -630,6 +632,24 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                 </DropdownMenuItem>
               )
             })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="min-w-0 flex-1 truncate">{t('assistant.loader')}</span>
+            <LoaderGlyph variant={loader} className="h-3.5 w-3.5 text-brand-primary dark:text-brand-primary-light" />
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>{t('assistant.loader')}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={loader} onValueChange={(value) => setLoader(value as StreamLoaderVariant)}>
+              {STREAM_LOADERS.map((variant) => (
+                <DropdownMenuRadioItem key={variant} value={variant} className="gap-2">
+                  <LoaderGlyph variant={variant} className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t(`assistant.loader.${variant}` as 'assistant.loader.blocks')}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />

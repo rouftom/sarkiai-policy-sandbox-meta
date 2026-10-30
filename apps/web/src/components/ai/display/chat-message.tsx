@@ -17,7 +17,7 @@ import { AgentActivityTrail, type TrailStepView } from '@/components/ai/tools/ag
 import { useI18n } from '@/lib/i18n'
 import type { AssessmentDto } from '@/lib/api'
 import { CitationDialog, type CitationView } from '@/components/ai/display/citation-dialog'
-import { StreamIndicator } from '@/components/ai/display/stream-indicator'
+import { StreamLoader } from '@/components/ai/display/stream-loaders'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 
 export interface ChatTurn {
@@ -120,7 +120,7 @@ export function ChatMessage({
 
           {turn.active && (
             <div className="mt-3">
-              <StreamIndicator />
+              <StreamLoader />
             </div>
           )}
 
