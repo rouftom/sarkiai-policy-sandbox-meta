@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { PNG } from 'pngjs'
 import type { LanguageModel } from 'ai'
 import type { InkMask } from './layout.js'
-import { analyzeGazettePage, mergeDetections, toKbChunks } from './pipeline.js'
+import { analyzeGazettePage, mergeDetections, plausibleArtefacts, toKbChunks } from './pipeline.js'
 import { mapSamBoxes, parseSamBoxes, samText } from './sam.js'
 import {
   buildTranscriptionPrompt,
@@ -240,6 +240,21 @@ describe('artefact detections', () => {
       { label: 'stamp', bbox: box(99, 300, 1002, 401), confidence: 0.71, frame: 0 },
     ])
     expect(merged.map((detection) => detection.label)).toEqual(['table'])
+  })
+
+  test('a page-sized rectangle is not a stamp, a real stamp and a table are kept', () => {
+    const page = { width: 1240, height: 1754 }
+    const { kept, dropped } = plausibleArtefacts(
+      [
+        { label: 'stamp', bbox: box(20, 20, 1200, 1700), confidence: 0.8, frame: 0 },
+        { label: 'stamp', bbox: box(60, 400, 1100, 520), confidence: 0.6, frame: 0 },
+        { label: 'stamp', bbox: box(780, 1500, 320, 160), confidence: 0.7, frame: 0 },
+        { label: 'table', bbox: box(100, 300, 1000, 600), confidence: 0.87, frame: 0 },
+      ],
+      page,
+    )
+    expect(dropped).toBe(2)
+    expect(kept.map((detection) => detection.label).sort()).toEqual(['stamp', 'table'])
   })
 
   test('an isolated stamp is kept', () => {
