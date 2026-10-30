@@ -11,7 +11,7 @@ import {
   toKbChunks,
   type GazettePage,
 } from '@sps/gazette'
-import { evaluateExercise, writeAfterAction, type ExerciseDefinition } from '@sps/exercise'
+import { evaluateExercise, figureBriefs, writeAfterAction, type ExerciseDefinition } from '@sps/exercise'
 import { analyzeImpact } from '@sps/impact'
 import { IngestionClient } from '@sps/kb'
 import type { AtlasIngestor } from '@sps/retrieval'
@@ -255,26 +255,25 @@ async function exerciseFigures(definition: ExerciseDefinition, lang: 'fr' | 'en'
     engine.provider.mode === 'cloud' && access.apiKey
       ? { baseURL: engine.provider.baseURL, apiKey: access.apiKey, headers: access.headers }
       : null
+  const briefs = figureBriefs(definition, lang)
   const captions =
     lang === 'fr'
       ? { context: 'Contexte de l’exercice', timeline: 'Chronologie des incidents' }
       : { context: 'Exercise context', timeline: 'Incident timeline' }
-  const [context, timeline] = await Promise.all([
-    referenceImage(
-      'Editorial illustration of an institutional crisis room facing a health data breach: large screens, a shared incident board, calm professionals. Realistic, muted teal and white palette, no readable text.',
-      { title: definition.title, lines: [`${definition.country.toUpperCase()} · ${definition.domain}`] },
-      imageOptions,
+  const figures = await Promise.all(
+    briefs.map((brief) =>
+      referenceImage(
+        brief.prompt,
+        { title: brief.fallbackTitle, lines: brief.fallbackLines },
+        imageOptions,
+      ),
     ),
-    referenceImage(
-      `Clean infographic timeline of a crisis exercise with ${definition.injects.length} milestones, flat vector style, white background, minimal short labels.`,
-      { title: captions.timeline, lines: definition.injects.map((inject) => `T+${inject.atMinute} · ${inject.title}`) },
-      imageOptions,
-    ),
-  ])
-  return [
-    { id: 'context', caption: captions.context, ...context },
-    { id: 'timeline', caption: captions.timeline, ...timeline },
-  ]
+  )
+  return briefs.map((brief, index) => ({
+    id: brief.id,
+    caption: captions[brief.id],
+    ...figures[index]!,
+  }))
 }
 
 export async function seedReferenceImages(log: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }) {
