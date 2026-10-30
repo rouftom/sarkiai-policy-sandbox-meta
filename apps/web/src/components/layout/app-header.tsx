@@ -129,7 +129,7 @@ export function AppHeader() {
       </header>
 
       {menuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-[70] md:hidden">
           <button
             type="button"
             aria-label={t('nav.collapse')}
