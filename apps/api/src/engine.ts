@@ -1,7 +1,9 @@
 /** Composes the shared packages into the two lenses + the hybrid profile. */
 
 import {
+  basetenProvider,
   createModel,
+  listBasetenModels,
   listProviderModels,
   resolveProvider,
   PolicyOrchestrator,
@@ -43,11 +45,15 @@ function buildModelStack(
   modelId: string,
   retriever: Retriever,
   audit: AuditService,
+  baseten: ProviderDescriptor | null,
 ) {
+  // The Baseten model routes every request to Baseten; any other id stays on Meta.
   const active: ProviderDescriptor =
-    provider.mode === 'cloud'
-      ? { ...provider, models: { ...provider.models, reasoning: modelId, vision: modelId } }
-      : provider
+    provider.mode !== 'cloud'
+      ? provider
+      : baseten && modelId === baseten.models.reasoning
+        ? baseten
+        : { ...provider, models: { ...provider.models, reasoning: modelId, vision: modelId } }
   const model = createModel({ provider: active })
   const webSearch = webSearchFor(active)
   const orchestrator = new PolicyOrchestrator({
@@ -74,6 +80,7 @@ export function createEngine() {
   // One provider decision for the whole engine. In cloud mode the chat model
   // is not read from the environment: it is selected from Meta's model list.
   const provider = resolveProvider(process.env)
+  const baseten = basetenProvider(process.env)
   const retrievalBackend = resolveRetrievalBackend(provider.mode, config.retrieval.backend)
 
   const retriever: Retriever =
@@ -116,16 +123,22 @@ export function createEngine() {
     audit,
     reports,
     storage,
-    ...buildModelStack(provider, '', retriever, audit),
-    /** Point the engine at a Meta model id (cloud mode). Rebuilds the model stack. */
+    ...buildModelStack(provider, '', retriever, audit, baseten),
+    /**
+     * The deployment's catalogue mode. It does not change when a Baseten model is
+     * active, so the operator can always switch back to a Meta model.
+     */
+    catalogMode: provider.mode,
+    /** Point the engine at a model id of the catalogue. Rebuilds the model stack. */
     useModel(modelId: string): ProviderDescriptor {
-      if (engine.provider.mode !== 'cloud') return engine.provider
-      Object.assign(engine, buildModelStack(provider, modelId, retriever, audit))
+      if (provider.mode !== 'cloud') return engine.provider
+      Object.assign(engine, buildModelStack(provider, modelId, retriever, audit, baseten))
       return engine.provider
     },
-    /** Chat-capable models this key may use, from Meta's own list. */
-    listModels() {
-      return listProviderModels(provider)
+    /** Chat-capable models this key may use: Meta's list, plus Baseten's when configured. */
+    async listModels() {
+      const meta = await listProviderModels(provider)
+      return baseten ? [...meta, ...(await listBasetenModels(process.env))] : meta
     },
   }
   return engine

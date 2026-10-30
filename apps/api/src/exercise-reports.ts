@@ -107,6 +107,25 @@ export class ExerciseReportStore {
     return summaryOf(record)
   }
 
+  /** Every saved report of the operator, newest first, without the bodies. */
+  async listAll(userId: string, limit = 50): Promise<ExerciseReportSummary[]> {
+    const col = await this.col()
+    if (col) {
+      const docs = await col
+        .find({ userId }, { projection: { definition: 0, actions: 0, report: 0, userId: 0 } })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .toArray()
+        .catch(() => null)
+      if (docs) return docs.map(summaryOfDoc)
+    }
+    return [...this.memory.values()]
+      .filter((record) => record.userId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map(summaryOf)
+  }
+
   /** Versions of one exercise, newest first, without the report bodies. */
   async list(userId: string, exerciseId: string, limit = 50): Promise<ExerciseReportSummary[]> {
     const col = await this.col()

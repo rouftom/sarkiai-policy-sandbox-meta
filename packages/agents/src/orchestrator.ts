@@ -13,6 +13,7 @@ import type {
   CitationValidation,
   Domain,
   InstitutionSpec,
+  KbChunk,
   ProviderDescriptor,
   WorkflowLens,
 } from '@sps/shared'
@@ -21,7 +22,7 @@ import { citationFromChunk, citationRetryDirective, validateCitations } from '@s
 import type { AuditService } from '@sps/audit'
 import { attachmentGuardrail, buildSystemPrompt, citationDirective, type AnswerLanguage } from './prompt'
 import { describeProvider } from './provider'
-import { createAgentTools, summarizeToolInput, type ActionSink, type AgentToolEvent, type McpPort } from './tools'
+import { createAgentTools, summarizeToolInput, type ActionSink, type AgentToolEvent, type DataPort, type McpPort } from './tools'
 import type { WebAnswer, WebSearch } from './web-search'
 
 export interface Attachment {
@@ -68,6 +69,10 @@ export interface AgentRunInput {
   actions?: ActionSink
   /** First-party MCP servers the agent may call (interactive runs only). */
   mcp?: McpPort
+  /** Records the agent may read and propose to delete (interactive runs only). */
+  data?: DataPort
+  /** Reasoning effort requested by the operator; absent lets the provider decide. */
+  effort?: 'minimal' | 'low' | 'medium' | 'high'
 }
 
 /**
@@ -136,32 +141,41 @@ export class PolicyOrchestrator {
     const language = input.language ?? 'en'
     const runId = input.runId ?? `run-${Date.now()}`
 
-    // 1. Retrieve country provisions (collection → retrieval stage).
-    handlers?.onStage?.('retrieving', { country, topK: input.topK ?? 8 })
-    const chunks = await this.deps.retriever.search({
-      text: question,
-      country,
-      jurisdiction: input.jurisdiction,
-      topK: input.topK ?? 8,
-    })
-    const citations: Citation[] = chunks.map((chunk) => citationFromChunk(chunk, 0))
+    // Interactive turns decide when to search (search_corpus); scripted runs retrieve first.
+    const onDemand = Boolean(input.withTools && handlers?.onDelta)
+    /** Every provision read in this turn: the only ones an answer may cite. */
+    const collected: KbChunk[] = []
+    const chunks: KbChunk[] = []
+    if (!onDemand) {
+      // 1. Retrieve country provisions (collection → retrieval stage).
+      handlers?.onStage?.('retrieving', { country, topK: input.topK ?? 8 })
+      const retrieved = await this.deps.retriever.search({
+        text: question,
+        country,
+        jurisdiction: input.jurisdiction,
+        topK: input.topK ?? 8,
+      })
+      chunks.push(...retrieved)
+      collected.push(...retrieved)
 
-    // 2. Trap the reasoning: pre-decision trace.
-    await this.deps.audit?.traceStep({
-      runId,
-      ...(input.userId ? { userId: input.userId } : {}),
-      agentId: institution.id,
-      step: 0,
-      thought: `Retrieved ${chunks.length} provisions for "${question}" in ${country}.`,
-      toolCalls: [
-        {
-          name: 'retrieve',
-          input: { question, country, attachments: input.attachmentMeta ?? [] },
-          output: citations.map((c) => c.filename),
-        },
-      ],
-      model: this.modelLabel(),
-    })
+      // 2. Trap the reasoning: pre-decision trace.
+      await this.deps.audit?.traceStep({
+        runId,
+        ...(input.userId ? { userId: input.userId } : {}),
+        agentId: institution.id,
+        step: 0,
+        thought: `Retrieved ${chunks.length} provisions for "${question}" in ${country}.`,
+        toolCalls: [
+          {
+            name: 'retrieve',
+            input: { question, country, attachments: input.attachmentMeta ?? [] },
+            output: chunks.map((c) => c.filename),
+          },
+        ],
+        model: this.modelLabel(),
+      })
+    }
+    const liveCitations = (): Citation[] => collected.map((chunk) => citationFromChunk(chunk, 0))
 
     // 3. Generate the grounded answer (multimodal when attachments are present).
     const hasAttachments = (input.attachments?.length ?? 0) > 0
@@ -173,8 +187,8 @@ export class PolicyOrchestrator {
         ].join('\n')
       : ''
     const system = [
-      buildSystemPrompt({ institution, country, domain, chunks, language }),
-      citationDirective(),
+      buildSystemPrompt({ institution, country, domain, chunks, language, retrieval: onDemand ? 'on-demand' : 'always' }),
+      onDemand ? '' : citationDirective(),
       hasAttachments ? attachmentGuardrail() : '',
       referenceBlock,
     ]
@@ -200,9 +214,7 @@ export class PolicyOrchestrator {
     let attempt = 0
     let text = ''
     let reasoningText = ''
-    // Validate against the full chunk text, not the truncated display excerpt.
-    const corpus = chunks.map((chunk) => chunk.text).join('\n')
-    let validation: CitationValidation = validateCitations('', citations, { attempts: 0, corpus })
+    let validation: CitationValidation = validateCitations('', [], { attempts: 0 })
     const webAnswers: WebAnswer[] = []
 
     /** One generation, buffered or streamed depending on the caller. */
@@ -219,16 +231,29 @@ export class PolicyOrchestrator {
             ...((input.actions ?? this.deps.actions) ? { actions: input.actions ?? this.deps.actions } : {}),
             ...(input.mcp ? { mcp: input.mcp } : {}),
             ...(this.deps.webSearch ? { webSearch: this.deps.webSearch, onWebAnswer: (answer: WebAnswer) => webAnswers.push(answer) } : {}),
+            onCorpusChunks: (found: KbChunk[]) => {
+              for (const chunk of found) if (!collected.some((known) => known.id === chunk.id)) collected.push(chunk)
+            },
+            ...(input.data ? { data: input.data } : {}),
             emit: (event) => {
               if (event.type === 'ui') handlers?.onUi?.(event.ui)
               else handlers?.onTool?.(event)
             },
           })
         : undefined
+      const effortOptions = input.effort
+        ? {
+            providerOptions: {
+              meta: { reasoningEffort: input.effort },
+              'openai-compatible': { reasoningEffort: input.effort },
+            },
+          }
+        : {}
       const settings = {
         model: this.deps.model,
         system,
         maxOutputTokens: input.maxOutputTokens ?? this.deps.maxOutputTokens ?? 4096,
+        ...effortOptions,
         ...(hasAttachments ? { messages: [{ role: 'user' as const, content: userContent(prompt) }] } : { prompt }),
         ...(tools ? { tools, stopWhen: stepCountIs(5) } : {}),
       }
@@ -271,7 +296,12 @@ export class PolicyOrchestrator {
       text = answer
       reasoningText = reasoning
       handlers?.onStage?.('validating', { attempt })
-      validation = validateCitations(answer, citations, { attempts: attempt, corpus })
+      // Validate against the full chunk text, not the truncated display excerpt.
+      const corpus = collected.map((chunk) => chunk.text).join('\n')
+      const cites = liveCitations()
+      const checked = validateCitations(answer, cites, { attempts: attempt, corpus })
+      // A conversational answer has no provision to cite: only invented quotes are rejected.
+      validation = onDemand && cites.length === 0 ? { ...checked, ok: checked.rejected.length === 0 } : checked
 
       if (validation.ok) break
 
@@ -324,7 +354,7 @@ export class PolicyOrchestrator {
         {
           name: 'generate',
           input: { question, attempt },
-          output: { grounded, rejectedQuotes: validation.rejected.length },
+          output: { grounded, rejectedQuotes: validation.rejected.length, searches: collected.length },
         },
       ],
       model: this.modelLabel(),
@@ -335,7 +365,7 @@ export class PolicyOrchestrator {
       action: 'agent.assessment',
       target: input.attachmentMeta?.length ? `${domain};attachments:${input.attachmentMeta.map((a) => a.sha256).join(',')}` : domain,
       lens,
-      citations: validation.used.length ? validation.used : citations,
+      citations: validation.used.length ? validation.used : liveCitations(),
       runId,
     })
 
@@ -345,7 +375,7 @@ export class PolicyOrchestrator {
       mandate: institution.mandate,
       domain,
       findings: [text],
-      citations,
+      citations: liveCitations(),
       gaps: grounded
         ? []
         : [

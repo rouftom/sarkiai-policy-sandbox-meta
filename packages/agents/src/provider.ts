@@ -157,6 +157,54 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
   }
 }
 
+export const BASETEN_DEFAULT_MODEL = 'meta-models/muse-spark-open-1026'
+
+/**
+ * Muse Spark open weights hosted on Baseten, offered next to the Meta models
+ * when `BASETEN_API_KEY` is set. Null without a key: the option does not exist.
+ */
+export function basetenProvider(source: Env = process.env): ProviderDescriptor | null {
+  if (!env(source, 'BASETEN_API_KEY')) return null
+  const model = env(source, 'BASETEN_MODEL', BASETEN_DEFAULT_MODEL)
+  return {
+    mode: 'sovereign',
+    label: PROVIDER_LABELS.sovereign,
+    servedBy: 'Baseten',
+    baseURL: withV1(env(source, 'BASETEN_BASE_URL', 'https://inference.baseten.co/v1')),
+    models: { reasoning: model, vision: model, embedding: env(source, 'EMBEDDING_MODEL', 'bge-m3') },
+    residency: 'cloud',
+    openWeights: true,
+    budgetUsd: Number(env(source, 'RUN_BUDGET_USD', '0')) || 0,
+    ready: true,
+  }
+}
+
+/**
+ * The Baseten entry of the model list. Its metadata is read from Baseten's own
+ * `GET /models` when that answers; otherwise the configured id is listed as is.
+ */
+export async function listBasetenModels(
+  source: Env = process.env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ProviderModelInfo[]> {
+  const descriptor = basetenProvider(source)
+  if (!descriptor) return []
+  const configured = descriptor.models.reasoning
+  try {
+    const response = await fetchImpl(`${descriptor.baseURL.replace(/\/+$/, '')}/models`, {
+      headers: { Authorization: `Bearer ${providerApiKey(descriptor, source)}` },
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (response.ok) {
+      const found = eligibleChatModels(await response.json()).find((entry) => entry.id === configured)
+      if (found) return [{ ...found, ownedBy: 'Baseten' }]
+    }
+  } catch {
+    // Unreachable right now: the configured id is still offered, and a failing call says why.
+  }
+  return [{ id: configured, ownedBy: 'Baseten' }]
+}
+
 /** API key for a descriptor · read at call time, never stored in the descriptor. */
 export function providerApiKey(descriptor: ProviderDescriptor, source: Env = process.env): string {
   if (descriptor.mode === 'cloud') return env(source, 'MODEL_API_KEY')

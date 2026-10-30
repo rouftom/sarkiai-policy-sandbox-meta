@@ -33,19 +33,27 @@ export function ConfirmDialog({
 }) {
   const { t } = useI18n()
   const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
   const submitting = React.useRef(false)
   const loading = isLoading || busy
+
+  // A new opening starts clean: the error of the previous attempt is not shown again.
+  React.useEffect(() => {
+    if (open) setError(null)
+  }, [open])
 
   const confirm = async () => {
     // A second click while the first request runs is ignored.
     if (submitting.current) return
     submitting.current = true
     setBusy(true)
+    setError(null)
     try {
       await onConfirm()
       onOpenChange(false)
-    } catch {
-      // The caller shows the error; the dialog stays open.
+    } catch (cause) {
+      // The dialog stays open with the reason; the caller also shows a toast.
+      setError((cause as Error)?.message || t('common.error'))
     } finally {
       setBusy(false)
       submitting.current = false
@@ -70,6 +78,11 @@ export function ConfirmDialog({
             </div>
             <DialogDescription className="text-left text-sm font-medium text-slate-500 dark:text-slate-400">{description}</DialogDescription>
           </DialogHeader>
+          {error && (
+            <p role="alert" className="mx-6 -mt-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-600 dark:text-rose-400">
+              {error}
+            </p>
+          )}
         </div>
         <div className="flex w-full flex-col-reverse items-center justify-end gap-2 px-6 pb-4 sm:flex-row">
           <Button

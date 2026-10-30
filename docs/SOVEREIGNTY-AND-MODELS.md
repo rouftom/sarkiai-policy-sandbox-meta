@@ -6,7 +6,7 @@ validator, gap engine and audit chain sit on top.
 
 | Mode | Reasoning | Retrieval | Data leaving the institution |
 |------|-----------|-----------|-----------------------------|
-| `cloud` | Meta Model API (Muse Spark), with SAM 3.1 for gazette vision and Muse Voice Transcribe for voice notes | Voyage embeddings + MongoDB Atlas Vector Search | prompts, retrieved passages, answers, audio |
+| `cloud` | Meta Model API (Muse Spark 1.1, 1.2 and 1.3, Muse Wonder 1.0 selectable; default the newest Muse Spark), with SAM 3.1 for gazette vision and Muse Voice Transcribe for voice notes | Voyage embeddings + MongoDB Atlas Vector Search | prompts, retrieved passages, answers, audio |
 | `sovereign` | Muse Glimmer 30B on Ollama, open weights | `bge-m3` + Qdrant | nothing |
 | `local` | any Ollama model (`qwen3.5:9b` by default) | `bge-m3` + Qdrant | nothing |
 

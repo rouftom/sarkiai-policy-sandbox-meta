@@ -24,9 +24,12 @@ flags conflicts between mandates. Every step lands in a **hash-chained audit log
 
 It runs on **Meta models**, in three interchangeable provider modes:
 
-- **cloud**: Meta Model API: `muse-spark-1.3` for reasoning, `sam-3.1` for scanned-gazette
-  segmentation, `muse-voice-transcribe-1.0` for WhatsApp voice notes. Retrieval runs on
-  **Voyage** embeddings + **MongoDB Atlas** Vector Search.
+- **cloud**: Meta Model API. Chat runs on the Muse Spark family (`muse-spark-1.1`, `muse-spark-1.2`,
+  `muse-spark-1.3`) and `muse-wonder-1.0`, all listed by the key itself and selectable from the
+  assistant's **+ menu**. The default is the newest `muse-spark-<version>` the key lists (`muse-spark-1.3`
+  today); contributor builds are never the default. Also `sam-3.1` for scanned-gazette segmentation,
+  `muse-voice-transcribe-1.0` for WhatsApp voice notes. Retrieval runs on **Voyage** embeddings +
+  **MongoDB Atlas** Vector Search.
 - **sovereign**: **Muse Glimmer** (30B, Apache-2.0) served locally by Ollama: same engine, no data
   leaving the institution, retrieval stays on `bge-m3` + Qdrant.
 - **local**: any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
