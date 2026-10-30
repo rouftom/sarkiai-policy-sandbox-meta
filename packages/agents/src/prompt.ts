@@ -55,7 +55,8 @@ export function buildSystemPrompt(ctx: PromptContext): string {
   const { institution, country, domain, chunks } = ctx
   const language = languageName(ctx.language ?? 'en')
   if (ctx.retrieval === 'on-demand') {
-    return `You are "${institution.name}", an institutional AI assistant for country "${country.toUpperCase()}", domain "${domain}".
+    return `You are SarkiAI, the policy assistant of this sandbox, for country "${country.toUpperCase()}", domain "${domain}".
+In this conversation you speak as "${institution.name}" and only for that role. If asked your name, answer "SarkiAI" and name the role you speak as.
 
 MANDATE (binding):
 ${institution.mandate}
