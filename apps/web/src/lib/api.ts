@@ -1,5 +1,6 @@
 /** Thin typed client for the API application layer. */
 
+import type { Domain } from '@sps/shared'
 import { readToken } from './session'
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -542,6 +543,74 @@ export interface NewNotificationContactDto {
   channels?: { email: boolean; whatsapp: boolean }
 }
 
+/** Country & sector registry: one row per jurisdiction, shared across operators. */
+export type CountryJurisdictionDto = 'national' | 'regional' | 'international'
+export type CountryStatusDto = 'active' | 'planned'
+
+export interface CountryDto {
+  /** ISO 3166-1 alpha-2, lower-cased. */
+  code: string
+  name: string
+  nameFr: string
+  jurisdiction: CountryJurisdictionDto
+  region: string
+  authority: string
+  currency: string
+  languages: string[]
+  timezone: string
+  sectors: Domain[]
+  status: CountryStatusDto
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: string
+}
+
+export interface CountryInputDto {
+  name: string
+  nameFr?: string
+  jurisdiction?: CountryJurisdictionDto
+  region?: string
+  authority?: string
+  currency?: string
+  languages?: string[]
+  timezone?: string
+  sectors?: Domain[]
+  status?: CountryStatusDto
+  notes?: string
+}
+
+export interface CountryInsightSectorDto {
+  sector: Domain
+  enabled: boolean
+  readinessRuns: number
+  latestComposite: number | null
+  averageComposite: number | null
+  scenarioRuns: number
+}
+
+export interface CountryInsightsDto {
+  country: CountryDto
+  insights: {
+    totals: {
+      sectors: number
+      availableSectors: number
+      readinessRuns: number
+      readinessComplete: number
+      readinessFailed: number
+      readinessAverage: number | null
+      scenarioRuns: number
+      scenarioRunning: number
+      scenarioComplete: number
+      scenarioFailed: number
+      knowledgeChunks: number
+      lastRunAt: string | null
+    }
+    sectors: CountryInsightSectorDto[]
+    trend: Array<{ date: string; readinessRuns: number; averageComposite: number | null }>
+  }
+}
+
 /** N8 · table-top crisis exercise. Injects are timed; actions are logged by the team. */
 export type ExerciseSeverity = 'low' | 'medium' | 'high' | 'critical'
 export type ExerciseActionKind = 'action' | 'decision' | 'escalation' | 'note'
@@ -819,6 +888,34 @@ async function streamReadinessFrom(
   return saved
 }
 
+/** Country & sector registry endpoints. */
+export const countriesApi = {
+  list: () => request<{ countries: CountryDto[] }>('/v1/countries'),
+
+  get: (code: string) => request<{ country: CountryDto }>(`/v1/countries/${encodeURIComponent(code)}`),
+
+  create: (body: CountryInputDto & { code: string }) =>
+    request<{ country: CountryDto }>('/v1/countries', { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (code: string, body: CountryInputDto) =>
+    request<{ country: CountryDto }>(`/v1/countries/${encodeURIComponent(code)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  setSectors: (code: string, sectors: Domain[]) =>
+    request<{ country: CountryDto }>(`/v1/countries/${encodeURIComponent(code)}/sectors`, {
+      method: 'PUT',
+      body: JSON.stringify({ sectors }),
+    }),
+
+  remove: (code: string) =>
+    request<{ removed: boolean }>(`/v1/countries/${encodeURIComponent(code)}`, { method: 'DELETE' }),
+
+  insights: (code: string) =>
+    request<CountryInsightsDto>(`/v1/countries/${encodeURIComponent(code)}/insights`),
+}
+
 export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
@@ -1011,6 +1108,23 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  updateNotificationContact: (id: string, body: NewNotificationContactDto) =>
+    request<{ contact: NotificationContactDto }>(`/v1/notifications/contacts/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  /** A model-written summary grounded in the run's latest joint report. */
+  suggestNotificationSummary: (body: {
+    runId: string
+    kind: 'joint_report' | 'approval_request'
+    locale?: 'en' | 'fr'
+  }) =>
+    request<{ runId: string; summary: string; model: string; generatedAt: string }>(
+      '/v1/notifications/summary-suggestion',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
   deleteNotificationContact: (id: string) =>
     request<{ removed: boolean }>(`/v1/notifications/contacts/${encodeURIComponent(id)}`, {
       method: 'DELETE',
@@ -1140,6 +1254,8 @@ export interface AuditEventDto {
   runId?: string
   ts: string
   actor: string
+  /** Operator (e-mail) the record belongs to; absent on system-wide events. */
+  userId?: string
   action: string
   target?: string
   lens: string

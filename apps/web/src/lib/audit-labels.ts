@@ -18,6 +18,10 @@ export const AUDIT_ACTION_KEYS: Record<string, string> = {
   'notification.whatsapp_sent': 'audit.action.notificationWhatsappSent',
   'notification.contact_added': 'audit.action.notificationContactAdded',
   'notification.contact_removed': 'audit.action.notificationContactRemoved',
+  'country.created': 'audit.action.countryCreated',
+  'country.updated': 'audit.action.countryUpdated',
+  'country.sectors_updated': 'audit.action.countrySectorsUpdated',
+  'country.removed': 'audit.action.countryRemoved',
   'exercise.after_action': 'audit.action.exerciseAfterAction',
   'gap.recorded': 'audit.action.gapRecorded',
   'impact.analyzed': 'audit.action.impactAnalyzed',
@@ -75,8 +79,12 @@ export function auditActionLabel(action: string, t: Translate): string {
 }
 
 /** The label of an actor: known services are translated, an address is kept as is. */
-export function auditActorLabel(actor: string, t: Translate): string {
-  const key = AUDIT_ACTOR_KEYS[actor.trim().toLowerCase()]
+export function auditActorLabel(actor: string, t: Translate, userId?: string): string {
+  const normalised = actor.trim().toLowerCase()
+  // Role-scoped records carry the role in `actor` and the operator's address in
+  // `userId`; the journal names the person, never the anonymous role.
+  if (userId && (normalised === 'operator' || normalised === 'user')) return userId
+  const key = AUDIT_ACTOR_KEYS[normalised]
   return key ? t(key as MessageKey) : humaniseActor(actor)
 }
 

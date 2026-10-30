@@ -1,6 +1,11 @@
 # Build context: repository root
 # ── base ─────────────────────────────────────────────────────────────────────
-FROM oven/bun:1.1-alpine AS base
+# Bun 1.4 reads the text `bun.lock` (lockfileVersion 1). Bun 1.1 ignored it and
+# installed latest versions, which gave react-dom 19.3.1 against react 19.3.0;
+# react-dom's Bun server bundle (`a: if (…)` labels) then failed to parse with
+# "Unexpected keyword 'if'. Cannot find scope for the label 'a'." on every
+# notification e-mail. Keep this image aligned with the lockfile it installs.
+FROM oven/bun:1.4.2-alpine AS base
 WORKDIR /app
 
 COPY package.json turbo.json tsconfig.base.json ./

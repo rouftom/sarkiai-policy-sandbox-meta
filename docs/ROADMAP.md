@@ -55,9 +55,7 @@ Everything below existed before the hackathon (tag `pre-hackathon-baseline`).
 - `[x]` Publish the repository and the public demo (address in the deployment notes).
 - `[ ]` Submit (repo + video) before 4 Nov 2026, 21:00 ET.
 
-### Sprint 5: multi-country & fine-tuning (post-shortlist)
-- `[ ]` Add UAE (`data/country/ae/`) for the cross-national narrative.
-- `[ ]` Validate the same engine on a second jurisdiction (no code change).
+### Sprint 5: fine-tuning (post-shortlist)
 - `[ ]` **Fine-tuning local (unsloth)**: export (KB context → cited answer) pairs from Mongo (`cot_traces`, `joint_reports`, readiness) → train a LoRA on **Muse Glimmer** with [unsloth](https://github.com/unslothai/unsloth) → merge + convert to GGUF → `ollama create sps-glimmer` → `MUSE_GLIMMER_MODEL=sps-glimmer`. The dataset never leaves the institution.
 
 ## Hackathon sprints (27 Oct – 4 Nov 2026)
@@ -73,9 +71,8 @@ Everything below existed before the hackathon (tag `pre-hackathon-baseline`).
 | N6 | WhatsApp voice notes → timestamped facts | Muse Voice Transcribe | 1 Nov |
 | N7 | Impact analysis: new legislation re-evaluates open incidents | Muse Spark | 1 Nov |
 | N8 | Crisis exercise mode with timed injects and after-action report | Muse Spark / open weights | 2 Nov |
-| N9 | Public-communication drafts in Fulfulde or Hausa (native review required) | Muse Spark | if time |
 
-Cut order if late: N9 → N8 → N7 → N6. Never cut N1, N2, N3, N4, N5, N10.
+Cut order if late: N8 → N7 → N6. Never cut N1, N2, N3, N4, N5, N10.
 
 ## Open gaps carried from the parent platform
 

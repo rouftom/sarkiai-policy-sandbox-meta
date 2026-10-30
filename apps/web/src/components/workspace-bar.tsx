@@ -5,12 +5,17 @@ import type { Domain } from '@sps/shared'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 
-const DOMAIN_OPTIONS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
-
 /** Country and domain controls, compact, for a page header. */
 export function WorkspaceControls() {
-  const { t } = useI18n()
-  const { country, setCountry, domains, setDomains } = useWorkspace()
+  const { t, locale } = useI18n()
+  const { country, setCountry, countries, sectors, domains, setDomains } = useWorkspace()
+
+  const selectable = countries.filter((row) => row.status === 'active')
+  const pool = selectable.length > 0 ? selectable : countries
+  const countryOptions =
+    pool.length > 0
+      ? pool.map((row) => ({ value: row.code, label: locale === 'fr' ? row.nameFr : row.name }))
+      : [{ value: country, label: country.toUpperCase() }]
 
   return (
     <>
@@ -18,15 +23,15 @@ export function WorkspaceControls() {
         ariaLabel={t('app.country')}
         value={country}
         onValueChange={setCountry}
-        options={[{ value: 'cm', label: t('country.cm') }]}
+        options={countryOptions}
         size="sm"
-        className="w-20"
+        className="w-40 max-w-40 truncate"
       />
       <MultiSelect
         ariaLabel={t('app.domains')}
         values={domains}
         onValuesChange={(values) => setDomains(values as Domain[])}
-        options={DOMAIN_OPTIONS.map((value) => ({ value, label: t(`domain.${value}` as 'domain.health') }))}
+        options={sectors.map((value) => ({ value, label: t(`domain.${value}` as 'domain.health') }))}
         className="w-36"
       />
     </>

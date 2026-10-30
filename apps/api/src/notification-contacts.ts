@@ -95,15 +95,28 @@ export class NotificationContactStore {
   }
 
   /** The same number or the same address twice is a mistake, not a second contact. */
-  async duplicate(input: { email?: string; phone?: string }): Promise<NotificationContact | null> {
+  async duplicate(
+    input: { email?: string; phone?: string },
+    ignoreId?: string,
+  ): Promise<NotificationContact | null> {
     const all = await this.list()
     return (
       all.find(
         (contact) =>
-          (input.phone && contact.phone === input.phone) ||
-          (input.email && contact.email && contact.email === input.email),
+          contact.id !== ignoreId &&
+          ((input.phone && contact.phone === input.phone) ||
+            (input.email && contact.email && contact.email === input.email)),
       ) ?? null
     )
+  }
+
+  async get(id: string): Promise<NotificationContact | null> {
+    const db = await this.col()
+    if (db) {
+      const doc = await db.findOne({ _id: id as unknown as Document['_id'] }).catch(() => null)
+      if (doc) return toContact(doc)
+    }
+    return this.memory.get(id) ?? null
   }
 
   async add(input: NewNotificationContact): Promise<NotificationContact> {
@@ -125,6 +138,43 @@ export class NotificationContactStore {
         .catch(() => undefined)
     }
     return contact
+  }
+
+  /** Replaces the mutable fields of one contact; the id, provenance and creation time stay. */
+  async update(id: string, input: Omit<NewNotificationContact, 'createdBy'>): Promise<NotificationContact | null> {
+    const current = await this.get(id)
+    if (!current) return null
+
+    const next: NotificationContact = {
+      id: current.id,
+      name: input.name,
+      ...(input.email ? { email: input.email.toLowerCase() } : {}),
+      ...(input.phone ? { phone: input.phone } : {}),
+      ...(input.country ? { country: input.country } : {}),
+      channels: input.channels,
+      createdAt: current.createdAt,
+      createdBy: current.createdBy,
+    }
+    this.memory.set(id, next)
+
+    const col = await this.col()
+    if (col) {
+      await col
+        .updateOne(
+          { _id: id as unknown as Document['_id'] },
+          {
+            $set: {
+              name: next.name,
+              email: next.email ?? null,
+              phone: next.phone ?? null,
+              country: next.country ?? null,
+              channels: next.channels,
+            },
+          },
+        )
+        .catch(() => undefined)
+    }
+    return next
   }
 
   async remove(id: string): Promise<boolean> {

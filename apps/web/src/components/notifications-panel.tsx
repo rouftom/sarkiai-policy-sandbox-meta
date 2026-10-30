@@ -11,11 +11,11 @@
 
 import * as React from 'react'
 import {
-  Bell,
   CheckCircle2,
-  Loader2,
+  Feather,
+  Loader,
   Mail,
-  MessageCircle,
+  Pencil,
   Plus,
   Send,
   ShieldCheck,
@@ -26,8 +26,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,6 +39,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   cn,
 } from '@sps/ui'
 import {
@@ -50,12 +52,14 @@ import {
   type NotificationContactDto,
   type NotificationSendResultDto,
   type NotificationStatusDto,
+  type ScenarioRunSummaryDto,
   type WhatsAppNotificationKind,
 } from '@/lib/api'
-import { useI18n } from '@/lib/i18n'
+import { useI18n, type MessageKey } from '@/lib/i18n'
 import { useToast } from '@/components/shared/toast'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
-import { displayPhone, parsePhoneInput } from '@/lib/phone'
+import { SearchSelect } from '@/components/shared/search-select'
+import { displayPhone, formatPhoneAsYouType, parsePhoneInput, phoneCountries } from '@/lib/phone'
 
 type Channel = 'whatsapp' | 'email'
 
@@ -69,8 +73,46 @@ function apiErrorCode(cause: unknown): string | null {
   return null
 }
 
+/** Codes the console has a translated sentence for; anything else uses the fallback. */
+const NOTIFY_ERROR_CODES = new Set([
+  'duplicate',
+  'invalid_phone',
+  'at_least_one_channel',
+  'email_consent_without_email',
+  'whatsapp_consent_without_phone',
+  'missing_joint_report_fields',
+  'missing_deadline_fields',
+  'missing_approval_fields',
+  'approval_secret_missing',
+  'whatsapp_not_configured',
+  'mail_not_configured',
+  'run_not_found',
+  'suggestion_failed',
+  'not_found',
+])
+
+/**
+ * A translated sentence for an API failure. Fastify's own 404 body says
+ * `Not Found`, which is not a message key: unknown codes fall back to `fallback`.
+ */
+function notifyErrorText(
+  cause: unknown,
+  t: (key: MessageKey) => string,
+  fallback: MessageKey,
+  /** True when a 404 most likely means the API does not expose the route yet. */
+  routeHint = false,
+): string {
+  // Fastify's own 404 body is `{ "error": "Not Found" }`, not one of our codes.
+  if (routeHint && cause instanceof ApiError && cause.status === 404) {
+    return t('notify.error.not_found')
+  }
+  const code = apiErrorCode(cause)
+  if (code && NOTIFY_ERROR_CODES.has(code)) return t(`notify.error.${code}` as MessageKey)
+  return t(fallback)
+}
+
 export function NotificationsPanel({ country }: { country: string }) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const toast = useToast()
 
   const [contacts, setContacts] = React.useState<NotificationContactDto[]>([])
@@ -79,9 +121,12 @@ export function NotificationsPanel({ country }: { country: string }) {
   const [channel, setChannel] = React.useState<Channel>('whatsapp')
   const [selected, setSelected] = React.useState<string[]>([])
   const [adding, setAdding] = React.useState(false)
+  const [editing, setEditing] = React.useState<NotificationContactDto | null>(null)
   const [deleting, setDeleting] = React.useState<NotificationContactDto | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [result, setResult] = React.useState<NotificationSendResultDto | null>(null)
+  const [runs, setRuns] = React.useState<ScenarioRunSummaryDto[]>([])
+  const [suggesting, setSuggesting] = React.useState(false)
 
   // WhatsApp composer
   const [kind, setKind] = React.useState<WhatsAppNotificationKind>('test')
@@ -95,11 +140,7 @@ export function NotificationsPanel({ country }: { country: string }) {
 
   // E-mail composer
   const [subject, setSubject] = React.useState('')
-  const [heading, setHeading] = React.useState('')
-  const [intro, setIntro] = React.useState('')
   const [message, setMessage] = React.useState('')
-  const [ctaLabel, setCtaLabel] = React.useState('')
-  const [ctaUrl, setCtaUrl] = React.useState('')
 
   const refresh = React.useCallback(async () => {
     try {
@@ -116,6 +157,22 @@ export function NotificationsPanel({ country }: { country: string }) {
   React.useEffect(() => {
     void refresh()
   }, [refresh])
+
+  // Runs feed the searchable picker. A failure here must not hide the address book.
+  React.useEffect(() => {
+    let cancelled = false
+    api
+      .scenarioRuns()
+      .then(({ runs: loaded }) => {
+        if (!cancelled) setRuns(loaded)
+      })
+      .catch(() => {
+        if (!cancelled) setRuns([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const reachable = React.useMemo(
     () =>
@@ -175,12 +232,7 @@ export function NotificationsPanel({ country }: { country: string }) {
         outcome = await api.sendEmailNotification({
           contactIds: selected,
           subject: subject.trim(),
-          ...(heading.trim() ? { heading: heading.trim() } : {}),
-          ...(intro.trim() ? { intro: intro.trim() } : {}),
           message: message.trim(),
-          ...(ctaLabel.trim() && ctaUrl.trim()
-            ? { ctaLabel: ctaLabel.trim(), ctaUrl: ctaUrl.trim() }
-            : {}),
         })
       }
       setResult(outcome)
@@ -195,44 +247,55 @@ export function NotificationsPanel({ country }: { country: string }) {
         toast.error(t('notify.nothingSent'), t('notify.nothingSentDetail'))
       }
     } catch (cause) {
-      const code = apiErrorCode(cause)
-      toast.error(
-        t('notify.sendError'),
-        code ? t(`notify.error.${code}` as 'notify.error.duplicate') : (cause as Error).message,
-      )
+      toast.error(t('notify.sendError'), notifyErrorText(cause, t, 'notify.error.generic'))
     } finally {
       setBusy(false)
     }
   }
 
+  const runDate = (iso: string) =>
+    new Intl.DateTimeFormat(locale === 'fr' ? 'fr-FR' : 'en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(iso))
+
+  const runOptions = runs.map((run) => ({
+    value: run.id,
+    label: run.title,
+    hint: `${runDate(run.createdAt)} · ${run.status} · ${run.released}/${run.total}`,
+    keywords: `${run.id} ${run.country} ${run.domain}`,
+  }))
+
+  const suggestSummary = async (channel: Channel = 'whatsapp') => {
+    if (!runId.trim() || suggesting) return
+    setSuggesting(true)
+    try {
+      const suggestion = await api.suggestNotificationSummary({
+        runId: runId.trim(),
+        kind:
+          channel === 'whatsapp' && kind === 'approval_request'
+            ? 'approval_request'
+            : 'joint_report',
+        locale,
+      })
+      if (channel === 'whatsapp') setSummary(suggestion.summary)
+      else setMessage(suggestion.summary)
+      toast.success(t('notify.whatsapp.suggested'), suggestion.model)
+    } catch (cause) {
+      toast.error(
+        t('notify.whatsapp.suggestError'),
+        notifyErrorText(cause, t, 'notify.error.generic', true),
+      )
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   return (
     <Card>
-      <CardHeader>
-        <Bell className="h-4 w-4 text-primary" />
-        <CardTitle>{t('notify.title')}</CardTitle>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <ChannelChip icon={Mail} label={t('notify.channel.email')} ready={emailReady} />
-          <ChannelChip icon={MessageCircle} label={t('notify.channel.whatsapp')} ready={whatsappReady} />
-        </div>
-      </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
-          <span>
-            {t('notify.status.emailLine', { from: status?.email.from ?? '—' })}
-            {emailReady ? '' : ` · ${t('notify.status.missing')}`}
-          </span>
-          <span className="hidden h-3 w-px bg-border sm:block" />
-          <span>
-            {t('notify.status.templates')}{' '}
-            {(status?.whatsapp.templates ?? []).length === 0
-              ? t('notify.status.templatesUnknown')
-              : status?.whatsapp.templates
-                  .map((template) => `${template.name.replace('meta_hackathon_', '')}: ${template.status}`)
-                  .join(' · ')}
-          </span>
-        </div>
-        <p className="text-[11px] text-muted-foreground">{t('notify.consentNotice')}</p>
-
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           <section className="min-w-0 space-y-2 rounded-xl border border-border p-2.5">
             <div className="flex items-center gap-2">
@@ -255,12 +318,12 @@ export function NotificationsPanel({ country }: { country: string }) {
             ) : contacts.length === 0 ? (
               <p className="py-4 text-center text-[11px] text-muted-foreground">{t('notify.contacts.empty')}</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="custom-scrollbar max-h-72 overflow-auto">
                 <Table className="min-w-0">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead>{t('notify.contacts.name')}</TableHead>
-                      <TableHead>{t('notify.contacts.reach')}</TableHead>
+                      <TableHead className="min-w-44 whitespace-nowrap">{t('notify.contacts.reach')}</TableHead>
                       <TableHead className="w-8" />
                     </TableRow>
                   </TableHeader>
@@ -276,21 +339,32 @@ export function NotificationsPanel({ country }: { country: string }) {
                             <span className={cn('truncate', contact.channels.email ? 'text-foreground' : 'text-muted-foreground/60')}>
                               {contact.email ?? '—'}
                             </span>
-                            <span className={cn('font-mono', contact.channels.whatsapp ? 'text-foreground' : 'text-muted-foreground/60')}>
+                            <span className={cn('font-mono whitespace-nowrap', contact.channels.whatsapp ? 'text-foreground' : 'text-muted-foreground/60')}>
                               {contact.phoneDisplay ?? (contact.phone ? displayPhone(contact.phone) : '—')}
                             </span>
                           </div>
                         </TableCell>
                         <TableCell className="align-top">
-                          <button
-                            type="button"
-                            onClick={() => setDeleting(contact)}
-                            aria-label={t('notify.contacts.delete')}
-                            title={t('notify.contacts.delete')}
-                            className="rounded-lg border border-border p-1 text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditing(contact)}
+                              aria-label={t('notify.contacts.edit')}
+                              title={t('notify.contacts.edit')}
+                              className="rounded-lg border border-border p-1 text-muted-foreground transition-colors hover:border-brand-primary/40 hover:text-foreground"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleting(contact)}
+                              aria-label={t('notify.contacts.delete')}
+                              title={t('notify.contacts.delete')}
+                              className="rounded-lg border border-border p-1 text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -317,13 +391,18 @@ export function NotificationsPanel({ country }: { country: string }) {
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {value === 'whatsapp' ? <MessageCircle className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}
+                  {value === 'whatsapp' ? (
+                    // Brand mark supplied as-is; the green is part of the asset.
+                    <img src="/icons/whatsapp-com-logo.svg" alt="" aria-hidden className="h-3.5 w-3.5" />
+                  ) : (
+                    <Mail className="h-3.5 w-3.5" />
+                  )}
                   {t(`notify.channel.${value}` as 'notify.channel.email')}
                 </button>
               ))}
             </div>
 
-            {!channelReady && (
+            {status !== null && !channelReady && (
               <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-[10px] text-amber-700 dark:text-amber-300">
                 {channel === 'whatsapp' ? t('notify.status.whatsappMissing') : t('notify.status.emailMissing')}
               </p>
@@ -350,26 +429,37 @@ export function NotificationsPanel({ country }: { country: string }) {
 
                 {(kind === 'joint_report' || kind === 'approval_request') && (
                   <>
-                    <label className="space-y-1">
+                    <div className="space-y-1">
                       <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.whatsapp.runId')}</span>
-                      <input
+                      <SearchSelect
+                        ariaLabel={t('notify.whatsapp.runId')}
                         value={runId}
-                        onChange={(event) => setRunId(event.target.value)}
-                        placeholder="run_…"
-                        maxLength={120}
-                        className="h-7 w-full rounded-lg border border-border bg-transparent px-2 font-mono text-[11px]"
+                        onValueChange={setRunId}
+                        placeholder={t('notify.whatsapp.runPlaceholder')}
+                        searchPlaceholder={t('notify.whatsapp.runSearch')}
+                        emptyLabel={t('notify.whatsapp.runEmpty')}
+                        options={runOptions}
+                        className="font-mono"
                       />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.whatsapp.summary')}</span>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="flex items-center justify-between gap-2 text-[10px] font-semibold text-muted-foreground">
+                        {t('notify.whatsapp.summary')}
+                        <SuggestButton
+                          ready={Boolean(runId.trim())}
+                          busy={suggesting}
+                          onClick={() => void suggestSummary('whatsapp')}
+                        />
+                      </span>
                       <textarea
                         value={summary}
                         onChange={(event) => setSummary(event.target.value)}
                         rows={3}
                         maxLength={kind === 'joint_report' ? 900 : 600}
+                        placeholder={t('notify.whatsapp.summaryHint')}
                         className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
-                    </label>
+                    </div>
                   </>
                 )}
 
@@ -441,18 +531,28 @@ export function NotificationsPanel({ country }: { country: string }) {
                     className="h-7 w-full rounded-lg border border-border bg-transparent px-2 text-[11px]"
                   />
                 </label>
-                <label className="space-y-1">
-                  <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.email.heading')}</span>
-                  <input
-                    value={heading}
-                    onChange={(event) => setHeading(event.target.value)}
-                    maxLength={160}
-                    placeholder={t('notify.email.headingHint')}
-                    className="h-7 w-full rounded-lg border border-border bg-transparent px-2 text-[11px]"
+                <div className="space-y-1">
+                  <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.whatsapp.runId')}</span>
+                  <SearchSelect
+                    ariaLabel={t('notify.whatsapp.runId')}
+                    value={runId}
+                    onValueChange={setRunId}
+                    placeholder={t('notify.whatsapp.runPlaceholder')}
+                    searchPlaceholder={t('notify.whatsapp.runSearch')}
+                    emptyLabel={t('notify.whatsapp.runEmpty')}
+                    options={runOptions}
+                    className="font-mono"
                   />
-                </label>
-                <label className="space-y-1">
-                  <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.email.message')}</span>
+                </div>
+                <div className="space-y-1">
+                  <span className="flex items-center justify-between gap-2 text-[10px] font-semibold text-muted-foreground">
+                    {t('notify.whatsapp.summary')}
+                    <SuggestButton
+                      ready={Boolean(runId.trim())}
+                      busy={suggesting}
+                      onClick={() => void suggestSummary('email')}
+                    />
+                  </span>
                   <textarea
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
@@ -461,26 +561,6 @@ export function NotificationsPanel({ country }: { country: string }) {
                     placeholder={t('notify.email.messageHint')}
                     className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                </label>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="space-y-1">
-                    <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.email.ctaLabel')}</span>
-                    <input
-                      value={ctaLabel}
-                      onChange={(event) => setCtaLabel(event.target.value)}
-                      maxLength={60}
-                      className="h-7 w-full rounded-lg border border-border bg-transparent px-2 text-[11px]"
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.email.ctaUrl')}</span>
-                    <input
-                      value={ctaUrl}
-                      onChange={(event) => setCtaUrl(event.target.value)}
-                      placeholder="https://…"
-                      className="h-7 w-full rounded-lg border border-border bg-transparent px-2 font-mono text-[11px]"
-                    />
-                  </label>
                 </div>
               </div>
             )}
@@ -506,7 +586,7 @@ export function NotificationsPanel({ country }: { country: string }) {
                 />
               </div>
               <Button size="sm" onClick={() => void send()} disabled={!canSend}>
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                {busy ? <Loader className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Send className="h-3.5 w-3.5" />}
                 {busy ? t('notify.sending') : t('notify.send')}
               </Button>
             </div>
@@ -521,11 +601,22 @@ export function NotificationsPanel({ country }: { country: string }) {
         </div>
       </CardContent>
 
-      <AddContactDialog
+      <ContactDialog
         open={adding}
         onOpenChange={setAdding}
         country={country}
-        onAdded={async () => {
+        onSaved={async () => {
+          await refresh()
+        }}
+      />
+
+      <ContactDialog
+        open={Boolean(editing)}
+        onOpenChange={(open) => !open && setEditing(null)}
+        country={country}
+        contact={editing}
+        onSaved={async () => {
+          setEditing(null)
           await refresh()
         }}
       />
@@ -553,27 +644,44 @@ export function NotificationsPanel({ country }: { country: string }) {
   )
 }
 
-function ChannelChip({
-  icon: Icon,
-  label,
+/** The one feather button: drafts a summary grounded in the chosen run. */
+function SuggestButton({
   ready,
+  busy,
+  onClick,
 }: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
   ready: boolean
+  busy: boolean
+  onClick: () => void
 }) {
+  const { t } = useI18n()
+  const inactive = !ready || busy
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
-        ready
-          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-          : 'border-border bg-muted/50 text-muted-foreground',
-      )}
-    >
-      <Icon className="h-3 w-3" />
-      {label}
-    </span>
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onClick}
+            aria-disabled={inactive}
+            aria-label={t('notify.whatsapp.suggest')}
+            className={cn(
+              'inline-flex h-6 w-6 items-center justify-center rounded-lg bg-brand-primary text-white shadow-sm transition-colors hover:bg-brand-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+              inactive && 'cursor-not-allowed bg-brand-primary/40 text-white/70 hover:bg-brand-primary/40',
+            )}
+          >
+            {busy ? (
+              <Loader className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Feather className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="max-w-56 text-[11px]">
+          {ready ? t('notify.whatsapp.suggestTooltip') : t('notify.whatsapp.suggestNeedsRun')}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
@@ -620,19 +728,22 @@ function SendResult({ result }: { result: NotificationSendResultDto }) {
   )
 }
 
-function AddContactDialog({
+function ContactDialog({
   open,
   onOpenChange,
   country,
-  onAdded,
+  contact,
+  onSaved,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   country: string
-  onAdded: () => Promise<void>
+  contact?: NotificationContactDto | null
+  onSaved: () => Promise<void>
 }) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const toast = useToast()
+  const editing = Boolean(contact)
   const [name, setName] = React.useState('')
   const [email, setEmail] = React.useState('')
   const [phone, setPhone] = React.useState('')
@@ -642,17 +753,32 @@ function AddContactDialog({
   const [busy, setBusy] = React.useState(false)
   const [problem, setProblem] = React.useState<string | null>(null)
 
+  const countries = React.useMemo(() => phoneCountries(locale), [locale])
+  const countryOptions = React.useMemo(
+    () =>
+      countries.map((entry) => ({
+        value: entry.code,
+        label: entry.name,
+        hint: entry.dial,
+        keywords: `${entry.code} ${entry.dial}`,
+      })),
+    [countries],
+  )
+  const parsedPhone = React.useMemo(
+    () => (phone.trim() ? parsePhoneInput(phone, phoneCountry) : null),
+    [phone, phoneCountry],
+  )
+
   React.useEffect(() => {
-    if (open) {
-      setName('')
-      setEmail('')
-      setPhone('')
-      setPhoneCountry(country.toUpperCase() || 'CM')
-      setEmailConsent(true)
-      setWhatsappConsent(true)
-      setProblem(null)
-    }
-  }, [open, country])
+    if (!open) return
+    setName(contact?.name ?? '')
+    setEmail(contact?.email ?? '')
+    setPhone(contact?.phoneDisplay ?? contact?.phone ?? '')
+    setPhoneCountry((contact?.country ?? country).toUpperCase() || 'CM')
+    setEmailConsent(contact ? contact.channels.email : true)
+    setWhatsappConsent(contact ? contact.channels.whatsapp : true)
+    setProblem(null)
+  }, [open, contact, country])
 
   const submit = async () => {
     setProblem(null)
@@ -683,13 +809,18 @@ function AddContactDialog({
     }
     setBusy(true)
     try {
-      const created = await api.addNotificationContact(body)
-      await onAdded()
-      toast.success(t('notify.contacts.added'), created.contact.name)
+      if (contact) {
+        const updated = await api.updateNotificationContact(contact.id, body)
+        await onSaved()
+        toast.success(t('notify.contacts.edited'), updated.contact.name)
+      } else {
+        const created = await api.addNotificationContact(body)
+        await onSaved()
+        toast.success(t('notify.contacts.added'), created.contact.name)
+      }
       onOpenChange(false)
     } catch (cause) {
-      const code = apiErrorCode(cause)
-      setProblem(code ? t(`notify.error.${code}` as 'notify.error.duplicate') : (cause as Error).message)
+      setProblem(notifyErrorText(cause, t, 'notify.contacts.saveError'))
     } finally {
       setBusy(false)
     }
@@ -699,8 +830,12 @@ function AddContactDialog({
     <Dialog open={open} onOpenChange={(next) => !busy && onOpenChange(next)}>
       <DialogContent className="max-w-md rounded-3xl p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
-          <DialogTitle className="text-sm font-semibold">{t('notify.contacts.addTitle')}</DialogTitle>
-          <DialogDescription className="text-[11px]">{t('notify.contacts.addHint')}</DialogDescription>
+          <DialogTitle className="text-sm font-semibold">
+            {editing ? t('notify.contacts.editTitle') : t('notify.contacts.addTitle')}
+          </DialogTitle>
+          <DialogDescription className="text-[11px]">
+            {editing ? t('notify.contacts.editHint') : t('notify.contacts.addHint')}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2.5 px-5 py-4">
           <label className="block space-y-1">
@@ -723,27 +858,43 @@ function AddContactDialog({
               className="h-8 w-full rounded-lg border border-border bg-transparent px-2 text-[11px]"
             />
           </label>
-          <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-2">
-            <label className="space-y-1">
+          <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-2">
+            <div className="space-y-1">
               <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.contacts.country')}</span>
-              <input
+              <SearchSelect
+                ariaLabel={t('notify.contacts.country')}
                 value={phoneCountry}
-                onChange={(event) => setPhoneCountry(event.target.value.toUpperCase().slice(0, 2))}
-                maxLength={2}
-                className="h-8 w-full rounded-lg border border-border bg-transparent px-2 text-center font-mono text-[11px] uppercase"
+                onValueChange={setPhoneCountry}
+                options={countryOptions}
+                placeholder={t('notify.contacts.country')}
+                searchPlaceholder={t('notify.contacts.countrySearch')}
+                emptyLabel={t('notify.contacts.countryEmpty')}
+                className="h-8"
               />
-            </label>
+            </div>
             <label className="space-y-1">
               <span className="text-[10px] font-semibold text-muted-foreground">{t('notify.contacts.phone')}</span>
               <input
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
+                onChange={(event) => setPhone(formatPhoneAsYouType(event.target.value, phoneCountry))}
                 inputMode="tel"
                 placeholder="6 12 34 56 78"
-                className="h-8 w-full rounded-lg border border-border bg-transparent px-2 text-[11px]"
+                className="h-8 w-full rounded-lg border border-border bg-transparent px-2 font-mono text-[11px]"
               />
             </label>
           </div>
+          {parsedPhone && (
+            <p
+              className={cn(
+                'text-[10px]',
+                parsedPhone.ok ? 'text-muted-foreground' : 'text-rose-500',
+              )}
+            >
+              {parsedPhone.ok
+                ? t('notify.contacts.phoneHint', { e164: parsedPhone.e164 })
+                : t(`notify.phone.${parsedPhone.reason}` as 'notify.phone.invalid')}
+            </p>
+          )}
           <div className="grid gap-1.5 rounded-lg border border-border p-2">
             <label className="flex items-center gap-2 text-[11px]">
               <input
@@ -775,8 +926,12 @@ function AddContactDialog({
             {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={busy}>
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-            {t('notify.contacts.save')}
+            {busy ? <Loader className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : editing ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+            {busy
+              ? t('notify.contacts.saving')
+              : editing
+                ? t('notify.contacts.saveEdit')
+                : t('notify.contacts.save')}
           </Button>
         </div>
       </DialogContent>
