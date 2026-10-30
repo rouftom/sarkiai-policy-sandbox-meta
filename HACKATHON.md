@@ -9,11 +9,9 @@ was built during the building period, and which Meta model does what.
 
 ## What existed before the hackathon
 
-Baseline: commit [`bdb8a11`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/bdb8a11b51487edc9f1b8633f8efa6034d2bd672) (`baseline: SarkiAI Policy Sandbox engine (v0.1.0)`), tagged `pre-hackathon-baseline`.
-Every later commit is hackathon work.
+The baseline commit [`bdb8a11`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/bdb8a11b51487edc9f1b8633f8efa6034d2bd672) (`baseline: SarkiAI Policy Sandbox engine (v0.1.0)`, tag `pre-hackathon-baseline`) imports the SarkiAI Policy Sandbox engine as a single commit at the start of the building period. It already contained the items listed below. Everything from N1 onward was built during the hackathon, with the commits shown in the table.
 
-The core engine was written earlier as a local-first policy sandbox, and is
-published here unchanged as the starting point:
+The engine, published here unchanged as the starting point:
 
 - national legal-corpus ingestion (structure-aware chunking, embeddings, jurisdiction metadata);
 - **mandated institutional agents** that must cite the applicable provisions;
@@ -26,12 +24,12 @@ published here unchanged as the starting point:
 ## Timeline
 
 The hackathon kicked off on **26 October 2026 at 12:00 PM ET (17:00 in Cameroon, UTC+1)**.
-The baseline engine, written before the event, was imported as a single commit
-after the kickoff; every later commit is hackathon work. Author times, UTC+1:
+The baseline engine was imported as a single commit after the kickoff; every later
+commit is hackathon work. Author times, UTC+1:
 
 | Time (26 Oct unless noted) | Commit | What |
 |---|---|---|
-| 20:48 | [`bdb8a11`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/bdb8a11b51487edc9f1b8633f8efa6034d2bd672) | Baseline import (pre-existing engine) |
+| 20:48 | [`bdb8a11`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/bdb8a11b51487edc9f1b8633f8efa6034d2bd672) | Baseline import (engine, see above) |
 | 20:49 | [`9a7d845`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/9a7d8456a8a25018f0137daacce5b5e78e66772c) | N1 provider modes scaffold |
 | 20:57 | [`80cdbac`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/80cdbacdac67d12ded033bf543d9936a0a3acbcb) | N1 runtime mode switch |
 | 21:05 | [`2043ad3`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/2043ad30122cd44e940f41bd6954d62b4a99ad83) | N2 citation validator |

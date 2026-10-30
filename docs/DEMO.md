@@ -148,7 +148,7 @@ Screen: `/audit` → **chain valid**. End card: the five Meta models, the reposi
 
 | Question | Answer |
 |---|---|
-| What was built during the hackathon? | Everything in [`HACKATHON.md`](../HACKATHON.md), with commits and times. The baseline engine is the first commit. |
+| What was built during the hackathon? | Everything in [`HACKATHON.md`](../HACKATHON.md), with commits and times. The engine is imported as the first commit; N1 to N11 are the hackathon work. |
 | Where does the open-weight model run, and what does it do? | Muse Spark Open runs on Baseten and takes over all reasoning (agents, coordinator, citation retries, impact analysis, exercise narrative). Muse Glimmer runs on the institution's hardware through Ollama. See the README section *Open weights*. |
 | Why Voyage for retrieval? | Meta publishes neither an embedding nor a reranking model. `voyage-4` and `rerank-2` only rank passages: they generate no text and take no decision. Every reasoning, vision, segmentation and speech step runs on Meta, and the citation validator checks every quote against the corpus anyway. |
 | Is the corpus real? | The manifest is the Cameroon national corpus. Laws and decrees are official texts; other works keep their own terms, and each manifest entry carries a `rights` status. The demo gazette page is a generated sample. |
