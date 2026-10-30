@@ -34,6 +34,7 @@ export type ActionKind =
   | 'publish_communication'
   | 'record_gap'
   | 'request_tool'
+  | 'delete_record'
 
 export type ActionStatus = 'pending' | 'approved' | 'rejected' | 'executed' | 'failed'
 

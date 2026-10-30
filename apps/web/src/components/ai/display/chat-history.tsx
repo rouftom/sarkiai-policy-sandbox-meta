@@ -2,6 +2,8 @@
 
 import * as React from 'react'
 import { MessageSquare, Trash2 } from 'lucide-react'
+import { ConfirmDialog } from '@/components/shared/confirm-dialog'
+import { useToast } from '@/components/shared/toast'
 import { HistoryShimmer } from '@/components/ai/display/conversation-shimmer'
 import { useI18n } from '@/lib/i18n'
 import type { ChatSessionSummary } from '@/lib/chat-sessions-client'
@@ -26,10 +28,11 @@ export function ChatHistory({
   loading: boolean
   activeId: string | null
   onOpen: (id: string) => void
-  onDelete: (id: string) => void
+  onDelete: (id: string) => Promise<void>
 }) {
   const { t } = useI18n()
-  const [confirming, setConfirming] = React.useState<string | null>(null)
+  const toast = useToast()
+  const [pendingDelete, setPendingDelete] = React.useState<ChatSessionSummary | null>(null)
   const now = Date.now()
   const groups: Array<{ key: 'today' | 'week' | 'older'; label: string; items: ChatSessionSummary[] }> = [
     { key: 'today', label: t('history.today'), items: [] },
@@ -74,33 +77,46 @@ export function ChatHistory({
                         {new Date(session.updatedAt).toLocaleDateString()} · {session.turnCount}
                       </span>
                     </button>
-                    {confirming === session.id ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConfirming(null)
-                          onDelete(session.id)
-                        }}
-                        className="shrink-0 rounded-lg bg-destructive px-2 py-1 text-[10px] font-semibold text-white"
-                      >
-                        {t('history.confirmDelete')}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirming(session.id)}
-                        aria-label={t('history.delete')}
-                        className="shrink-0 rounded-lg p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/row:opacity-100"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete(session)}
+                      aria-label={t('history.delete')}
+                      className="shrink-0 rounded-lg p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/row:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </li>
                 )
               })}
             </ul>
           </section>
         ))}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return
+          try {
+            await onDelete(pendingDelete.id)
+            toast.success(t('history.delete.done'))
+          } catch (cause) {
+            toast.error(t('history.delete.failed'), (cause as Error).message)
+            throw cause
+          }
+        }}
+        title={t('history.delete.title')}
+        description={
+          pendingDelete
+            ? t('history.delete.body', {
+                title: pendingDelete.title || t('assistant.newChat'),
+                turns: pendingDelete.turnCount,
+              })
+            : ''
+        }
+        confirmText={t('history.delete.confirm')}
+        cancelText={t('common.cancel')}
+      />
     </div>
   )
 }

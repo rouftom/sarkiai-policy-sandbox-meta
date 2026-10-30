@@ -113,7 +113,7 @@ export function AgentActivityTrail({ steps, isStreaming, startedAt, endedAt, hea
         {totalCount > 1 && <span className="text-foreground/30">×{totalCount}</span>}
         {elapsed && <span className="text-foreground/30">· {elapsed}</span>}
       </ChainOfThoughtHeader>
-      <ChainOfThoughtContent className="border-l border-brand-primary/10 ml-1.5 pl-3 py-1 space-y-0.5">
+      <ChainOfThoughtContent className="ml-3 pl-3 py-1 space-y-0.5">
         {hiddenCount > 0 && <div className="text-[10px] text-foreground/30 pl-4">+{hiddenCount}</div>}
         {visibleSteps.map((step) => (
           <ChainOfThoughtStep

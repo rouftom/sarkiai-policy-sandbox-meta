@@ -17,6 +17,7 @@ export const ACTION_KIND_KEY: Record<ActionKind, MessageKey> = {
   publish_communication: 'agentui.kind.publish_communication',
   record_gap: 'agentui.kind.record_gap',
   request_tool: 'agentui.kind.request_tool',
+  delete_record: 'agentui.kind.delete_record',
 }
 
 export const ACTION_RISK_KEY: Record<ActionRisk, MessageKey> = {
