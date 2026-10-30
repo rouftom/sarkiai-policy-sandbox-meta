@@ -8,9 +8,8 @@
 
 import * as React from 'react'
 import { cn } from '@sps/ui'
-import { StreamIndicator } from '@/components/ai/display/stream-indicator'
 
-export const STREAM_LOADERS = ['blocks', 'wind', 'cube'] as const
+export const STREAM_LOADERS = ['blocks', 'wind', 'neural'] as const
 export type StreamLoaderVariant = (typeof STREAM_LOADERS)[number]
 export const DEFAULT_STREAM_LOADER: StreamLoaderVariant = 'blocks'
 
@@ -63,6 +62,60 @@ function Block({
   )
 }
 
+const MESH_PERIOD = 1.6
+const MESH_LAYERS = [
+  { x: 4, ys: [6, 12, 18], delay: 0 },
+  { x: 12, ys: [3.5, 9.2, 14.8, 20.5], delay: 0.5 },
+  { x: 20, ys: [8, 12, 16], delay: 1 },
+]
+
+/** A small neural network: three layers of nodes, signals travelling along the links, the nodes lighting up layer by layer. */
+export function NeuralMesh(props: React.SVGProps<SVGSVGElement>) {
+  const links: Array<{ x1: number; y1: number; x2: number; y2: number }> = []
+  for (let layer = 0; layer < MESH_LAYERS.length - 1; layer += 1) {
+    const from = MESH_LAYERS[layer]!
+    const to = MESH_LAYERS[layer + 1]!
+    for (const y1 of from.ys) for (const y2 of to.ys) links.push({ x1: from.x, y1, x2: to.x, y2 })
+  }
+  const signals = links.filter((_, index) => index % 4 === 0)
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none">
+      <title>neural-mesh</title>
+      <g stroke="currentColor" strokeWidth="0.6" strokeOpacity="0.28">
+        {links.map((link, index) => (
+          <line key={index} x1={link.x1} y1={link.y1} x2={link.x2} y2={link.y2} />
+        ))}
+      </g>
+      {signals.map((link, index) => (
+        <circle key={`signal-${index}`} r="0.9" fill="currentColor">
+          <animateMotion
+            dur={`${MESH_PERIOD}s`}
+            repeatCount="indefinite"
+            begin={`${(index * 0.2).toFixed(2)}s`}
+            path={`M${link.x1} ${link.y1} L${link.x2} ${link.y2}`}
+          />
+          <animate
+            attributeName="opacity"
+            values="0;1;1;0"
+            keyTimes="0;0.15;0.85;1"
+            dur={`${MESH_PERIOD}s`}
+            repeatCount="indefinite"
+            begin={`${(index * 0.2).toFixed(2)}s`}
+          />
+        </circle>
+      ))}
+      {MESH_LAYERS.map((layer, layerIndex) =>
+        layer.ys.map((y, nodeIndex) => (
+          <circle key={`node-${layerIndex}-${nodeIndex}`} cx={layer.x} cy={y} r="1.5" fill="currentColor">
+            <animate attributeName="opacity" values="0.4;1;0.4" dur={`${MESH_PERIOD}s`} repeatCount="indefinite" begin={`${layer.delay}s`} />
+            <animate attributeName="r" values="1.3;1.8;1.3" dur={`${MESH_PERIOD}s`} repeatCount="indefinite" begin={`${layer.delay}s`} />
+          </circle>
+        )),
+      )}
+    </svg>
+  )
+}
+
 /** A single shape turning on its axis, like a wind vane in a gust. */
 export function WindToy(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -80,7 +133,7 @@ export function WindToy(props: React.SVGProps<SVGSVGElement>) {
 
 /** The glyph of one style. The cube keeps its own fixed size. */
 export function LoaderGlyph({ variant, className }: { variant: StreamLoaderVariant; className?: string }) {
-  if (variant === 'cube') return <StreamIndicator />
+  if (variant === 'neural') return <NeuralMesh aria-hidden="true" className={cn('text-brand-primary dark:text-brand-primary-light', className)} />
   if (variant === 'wind') return <WindToy aria-hidden="true" className={cn('text-brand-primary dark:text-brand-primary-light', className)} />
   return <BlocksWave aria-hidden="true" className={cn('text-brand-primary dark:text-brand-primary-light', className)} />
 }
@@ -95,6 +148,8 @@ function isVariant(value: unknown): value is StreamLoaderVariant {
 function readVariant(): StreamLoaderVariant {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
+    // The former cube style is now the neural mesh.
+    if (stored === 'cube') return 'neural'
     return isVariant(stored) ? stored : DEFAULT_STREAM_LOADER
   } catch {
     return DEFAULT_STREAM_LOADER

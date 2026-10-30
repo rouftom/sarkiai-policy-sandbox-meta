@@ -638,7 +638,6 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="min-w-0 flex-1 truncate">{t('assistant.loader')}</span>
-            <LoaderGlyph variant={loader} className="h-3.5 w-3.5 text-brand-primary dark:text-brand-primary-light" />
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuLabel>{t('assistant.loader')}</DropdownMenuLabel>
