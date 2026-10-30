@@ -10,6 +10,7 @@ import {
   Compass,
   Cpu,
   Info,
+  Layers,
   ListChecks,
   Settings2,
   ShieldCheck,
@@ -19,10 +20,10 @@ import { PageIntro } from '@/components/page-intro'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 
 export const GUIDE_ORDER = [
-  { href: '/guide/start', key: 'nav.guide_start' as const, icon: Compass },
-  { href: '/guide/engine', key: 'nav.guide_engine' as const, icon: Cpu },
-  { href: '/guide/operations', key: 'nav.guide_operations' as const, icon: Settings2 },
-  { href: '/guide/meta', key: 'nav.guide_meta' as const, icon: ShieldCheck },
+  { href: '/guide/start', key: 'nav.guide_start' as const, icon: Compass, iconClassName: 'h-4 w-4' },
+  { href: '/guide/engine', key: 'nav.guide_engine' as const, icon: Cpu, iconClassName: 'h-4 w-4' },
+  { href: '/guide/operations', key: 'nav.guide_operations' as const, icon: Settings2, iconClassName: 'h-4 w-4' },
+  { href: '/guide/meta', key: 'nav.guide_meta' as const, icon: Layers, iconClassName: 'h-4 w-4' },
 ]
 
 /**
@@ -79,7 +80,7 @@ export function GuideShell({
                     <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border border-current text-[8px]">
                       {position + 1}
                     </span>
-                    <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <Icon className={cn('mt-0.5 shrink-0', entry.iconClassName)} aria-hidden="true" />
                     <span className="min-w-0">{t(entry.key)}</span>
                   </Link>
                 </li>
@@ -225,16 +226,18 @@ export function GuideNote({ children }: { children: React.ReactNode }) {
 export function GuideSection({
   title,
   icon: Icon = ListChecks,
+  iconClassName,
   children,
 }: {
   title: string
   icon?: React.ComponentType<{ className?: string }>
+  iconClassName?: string
   children: React.ReactNode
 }) {
   return (
     <section className="mt-6 first:mt-0">
       <h3 className="flex items-center gap-1.5 font-display text-sm font-bold tracking-tight text-foreground">
-        <Icon className="h-3.5 w-3.5 text-brand-primary dark:text-brand-primary-light" aria-hidden="true" />
+        <Icon className={cn('h-3.5 w-3.5 text-brand-primary dark:text-brand-primary-light', iconClassName)} aria-hidden="true" />
         {title}
       </h3>
       <div className="mt-2 space-y-2 text-xs leading-relaxed text-muted-foreground">{children}</div>
