@@ -5,10 +5,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Compass, Cpu, Database, Gauge, Globe, LayoutDashboard, Megaphone, Menu, Newspaper, Network,
-  Rocket, ScrollText, Settings, Settings2, ShieldCheck, Siren, SlidersHorizontal, Sparkles, X,
+  Layers, Rocket, ScrollText, Settings, Settings2, ShieldCheck, Siren, SlidersHorizontal, X,
 } from 'lucide-react'
 import { cn, Select } from '@sps/ui'
 import { BrandMark, BrandWordmark } from './brand-mark'
+import { OperatorMenu } from './operator-menu'
 import { ThemeSwitcher } from './theme-switcher'
 import { useI18n, type Locale, type MessageKey } from '@/lib/i18n'
 import { useAuth } from '@/lib/auth'
@@ -34,6 +35,7 @@ interface MobileNavEntry {
   href: string
   labelKey: MessageKey
   icon: React.ComponentType<{ className?: string }>
+  iconClassName?: string
 }
 
 /** Same sections, same order as the desktop rail: the drawer is not a second navigation. */
@@ -45,7 +47,7 @@ const MOBILE_NAV: Array<{ groupKey: MessageKey; entries: MobileNavEntry[]; child
       { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
       { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
       { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
-      { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Sparkles },
+      { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Layers },
     ],
   },
   {
@@ -198,7 +200,7 @@ export function AppHeader() {
                                       : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground',
                                   )}
                                 >
-                                  <ChildIcon className="mr-2 h-3.5 w-3.5 shrink-0" />
+                                  <ChildIcon className={cn('mr-2 shrink-0', child.iconClassName ?? 'h-3.5 w-3.5')} />
                                   <span className="truncate">{t(child.labelKey)}</span>
                                 </Link>
                               )
@@ -211,6 +213,9 @@ export function AppHeader() {
                 </div>
               ))}
             </nav>
+            <div className="border-t border-border p-2">
+              <OperatorMenu side="top" />
+            </div>
           </aside>
         </div>
       )}

@@ -29,6 +29,7 @@ import { decideAction, listActions } from '@/lib/actions-client'
 import { ActionCenter } from '@/components/ai/tools/action-center'
 import { McpAppView } from '@/components/ai/mcp/mcp-app-wrapper'
 import { ChatHistory } from '@/components/ai/display/chat-history'
+import { ConversationShimmer } from '@/components/ai/display/conversation-shimmer'
 import {
   deleteChatSession,
   getChatSession,
@@ -45,6 +46,7 @@ import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
+import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
 import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 
 interface Attachment {
@@ -91,6 +93,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [actionError, setActionError] = React.useState<string | null>(null)
   const [actionsOpen, setActionsOpen] = React.useState(false)
   const [sessionId, setSessionId] = React.useState<string | null>(null)
+  const [sessionLoading, setSessionLoading] = React.useState(false)
   const [historyOpen, setHistoryOpen] = React.useState(false)
   const [sessions, setSessions] = React.useState<ChatSessionSummary[]>([])
   const [sessionsLoading, setSessionsLoading] = React.useState(false)
@@ -485,14 +488,18 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
   const openSession = async (id: string) => {
     if (busy) return
+    setHistoryOpen(false)
+    setSessionLoading(true)
     try {
       const detail = await getChatSession(id)
       skipSave.current = true
       setSessionId(id)
       setTurns(detail.turns as unknown as ChatTurn[])
-      setHistoryOpen(false)
     } catch (error) {
       setActionError((error as Error).message)
+      setHistoryOpen(true)
+    } finally {
+      setSessionLoading(false)
     }
   }
 
@@ -524,6 +531,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }
 
   const suggestions = [t('assistant.suggest1'), t('assistant.suggest2'), t('assistant.suggest3')]
+  const [loader, setLoader] = useStreamLoader()
 
   const optionsMenu = (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -633,6 +641,23 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="min-w-0 flex-1 truncate">{t('assistant.loader')}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>{t('assistant.loader')}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={loader} onValueChange={(value) => setLoader(value as StreamLoaderVariant)}>
+              {STREAM_LOADERS.map((variant) => (
+                <DropdownMenuRadioItem key={variant} value={variant} className="gap-2">
+                  <LoaderGlyph variant={variant} className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t(`assistant.loader.${variant}` as 'assistant.loader.blocks')}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => fileRef.current?.click()}>
           <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
           {t('assistant.attach')}
@@ -700,6 +725,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             onOpen={(id) => void openSession(id)}
             onDelete={(id) => void removeSession(id)}
           />
+        ) : sessionLoading ? (
+          <ConversationShimmer />
         ) : turns.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <BrandMark className="h-12 w-12" />
@@ -727,6 +754,12 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
               <ChatMessage
                 turn={turn}
                 isLast={index === turns.length - 1}
+                onRate={
+                  turn.role === 'assistant' && !turn.active
+                    ? (rating) =>
+                        setTurns((previous) => previous.map((entry) => (entry.id === turn.id ? { ...entry, rating } : entry)))
+                    : undefined
+                }
                 onRegenerate={
                   turn.role === 'assistant' && !turn.active && index === turns.length - 1
                     ? () => {

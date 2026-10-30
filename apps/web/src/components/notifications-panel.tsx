@@ -15,6 +15,7 @@ import {
   Feather,
   Loader,
   Mail,
+  Smartphone,
   Pencil,
   Plus,
   Send,
@@ -391,12 +392,7 @@ export function NotificationsPanel({ country }: { country: string }) {
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {value === 'whatsapp' ? (
-                    // Brand mark supplied as-is; the green is part of the asset.
-                    <img src="/icons/whatsapp-com-logo.svg" alt="" aria-hidden className="h-3.5 w-3.5" />
-                  ) : (
-                    <Mail className="h-3.5 w-3.5" />
-                  )}
+                  {value === 'whatsapp' ? <Smartphone className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}
                   {t(`notify.channel.${value}` as 'notify.channel.email')}
                 </button>
               ))}

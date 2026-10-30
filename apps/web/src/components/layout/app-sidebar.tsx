@@ -11,6 +11,7 @@ import {
   Gauge,
   Globe2,
   LayoutDashboard,
+  Layers,
   Loader,
   Megaphone,
   Newspaper,
@@ -24,7 +25,6 @@ import {
   ShieldCheck,
   Siren,
   SlidersHorizontal,
-  Sparkles,
 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, cn } from '@sps/ui'
 import { BrandMark, BrandWordmark } from './brand-mark'
@@ -54,8 +54,17 @@ interface NavEntry {
   href: string
   labelKey: MessageKey
   icon: React.ComponentType<{ className?: string }>
+  /** Size of the icon in the sub-items; the default is the small glyph. */
+  iconClassName?: string
   children?: NavEntry[]
 }
+
+const GUIDE_CHILDREN: NavEntry[] = [
+  { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
+  { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
+  { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
+  { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Layers },
+]
 
 const GENERAL_NAV: NavEntry[] = [
   { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
@@ -143,7 +152,7 @@ export function AdminSidebar() {
             : 'text-sidebar-foreground/60 hover:bg-brand-primary/5 hover:text-sidebar-foreground',
         )}
       >
-        <NavIcon icon={entry.icon} className="h-3.5 w-3.5 shrink-0" />
+        <NavIcon icon={entry.icon} className={cn('shrink-0', entry.iconClassName ?? 'h-3.5 w-3.5')} />
         <span className="truncate">{t(entry.labelKey)}</span>
       </Link>
     )
@@ -214,6 +223,7 @@ export function AdminSidebar() {
           <nav className="grid gap-1 px-2">
             {groupLabel('nav.group_guide')}
             {renderItem({ href: '/guide', labelKey: 'nav.guide', icon: Compass })}
+            {!collapsed && <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-2">{GUIDE_CHILDREN.map(renderChild)}</div>}
 
             <div className="my-1 border-t border-sidebar-border" />
             {groupLabel('nav.group_general')}
