@@ -42,13 +42,11 @@ import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { TableActionItem } from '@/components/ui/table-actions'
 import { assetUrl, knowledgeApi, type KbChunkDto, type KbDocumentDto, type KbImageDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { countryOptions } from '@/lib/country-options'
+import { useWorkspace } from '@/lib/workspace'
 import { formatSize } from '@/lib/format'
 
 const DOC_TYPES = ['law', 'policy', 'regulation', 'strategy', 'report', 'guidance']
-const COUNTRIES = [
-  { value: 'cm', label: 'CM' },
-  { value: 'global', label: 'Global' },
-]
 
 type Tab = 'details' | 'passages' | 'media'
 
@@ -157,7 +155,8 @@ function DocumentEditor() {
 }
 
 function DetailsForm({ document, onSaved }: { document: KbDocumentDto; onSaved: () => Promise<void> }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const { countries } = useWorkspace()
   const [title, setTitle] = React.useState(document.title ?? '')
   const [summary, setSummary] = React.useState(document.summary ?? '')
   const [country, setCountry] = React.useState(document.country)
@@ -193,9 +192,10 @@ function DetailsForm({ document, onSaved }: { document: KbDocumentDto; onSaved: 
     }
   }
 
-  const countryOptions = COUNTRIES.some((entry) => entry.value === country)
-    ? COUNTRIES
-    : [...COUNTRIES, { value: country, label: country.toUpperCase() }]
+  const countrySelectOptions = React.useMemo(
+    () => countryOptions(countries, locale, country),
+    [countries, country, locale],
+  )
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -207,7 +207,7 @@ function DetailsForm({ document, onSaved }: { document: KbDocumentDto; onSaved: 
           <Input value={document.filename} readOnly className="h-8 text-[12px] text-muted-foreground" />
         </Field>
         <Field label={t('knowledge.corpus.country')}>
-          <Select value={country} onValueChange={setCountry} options={countryOptions} ariaLabel={t('knowledge.corpus.country')} size="md" className="w-40" />
+          <Select value={country} onValueChange={setCountry} options={countrySelectOptions} ariaLabel={t('knowledge.corpus.country')} size="md" className="w-40" />
         </Field>
         <Field label={t('knowledge.vectorise.docType')}>
           <Select

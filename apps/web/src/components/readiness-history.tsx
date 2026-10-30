@@ -17,8 +17,8 @@ import { RowActionButton } from '@/components/ui/row-action-button'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { api, type ReadinessRunSummaryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { useWorkspace } from '@/lib/workspace'
 
-const DOMAINS = ['health', 'education', 'telecom', 'public_services', 'agriculture'] as const
 const STATUSES = ['complete', 'failed'] as const
 const PAGE_SIZE = 10
 
@@ -45,6 +45,7 @@ export function ReadinessHistory({
   deletingId: string | null
 }) {
   const { t, locale } = useI18n()
+  const { sectors } = useWorkspace()
   const [pending, setPending] = React.useState<ReadinessRunSummaryDto | null>(null)
   const [query, setQuery] = React.useState('')
   const [search, setSearch] = React.useState('')
@@ -153,7 +154,7 @@ export function ReadinessHistory({
         >
           <div className="space-y-2">
             <p className="text-[11px] font-semibold text-foreground">{t('readiness.filter.sectors')}</p>
-            {DOMAINS.map((domain) => (
+            {sectors.map((domain) => (
               <label key={domain} className="flex cursor-pointer items-center gap-2 text-[12px] text-foreground">
                 <Checkbox
                   checked={draft.domains.includes(domain)}

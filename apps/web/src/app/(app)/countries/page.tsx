@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
-import { ArrowUpRight, Globe2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Globe2, Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -14,6 +14,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@sps/ui'
 import { ApiError, countriesApi, type CountryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
@@ -21,12 +25,16 @@ import { PageIntro } from '@/components/page-intro'
 import { CountryDialog } from '@/components/country-dialog'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { useToast } from '@/components/shared/toast'
+import { RowActionMenu } from '@/components/ui/row-action-menu'
+import { RowActionButton } from '@/components/ui/row-action-button'
+import { TableActionItem } from '@/components/ui/table-actions'
 
 const TOTAL_SECTORS = 5
 
 export default function CountriesPage() {
   const { t, locale } = useI18n()
   const toast = useToast()
+  const router = useRouter()
   const [countries, setCountries] = React.useState<CountryDto[] | null>(null)
   const [problem, setProblem] = React.useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = React.useState(false)
@@ -94,10 +102,23 @@ export default function CountriesPage() {
   return (
     <>
       <PageIntro title={t('countries.title')} subtitle={t('countries.subtitle')}>
-        <Button size="sm" onClick={openCreate} className="gap-1.5">
-          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-          {t('countries.new')}
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                aria-label={t('countries.new')}
+                onClick={openCreate}
+                className="h-8 w-8 rounded-lg"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="border-border bg-card text-[11px] font-medium text-foreground shadow-md">
+              {t('countries.new')}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </PageIntro>
 
       <Card className="overflow-hidden">
@@ -112,26 +133,27 @@ export default function CountriesPage() {
         ) : countries.length === 0 ? (
           <p className="p-6 text-center text-[11px] text-muted-foreground">{t('countries.empty')}</p>
         ) : (
-          <Table>
+          <Table className="table-actions-overlay">
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>{t('countries.col.country')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('countries.col.region')}</TableHead>
                 <TableHead className="hidden lg:table-cell">{t('countries.col.authority')}</TableHead>
                 <TableHead>{t('countries.col.sectors')}</TableHead>
                 <TableHead>{t('countries.col.status')}</TableHead>
                 <TableHead className="hidden sm:table-cell">{t('countries.col.updated')}</TableHead>
-                <TableHead className="text-right">{t('countries.open')}</TableHead>
+                <TableHead className="text-right">{t('countries.col.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {countries.map((country) => (
-                <TableRow key={country.code}>
+                <TableRow
+                  key={country.code}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/countries/${country.code}`)}
+                >
                   <TableCell>
-                    <Link
-                      href={`/countries/${country.code}`}
-                      className="flex items-center gap-2 font-medium text-foreground hover:text-brand-primary"
-                    >
+                    <div className="flex items-center gap-2 font-medium text-foreground">
                       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-brand-primary/10 text-brand-primary">
                         <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </span>
@@ -139,7 +161,7 @@ export default function CountriesPage() {
                         <span className="block truncate text-[12px]">{nameOf(country)}</span>
                         <span className="block font-mono text-[9px] uppercase text-muted-foreground">{country.code}</span>
                       </span>
-                    </Link>
+                    </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-[11px] text-muted-foreground">
                     {country.region || '—'}
@@ -160,37 +182,44 @@ export default function CountriesPage() {
                       dateStyle: 'medium',
                     })}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      <Link
-                        href={`/countries/${country.code}`}
-                        aria-label={`${t('countries.open')} ${country.name}`}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                      >
-                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-                      </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        aria-label={`${t('countries.editTitle')} ${country.name}`}
-                        onClick={() => openEdit(country)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-rose-500 hover:text-rose-600"
-                        aria-label={`${t('country.delete')} ${country.name}`}
+                  <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                    <RowActionMenu
+                      overlay
+                      inline={
+                        <div className="flex items-center justify-end gap-1">
+                          <RowActionButton
+                            label={t('countries.editTitle')}
+                            onClick={() => openEdit(country)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </RowActionButton>
+                          <RowActionButton
+                            label={t('country.delete')}
+                            tone="danger"
+                            onClick={() => {
+                              setDeleteProblem(null)
+                              setDeleting(country)
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </RowActionButton>
+                        </div>
+                      }
+                    >
+                      <TableActionItem icon={Pencil} onClick={() => openEdit(country)}>
+                        {t('countries.editTitle')}
+                      </TableActionItem>
+                      <TableActionItem
+                        icon={Trash2}
+                        variant="danger"
                         onClick={() => {
                           setDeleteProblem(null)
                           setDeleting(country)
                         }}
                       >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      </Button>
-                    </div>
+                        {t('country.delete')}
+                      </TableActionItem>
+                    </RowActionMenu>
                   </TableCell>
                 </TableRow>
               ))}

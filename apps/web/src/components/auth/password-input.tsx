@@ -23,8 +23,14 @@ export const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputPro
       <div className="relative">
         <Input
           ref={ref}
-          {...props}
           type={visible ? 'text' : 'password'}
+          /* Mobile keyboards must not rewrite a password: no auto-capitalisation,
+             no autocorrect, no spell-check red squiggles. What the operator
+             typed is what the API hashes. */
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          {...props}
           className={cn('pr-9', className)}
         />
         <button

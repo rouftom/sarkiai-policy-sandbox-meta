@@ -30,8 +30,8 @@ import { TableActionItem } from '@/components/ui/table-actions'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import type { ScenarioRunSummaryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { useWorkspace } from '@/lib/workspace'
 
-const DOMAINS = ['health', 'education', 'telecom', 'public_services', 'agriculture'] as const
 const STATUSES = ['running', 'complete', 'failed'] as const
 const PAGE_SIZE = 10
 
@@ -81,6 +81,7 @@ export function ScenarioHistory({
   onAuto: () => void
 }) {
   const { t, locale } = useI18n()
+  const { sectors } = useWorkspace()
   const [pending, setPending] = React.useState<ScenarioRunSummaryDto | null>(null)
   const [query, setQuery] = React.useState('')
   const [search, setSearch] = React.useState('')
@@ -180,7 +181,7 @@ export function ScenarioHistory({
           >
             <div className="space-y-2">
               <p className="text-[11px] font-semibold text-foreground">{t('scenario.filter.sectors')}</p>
-              {DOMAINS.map((domain) => (
+              {sectors.map((domain) => (
                 <label key={domain} className="flex cursor-pointer items-center gap-2 text-[12px] text-foreground">
                   <Checkbox
                     checked={draft.domains.includes(domain)}

@@ -5,17 +5,12 @@ import { AlertTriangle, Check, Database, Loader, Newspaper, Play, RotateCcw, Sea
 import { AnimatedTabsList, Button, Input, Select, Skeleton, Tabs, TabsContent, cn, type TabItem } from '@sps/ui'
 import { knowledgeApi, type KbDocumentDto, type KbExplorationDto, type KbStageItemDto, type KbStatusDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { countryOptions } from '@/lib/country-options'
 import { PageIntro } from '@/components/page-intro'
 import { KbDocuments } from '@/components/kb-documents'
 import { GazettePanel } from '@/components/gazette-panel'
 import { useToast } from '@/components/shared/toast'
 import { useWorkspace } from '@/lib/workspace'
-
-const COUNTRY_OPTIONS = [
-  { value: '', label: 'All countries' },
-  { value: 'cm', label: 'CM' },
-  { value: 'global', label: 'Global' },
-]
 
 const KB_TABS: TabItem[] = [
   { id: 'documents', label: 'Documents', icon: Database },
@@ -174,7 +169,8 @@ export default function KnowledgePage() {
 type StageKey = 'final' | 'dense' | 'sparse' | 'fused' | 'reranked'
 
 function RetrievalPanel({ hasCorpus }: { hasCorpus: boolean }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const { countries } = useWorkspace()
   const [query, setQuery] = React.useState('')
   const [country, setCountry] = React.useState('')
   const [topK, setTopK] = React.useState('6')
@@ -182,6 +178,14 @@ function RetrievalPanel({ hasCorpus }: { hasCorpus: boolean }) {
   const [result, setResult] = React.useState<KbExplorationDto | null>(null)
   const [failure, setFailure] = React.useState<string | null>(null)
   const [stage, setStage] = React.useState<StageKey>('final')
+
+  const countryFilterOptions = React.useMemo(
+    () => [
+      { value: '', label: t('knowledge.retrieval.allCountries') },
+      ...countryOptions(countries, locale, country),
+    ],
+    [countries, country, locale, t],
+  )
 
   const run = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -228,7 +232,7 @@ function RetrievalPanel({ hasCorpus }: { hasCorpus: boolean }) {
             className="h-9 text-[12px]"
           />
         </div>
-        <Select value={country} onValueChange={setCountry} options={COUNTRY_OPTIONS} ariaLabel={t('knowledge.corpus.country')} size="md" className="w-48" />
+        <Select value={country} onValueChange={setCountry} options={countryFilterOptions} ariaLabel={t('knowledge.corpus.country')} size="md" className="w-48" />
         <Select
           value={topK}
           onValueChange={setTopK}

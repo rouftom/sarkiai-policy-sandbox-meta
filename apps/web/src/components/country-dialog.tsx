@@ -22,8 +22,15 @@ import {
   type CountryInputDto,
 } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { SearchSelect } from '@/components/shared/search-select'
 
 const SECTORS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
+
+/** The IANA zones the runtime knows, plus UTC; older runtimes fall back to the seed zone. */
+const TIMEZONES: string[] = (() => {
+  const supported = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('timeZone')
+  return Array.from(new Set(['UTC', ...(supported ?? ['Africa/Douala'])])).sort()
+})()
 
 type FormState = {
   code: string
@@ -168,7 +175,7 @@ export function CountryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid max-h-[65vh] gap-2.5 overflow-auto px-5 py-4 sm:grid-cols-2">
+        <div className="custom-scrollbar grid max-h-[65vh] gap-2.5 overflow-auto px-5 py-4 sm:grid-cols-2">
           <label className="block space-y-1">
             <span className="text-[10px] font-semibold text-muted-foreground">{t('countries.field.code')}</span>
             <input
@@ -281,12 +288,16 @@ export function CountryDialog({
 
           <label className="block space-y-1">
             <span className="text-[10px] font-semibold text-muted-foreground">{t('countries.field.timezone')}</span>
-            <input
+            <SearchSelect
+              ariaLabel={t('countries.field.timezone')}
               value={form.timezone}
-              onChange={(event) => patch({ timezone: event.target.value })}
-              maxLength={60}
+              onValueChange={(value) => patch({ timezone: value })}
+              options={(TIMEZONES.includes(form.timezone) ? TIMEZONES : [...TIMEZONES, form.timezone])
+                .filter(Boolean)
+                .map((zone) => ({ value: zone, label: zone }))}
               placeholder="Africa/Douala"
-              className="h-8 w-full rounded-lg border border-border bg-transparent px-2 font-mono text-[11px]"
+              searchPlaceholder={t('countries.timezoneSearch')}
+              emptyLabel={t('countries.timezoneEmpty')}
             />
           </label>
 

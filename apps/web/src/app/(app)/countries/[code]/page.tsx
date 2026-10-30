@@ -6,8 +6,10 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   ArrowUpRight,
+  BarChart3,
   Check,
   Database,
+  FileText,
   Gauge,
   Globe2,
   Loader,
@@ -28,6 +30,7 @@ import {
   YAxis,
 } from 'recharts'
 import {
+  AnimatedTabsList,
   Button,
   Card,
   CardContent,
@@ -36,9 +39,8 @@ import {
   Skeleton,
   Tabs,
   TabsContent,
-  TabsList,
-  TabsTrigger,
   cn,
+  type TabItem,
 } from '@sps/ui'
 import type { Domain } from '@sps/shared'
 import {
@@ -54,10 +56,13 @@ import { PageIntro } from '@/components/page-intro'
 import { CountryDialog } from '@/components/country-dialog'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { useToast } from '@/components/shared/toast'
+import { RowActionButton } from '@/components/ui/row-action-button'
 
 type Tab = 'overview' | 'sectors' | 'syntheses' | 'insights'
 
 const TABS: Tab[] = ['overview', 'sectors', 'syntheses', 'insights']
+/** Seed copy that older API deployments still return; never shown in the console. */
+const LEGACY_SEED_NOTE = 'Reference corpus and demo jurisdiction.'
 
 function sectorLabel(t: ReturnType<typeof useI18n>['t'], sector: Domain): string {
   return t(`domain.${sector}` as 'domain.health')
@@ -160,6 +165,18 @@ export default function CountryPage() {
 
   const name = country ? (locale === 'fr' ? country.nameFr : country.name) : code.toUpperCase()
 
+  const tabItems: TabItem[] = [
+    { id: 'overview', label: t('country.tab.overview'), icon: Globe2 },
+    { id: 'sectors', label: t('country.tab.sectors'), icon: Network },
+    { id: 'syntheses', label: t('country.tab.syntheses'), icon: FileText },
+    { id: 'insights', label: t('country.tab.insights'), icon: BarChart3 },
+  ]
+
+  const selectTab = (value: string) => {
+    setTab(value as Tab)
+    if (country) window.history.replaceState(null, '', `/countries/${country.code}?tab=${value}`)
+  }
+
   const confirmDelete = async () => {
     if (!country) return
     setDeleteProblem(null)
@@ -261,6 +278,8 @@ export default function CountryPage() {
     score: point.averageComposite,
   }))
   const noData = (totals?.readinessRuns ?? 0) === 0 && (totals?.scenarioRuns ?? 0) === 0
+  const countryNotes = country.notes?.trim()
+  const visibleNotes = countryNotes && countryNotes !== LEGACY_SEED_NOTE ? countryNotes : null
 
   return (
     <>
@@ -280,39 +299,23 @@ export default function CountryPage() {
           </Button>
         }
       >
-        <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)} className="gap-1.5">
-          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-          {t('country.edit')}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
+        <AnimatedTabsList items={tabItems} value={tab} onValueChange={selectTab} dense />
+        <RowActionButton label={t('country.edit')} onClick={() => setEditOpen(true)}>
+          <Pencil className="h-3.5 w-3.5" />
+        </RowActionButton>
+        <RowActionButton
+          label={t('country.delete')}
+          tone="danger"
           onClick={() => {
             setDeleteProblem(null)
             setDeleteOpen(true)
           }}
-          className="gap-1.5 text-rose-500 hover:text-rose-600"
         >
-          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-          {t('country.delete')}
-        </Button>
+          <Trash2 className="h-3.5 w-3.5" />
+        </RowActionButton>
       </PageIntro>
 
-      <Tabs
-        value={tab}
-        onValueChange={(value) => {
-          setTab(value as Tab)
-          window.history.replaceState(null, '', `/countries/${country.code}?tab=${value}`)
-        }}
-      >
-        <TabsList className="mb-3">
-          {TABS.map((entry) => (
-            <TabsTrigger key={entry} value={entry}>
-              {t(`country.tab.${entry}` as 'country.tab.overview')}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
+      <Tabs value={tab} onValueChange={selectTab}>
         {/* ── Overview ─────────────────────────────────────────────────────── */}
         <TabsContent value="overview" className="space-y-3">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -377,9 +380,9 @@ export default function CountryPage() {
                     </div>
                   ))}
                 </dl>
-                {country.notes && (
+                {visibleNotes && (
                   <p className="mt-3 rounded-lg border border-border bg-secondary/40 p-2 text-[10px] text-muted-foreground">
-                    {country.notes}
+                    {visibleNotes}
                   </p>
                 )}
               </CardContent>

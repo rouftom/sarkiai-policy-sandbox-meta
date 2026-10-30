@@ -61,15 +61,6 @@ const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting'] as const
 
-/**
- * Policy assistant in the left panel of the console. Turns are rendered by the
- * organization chat components (composer, message, activity trail, animated
- * answer). The stream drives them: stage events open and close trail steps with
- * their durations, reasoning and answer deltas are written as they arrive, and
- * the final assessment replaces the draft with its citations and validation.
- */
-const ASSISTANT_SECTORS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
-
 /** The icon and the tint of each sector, so the menu reads at a glance. */
 const SECTOR_STYLE: Record<Domain, { icon: typeof HeartPulse; color: string; soft: string }> = {
   health: { icon: HeartPulse, color: 'text-rose-500', soft: 'bg-rose-500/10' },
@@ -79,9 +70,16 @@ const SECTOR_STYLE: Record<Domain, { icon: typeof HeartPulse; color: string; sof
   agriculture: { icon: Sprout, color: 'text-emerald-500', soft: 'bg-emerald-500/10' },
 }
 
+/**
+ * Policy assistant in the left panel of the console. Turns are rendered by the
+ * organization chat components (composer, message, activity trail, animated
+ * answer). The stream drives them: stage events open and close trail steps with
+ * their durations, reasoning and answer deltas are written as they arrive, and
+ * the final assessment replaces the draft with its citations and validation.
+ */
 export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const { t, locale } = useI18n()
-  const { country, domain, domains, setDomains } = useWorkspace()
+  const { country, domain, domains, sectors, setDomains } = useWorkspace()
   const [input, setInput] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [turns, setTurns] = React.useState<ChatTurn[]>([])
@@ -598,7 +596,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuLabel>{t('app.domains')}</DropdownMenuLabel>
-            {ASSISTANT_SECTORS.map((value) => {
+            {sectors.map((value) => {
               const on = domains.includes(value)
               const sector = SECTOR_STYLE[value]
               const Icon = sector.icon

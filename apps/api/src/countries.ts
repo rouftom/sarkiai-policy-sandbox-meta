@@ -83,6 +83,8 @@ export interface CountryPatch {
 }
 
 const SEED_AT = '2026-01-01T00:00:00.000Z'
+/** Note shipped with the first seed; ignored so the console shows no seed copy. */
+const LEGACY_SEED_NOTE = 'Reference corpus and demo jurisdiction.'
 
 /** The only seeded country: the corpus and the demo are Cameroonian. */
 export const SEED_COUNTRIES: readonly CountryRecord[] = [
@@ -98,7 +100,6 @@ export const SEED_COUNTRIES: readonly CountryRecord[] = [
     timezone: 'Africa/Douala',
     sectors: [...COUNTRY_SECTORS],
     status: 'active',
-    notes: 'Reference corpus and demo jurisdiction.',
     createdAt: SEED_AT,
     updatedAt: SEED_AT,
     createdBy: 'seed',
@@ -125,7 +126,7 @@ function toCountry(doc: Document): CountryRecord {
     timezone: String(doc.timezone ?? ''),
     sectors: sectorsFrom(doc.sectors),
     status: doc.status === 'planned' ? 'planned' : 'active',
-    ...(typeof doc.notes === 'string' && doc.notes ? { notes: doc.notes } : {}),
+    ...(typeof doc.notes === 'string' && doc.notes && doc.notes !== LEGACY_SEED_NOTE ? { notes: doc.notes } : {}),
     createdAt: String(doc.createdAt ?? SEED_AT),
     updatedAt: String(doc.updatedAt ?? doc.createdAt ?? SEED_AT),
     createdBy: String(doc.createdBy ?? ''),
