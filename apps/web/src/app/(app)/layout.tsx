@@ -124,7 +124,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <div className="relative isolate flex min-h-dvh w-full overflow-hidden">
+    <div className="relative isolate flex min-h-dvh w-full overflow-hidden bg-white dark:bg-brand-ink">
       <div className="relative z-10 flex min-h-dvh w-full">
         <WorkspaceProvider>
           <AppSidebar />
