@@ -48,4 +48,4 @@ Reuse the same charter as the main SarkiAI apps:
 
 - Do not import from `@sarkiai/*` or the agentic harness.
 - Keep the public API (chunk shape, index names) stable: the KB is a shared asset.
-- Documentation stays generic: never name our cloud spaces, hosted projects, team slugs, deployment ids or live URLs in docs, specs or deploy notes. Use placeholders such as `<api-host>` and `<web-host>`.
+- Documentation stays generic: never name our cloud spaces, hosted projects, team slugs, deployment ids, private hosts or credentials in docs, specs or deploy notes. Public project URLs (the demo site, the public repository) may be cited; use placeholders such as `<api-host>` and `<web-host>` for any deployment-specific host.

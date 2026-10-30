@@ -1,7 +1,9 @@
 # SarkiAI Policy Sandbox
 
 > Policy-grounded, multi-agent AI engine for the Meta Global AI Developer Hackathon (Startup track).
-> One engine, two lenses: error-scenario simulation and AI-readiness assessment.
+> Mandated AI agents that help governments respond to data incidents under their own laws,
+> built on Meta models: Muse Spark, Muse Spark Open (Baseten), Muse Glimmer, SAM 3.1 and Muse Voice Transcribe.
+> What was built during the hackathon: [HACKATHON.md](HACKATHON.md).
 
 [![Meta Model API](https://img.shields.io/badge/Meta%20Model%20API-Muse%20Spark-0866FF?style=for-the-badge)](https://dev.meta.ai)
 [![Open weights](https://img.shields.io/badge/Open%20weights-Muse%20Glimmer-0866FF?style=for-the-badge)](https://dev.meta.ai/models/muse-glimmer)
@@ -47,6 +49,7 @@ It runs on **Meta models**, in three interchangeable provider modes:
 - **Muse Glimmer** (30B, Apache-2.0) runs on the institution's own hardware through Ollama (`make glimmer`)
   and is the default model of the `local` mode: same reasoning, nothing leaves the machine.
 - SAM 3.1 and Muse Voice Transcribe stay on the Meta Model API in every mode.
+- **Model choice is shared:** the model picked in the console is global to the deployment, so during judging (5–8 November) a change made by one visitor applies to everyone.
 
 What was built during the hackathon, with commits and times: [`HACKATHON.md`](HACKATHON.md).
 
