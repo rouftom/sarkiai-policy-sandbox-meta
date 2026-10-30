@@ -1,9 +1,9 @@
 /**
  * Voyage AI client · cloud embeddings and reranking.
  *
- * Meta does not publish an embedding model, so cloud mode pairs the Meta
- * reasoning/vision models with Voyage (`voyage-4` + `rerank-2`). Local and
- * sovereign modes keep `bge-m3` + Qdrant and never call this module.
+ * Cloud mode pairs the Meta reasoning/vision models with Voyage (`voyage-4` +
+ * `rerank-2`). Local and sovereign modes keep `bge-m3` + Qdrant and never call
+ * this module.
  */
 
 export interface VoyageConfig {

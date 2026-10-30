@@ -1,6 +1,6 @@
 'use client'
 
-import { ClipboardList, Clock, Flag, LifeBuoy, ScrollText, Workflow } from 'lucide-react'
+import { ClipboardList, Clock, Flag, Globe2, LifeBuoy, ScrollText, Workflow } from 'lucide-react'
 import {
   GuideBanner,
   GuideChecklist,
@@ -133,6 +133,79 @@ export default function GuideOperationsPage() {
             ? 'La suppression efface le run et ses rapports, jamais la preuve : le raisonnement et les entrées d’audit restent dans le journal, avec leur hash. Un run se rejoue donc encore après sa suppression.'
             : 'Deletion removes the run and its reports, never the evidence: reasoning and audit entries stay in the journal with their hash. A run can still be replayed after it is deleted.'}
         </p>
+      </GuideSection>
+
+      <GuideSection title={fr ? 'Registre des pays et secteurs' : 'Country and sector registry'} icon={Globe2}>
+        <p>
+          {fr
+            ? 'Le référentiel pays/secteurs est la source unique de l’espace de travail : scénarios, évaluations de maturité et filtres du corpus lisent cette liste. Une ligne ouverte mène à la fiche du pays, qui détaille son identité, ses secteurs et ses indicateurs.'
+            : 'The country/sector registry is the single source of the workspace: scenarios, readiness assessments and corpus filters all read this list. An opened row leads to the country page, with its identity, sectors and indicators.'}
+        </p>
+        <GuideTable
+          headers={[fr ? 'Colonne' : 'Column', fr ? 'Ce qu’elle porte' : 'What it holds', fr ? 'Usage' : 'Use']}
+          rows={[
+            {
+              a: fr ? 'Pays' : 'Country',
+              b: fr
+                ? 'Le drapeau du pays, son nom dans la langue de l’interface et son code ISO.'
+                : 'The country flag, its name in the interface language and its ISO code.',
+              c: fr ? 'Ouvre la fiche pays' : 'Opens the country page',
+            },
+            {
+              a: fr ? 'Région · Autorité' : 'Region · Authority',
+              b: fr
+                ? 'Rattachement géographique et autorité de tutelle, masqués sur petit écran.'
+                : 'Geographic grouping and mandated authority, hidden on small screens.',
+              c: fr ? 'Contexte du mandat' : 'Mandate context',
+            },
+            {
+              a: fr ? 'Secteurs' : 'Sectors',
+              b: fr
+                ? 'Nombre de secteurs activés sur le total autorisé par le pays.'
+                : 'Number of enabled sectors over the total the country allows.',
+              c: fr ? 'Périmètre des runs' : 'Scope of the runs',
+            },
+            {
+              a: fr ? 'Statut' : 'Status',
+              b: fr
+                ? 'Actif (proposé dans l’espace de travail) ou prévu (enregistré seulement).'
+                : 'Active (offered in the workspace) or planned (registered only).',
+              c: fr ? 'Visibilité' : 'Visibility',
+            },
+          ]}
+        />
+        <GuideChecklist
+          items={[
+            {
+              label: fr ? 'Recherche insensible aux accents' : 'Accent-insensitive search',
+              detail: fr
+                ? 'Le champ cherche dans le nom anglais et français, le code, la région, l’autorité et le statut.'
+                : 'The field searches the English and French names, the code, the region, the authority and the status.',
+              state: 'ok',
+            },
+            {
+              label: fr ? 'Filtre entonnoir par statut et région' : 'Funnel filter by status and region',
+              detail: fr
+                ? 'Les choix sont un brouillon : appliquer engage le filtre, réinitialiser revient à la liste entière.'
+                : 'Choices are a draft: applying commits the filter, resetting returns to the full list.',
+              state: 'ok',
+            },
+            {
+              label: fr ? 'Pagination et actions de ligne' : 'Pagination and row actions',
+              detail: fr
+                ? 'La taille de page et les chevrons sont en pied de table ; les icônes modifier/supprimer apparaissent sur la ligne (appui long sur mobile).'
+                : 'Page size and chevrons sit in the table footer; edit/delete icons appear on the row (long-press on mobile).',
+              state: 'ok',
+            },
+            {
+              label: fr ? 'Le dernier pays actif est protégé' : 'The last active country is protected',
+              detail: fr
+                ? 'Supprimer le dernier pays actif est refusé, et un pays cité par un run demande d’abord la suppression du run.'
+                : 'Deleting the last active country is refused, and a country referenced by a run requires deleting the run first.',
+              state: 'watch',
+            },
+          ]}
+        />
       </GuideSection>
 
       <GuideSection title={fr ? 'Registre des écarts' : 'Gap register'} icon={ClipboardList}>

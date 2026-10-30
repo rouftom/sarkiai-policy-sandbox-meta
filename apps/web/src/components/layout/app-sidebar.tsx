@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
+import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   ChevronDown,
@@ -9,8 +9,11 @@ import {
   Cpu,
   Database,
   Gauge,
-  Languages,
+  Globe2,
   LayoutDashboard,
+  Layers,
+  Loader,
+  Megaphone,
   Newspaper,
   Network,
   PanelLeftClose,
@@ -22,7 +25,6 @@ import {
   ShieldCheck,
   Siren,
   SlidersHorizontal,
-  Sparkles,
 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, cn } from '@sps/ui'
 import { BrandMark, BrandWordmark } from './brand-mark'
@@ -31,15 +33,42 @@ import { useI18n, type MessageKey } from '@/lib/i18n'
 
 const COLLAPSE_KEY = 'sps-sidebar-collapsed'
 
+/**
+ * The icon of a nav item, replaced by a spinner while its route is being
+ * fetched. `useLinkStatus` reports the pending state of the enclosing `Link`,
+ * so the loader belongs to the item that was actually clicked.
+ */
+function NavIcon({
+  icon: Icon,
+  className,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  className?: string
+}) {
+  const { pending } = useLinkStatus()
+  if (pending) return <Loader className={cn(className, 'animate-spin')} aria-hidden="true" />
+  return <Icon className={className} />
+}
+
 interface NavEntry {
   href: string
   labelKey: MessageKey
   icon: React.ComponentType<{ className?: string }>
+  /** Size of the icon in the sub-items; the default is the small glyph. */
+  iconClassName?: string
   children?: NavEntry[]
 }
 
+const GUIDE_CHILDREN: NavEntry[] = [
+  { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
+  { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
+  { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
+  { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Layers },
+]
+
 const GENERAL_NAV: NavEntry[] = [
   { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
+  { href: '/countries', labelKey: 'nav.countries', icon: Globe2 },
   { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
@@ -47,7 +76,7 @@ const GENERAL_NAV: NavEntry[] = [
 
 const OPERATIONS_NAV: NavEntry[] = [
   { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
-  { href: '/communications', labelKey: 'nav.communication', icon: Languages },
+  { href: '/communications', labelKey: 'nav.communication', icon: Megaphone },
   { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },
 ]
 
@@ -83,7 +112,6 @@ export function AdminSidebar() {
 
   const renderItem = (entry: NavEntry) => {
     const active = isActive(entry.href)
-    const Icon = entry.icon
     const link = (
       <Link
         key={entry.href}
@@ -96,7 +124,7 @@ export function AdminSidebar() {
             : 'text-sidebar-foreground/70 hover:bg-brand-primary/5 hover:text-sidebar-foreground',
         )}
       >
-        <Icon className={cn('h-4 w-4 shrink-0', !collapsed && 'mr-2')} />
+        <NavIcon icon={entry.icon} className={cn('h-4 w-4 shrink-0', !collapsed && 'mr-2')} />
         {!collapsed && <span className="truncate">{t(entry.labelKey)}</span>}
       </Link>
     )
@@ -113,7 +141,6 @@ export function AdminSidebar() {
 
   const renderChild = (entry: NavEntry) => {
     const active = isActive(entry.href)
-    const Icon = entry.icon
     return (
       <Link
         key={entry.href}
@@ -125,7 +152,7 @@ export function AdminSidebar() {
             : 'text-sidebar-foreground/60 hover:bg-brand-primary/5 hover:text-sidebar-foreground',
         )}
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <NavIcon icon={entry.icon} className={cn('shrink-0', entry.iconClassName ?? 'h-3.5 w-3.5')} />
         <span className="truncate">{t(entry.labelKey)}</span>
       </Link>
     )
@@ -196,6 +223,7 @@ export function AdminSidebar() {
           <nav className="grid gap-1 px-2">
             {groupLabel('nav.group_guide')}
             {renderItem({ href: '/guide', labelKey: 'nav.guide', icon: Compass })}
+            {!collapsed && <div className="ml-4 mt-1 space-y-0.5 border-l border-sidebar-border pl-2">{GUIDE_CHILDREN.map(renderChild)}</div>}
 
             <div className="my-1 border-t border-sidebar-border" />
             {groupLabel('nav.group_general')}

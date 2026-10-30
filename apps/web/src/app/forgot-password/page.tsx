@@ -95,6 +95,10 @@ export default function ForgotPasswordPage() {
                 id="forgot-email"
                 type="email"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="email"
                 autoFocus
                 {...form.register('email')}
                 aria-invalid={Boolean(form.formState.errors.email)}

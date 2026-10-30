@@ -24,18 +24,18 @@ Everything below existed before the hackathon (tag `pre-hackathon-baseline`).
 - `[x]` Readiness gap engine (13 dimensions / 6 factors).
 - `[x]` 0–5 maturity scoring + weighted composite (`packages/readiness/src/scoring.ts`).
 - `[x]` Causal what-if propagation across dimensions (`packages/readiness/src/causal.ts`).
-- `[x]` African/regional reference corpus (`data/global/africa/`, `scripts/fetch-corpus.sh`).
+- `[x]` African regional reference corpus — continental and regional instruments only (`data/global/africa/`, `scripts/fetch-corpus.sh`).
 - `[x]` Hash-chained audit + persisted CoT traces.
-- `[x]` **Local-first / sovereign**: Ollama (qwen3.5:9b) + local bge-m3 embeddings; **all cloud providers removed**; local faster-whisper. See `docs/LOCAL-FIRST-PLAN.md`, `docs/SOVEREIGNTY-AND-MODELS.md`.
-- `[x]` **Admin design system** replicated in `@sps/theme` (packs fada/green/ocean/sunset/mono, fada default): assistant uses SarkiAI Compact.
+- `[x]` **Local-first / sovereign**: Ollama (`qwen3.5:9b`, Muse Glimmer 30B) + local `bge-m3` embeddings; local faster-whisper. Cloud mode is a third, optional provider. See `docs/LOCAL-FIRST-PLAN.md`, `docs/SOVEREIGNTY-AND-MODELS.md`.
+- `[x]` **Admin design system** replicated in `@sps/theme` (packs meta/green/ocean/sunset/mono/fada, `meta` default): assistant uses SarkiAI Compact.
 - `[x]` **MinIO** local object bucket (`sps-attachments`) for assistant image attachments.
 - `[x]` **SOPS + age** secrets workflow (`docs/SECRETS.md`, `scripts/gen-age-key.sh`).
 - `[x]` **Multimodal assistant**: local vision model (`qwen3.5:9b`), image attachments stored in MinIO (content-addressed), untrusted-context guardrails, audit hash. `POST /v1/agents/ask` + `attachments[]`.
 
 ### Sprint 1: the Cameroon health corpus
 - `[x]` Collect real CM corpus (health law, data-protection law, national AI/digital strategy, cyber strategy) → `data/country/cm/`.
-- `[ ]` Collect global best-practice corpus (WHO) → `data/global/standards/`.
-- `[x]` Ingest + validate retrieval quality per dimension (8 documents, 2,166 chunks, 1024d; see `docs/KNOWLEDGE-BASE.md`).
+- `[x]` Global best-practice corpus manifests (WHO, UNESCO, OECD, Malabo) → `data/global/standards/`; payloads are fetched on demand.
+- `[x]` Ingest + validate retrieval quality per dimension (live counters on `/knowledge`; see `docs/KNOWLEDGE-BASE.md`).
 - `[ ]` Replace `data/samples/*` placeholders.
 
 ### Sprint 2: scenario authoring & coordination
@@ -52,12 +52,12 @@ Everything below existed before the hackathon (tag `pre-hackathon-baseline`).
 ### Sprint 4: demo & submission
 - `[ ]` Record the 3-minute demo video (runbook in `docs/DEMO.md`).
 - `[x]` Finalize `HACKATHON.md` (built-during-the-hackathon ledger) and the README.
-- `[x]` Publish the repository and the public demo (address in the deployment notes).
+- `[x]` Publish the repository and the public demo at <https://sps.djotta.com>.
+- `[x]` Document corpus rights: per-document `rights` status in the manifests, payloads out of git, decision rules in `docs/LICENSING.md`.
+- `[ ]` Purge `quotation-only` / `to-confirm` payloads from the public demo corpus before recording.
 - `[ ]` Submit (repo + video) before 4 Nov 2026, 21:00 ET.
 
-### Sprint 5: multi-country & fine-tuning (post-shortlist)
-- `[ ]` Add UAE (`data/country/ae/`) for the cross-national narrative.
-- `[ ]` Validate the same engine on a second jurisdiction (no code change).
+### Sprint 5: fine-tuning (post-shortlist)
 - `[ ]` **Fine-tuning local (unsloth)**: export (KB context → cited answer) pairs from Mongo (`cot_traces`, `joint_reports`, readiness) → train a LoRA on **Muse Glimmer** with [unsloth](https://github.com/unslothai/unsloth) → merge + convert to GGUF → `ollama create sps-glimmer` → `MUSE_GLIMMER_MODEL=sps-glimmer`. The dataset never leaves the institution.
 
 ## Hackathon sprints (27 Oct – 4 Nov 2026)
@@ -66,16 +66,15 @@ Everything below existed before the hackathon (tag `pre-hackathon-baseline`).
 |---|---------|-----------|-----|
 | N1 | Multi-provider layer (`cloud` / `sovereign` / `local`), provider badge, `provider.switched` audit event | Muse Spark | 27 Oct |
 | N2 | Citation validator: a quote absent from the corpus is rejected and the agent retries | Muse Spark | 28 Oct |
-| N10 | Demo UI: incident timeline, clickable citations, provider badge, audit-chain check |: | 28 Oct |
+| N10 | Demo UI: incident timeline, clickable citations, provider badge, audit-chain check | — | 28 Oct |
 | N3 | Scanned gazette ingestion: column segmentation, `sam-3.1` zones, per-zone transcription, clickable provenance | SAM 3.1 + Muse Spark vision | 29 Oct |
 | N5 | Sovereign mode on open weights | Muse Glimmer (Ollama) | 30 Oct |
-| N4 | WhatsApp channel: joint reports, deadline alerts, human approval buttons |: | 31 Oct |
+| N4 | WhatsApp channel: joint reports, deadline alerts, human approval buttons | — | 31 Oct |
 | N6 | WhatsApp voice notes → timestamped facts | Muse Voice Transcribe | 1 Nov |
 | N7 | Impact analysis: new legislation re-evaluates open incidents | Muse Spark | 1 Nov |
 | N8 | Crisis exercise mode with timed injects and after-action report | Muse Spark / open weights | 2 Nov |
-| N9 | Public-communication drafts in Fulfulde or Hausa (native review required) | Muse Spark | if time |
 
-Cut order if late: N9 → N8 → N7 → N6. Never cut N1, N2, N3, N4, N5, N10.
+Cut order if late: N8 → N7 → N6. Never cut N1, N2, N3, N4, N5, N10.
 
 ## Open gaps carried from the parent platform
 

@@ -9,7 +9,8 @@
 
 import * as React from 'react'
 import type { AgentUiRequest } from '@/lib/agent-ui'
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, GalleryHorizontal, List, RotateCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, GalleryHorizontal, List, RotateCw, ShieldCheck, ThumbsDown, ThumbsUp } from 'lucide-react'
+import { burstConfetti } from '@/lib/confetti'
 import { Button, StarBorder, cn } from '@sps/ui'
 import { AnimatedTextCompletion } from '@/components/ui/animated-text-completion'
 import { MessageReasoning } from '@/components/ai/display/message-reasoning'
@@ -17,7 +18,7 @@ import { AgentActivityTrail, type TrailStepView } from '@/components/ai/tools/ag
 import { useI18n } from '@/lib/i18n'
 import type { AssessmentDto } from '@/lib/api'
 import { CitationDialog, type CitationView } from '@/components/ai/display/citation-dialog'
-import { StreamIndicator } from '@/components/ai/display/stream-indicator'
+import { StreamLoader } from '@/components/ai/display/stream-loaders'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 
 export interface ChatTurn {
@@ -38,6 +39,8 @@ export interface ChatTurn {
   endedAt?: number
   /** The turn is still being written. */
   active?: boolean
+  /** The operator's verdict on an answer. */
+  rating?: 'good' | 'bad'
   /** Interactive cards the agent opened on this turn (questions, approvals). */
   cards?: AgentUiRequest[]
 }
@@ -46,10 +49,12 @@ export function ChatMessage({
   turn,
   isLast,
   onRegenerate,
+  onRate,
 }: {
   turn: ChatTurn
   isLast: boolean
   onRegenerate?: () => void
+  onRate?: (rating: 'good' | 'bad') => void
 }) {
   const { t } = useI18n()
   const [copied, setCopied] = React.useState(false)
@@ -120,7 +125,7 @@ export function ChatMessage({
 
           {turn.active && (
             <div className="mt-3">
-              <StreamIndicator />
+              <StreamLoader />
             </div>
           )}
 
@@ -184,12 +189,52 @@ export function ChatMessage({
               >
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
+              {onRate && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      if (turn.rating === 'good') return
+                      const box = event.currentTarget.getBoundingClientRect()
+                      burstConfetti({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
+                      onRate('good')
+                    }}
+                    aria-label={t('assistant.rate.good')}
+                    aria-pressed={turn.rating === 'good'}
+                    className={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-muted',
+                      turn.rating === 'good' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <ThumbsUp className={cn('h-3.5 w-3.5', turn.rating === 'good' && 'fill-current')} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (turn.rating !== 'bad') onRate('bad')
+                    }}
+                    aria-label={t('assistant.rate.bad')}
+                    aria-pressed={turn.rating === 'bad'}
+                    className={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-muted',
+                      turn.rating === 'bad' ? 'text-rose-500' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <ThumbsDown className={cn('h-3.5 w-3.5', turn.rating === 'bad' && 'fill-current')} />
+                  </button>
+                </>
+              )}
               {isLast && onRegenerate && (
                 <button
                   type="button"
                   onClick={onRegenerate}
                   aria-label={t('assistant.regenerate')}
-                  className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className={cn(
+                    'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-muted',
+                    turn.rating === 'bad'
+                      ? 'bg-primary/10 text-primary ring-2 ring-primary/40 hover:text-primary'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
                 >
                   <RotateCw className="h-3.5 w-3.5" />
                 </button>
@@ -213,6 +258,7 @@ const VIEW_KEY = 'sps.citations.view'
 function CitationStrip({ citations, onOpen }: { citations: CitationItem[]; onOpen: (citation: CitationItem) => void }) {
   const { t } = useI18n()
   const [view, setView] = React.useState<'list' | 'swipe'>('list')
+  const [open, setOpen] = React.useState(true)
   const track = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
@@ -253,7 +299,16 @@ function CitationStrip({ citations, onOpen }: { citations: CitationItem[]; onOpe
   return (
     <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold text-muted-foreground">{t('assistant.citations.count', { count: citations.length })}</p>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="flex min-w-0 items-center gap-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground"
+        >
+          <ChevronDown className={cn('h-3 w-3 shrink-0 transition-transform', !open && '-rotate-90')} aria-hidden="true" />
+          <span className="truncate">{t('assistant.citations.count', { count: citations.length })}</span>
+        </button>
+        {open && (
         <div className="flex items-center gap-1">
           {view === 'swipe' && (
             <>
@@ -276,9 +331,10 @@ function CitationStrip({ citations, onOpen }: { citations: CitationItem[]; onOpe
             {view === 'list' ? <GalleryHorizontal className="h-3.5 w-3.5" /> : <List className="h-3.5 w-3.5" />}
           </Button>
         </div>
+        )}
       </div>
 
-      {view === 'list' ? (
+      {open && (view === 'list' ? (
         <ul className="space-y-1.5">
           {citations.map((citation, index) => (
             <li key={index}>{card(citation, index)}</li>
@@ -292,7 +348,7 @@ function CitationStrip({ citations, onOpen }: { citations: CitationItem[]; onOpe
             </div>
           ))}
         </div>
-      )}
+      ))}
     </div>
   )
 }

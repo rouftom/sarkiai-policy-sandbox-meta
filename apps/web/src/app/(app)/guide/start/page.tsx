@@ -30,8 +30,8 @@ export default function GuideStartPage() {
       <GuideSection title={fr ? 'Le sigle SPS' : 'What SPS stands for'} icon={BookOpen}>
         <p className="text-[12px] leading-relaxed text-muted-foreground">
           {fr
-            ? 'SPS signifie SarkiAI Policy Sandbox : le bac à sable de politiques publiques de SarkiAI. C’est une console opérateur qui simule des crises, mesure la maturité IA et rédige les communications, avec un journal d’audit chaîné par hachage.'
-            : 'SPS stands for SarkiAI Policy Sandbox: the public-policy sandbox of SarkiAI. It is an operator console that simulates crises, scores AI readiness and drafts communications, with a hash-chained audit log.'}
+            ? 'SPS signifie SarkiAI Policy Sandbox : le bac à sable de politiques publiques de SarkiAI. C’est une console opérateur qui simule des crises, mesure la maturité IA et notifie les points focaux, avec un journal d’audit chaîné par hachage.'
+            : 'SPS stands for SarkiAI Policy Sandbox: the public-policy sandbox of SarkiAI. It is an operator console that simulates crises, scores AI readiness and notifies focal points, with a hash-chained audit log.'}
         </p>
       </GuideSection>
 
@@ -94,6 +94,13 @@ export default function GuideStartPage() {
               body: fr
                 ? 'Pays, domaine et lentille sont partagés par toutes les pages et enregistrés dans le profil. Une démo correcte commence par vérifier que ces trois valeurs sont celles annoncées.'
                 : 'Country, domain and lens are shared by every page and stored on the profile. A correct run starts by checking that these three values are the announced ones.',
+              owner: fr ? 'Analyste' : 'Analyst',
+            },
+            {
+              title: fr ? 'Vérifier le référentiel pays et secteurs' : 'Check the country and sector registry',
+              body: fr
+                ? 'Ouvrez Pays et secteurs : chaque ligne porte le drapeau du pays, son code ISO, sa région, son autorité, ses secteurs actifs et son statut. La recherche ignore casse et accents, l’entonnoir filtre par statut et par région, et la liste se pagine. Un pays « prévu » reste enregistré mais n’est pas proposé dans l’espace de travail.'
+                : 'Open Countries and sectors: every row carries the country flag, its ISO code, region, authority, active sectors and status. Search ignores case and accents, the funnel filters by status and region, and the list is paginated. A “planned” country stays registered but is not offered in the workspace.',
               owner: fr ? 'Analyste' : 'Analyst',
             },
             {

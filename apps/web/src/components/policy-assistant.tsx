@@ -29,6 +29,7 @@ import { decideAction, listActions } from '@/lib/actions-client'
 import { ActionCenter } from '@/components/ai/tools/action-center'
 import { McpAppView } from '@/components/ai/mcp/mcp-app-wrapper'
 import { ChatHistory } from '@/components/ai/display/chat-history'
+import { ConversationShimmer } from '@/components/ai/display/conversation-shimmer'
 import {
   deleteChatSession,
   getChatSession,
@@ -45,6 +46,7 @@ import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
+import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
 import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 
 interface Attachment {
@@ -61,15 +63,6 @@ const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting'] as const
 
-/**
- * Policy assistant in the left panel of the console. Turns are rendered by the
- * organization chat components (composer, message, activity trail, animated
- * answer). The stream drives them: stage events open and close trail steps with
- * their durations, reasoning and answer deltas are written as they arrive, and
- * the final assessment replaces the draft with its citations and validation.
- */
-const ASSISTANT_SECTORS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
-
 /** The icon and the tint of each sector, so the menu reads at a glance. */
 const SECTOR_STYLE: Record<Domain, { icon: typeof HeartPulse; color: string; soft: string }> = {
   health: { icon: HeartPulse, color: 'text-rose-500', soft: 'bg-rose-500/10' },
@@ -79,9 +72,16 @@ const SECTOR_STYLE: Record<Domain, { icon: typeof HeartPulse; color: string; sof
   agriculture: { icon: Sprout, color: 'text-emerald-500', soft: 'bg-emerald-500/10' },
 }
 
+/**
+ * Policy assistant in the left panel of the console. Turns are rendered by the
+ * organization chat components (composer, message, activity trail, animated
+ * answer). The stream drives them: stage events open and close trail steps with
+ * their durations, reasoning and answer deltas are written as they arrive, and
+ * the final assessment replaces the draft with its citations and validation.
+ */
 export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const { t, locale } = useI18n()
-  const { country, domain, domains, setDomains } = useWorkspace()
+  const { country, domain, domains, sectors, setDomains } = useWorkspace()
   const [input, setInput] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [turns, setTurns] = React.useState<ChatTurn[]>([])
@@ -93,6 +93,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [actionError, setActionError] = React.useState<string | null>(null)
   const [actionsOpen, setActionsOpen] = React.useState(false)
   const [sessionId, setSessionId] = React.useState<string | null>(null)
+  const [sessionLoading, setSessionLoading] = React.useState(false)
   const [historyOpen, setHistoryOpen] = React.useState(false)
   const [sessions, setSessions] = React.useState<ChatSessionSummary[]>([])
   const [sessionsLoading, setSessionsLoading] = React.useState(false)
@@ -100,8 +101,13 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const skipSave = React.useRef(false)
   const [actionRecords, setActionRecords] = React.useState<ActionRecord[]>([])
   const [actionsLoading, setActionsLoading] = React.useState(false)
-  /** Base text and last dictation of the current voice recording (the recorder sends the whole dictation each time). */
-  const dictation = React.useRef({ base: null as string | null, last: '' })
+  /**
+   * Base text and last dictation of the current voice recording (the recorder
+   * sends the whole dictation each time). `stale` is set when the operator sends
+   * or empties the field: the last correction of the transcription is still in
+   * flight at that point and must not write the discarded words back.
+   */
+  const dictation = React.useRef({ base: null as string | null, last: '', stale: false })
   const inputRef = React.useRef(input)
   inputRef.current = input
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -203,14 +209,31 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     if (!question || busy || institutions.length === 0) return
     const now = Date.now()
     setInput('')
-    dictation.current = { base: null, last: '' }
+    // Whatever the recorder is still correcting belongs to the question just sent.
+    dictation.current = { base: null, last: '', stale: true }
     setBusy(true)
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64, name: attachment.name }))
     // The files belong to this message: the next question starts without them.
     setAttachments([])
 
-    // Auto: the router picks the institution(s) first; the first one answers.
+    // The question and the agent's turn are shown before any network call: the
+    // conversation appears the moment the operator sends, then the trail fills in.
     let target = pinned ?? institutions[0]!
+    setTurns((previous) => [
+      ...previous,
+      { id: crypto.randomUUID(), role: 'user', content: question },
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: '',
+        agentName: target.name,
+        steps: [],
+        startedAt: now,
+        active: true,
+      },
+    ])
+
+    // Auto: the router picks the institution(s) first; the first one answers.
     let routedTo: string[] | undefined
     if (!pinned) {
       const routed = await api.routeQuestion({ question, domains, institutionIds }).catch(() => null)
@@ -220,23 +243,13 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         .map((id) => institutions.find((institution) => institution.id === id)?.name)
         .filter((name): name is string => Boolean(name))
       routedTo = [primary.name, ...others]
+      patchLast((turn) => ({
+        ...turn,
+        agentName: primary.name,
+        ...(routedTo ? { routedTo } : {}),
+      }))
     }
     const activeInstitution = target
-
-    setTurns((previous) => [
-      ...previous,
-      { id: crypto.randomUUID(), role: 'user', content: question },
-      {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: '',
-        agentName: activeInstitution.name,
-        ...(routedTo ? { routedTo } : {}),
-        steps: [],
-        startedAt: now,
-        active: true,
-      },
-    ])
 
     // Tool calls get their own trail steps, closed by their own `end` event.
     const toolSteps = new Map<string, { key: string; startedAt: number }>()
@@ -475,14 +488,18 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
   const openSession = async (id: string) => {
     if (busy) return
+    setHistoryOpen(false)
+    setSessionLoading(true)
     try {
       const detail = await getChatSession(id)
       skipSave.current = true
       setSessionId(id)
       setTurns(detail.turns as unknown as ChatTurn[])
-      setHistoryOpen(false)
     } catch (error) {
       setActionError((error as Error).message)
+      setHistoryOpen(true)
+    } finally {
+      setSessionLoading(false)
     }
   }
 
@@ -514,6 +531,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }
 
   const suggestions = [t('assistant.suggest1'), t('assistant.suggest2'), t('assistant.suggest3')]
+  const [loader, setLoader] = useStreamLoader()
 
   const optionsMenu = (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -598,7 +616,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuLabel>{t('app.domains')}</DropdownMenuLabel>
-            {ASSISTANT_SECTORS.map((value) => {
+            {sectors.map((value) => {
               const on = domains.includes(value)
               const sector = SECTOR_STYLE[value]
               const Icon = sector.icon
@@ -620,6 +638,23 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                 </DropdownMenuItem>
               )
             })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="min-w-0 flex-1 truncate">{t('assistant.loader')}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>{t('assistant.loader')}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={loader} onValueChange={(value) => setLoader(value as StreamLoaderVariant)}>
+              {STREAM_LOADERS.map((variant) => (
+                <DropdownMenuRadioItem key={variant} value={variant} className="gap-2">
+                  <LoaderGlyph variant={variant} className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t(`assistant.loader.${variant}` as 'assistant.loader.blocks')}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
@@ -690,6 +725,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             onOpen={(id) => void openSession(id)}
             onDelete={(id) => void removeSession(id)}
           />
+        ) : sessionLoading ? (
+          <ConversationShimmer />
         ) : turns.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <BrandMark className="h-12 w-12" />
@@ -717,6 +754,12 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
               <ChatMessage
                 turn={turn}
                 isLast={index === turns.length - 1}
+                onRate={
+                  turn.role === 'assistant' && !turn.active
+                    ? (rating) =>
+                        setTurns((previous) => previous.map((entry) => (entry.id === turn.id ? { ...entry, rating } : entry)))
+                    : undefined
+                }
                 onRegenerate={
                   turn.role === 'assistant' && !turn.active && index === turns.length - 1
                     ? () => {
@@ -777,7 +820,17 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           ref={textareaRef}
           accent={pinned ? institutionAccent(pinned.color) : undefined}
           input={input}
-          handleInputChange={(event) => setInput(event.target.value)}
+          handleInputChange={(event) => {
+            const value = event.target.value
+            // Emptying the field ends the dictation: its correction must not bring the words back.
+            if (!value.trim()) {
+              dictation.current = { base: null, last: '', stale: true }
+            } else if (!dictation.current.stale && value !== `${dictation.current.base ?? ''}${dictation.current.last}`) {
+              // Typed over the dictation: what is in the field becomes the new base.
+              dictation.current = { base: value, last: '', stale: false }
+            }
+            setInput(value)
+          }}
           handleSubmit={(event) => {
             event?.preventDefault()
             void send()
@@ -785,8 +838,14 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           isStreaming={busy}
           placeholder={t('assistant.placeholder')}
           optionsMenu={optionsMenu}
+          onRecordingStart={() => {
+            // A new dictation starts empty, even after the previous one was sent or discarded.
+            dictation.current = { base: null, last: '', stale: false }
+          }}
           onTranscript={(text) => {
             const current = dictation.current
+            // The last correction arrives after the field was sent or emptied: it is stale.
+            if (current.stale) return
             // A recording that does not extend the last dictation starts a new base: the text typed so far.
             if (current.base === null || !text.startsWith(current.last)) {
               const typed = inputRef.current

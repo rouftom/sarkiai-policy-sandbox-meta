@@ -1,23 +1,29 @@
 Content license — Creative Commons Attribution 4.0 International (CC BY 4.0)
 
-The knowledge-base content, document manifests, and documentation authored for
-this project are licensed under CC BY 4.0.
+Scope: this license covers only material authored by the project team —
+documentation, the document manifests (selection, ordering and annotations),
+diagrams and the project's own screenshots.
 
-You are free to:
-  - Share  — copy and redistribute the material in any medium or format.
-  - Adapt  — remix, transform, and build upon the material for any purpose,
-             even commercially.
+It does NOT cover, and must not be read as relicensing:
 
-Under the following terms:
-  - Attribution — you must give appropriate credit, provide a link to the
-    license, and indicate if changes were made.
+  - the software, which is under the Apache License 2.0 (see LICENSE);
+  - third-party source documents (national laws, decrees, strategies, reports,
+    press articles, research papers), which retain their own terms.
+
+The repository does not redistribute third-party source documents. Their
+payloads are git-ignored; only the manifests (with the issuer, the source URL
+and a per-document `rights` status) and our own illustrative samples are
+versioned. Official texts of a
+legislative, administrative or judicial nature are generally excluded from
+copyright protection under Cameroonian law (Law No. 2000/011); other documents
+are used under their own licence, by permission, or only as short attributed
+quotations. See docs/LICENSING.md for the decision rules and the takedown
+contact.
+
+You are free to share and adapt the project-authored material under CC BY 4.0,
+provided you give appropriate credit, link to the license, and indicate changes.
 
 Full legal text: https://creativecommons.org/licenses/by/4.0/legalcode
 License summary: https://creativecommons.org/licenses/by/4.0/
-
-Scope: this content license does NOT apply to the software (licensed under the
-Apache License 2.0 — see LICENSE), nor to third-party source documents (national
-laws, strategies, reports), which retain their own terms. Provenance for each
-source is recorded in the relevant data/**/manifest.json.
 
 Copyright 2026 Djotta — Made with ♥️ by Djotta (https://djotta.com)

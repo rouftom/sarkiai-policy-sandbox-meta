@@ -19,7 +19,6 @@
     "@sps/audit": "workspace:*",
     "@sps/auth": "workspace:*",
     "@sps/citations": "workspace:*",
-    "@sps/communications": "workspace:*",
     "@sps/exercise": "workspace:*",
     "@sps/gazette": "workspace:*",
     "@sps/impact": "workspace:*",

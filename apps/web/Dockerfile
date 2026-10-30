@@ -1,6 +1,7 @@
 # Build context: repository root
 # ── base ─────────────────────────────────────────────────────────────────────
-FROM oven/bun:1.1-alpine AS base
+# Bun 1.4 reads the text `bun.lock`; keep this aligned with the lockfile.
+FROM oven/bun:1.4.2-alpine AS base
 WORKDIR /app
 
 COPY package.json turbo.json tsconfig.base.json ./

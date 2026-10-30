@@ -1,9 +1,7 @@
 # Operator notifications (e-mail + WhatsApp)
 
 The Communications page reaches the people who must act, over e-mail or
-WhatsApp, with a per-channel consent and an audit record for every send. The
-Fulfulde/Hausa drafting endpoint still exists (`/v1/communications/*`) but is not
-surfaced in the console.
+WhatsApp, with a per-channel consent and an audit record for every send.
 
 ## Two channels, one address book
 
@@ -42,7 +40,9 @@ like every other store in `apps/api`).
 | `GET /v1/notifications/status` | whether Resend and WhatsApp are configured, the sending address, and the review status of every `meta_hackathon_*` template (cached 60 s) |
 | `GET /v1/notifications/contacts` | the address book |
 | `POST /v1/notifications/contacts` | add a contact (validates the number, records consent) |
+| `PUT /v1/notifications/contacts/:id` | edit a contact in place (name, addresses, consent) |
 | `DELETE /v1/notifications/contacts/:id` | remove a contact; past sends stay in the audit trail |
+| `POST /v1/notifications/summary-suggestion` | draft a run-grounded summary for the WhatsApp composer (the operator edits it) |
 | `POST /v1/notifications/whatsapp` | send one approved template to a list of contacts |
 | `POST /v1/notifications/email` | send the React Email notification to a list of contacts |
 
@@ -59,13 +59,20 @@ WhatsApp kinds map to templates exactly as in
 only template that needs no variable — useful to prove that the channel works
 before the Utility templates are approved.
 
+The composer's feather button (`POST /v1/notifications/summary-suggestion`) asks
+the model to summarise the selected run's latest joint report. The prompt carries
+only stored facts (title, progress, summary, agreements, conflicts, open
+questions) and is written in the interface language; the operator still edits the
+text before sending.
+
 ## Audit
 
-Every add, removal and successful send is written to the hash-chained audit log:
+Every add, edit, removal and successful send is written to the hash-chained audit log:
 
 | Action | Target |
 |---|---|
 | `notification.contact_added` | `name · email+whatsapp` |
+| `notification.contact_updated` | `name · email+whatsapp` |
 | `notification.contact_removed` | contact id |
 | `notification.whatsapp_sent` | `name · masked phone · template` (+ `runId` when given) |
 | `notification.email_sent` | `name · masked address · subject` |

@@ -1,20 +1,26 @@
 {
   "country": "cm",
   "jurisdiction": "national",
-  "generated": "2026-10-03",
-  "note": "Corpus Cameroun. status='present' = fichier copié localement (payloads non versionnés, cf. .gitignore) ; status='to_confirm' = instrument à collecter/vérifier avant ingestion. needsOcr=true => PDF scanné sans couche texte : l'ingestion déclenche le service OCR (services/ocr). Toute erreur factuelle se propage aux réponses des agents.",
+  "generated": "2026-10-30",
+  "note": "Cameroon corpus. status='present' = file copied locally (payloads are not versioned, see .gitignore); status='to_confirm' = instrument still to source or verify before ingestion. needsOcr=true => scanned PDF without a text layer, so ingestion calls the OCR service (services/ocr). Any factual error propagates into the agents' answers.",
+  "rightsNote": "Per-document rights status. official-text = official legislative/administrative/judicial text, generally outside copyright under Cameroonian law; open-licence = explicit reuse licence (see the entry); quotation-only = third-party work, short attributed quotations only, payload not redistributed; to-confirm = rights not established, do not publish the payload. Third-party payloads are git-ignored; only manifests (and the project's own samples) are versioned. See docs/LICENSING.md.",
   "documents": [
     {
       "id": "cm-data-protection-law-2024",
       "title": "Loi relative à la protection des données à caractère personnel au Cameroun (23 décembre 2024)",
-      "authority": "Présidence de la République / Parlement",
+      "authority": "Presidency of the Republic / Parliament",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["data_marketplace", "human_interface", "ai_policies"],
+      "pillar": [
+        "data_marketplace",
+        "human_interface",
+        "ai_policies"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "critical",
       "file": "loi_2024_protection_donnees_personnelles.pdf",
-      "note": "Copie certifiée scannée avec couche OCR partielle ; numéro de loi à confirmer.",
+      "note": "Certified scanned copy with a partial OCR layer; the law number is to be confirmed.",
       "sourceUrl": ""
     },
     {
@@ -23,11 +29,17 @@
       "authority": "MINPOSTEL",
       "docType": "report",
       "jurisdiction": "national",
-      "pillar": ["generated_content", "ai_policies", "ai_inclusion"],
+      "pillar": [
+        "generated_content",
+        "ai_policies",
+        "ai_inclusion"
+      ],
       "status": "present",
+      "rights": "quotation-only",
+      "rightsNote": "Press article, all rights reserved: short attributed quotations only; do not publish the payload.",
       "priority": "critical",
       "file": "actualite_strategie_ia_cameroun.pdf",
-      "note": "Article de presse décrivant la stratégie (objectif 12 000 emplois d'ici 2040) — le document officiel de la stratégie reste à obtenir.",
+      "note": "Press article describing the strategy (target of 12,000 jobs by 2040) — the official strategy document is still to be obtained.",
       "sourceUrl": ""
     },
     {
@@ -36,8 +48,13 @@
       "authority": "MINPOSTEL",
       "docType": "strategy",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "generated_content", "ai_policies"],
+      "pillar": [
+        "digital_infrastructure",
+        "generated_content",
+        "ai_policies"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "high",
       "file": "plan_strategique_cameroun_numerique_2020.pdf",
       "sourceUrl": ""
@@ -45,39 +62,55 @@
     {
       "id": "cm-health-digital-psnsn-2026-2030",
       "title": "Plan Stratégique National de Santé Numérique (PSNSN) 2026-2030",
-      "authority": "Ministère de la Santé Publique",
+      "authority": "Ministry of Public Health",
       "docType": "policy",
       "jurisdiction": "national",
-      "pillar": ["ai_integration", "ai_inclusion", "digital_infrastructure", "human_interface"],
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "digital_infrastructure",
+        "human_interface"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "critical",
       "file": "psnsn_sante_numerique_2026_2030.pdf",
       "needsOcr": true,
-      "note": "114 pages, scanné (aucune couche texte) — OCR requis.",
+      "note": "114 pages, scanned (no text layer) — OCR required.",
       "sourceUrl": ""
     },
     {
       "id": "cm-health-compact-2023",
       "title": "Compact national entre le Gouvernement du Cameroun et les partenaires au développement (santé / CSU)",
-      "authority": "Ministère de la Santé Publique",
+      "authority": "Ministry of Public Health",
       "docType": "policy",
       "jurisdiction": "national",
-      "pillar": ["ai_integration", "ai_inclusion"],
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion"
+      ],
       "status": "present",
+      "rights": "to-confirm",
+      "rightsNote": "Government/development-partner compact: partner terms may apply; verify before publishing the payload.",
       "priority": "medium",
       "file": "compact_national_sante_2023.pdf",
       "needsOcr": true,
-      "note": "Partie du texte extraite avec police non-unicode (garbled) — OCR recommandé.",
+      "note": "Part of the text extracts with a non-Unicode font (garbled) — OCR recommended.",
       "sourceUrl": ""
     },
     {
       "id": "cm-health-system",
       "title": "Le système de santé camerounais",
-      "authority": "Revue / auteur (Jean Paul Beyeme Ondoua)",
+      "authority": "Journal / author (Jean Paul Beyeme Ondoua)",
       "docType": "report",
       "jurisdiction": "national",
-      "pillar": ["ai_integration", "ai_inclusion"],
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion"
+      ],
       "status": "present",
+      "rights": "quotation-only",
+      "rightsNote": "Authored article, all rights reserved: short attributed quotations only; do not publish the payload.",
       "priority": "medium",
       "file": "systeme_de_sante_camerounais.pdf",
       "sourceUrl": ""
@@ -88,8 +121,13 @@
       "authority": "MINEPAT",
       "docType": "strategy",
       "jurisdiction": "national",
-      "pillar": ["contextualization", "ai_policies", "digital_infrastructure"],
+      "pillar": [
+        "contextualization",
+        "ai_policies",
+        "digital_infrastructure"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "high",
       "file": "resume_snd30.pdf",
       "sourceUrl": "https://www.minepat.gov.cm/"
@@ -100,8 +138,13 @@
       "authority": "MINEPAT",
       "docType": "strategy",
       "jurisdiction": "national",
-      "pillar": ["contextualization", "ai_policies", "digital_infrastructure"],
+      "pillar": [
+        "contextualization",
+        "ai_policies",
+        "digital_infrastructure"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "high",
       "file": "snd30_complet_2020_2030.pdf",
       "sourceUrl": "https://minepat.gov.cm/"
@@ -112,8 +155,13 @@
       "authority": "CEMAC / ART",
       "docType": "regulation",
       "jurisdiction": "regional",
-      "pillar": ["human_interface", "collaboration", "digital_infrastructure"],
+      "pillar": [
+        "human_interface",
+        "collaboration",
+        "digital_infrastructure"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "medium",
       "file": "cemac_protection_droits_utilisateurs.pdf",
       "sourceUrl": "https://www.art.cm/"
@@ -121,15 +169,20 @@
     {
       "id": "cm-ecommerce-law-2010",
       "title": "Loi n° 2010/021 du 21 décembre 2010 régissant le commerce électronique au Cameroun",
-      "authority": "Assemblée Nationale",
+      "authority": "National Assembly",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "generated_content", "data_marketplace"],
+      "pillar": [
+        "digital_infrastructure",
+        "generated_content",
+        "data_marketplace"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "high",
       "file": "loi_2010_021_commerce_electronique.pdf",
       "needsOcr": true,
-      "note": "14 pages, scanné — OCR requis.",
+      "note": "14 pages, scanned — OCR required.",
       "sourceUrl": "https://www.art.cm/"
     },
     {
@@ -138,8 +191,13 @@
       "authority": "ART",
       "docType": "report",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "collaboration"],
+      "pillar": [
+        "digital_infrastructure",
+        "collaboration"
+      ],
       "status": "present",
+      "rights": "to-confirm",
+      "rightsNote": "ART report; reuse terms not stated on the publication: verify before publishing the payload.",
       "priority": "medium",
       "file": "art_observatoire_marche_telecom_2016.pdf",
       "sourceUrl": "https://www.art.cm/"
@@ -147,11 +205,15 @@
     {
       "id": "cm-cybersecurity-law-2010",
       "title": "Loi n° 2010/012 du 21 décembre 2010 relative à la cybersécurité et à la cybercriminalité au Cameroun",
-      "authority": "Assemblée Nationale / MINPOSTEL",
+      "authority": "National Assembly / MINPOSTEL",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "ai_policies"],
+      "pillar": [
+        "digital_infrastructure",
+        "ai_policies"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "critical",
       "file": "loi_2010_012_cybersecurite_cybercriminalite.pdf",
       "sourceUrl": "https://www.minpostel.gov.cm/"
@@ -159,37 +221,51 @@
     {
       "id": "cm-electronic-comms-law",
       "title": "Loi régissant les communications électroniques au Cameroun (réf. source 2013/013)",
-      "authority": "Assemblée Nationale / MINPOSTEL",
+      "authority": "National Assembly / MINPOSTEL",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "contextualization"],
+      "pillar": [
+        "digital_infrastructure",
+        "contextualization"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "high",
       "file": "loi_2013_013_communications_electroniques.pdf",
-      "note": "Référence de la source : Loi_2013-013 (numéro/année à confirmer).",
+      "note": "Source reference: Loi_2013-013 (number and year to be confirmed).",
       "sourceUrl": "https://www.minpostel.gov.cm/"
     },
     {
       "id": "cm-ai-adoption-local-authorities",
       "title": "Stratégie d'adoption de l'IA dans la transformation numérique des Collectivités Territoriales Décentralisées du Cameroun",
-      "authority": "Recherche (HAL / auteurs)",
+      "authority": "Research (HAL / authors)",
       "docType": "report",
       "jurisdiction": "national",
-      "pillar": ["ai_policies", "contextualization", "ai_inclusion"],
+      "pillar": [
+        "ai_policies",
+        "contextualization",
+        "ai_inclusion"
+      ],
       "status": "present",
+      "rights": "quotation-only",
+      "rightsNote": "HAL deposit with no confirmed reuse licence: short attributed quotations only until the licence is checked.",
       "priority": "high",
       "file": "strategie_ia_collectivites_territoriales.pdf",
-      "note": "Papier de recherche (approche DSR). Le dépôt HAL équivalent n'a pas été dupliqué.",
+      "note": "Research paper (DSR approach). The equivalent HAL record was not duplicated.",
       "sourceUrl": "https://hal.science/hal-05411779v1"
     },
     {
       "id": "cm-interconnection-decree-2023",
       "title": "Décret fixant les conditions d'interconnexion et d'accès aux réseaux de communications électroniques (2023)",
-      "authority": "Primature / ART",
+      "authority": "Prime Minister’s Office / ART",
       "docType": "regulation",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "collaboration"],
+      "pillar": [
+        "digital_infrastructure",
+        "collaboration"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "medium",
       "file": "decret_2023_interconnexion.pdf",
       "sourceUrl": "https://www.art.cm/"
@@ -200,11 +276,16 @@
       "authority": "ART",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "ai_policies", "human_interface"],
+      "pillar": [
+        "digital_infrastructure",
+        "ai_policies",
+        "human_interface"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "high",
       "file": "art_recueil_textes_2018.pdf",
-      "note": "486 pages — compilation de lois/décrets/arrêtés télécoms.",
+      "note": "486 pages — compilation of telecom laws, decrees and orders.",
       "sourceUrl": "https://www.art.cm/"
     },
     {
@@ -213,54 +294,72 @@
       "authority": "MINPOSTEL",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "ai_policies", "human_interface"],
+      "pillar": [
+        "digital_infrastructure",
+        "ai_policies",
+        "human_interface"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "high",
       "file": "compendium_textes_poste_telecom_tic_2023.pdf",
       "needsOcr": true,
-      "note": "456 pages, scanné — OCR requis. Édition 2023 (succède au recueil ART 2018).",
+      "note": "456 pages, scanned — OCR required. 2023 edition (successor to the 2018 ART compilation).",
       "sourceUrl": "https://www.minpostel.gov.cm/"
     },
     {
       "id": "cm-electronic-certification-decree",
       "title": "Décret relatif à la certification électronique",
-      "authority": "MINPOSTEL / Primature",
+      "authority": "MINPOSTEL / Prime Minister’s Office",
       "docType": "regulation",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "human_interface"],
+      "pillar": [
+        "digital_infrastructure",
+        "human_interface"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "medium",
       "file": "decret_certification_electronique.pdf",
       "needsOcr": true,
-      "note": "8 pages, scanné — OCR requis.",
+      "note": "8 pages, scanned — OCR required.",
       "sourceUrl": "https://www.minpostel.gov.cm/"
     },
     {
       "id": "cm-health-sr-pf-standards",
       "title": "Normes et standards en santé de la reproduction et planification familiale au Cameroun",
-      "authority": "Ministère de la Santé Publique",
+      "authority": "Ministry of Public Health",
       "docType": "guidance",
       "jurisdiction": "national",
-      "pillar": ["ai_integration", "ai_inclusion", "human_interface"],
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "human_interface"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "medium",
       "file": "normes_standards_sr_pf_sante.pdf",
       "needsOcr": true,
-      "note": "164 pages, scanné — OCR requis.",
+      "note": "164 pages, scanned — OCR required.",
       "sourceUrl": ""
     },
     {
       "id": "cm-penal-code-2016",
       "title": "Code pénal du Cameroun (édition 2016)",
-      "authority": "République du Cameroun",
+      "authority": "Republic of Cameroon",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["ai_policies", "human_interface"],
+      "pillar": [
+        "ai_policies",
+        "human_interface"
+      ],
       "status": "present",
+      "rights": "official-text",
       "priority": "medium",
       "file": "penal_code_2016.pdf",
       "needsOcr": true,
-      "note": "139 pages, scanné — OCR requis.",
+      "note": "139 pages, scanned — OCR required.",
       "sourceUrl": ""
     },
     {
@@ -269,66 +368,91 @@
       "authority": "ID4D / Government of Cameroon",
       "docType": "report",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "ai_policies", "ai_inclusion"],
+      "pillar": [
+        "digital_infrastructure",
+        "ai_policies",
+        "ai_inclusion"
+      ],
       "status": "present",
+      "rights": "to-confirm",
+      "rightsNote": "World Bank / ID4D report, usually CC BY 3.0 IGO; verify the licence on the report before publishing the payload.",
       "priority": "medium",
       "file": "cameroon_id_cr_ecosystem_diagnostic.txt",
-      "note": "Converti depuis .docx (l'ingestion ne lit que PDF/TXT).",
+      "note": "Converted from .docx (ingestion only reads PDF/TXT).",
       "sourceUrl": ""
     },
-
     {
       "id": "cm-constitution-1996",
       "title": "Constitution de la République du Cameroun (loi n° 96/06 du 18 janvier 1996, modifiée)",
-      "authority": "République du Cameroun",
+      "authority": "Republic of Cameroon",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["ai_policies", "human_interface"],
+      "pillar": [
+        "ai_policies",
+        "human_interface"
+      ],
       "status": "to_confirm",
+      "rights": "official-text",
       "priority": "high",
       "sourceUrl": "https://www.prc.cm/"
     },
     {
       "id": "cm-health-framework-1996",
       "title": "Loi n° 96/03 du 4 janvier 1996 portant loi-cadre dans le domaine de la santé",
-      "authority": "Ministère de la Santé Publique",
+      "authority": "Ministry of Public Health",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["ai_integration", "ai_inclusion"],
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion"
+      ],
       "status": "to_confirm",
+      "rights": "official-text",
       "priority": "high",
       "sourceUrl": "https://www.minsante.cm/"
     },
     {
       "id": "cm-cybersecurity-2010",
       "title": "Loi n° 2010/012 du 21 décembre 2010 relative à la cybersécurité et à la cybercriminalité au Cameroun",
-      "authority": "Assemblée Nationale",
+      "authority": "National Assembly",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "ai_policies"],
+      "pillar": [
+        "digital_infrastructure",
+        "ai_policies"
+      ],
       "status": "to_confirm",
+      "rights": "official-text",
       "priority": "critical",
       "sourceUrl": "https://www.antic.cm/"
     },
     {
       "id": "cm-electronic-comms-2010",
       "title": "Loi n° 2010/013 du 21 décembre 2010 régissant les communications électroniques au Cameroun",
-      "authority": "Assemblée Nationale",
+      "authority": "National Assembly",
       "docType": "law",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "contextualization"],
+      "pillar": [
+        "digital_infrastructure",
+        "contextualization"
+      ],
       "status": "to_confirm",
+      "rights": "official-text",
       "priority": "high",
       "sourceUrl": "https://www.art.cm/"
     },
     {
       "id": "cm-data-protection-authority-mandate",
       "title": "Mandat et attributions de l'autorité de protection des données (décret de création à confirmer)",
-      "authority": "Autorité de protection des données",
+      "authority": "Data Protection Authority",
       "docType": "regulation",
       "jurisdiction": "national",
-      "pillar": ["ai_policies", "human_interface"],
+      "pillar": [
+        "ai_policies",
+        "human_interface"
+      ],
       "status": "to_confirm",
+      "rights": "official-text",
       "priority": "critical",
       "sourceUrl": ""
     },
@@ -338,8 +462,12 @@
       "authority": "ANTIC",
       "docType": "regulation",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "ai_policies"],
+      "pillar": [
+        "digital_infrastructure",
+        "ai_policies"
+      ],
       "status": "to_confirm",
+      "rights": "official-text",
       "priority": "high",
       "sourceUrl": "https://www.antic.cm/"
     },
@@ -349,19 +477,27 @@
       "authority": "MINPOSTEL / ANTIC",
       "docType": "strategy",
       "jurisdiction": "national",
-      "pillar": ["digital_infrastructure", "ai_policies"],
+      "pillar": [
+        "digital_infrastructure",
+        "ai_policies"
+      ],
       "status": "to_confirm",
+      "rights": "official-text",
       "priority": "high",
       "sourceUrl": ""
     },
     {
       "id": "cm-malabo-convention",
       "title": "Convention de Malabo sur la cybersécurité et la protection des données à caractère personnel (2014)",
-      "authority": "Union Africaine",
+      "authority": "African Union",
       "docType": "treaty",
       "jurisdiction": "regional",
-      "pillar": ["data_marketplace", "human_interface"],
+      "pillar": [
+        "data_marketplace",
+        "human_interface"
+      ],
       "status": "verified",
+      "rights": "official-text",
       "priority": "high",
       "sourceUrl": "https://au.int/en/treaties"
     }

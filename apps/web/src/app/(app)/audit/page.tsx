@@ -11,6 +11,9 @@ import {
   CardTitle,
   DataTablePagination,
   Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Table,
   TableBody,
   TableCell,
@@ -90,7 +93,7 @@ export default function AuditPage() {
         event.actor,
         event.action,
         event.target ?? '',
-        auditActorLabel(event.actor, t),
+        auditActorLabel(event.actor, t, event.userId),
         auditActionLabel(event.action, t),
       ].some((value) => value.toLowerCase().includes(needle)),
     )
@@ -109,27 +112,46 @@ export default function AuditPage() {
       <PageIntro title={t('audit.title')} subtitle={t('audit.pageSubtitle')} />
 
       <Card className="flex min-h-[420px] flex-col">
-        <CardHeader className="h-auto flex-wrap gap-x-3 gap-y-2 py-2">
-          <ScrollText className="h-4 w-4 text-brand-primary dark:text-brand-primary-light" />
-          <CardTitle>{t('audit.title')}</CardTitle>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+        <CardHeader className="h-auto flex-nowrap gap-x-3 gap-y-2 py-2 sm:flex-wrap">
+          <ScrollText className="hidden h-4 w-4 text-brand-primary sm:block dark:text-brand-primary-light" />
+          <CardTitle className="hidden sm:block">{t('audit.title')}</CardTitle>
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 sm:ml-auto sm:flex-none sm:flex-wrap">
             {chain && (
-              <span className="inline-flex items-center gap-1.5">
-                <Badge tone={chain.valid ? 'success' : 'danger'} className="max-w-full whitespace-nowrap">
-                  {chain.valid ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-                  {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? 'n/a' })}
-                </Badge>
-                {chain.valid && (chain.forks ?? 0) > 0 && (
-                  <span className="text-[10px] text-muted-foreground">{t('audit.forks', { count: chain.forks ?? 0 })}</span>
-                )}
-              </span>
+              <>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? 'n/a' })}
+                      className={chain.valid ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-emerald-600 hover:bg-muted sm:hidden dark:text-emerald-400' : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-rose-500 hover:bg-muted sm:hidden'}
+                    >
+                      {chain.valid ? <ShieldCheck className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-56 p-3 text-[11px]">
+                    <p className="font-semibold">{chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? 'n/a' })}</p>
+                    {chain.valid && (chain.forks ?? 0) > 0 && (
+                      <p className="mt-1 text-[10px] text-muted-foreground">{t('audit.forks', { count: chain.forks ?? 0 })}</p>
+                    )}
+                  </PopoverContent>
+                </Popover>
+                <span className="hidden items-center gap-1.5 sm:inline-flex">
+                  <Badge tone={chain.valid ? 'success' : 'danger'} className="max-w-full whitespace-nowrap">
+                    {chain.valid ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                    {chain.valid ? t('audit.chainOk') : t('audit.chainBroken', { at: chain.brokenAt ?? 'n/a' })}
+                  </Badge>
+                  {chain.valid && (chain.forks ?? 0) > 0 && (
+                    <span className="text-[10px] text-muted-foreground">{t('audit.forks', { count: chain.forks ?? 0 })}</span>
+                  )}
+                </span>
+              </>
             )}
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('audit.filter')}
               aria-label={t('audit.filter')}
-              className="h-8 w-40 text-[11px] sm:w-56"
+              className="h-8 min-w-0 flex-1 text-[11px] sm:w-56 sm:flex-none"
             />
             <TooltipProvider>
               <Tooltip>
@@ -206,7 +228,7 @@ export default function AuditPage() {
                           {formatTime(event.ts, locale)}
                         </TableCell>
                         <TableCell className="max-w-[180px] truncate font-medium">
-                          {auditActorLabel(event.actor, t)}
+                          {auditActorLabel(event.actor, t, event.userId)}
                         </TableCell>
                         <TableCell>
                           <span

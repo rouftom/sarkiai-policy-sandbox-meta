@@ -11,21 +11,29 @@
  */
 
 import * as React from 'react'
-import { AlertTriangle, CheckCircle2, ClipboardList, Loader2, Plus, Timer, Trash2 } from 'lucide-react'
-import { Button, Card, CardContent, CardHeader, CardTitle, Select, cn } from '@sps/ui'
+import { AlertTriangle, CheckCircle2, ClipboardList, FileText, Loader, Loader2, Plus, Timer, Trash2 } from 'lucide-react'
+import { AnimatedTabsList, Button, Card, CardContent, CardHeader, CardTitle, Select, cn, type TabItem } from '@sps/ui'
 import { institutionsForDomain, type Domain } from '@sps/shared'
 import {
   api,
-  type AfterActionDto,
+  type ExerciseReportSummaryDto,
   type ExerciseActionDto,
   type ExerciseActionKind,
   type ExerciseDefinitionDto,
   type ExerciseEvaluationDto,
 } from '@/lib/api'
-import { useI18n } from '@/lib/i18n'
+import { useI18n, type MessageKey } from '@/lib/i18n'
 import { ProcessingBar } from '@/components/processing-bar'
+import { ExerciseReportHistory } from '@/components/exercise-report-history'
 
 const KINDS: ExerciseActionKind[] = ['action', 'decision', 'escalation', 'note']
+
+type ExerciseTab = 'exercise' | 'report'
+
+const EXERCISE_TABS: Array<Omit<TabItem, 'label'> & { labelKey: MessageKey }> = [
+  { id: 'exercise', labelKey: 'exercise.tab.exercise', icon: Timer },
+  { id: 'report', labelKey: 'exercise.tab.report', icon: FileText },
+]
 
 const SEVERITY_TONE: Record<string, string> = {
   low: 'border-border bg-muted/40',
@@ -42,7 +50,7 @@ const KIND_TONE: Record<ExerciseActionKind, string> = {
 }
 
 export function ExercisePanel({ country, domain }: { country: string; domain: Domain }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const institutions = React.useMemo(() => institutionsForDomain(domain), [domain])
   const actorName = React.useCallback(
     (id: string) => institutions.find((item) => item.id === id)?.name ?? id,
@@ -53,11 +61,12 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
   const [actions, setActions] = React.useState<ExerciseActionDto[]>([])
   const [clock, setClock] = React.useState(0)
   const [evaluation, setEvaluation] = React.useState<ExerciseEvaluationDto | null>(null)
-  const [afterAction, setAfterAction] = React.useState<AfterActionDto | null>(null)
+  const [history, setHistory] = React.useState<ExerciseReportSummaryDto[]>([])
   const [loading, setLoading] = React.useState(true)
   const [evaluating, setEvaluating] = React.useState(false)
   const [generating, setGenerating] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [tab, setTab] = React.useState<ExerciseTab>('exercise')
 
   const [form, setForm] = React.useState<{
     actor: string
@@ -71,7 +80,6 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
     setActions([])
     setClock(0)
     setEvaluation(null)
-    setAfterAction(null)
     setError(null)
     setLoading(true)
     try {
@@ -94,7 +102,6 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
 
   const resetScoring = () => {
     setEvaluation(null)
-    setAfterAction(null)
   }
 
   const addAction = () => {
@@ -127,7 +134,6 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
       setEvaluation(
         await api.evaluateExercise({ definition, actions, evaluatedAtMinute: clock }),
       )
-      setAfterAction(null)
     } catch (cause) {
       setError((cause as Error).message)
     } finally {
@@ -140,15 +146,29 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
     setGenerating(true)
     setError(null)
     try {
-      const report = await api.exerciseAfterAction({ definition, actions, evaluatedAtMinute: clock })
+      const report = await api.exerciseAfterAction({
+        definition,
+        actions,
+        evaluatedAtMinute: clock,
+        lang: locale === 'fr' ? 'fr' : 'en',
+      })
       setEvaluation(report)
-      setAfterAction(report)
+      setHistory((await api.exerciseReports(definition.id)).reports)
+      setTab('report')
     } catch (cause) {
       setError((cause as Error).message)
     } finally {
       setGenerating(false)
     }
   }
+
+  React.useEffect(() => {
+    if (!definition) return
+    api
+      .exerciseReports(definition.id)
+      .then((listed) => setHistory(listed.reports))
+      .catch(() => setHistory([]))
+  }, [definition])
 
   const coverage = evaluation ? Math.round(evaluation.coverage * 100) : null
 
@@ -157,11 +177,20 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
       <CardHeader>
         <ClipboardList className="h-4 w-4 text-primary" />
         <CardTitle>{t('exercise.title')}</CardTitle>
-        <span className="ml-auto text-[10px] font-semibold text-muted-foreground">
-          {t('exercise.subtitle')}
-        </span>
+        <div className="ml-auto">
+          <AnimatedTabsList
+            dense
+            value={tab}
+            onValueChange={(value) => setTab(value as ExerciseTab)}
+            items={EXERCISE_TABS.map((item) => ({ ...item, label: t(item.labelKey), icon: item.icon }))}
+          />
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {tab === 'report' && <ExerciseReportHistory reports={history} />}
+
+        {tab === 'exercise' && (
+          <>
         <p className="text-xs text-muted-foreground">{t('exercise.hint')}</p>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -392,7 +421,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
                 onClick={() => void writeReport()}
                 disabled={evaluating || generating || actions.length === 0}
               >
-                {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+                {generating ? <Loader className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <FileText className="h-3.5 w-3.5" aria-hidden />}
                 {generating ? t('exercise.generating') : t('exercise.afterAction')}
               </Button>
             </div>
@@ -449,34 +478,8 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
               </div>
             )}
 
-            {afterAction && (
-              <div className="space-y-2 rounded-xl border border-primary/40 bg-primary/5 p-2.5">
-                <p className="text-[10px] font-semibold text-muted-foreground">
-                  {t('exercise.narrative')} · {afterAction.model}
-                </p>
-                <p className="text-xs leading-relaxed">{afterAction.narrative.summary}</p>
-                {(
-                  [
-                    { label: t('exercise.lessons'), items: afterAction.narrative.lessons },
-                    { label: t('exercise.recommendations'), items: afterAction.narrative.recommendations },
-                    { label: t('exercise.unresolved'), items: afterAction.narrative.unresolved },
-                  ] as Array<{ label: string; items: string[] }>
-                )
-                  .filter((section) => section.items.length > 0)
-                  .map((section) => (
-                    <div key={section.label}>
-                      <p className="text-[10px] font-semibold text-muted-foreground">
-                        {section.label}
-                      </p>
-                      <ul className="list-disc space-y-0.5 pl-4 text-[11px]">
-                        {section.items.map((item, index) => (
-                          <li key={index}>{item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-              </div>
-            )}
+          </>
+        )}
           </>
         )}
       </CardContent>

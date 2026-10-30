@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { extractJsonObject } from './structured'
+import { extractJsonObject, plainTextReply } from './structured'
 
 describe('extractJsonObject', () => {
   test('reads a bare object', () => {
@@ -22,5 +22,35 @@ describe('extractJsonObject', () => {
   test('returns null when no object is present or the JSON is broken', () => {
     expect(extractJsonObject('no structure here')).toBeNull()
     expect(extractJsonObject('{"summary": ')).toBeNull()
+  })
+})
+
+describe('plainTextReply', () => {
+  test('keeps a plain-text answer when the model skips the JSON envelope', () => {
+    expect(plainTextReply('The health ministry must validate the cohort before release.')).toBe(
+      'The health ministry must validate the cohort before release.',
+    )
+  })
+
+  test('removes fences, a summary label and wrapping quotes', () => {
+    expect(plainTextReply('```\nsummary: "A short update."\n```')).toBe('A short update.')
+  })
+
+  test('strips thinking tags before deciding', () => {
+    const open = '<' + 'think' + 'ing>'
+    const close = '<' + '/' + 'think' + 'ing>'
+    expect(plainTextReply(open + 'compare options' + close + 'The run is at tick 3.')).toBe('The run is at tick 3.')
+  })
+
+  test('rejects empty replies and anything that still looks like JSON', () => {
+    expect(plainTextReply('   ')).toBeNull()
+    expect(plainTextReply('{"summary":"ok"}')).toBeNull()
+    expect(plainTextReply('{"summary": ')).toBeNull()
+  })
+
+  test('trims to the requested length with an ellipsis', () => {
+    const trimmed = plainTextReply('a'.repeat(1200), 900)
+    expect(trimmed).toHaveLength(900)
+    expect(trimmed?.endsWith('…')).toBe(true)
   })
 })

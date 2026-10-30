@@ -42,7 +42,8 @@ We use these exact stage names throughout the codebase and the docs.
 
 | Concern | File |
 |---------|------|
-| Country corpora placement (CM first, then AE) | `data/country/cm/`, `data/country/ae/` |
+| Country corpora placement | `data/country/cm/` |
+| African regional reference corpus | `data/global/africa/` |
 | Global best-practice corpus | `data/global/standards/` |
 | Illustrative seed documents | `data/samples/*.txt` |
 | Media-derived sources (briefings, hearings) | `services/transcription/app/main.py` |

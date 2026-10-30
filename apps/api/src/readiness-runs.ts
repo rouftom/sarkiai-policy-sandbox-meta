@@ -189,6 +189,35 @@ export class ReadinessRunStore {
     return { runs: matching.slice((page - 1) * limit, page * limit).map((run) => this.summary(run)), total: matching.length }
   }
 
+  /** Every saved run for a country, across operators: the country dashboard. */
+  async byCountry(country: string, limit = 200): Promise<ReadinessRunSummary[]> {
+    const col = await this.col()
+    if (col) {
+      const docs = await col
+        .find({ country }, { projection: { report: 0, input: 0, userId: 0 } })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .toArray()
+        .catch(() => null)
+      if (docs) return docs.map(summaryOfDoc)
+    }
+    return [...this.memory.values()]
+      .filter((run) => run.country === country)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((run) => this.summary(run))
+  }
+
+  /** How many saved runs reference a country, across operators (deletion guard). */
+  async countForCountry(country: string): Promise<number> {
+    const col = await this.col()
+    if (col) {
+      const count = await col.countDocuments({ country }).catch(() => null)
+      if (count !== null) return count
+    }
+    return [...this.memory.values()].filter((run) => run.country === country).length
+  }
+
   async list(userId: string, limit = 50): Promise<ReadinessRunSummary[]> {
     const col = await this.col()
     if (col) {

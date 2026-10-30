@@ -184,6 +184,10 @@ export default function SignupPage() {
                 id="signup-email"
                 type="email"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                inputMode="email"
                 {...form.register('email')}
                 aria-invalid={Boolean(form.formState.errors.email)}
                 className="h-9"

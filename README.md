@@ -1,7 +1,7 @@
 # SarkiAI Policy Sandbox
 
-> Policy-grounded, multi-agent AI engine for the **Meta Global AI Developer Hackathon** (Startup track).
-> One engine, two lenses: **error-scenario simulation** and **AI-readiness assessment**.
+> Policy-grounded, multi-agent AI engine for the Meta Global AI Developer Hackathon (Startup track).
+> One engine, two lenses: error-scenario simulation and AI-readiness assessment.
 
 [![Meta Model API](https://img.shields.io/badge/Meta%20Model%20API-Muse%20Spark-0866FF?style=for-the-badge)](https://dev.meta.ai)
 [![Open weights](https://img.shields.io/badge/Open%20weights-Muse%20Glimmer-0866FF?style=for-the-badge)](https://dev.meta.ai/models/muse-glimmer)
@@ -26,27 +26,58 @@ It runs on **Meta models**, in three interchangeable provider modes:
 
 - **cloud**: Meta Model API: `muse-spark-1.3` for reasoning, `sam-3.1` for scanned-gazette
   segmentation, `muse-voice-transcribe-1.0` for WhatsApp voice notes. Retrieval runs on
-  **Voyage** embeddings + **MongoDB Atlas** Vector Search (Meta publishes no embedding model).
+  **Voyage** embeddings + **MongoDB Atlas** Vector Search.
 - **sovereign**: **Muse Glimmer** (30B, Apache-2.0) served locally by Ollama: same engine, no data
   leaving the institution, retrieval stays on `bge-m3` + Qdrant.
 - **local**: any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
 
 Around the incident run, the sandbox also rehearses the team (**timed crisis
-injects with a deterministic after-action score**). Public-message drafting in
-**Fulfulde or Hausa** is available through the API, always marked pending native
-review; it is not surfaced in the console.
+injects with a deterministic after-action score**) and can notify focal points
+over **e-mail or WhatsApp**, with per-channel consent and an audited send.
 
-- **Primary country:** Cameroon (MINPOSTEL-aligned), then multi-country (UAE → …).
+- **Primary country:** Cameroon (MINPOSTEL-aligned), with a country/sector registry ready for more jurisdictions.
 - **Primary domain:** healthcare, with cross-domain spillover (data protection, telecom, cybersecurity).
-- **Open by design:** permissive license (Apache-2.0 code, CC BY 4.0 content).
+- **Open by design:** permissive license (Apache-2.0 code, CC BY 4.0 for project-authored content; third-party documents keep their own terms).
 
-## One engine, two lenses
+## Live demo
+
+**<https://sps.djotta.com>**: the hosted console, in English and French, light and dark, running in `cloud` mode on the Meta Model API. Nothing is mocked: the corpus, the runs and the audit chain are live.
+
+### First connection
+
+The public deployment has two ways in: create your own operator account, or use the account handed out with the submission.
+
+1. Open <https://sps.djotta.com>. A signed-out visitor lands on `/login`; the console forwards to `/setup` only when the operator store is empty, which is not the case on the demo.
+2. **Own account:** open <https://sps.djotta.com/signup> (public sign-up is enabled on this deployment). Enter a first name, last name and a real address: the API mails a one-time password to it. If the mail cannot be delivered, the account is rolled back, so retry with another address.
+   **Provided account:** sign in directly; the credentials come with the submission, never from this repository.
+3. Replace the one-time password on the next screen (12 characters minimum, letters and digits), then scan the TOTP QR code with an authenticator app and store the ten recovery codes. They are shown once.
+4. Every later sign-in asks for the password **and** the 6-digit TOTP code.
+5. The workspace bar (country, domain, lens) is stored on the profile. For the announced demo, pick **Cameroon**, **health**, **simulation**.
+6. The free API sleeps: the first call after a quiet period can take up to 40 seconds. Open the overview once and wait for the provider badge before starting a run. See [`docs/DEMO.md`](docs/DEMO.md) for the 3-minute recording plan.
+
+### A look at the console
+
+| Countries & sectors registry | Crisis simulation |
+|---|---|
+| ![Countries and sectors registry, with search, funnel filter, pagination and the country flag](docs/screenshots/countries.png) | ![Crisis scenario process graph with mandated agents and a joint report](docs/screenshots/crisis-scenarios.png) |
+
+| AI-readiness assessment | In-app operations handbook |
+|---|---|
+| ![AI-readiness process graph with 13 dimensions scored by agents](docs/screenshots/readiness-agent-workflow.png) | ![Guide: taking-over runbooks, four pages](docs/screenshots/guide.png) |
+
+More screens (audit trail, knowledge graph, notifications, preferences, security) live in [`docs/screenshots/`](docs/screenshots): 1295×812 captures of the hosted app, palette-optimised with ImageMagick.
+
+## One engine, two lenses, three profiles
 
 | Lens | Purpose | Basis |
 |------|---------|-----------|
 | `simulation` | Run a progressive, chunked error scenario across mandated agents; produce an audit trail + gap findings. | scenario engine |
 | `readiness` | Assess a country corpus against the 13 AI-readiness dimensions (6 factors); produce a gap report. | readiness framework |
 | `hybrid` | Simulation that emits the readiness / gap report as a by-product. | both |
+
+The two lenses are `simulation` and `readiness`; `hybrid` is the composition
+profile. WhatsApp, voice notes, impact analysis, the table-top exercise and the
+`/knowledge` console are capabilities of the same engine, not additional lenses.
 
 The lens is a **declarative workflow profile** (`packages/shared`), never a duplicated code path.
 Gap analysis is a **shared service** consumed by every lens, so no evaluation criterion is lost.
@@ -58,7 +89,7 @@ Gap analysis is a **shared service** consumed by every lens, so no evaluation cr
       │               │              │                 │                   │              │
  data/country     services/      services/         packages/kb        packages/agents   packages/audit
  data/global      ingestion      ingestion+ocr     packages/retrieval packages/scenarios (audit + CoT)
- data/standards   (fetch/load)   (chunk+embed)                        packages/readiness
+                 (fetch/load)   (chunk+embed)                        packages/readiness
                                                                       packages/citations
 ```
 
@@ -81,20 +112,19 @@ sarkiai-policy-sandbox/
 │  ├─ whatsapp/       # direct Meta Graph API client + signed approval tokens
 │  ├─ impact/         # new policy → which open incidents change, and how
 │  ├─ exercise/       # N8: timed injects, action log, deterministic after-action score
-│  ├─ communications/ # N9: Fulfulde / Hausa drafts + policy gate (native review)
 │  ├─ agents/         # roles, mandates, orchestrator (AI SDK ToolLoopAgent)
 │  ├─ scenarios/      # progressive event engine (chunked release)
 │  ├─ readiness/      # gap engine + AI readiness dimensions
 │  ├─ audit/          # immutable audit log + persisted CoT traces
 │  ├─ report/         # run dossier: audit + CoT + reports + citations
 │  ├─ ui/             # shared components (SarkiAI Compact charter)
-│  ├─ theme/          # admin theme packs (fada, green, ocean, sunset, mono)
+│  ├─ theme/          # admin theme packs (meta default, fada, green, ocean, sunset, mono)
 │  └─ storage/        # MinIO/S3 client (content-addressed attachments)
 ├─ services/          # Python microservices
 │  ├─ ingestion/      # structure-aware legal chunking + embeddings + Qdrant store
 │  ├─ ocr/            # scanned gazette OCR (Tesseract)
 │  └─ transcription/  # optional media → timestamped transcript
-├─ data/              # corpora: country/cm, country/ae, global/standards (git-ignored payloads)
+├─ data/              # corpora: country/cm, global/africa + global/standards (payloads git-ignored)
 ├─ deploy/
 │  ├─ sandbox/        # locked-down sandbox deployment
 │  ├─ mongo/          # Atlas Search indexes (kb.indexes.json) + local seed
@@ -105,11 +135,11 @@ sarkiai-policy-sandbox/
 
 ## Quick start
 
-> **Pick a provider mode** with `SANDBOX_MODE` in `.env`: `local` (default , 
+> **Pick a provider mode** with `SANDBOX_MODE` in `.env`: `local` (default,
 > Ollama, no key, nothing leaves the machine), `sovereign` (Muse Glimmer on
 > Ollama, or a hosted open-weight endpoint) or `cloud` (Meta Model API, requires
 > `MODEL_API_KEY`). The badge in the console shows which one is answering.
-> First local run pulls ~9 GB (qwen3.5:9b) + ~2 GB (bge-m3).
+> A first local run pulls ~6.6 GB (qwen3.5:9b) + ~1.2 GB (bge-m3).
 
 ### Everything at once
 
@@ -213,8 +243,7 @@ link.
 
 ### Public sign-up (cloud demo only)
 
-The public demo at
-the public demo (address in the deployment notes)
+The public demo at <https://sps.djotta.com>
 opens self-service accounts so judges can walk the console with their own login:
 `/signup` shows what the sandbox does and the notice (prompts, answers and
 files **may be used by Meta to train or improve its models**) in the left
@@ -241,8 +270,7 @@ bun run demo:reset -- --yes       # operators, password_resets, audit_logs,
 It needs `MONGODB_URI` and never prints it. `kb_chunks`, the Atlas indexes and
 all configuration are left untouched; the console then shows `/setup` again.
 
-Hosts without a shell (Render free instances refuse SSH, one-off jobs,
-pre-deploy commands and start-command overrides) run the same wipe from the
+When the database is not reachable from your shell, run the same wipe from the
 service itself: commit `apps/api/scripts/reset-on-boot.flag`, let the deploy
 come live, then delete the flag and deploy again. The API logs
 `demo reset executed at boot` with the total deleted.
@@ -462,17 +490,6 @@ those already-computed facts. The narrative cannot change the score, so a
 well-written report cannot hide a missed inject. The event is recorded in the
 audit trail as `exercise.after_action`.
 
-### Communications: generated briefs in Fulfulde and Hausa (N9)
-
-This endpoint is not exposed in the console; the notification panel covers the
-e-mail and WhatsApp channels. `POST /v1/communications/draft` produces a short public-information draft in
-Fulfulde or Hausa from a supplied set of facts. The service enforces three rules:
-it refuses drafts that contain political content or offer medical advice; it
-flags phone numbers that appear in the draft but not in the supplied facts; and
-it never claims fluency. Every response carries `reviewStatus:
-'pending_native_review'` and a warning that a native speaker must approve the
-text before publication. The API returns the draft; it does not publish it.
-
 Optional local reranker (TEI, no cloud):
 
 ```bash
@@ -523,9 +540,9 @@ settings, environment variables and the warm-up strategy live in
 
 #### Model-call relay
 
-Some hosts' outbound traffic is refused by the Meta Model API: every model call
+If the API host's outbound traffic is refused by the Meta Model API (every call
 returns `404 model_not_found`, on every model id, while the same key works from
-the web host. In that case the API points `META_BASE_URL` at the web app's relay:
+the web host), point `META_BASE_URL` at the web app's relay:
 
 ```
 META_BASE_URL=https://<web-host>/api/meta
@@ -551,7 +568,8 @@ lists their exact bodies, ids and review status.
 ## License
 
 - **Code**: Apache-2.0 (see [`LICENSE`](LICENSE)).
-- **Knowledge base / docs**: CC BY 4.0 (see [`LICENSE-CONTENT`](LICENSE-CONTENT)); source documents retain their own terms.
+- **Project-authored content** (documentation, manifests, annotations, diagrams, own screenshots): CC BY 4.0 (see [`LICENSE-CONTENT`](LICENSE-CONTENT)).
+- **Third-party source documents**: not covered by either licence and not redistributed. They keep their own terms; official texts are generally outside copyright, while reports, articles and research papers are used under their licence, by permission, or as short attributed quotations. Every manifest entry carries a `rights` status (`official-text`, `open-licence`, `quotation-only`, `to-confirm`).
 
 See [`docs/LICENSING.md`](docs/LICENSING.md) for the rationale and provenance.
 

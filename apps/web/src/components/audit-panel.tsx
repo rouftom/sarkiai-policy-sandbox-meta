@@ -43,17 +43,24 @@ export function AuditPanel({ runId }: { runId: string }) {
   return (
     <Card>
       <CardHeader>
-        <ListTree className="h-4 w-4 text-primary" />
-        <CardTitle>{t('audit.title')}, {runId}</CardTitle>
+        <ListTree className="h-4 w-4 shrink-0 text-primary" />
+        <CardTitle className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+          <span className="shrink-0">{t('audit.title')}</span>
+          <span className="min-w-0 truncate font-mono text-[10px] font-normal text-muted-foreground" title={runId}>
+            {runId}
+          </span>
+        </CardTitle>
         {integrity && (
           <span
             className={cn(
-              'ml-auto inline-flex items-center gap-1 text-[10px] font-semibold',
+              'ml-auto inline-flex min-w-0 items-center gap-1 text-[10px] font-semibold',
               integrity.valid ? 'text-primary' : 'text-destructive',
             )}
           >
-            {integrity.valid ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
-            {integrity.valid ? t('audit.integrityOk') : t('audit.chainBroken', { at: integrity.brokenAt ?? '' })}
+            {integrity.valid ? <ShieldCheck className="h-3.5 w-3.5 shrink-0" /> : <ShieldAlert className="h-3.5 w-3.5 shrink-0" />}
+            <span className="min-w-0 truncate">
+              {integrity.valid ? t('audit.integrityOk') : t('audit.chainBroken', { at: integrity.brokenAt ?? '' })}
+            </span>
           </span>
         )}
       </CardHeader>

@@ -1,6 +1,6 @@
 'use client'
 
-import { MessageSquare, ShieldCheck, Sparkles, Workflow } from 'lucide-react'
+import { Layers, MessageSquare, ShieldCheck, Workflow } from 'lucide-react'
 import {
   GuideBanner,
   GuideChecklist,
@@ -34,7 +34,7 @@ export default function GuideMetaPage() {
         </p>
       </GuideBanner>
 
-      <GuideSection title={fr ? 'Capacités Meta utilisées, et où' : 'Meta capabilities, and where'} icon={Sparkles}>
+      <GuideSection title={fr ? 'Capacités Meta utilisées, et où' : 'Meta capabilities, and where'} icon={Layers}>
         <GuideTable
           headers={[fr ? 'Capacité' : 'Capability', fr ? 'Usage opérationnel' : 'Operational use', fr ? 'Modèle / endpoint' : 'Model / endpoint']}
           rows={[

@@ -37,4 +37,4 @@ Combine SOPS with compose layers:
 |-------------|---------|-------------------|---------|
 | dev | `docker-compose.yml` | `.env.example` | `.env.enc` |
 | local | `+ docker-compose.dev.yml` | `.env` | `.env.enc` |
-| sandbox (verrouillée) | `deploy/sandbox/docker-compose.sandbox.yml` | `.env.sandbox` | `deploy/sandbox/*.enc.yaml` |
+| sandbox (locked-down) | `deploy/sandbox/docker-compose.sandbox.yml` | `.env.sandbox` | `deploy/sandbox/*.enc.yaml` |

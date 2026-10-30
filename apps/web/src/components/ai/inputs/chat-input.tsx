@@ -21,12 +21,14 @@ interface ChatInputProps {
   isStreaming?: boolean
   /** Dictation: when provided, the microphone button is shown. `text` is the whole dictation so far. */
   onTranscript?: (text: string, final: boolean) => void
+  /** A dictation just started. */
+  onRecordingStart?: () => void
   /** The colour of the institution answering: tints the composer. */
   accent?: string
 }
 
 export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
-  function ChatInput({ input, handleInputChange, handleSubmit, status = 'ready', stop, placeholder: customPlaceholder, optionsMenu, onFocus, onBlur, onClose, isStreaming, onTranscript, accent }, ref) {
+  function ChatInput({ input, handleInputChange, handleSubmit, status = 'ready', stop, placeholder: customPlaceholder, optionsMenu, onFocus, onBlur, onClose, isStreaming, onTranscript, onRecordingStart, accent }, ref) {
     const { t } = useI18n()
 
     const placeholderText = customPlaceholder || t('assistant.placeholder')
@@ -83,7 +85,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                 {isMultiline && optionsMenu}
               </div>
 
-              {onTranscript && <AudioRecorder onTranscript={onTranscript} disabled={isStreaming} accent={accent} />}
+              {onTranscript && <AudioRecorder onTranscript={onTranscript} onRecordingStart={onRecordingStart} disabled={isStreaming} accent={accent} />}
 
               <Button
                 type={isStreaming ? 'button' : 'submit'}
