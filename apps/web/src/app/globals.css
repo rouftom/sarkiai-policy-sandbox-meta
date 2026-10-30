@@ -352,6 +352,10 @@ html[data-radius='square']
     max-width: 0;
     padding: 0;
     background-color: transparent;
+    /* The label stays in the accessibility tree but its glyphs must not widen
+       the zero-width cell: their overflow would give the table a phantom
+       horizontal scrollbar. */
+    font-size: 0;
   }
   [data-slot="table"].table-actions-overlay > tbody > tr > td:last-child:not([colspan]) {
     position: sticky;
