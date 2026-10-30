@@ -56,7 +56,7 @@ export function AuditEventDrawer({
 
   const rows: Array<{ label: string; value: React.ReactNode }> = [
     { label: t('audit.time'), value: time },
-    { label: t('audit.actor'), value: auditActorLabel(event.actor, t) },
+    { label: t('audit.actor'), value: auditActorLabel(event.actor, t, event.userId) },
     {
       label: t('audit.action'),
       value: (

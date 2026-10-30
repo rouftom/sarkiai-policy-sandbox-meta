@@ -32,11 +32,10 @@ It runs on **Meta models**, in three interchangeable provider modes:
 - **local**: any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
 
 Around the incident run, the sandbox also rehearses the team (**timed crisis
-injects with a deterministic after-action score**). Public-message drafting in
-**Fulfulde or Hausa** is available through the API, always marked pending native
-review; it is not surfaced in the console.
+injects with a deterministic after-action score**) and can notify focal points
+over **e-mail or WhatsApp**, with per-channel consent and an audited send.
 
-- **Primary country:** Cameroon (MINPOSTEL-aligned), then multi-country (UAE → …).
+- **Primary country:** Cameroon (MINPOSTEL-aligned), with a country/sector registry ready for more jurisdictions.
 - **Primary domain:** healthcare, with cross-domain spillover (data protection, telecom, cybersecurity).
 - **Open by design:** permissive license (Apache-2.0 code, CC BY 4.0 content).
 
@@ -81,7 +80,6 @@ sarkiai-policy-sandbox/
 │  ├─ whatsapp/       # direct Meta Graph API client + signed approval tokens
 │  ├─ impact/         # new policy → which open incidents change, and how
 │  ├─ exercise/       # N8: timed injects, action log, deterministic after-action score
-│  ├─ communications/ # N9: Fulfulde / Hausa drafts + policy gate (native review)
 │  ├─ agents/         # roles, mandates, orchestrator (AI SDK ToolLoopAgent)
 │  ├─ scenarios/      # progressive event engine (chunked release)
 │  ├─ readiness/      # gap engine + AI readiness dimensions
@@ -94,7 +92,7 @@ sarkiai-policy-sandbox/
 │  ├─ ingestion/      # structure-aware legal chunking + embeddings + Qdrant store
 │  ├─ ocr/            # scanned gazette OCR (Tesseract)
 │  └─ transcription/  # optional media → timestamped transcript
-├─ data/              # corpora: country/cm, country/ae, global/standards (git-ignored payloads)
+├─ data/              # corpora: country/cm, global/standards (git-ignored payloads)
 ├─ deploy/
 │  ├─ sandbox/        # locked-down sandbox deployment
 │  ├─ mongo/          # Atlas Search indexes (kb.indexes.json) + local seed
@@ -461,17 +459,6 @@ gaps.
 those already-computed facts. The narrative cannot change the score, so a
 well-written report cannot hide a missed inject. The event is recorded in the
 audit trail as `exercise.after_action`.
-
-### Communications: generated briefs in Fulfulde and Hausa (N9)
-
-This endpoint is not exposed in the console; the notification panel covers the
-e-mail and WhatsApp channels. `POST /v1/communications/draft` produces a short public-information draft in
-Fulfulde or Hausa from a supplied set of facts. The service enforces three rules:
-it refuses drafts that contain political content or offer medical advice; it
-flags phone numbers that appear in the draft but not in the supplied facts; and
-it never claims fluency. Every response carries `reviewStatus:
-'pending_native_review'` and a warning that a native speaker must approve the
-text before publication. The API returns the draft; it does not publish it.
 
 Optional local reranker (TEI, no cloud):
 

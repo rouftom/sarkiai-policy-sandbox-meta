@@ -1,13 +1,16 @@
 'use client'
 
 /**
- * Demo workspace: the country and domain the operator is working on. Every
+ * Demo workspace: the country and sectors the operator is working on. Every
  * page reads the same values so moving from the dashboard to a scenario does not
- * silently reset the context. Persisted in `localStorage`.
+ * silently reset the context. The country list comes from the registry API
+ * (`/v1/countries`), so adding a jurisdiction is a data change, not a code one.
+ * Persisted in `localStorage`.
  */
 
 import * as React from 'react'
 import type { Domain } from '@sps/shared'
+import { countriesApi, type CountryDto } from './api'
 
 const STORAGE_KEY = 'sps.workspace'
 const DOMAINS: Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
@@ -21,6 +24,10 @@ interface WorkspaceState {
 interface WorkspaceContextValue extends WorkspaceState {
   /** The first sector: what the pages that take one sector use. */
   domain: Domain
+  /** The registry rows, empty until the API answers. */
+  countries: CountryDto[]
+  /** Sectors enabled for the current country (all of them before the list loads). */
+  sectors: Domain[]
   setCountry: (country: string) => void
   setDomains: (domains: Domain[]) => void
 }
@@ -38,31 +45,70 @@ function domainsFrom(stored: { domains?: unknown; domain?: unknown }): Domain[] 
 
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = React.useState<WorkspaceState>(DEFAULT_WORKSPACE)
+  const [countries, setCountries] = React.useState<CountryDto[]>([])
+
+  React.useEffect(() => {
+    let cancelled = false
+    void countriesApi
+      .list()
+      .then((result) => !cancelled && setCountries(result.countries))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   React.useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY)
       if (!raw) return
-      const stored = JSON.parse(raw) as { country?: string; domains?: unknown; domain?: unknown }
-      // Only Cameroon is offered: an earlier choice of another country falls back to it.
-      const country = stored.country === 'cm' ? 'cm' : DEFAULT_WORKSPACE.country
+      const stored = JSON.parse(raw) as { country?: unknown; domains?: unknown; domain?: unknown }
+      const country =
+        typeof stored.country === 'string' && /^[a-z]{2}$/.test(stored.country)
+          ? stored.country
+          : DEFAULT_WORKSPACE.country
       setState({ country, domains: domainsFrom(stored) })
     } catch {
       /* malformed value: keep the defaults */
     }
   }, [])
 
+  /** A stored country removed or not active falls back to the first active one. */
+  React.useEffect(() => {
+    if (countries.length === 0) return
+    const active = countries.filter((row) => row.status === 'active')
+    const available = active.length > 0 ? active : countries
+    if (available.some((row) => row.code === state.country)) return
+    setState((current) => persist({ ...current, country: active[0]?.code ?? available[0]!.code }))
+  }, [countries, state.country])
+
+  const sectors = React.useMemo<Domain[]>(() => {
+    const current = countries.find((row) => row.code === state.country)
+    return current?.sectors?.length ? current.sectors : DOMAINS
+  }, [countries, state.country])
+
+  /** Keep the selection inside the sectors the current country enables. */
+  React.useEffect(() => {
+    setState((current) => {
+      const allowed = current.domains.filter((domain) => sectors.includes(domain))
+      if (allowed.length === current.domains.length) return current
+      return persist({ ...current, domains: allowed.length > 0 ? allowed : [sectors[0] ?? DEFAULT_WORKSPACE.domains[0]!] })
+    })
+  }, [sectors])
+
   const value = React.useMemo<WorkspaceContextValue>(
     () => ({
       ...state,
       domain: state.domains[0] ?? DEFAULT_WORKSPACE.domains[0]!,
+      countries,
+      sectors,
       setCountry: (country) => setState((current) => persist({ ...current, country })),
       setDomains: (domains) =>
         setState((current) => persist({ ...current, domains: domains.length > 0 ? domains : current.domains })),
     }),
     // `setX` closures do not capture state: they are stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.country, state.domains],
+    [state.country, state.domains, countries, sectors],
   )
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>

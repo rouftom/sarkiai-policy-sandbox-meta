@@ -19,7 +19,7 @@ import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { MODEL_CHANGED, api, authApi, knowledgeApi, type AuditEventDto, type KbDocumentDto, type KbStatusDto, type ProviderDto } from '@/lib/api'
-import { actionCategory, AUDIT_ACTION_KEYS, humaniseAction } from '@/lib/audit-labels'
+import { actionCategory, auditActorLabel, AUDIT_ACTION_KEYS, humaniseAction } from '@/lib/audit-labels'
 
 function relativeTime(value: string, locale: string): string {
   const delta = Date.now() - Date.parse(value)
@@ -338,7 +338,10 @@ export default function OverviewPage() {
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-primary dark:bg-brand-primary-light" />
                       <span className="min-w-0 flex-1 truncate">
                         <span className="font-medium text-foreground">{label}</span>
-                        <span className="text-muted-foreground"> · {event.actor}</span>
+                        <span className="text-muted-foreground">
+                          {' · '}
+                          {auditActorLabel(event.actor, t, event.userId)}
+                        </span>
                       </span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">{relativeTime(event.ts, locale)}</span>
                     </li>

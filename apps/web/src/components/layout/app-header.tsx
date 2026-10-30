@@ -4,7 +4,7 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Compass, Cpu, Database, Gauge, Globe, Languages, LayoutDashboard, Menu, Newspaper, Network,
+  Compass, Cpu, Database, Gauge, Globe, LayoutDashboard, Megaphone, Menu, Newspaper, Network,
   Rocket, ScrollText, Settings, Settings2, ShieldCheck, Siren, SlidersHorizontal, Sparkles, X,
 } from 'lucide-react'
 import { cn, Select } from '@sps/ui'
@@ -36,7 +36,7 @@ const MOBILE_NAV: Array<{ href: string; labelKey: MessageKey; icon: React.Compon
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
   { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
-  { href: '/communications', labelKey: 'nav.communication', icon: Languages },
+  { href: '/communications', labelKey: 'nav.communication', icon: Megaphone },
   { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },
   { href: '/guide', labelKey: 'nav.guide', icon: Compass },
   { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },

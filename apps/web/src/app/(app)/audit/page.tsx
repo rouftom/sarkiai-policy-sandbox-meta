@@ -90,7 +90,7 @@ export default function AuditPage() {
         event.actor,
         event.action,
         event.target ?? '',
-        auditActorLabel(event.actor, t),
+        auditActorLabel(event.actor, t, event.userId),
         auditActionLabel(event.action, t),
       ].some((value) => value.toLowerCase().includes(needle)),
     )
@@ -206,7 +206,7 @@ export default function AuditPage() {
                           {formatTime(event.ts, locale)}
                         </TableCell>
                         <TableCell className="max-w-[180px] truncate font-medium">
-                          {auditActorLabel(event.actor, t)}
+                          {auditActorLabel(event.actor, t, event.userId)}
                         </TableCell>
                         <TableCell>
                           <span

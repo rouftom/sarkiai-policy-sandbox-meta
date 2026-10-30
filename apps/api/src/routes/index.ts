@@ -11,7 +11,6 @@ import {
   toKbChunks,
   type GazettePage,
 } from '@sps/gazette'
-import { CommunicationPolicyError, COMMUNICATION_LANGUAGES, draftCommunication } from '@sps/communications'
 import { evaluateExercise, writeAfterAction, type ExerciseDefinition } from '@sps/exercise'
 import { analyzeImpact } from '@sps/impact'
 import { IngestionClient } from '@sps/kb'
@@ -55,6 +54,7 @@ import { McpGateway } from '../mcp.js'
 import { ChatSessionStore } from '../chat-sessions.js'
 import { ReadinessRunStore, type ReadinessRun, type ReadinessRunInput, type ReadinessRunSummary } from '../readiness-runs.js'
 import { NotificationContactStore, type NotificationContact } from '../notification-contacts.js'
+import { COUNTRY_SECTORS, CountryStore, type CountryRecord } from '../countries.js'
 import { mailConfigured, mailFrom, sendNotificationEmail } from '../mailer.js'
 import { buildReadinessReport } from '../readiness-report.js'
 import { defaultChatModel } from '@sps/agents'
@@ -121,6 +121,11 @@ const chatSessions = new ChatSessionStore({ mongodbUri: config.mongodb.uri, dbNa
 const readinessRuns = new ReadinessRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const scenarioRuns = new ScenarioRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const notificationContacts = new NotificationContactStore({
+  mongodbUri: config.mongodb.uri,
+  dbName: config.mongodb.dbName,
+})
+
+const countries = new CountryStore({
   mongodbUri: config.mongodb.uri,
   dbName: config.mongodb.dbName,
 })
@@ -2195,24 +2200,17 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     ...(contact.phone ? { phoneDisplay: formatPhone(contact.phone) } : {}),
   })
 
-  app.get('/v1/notifications/contacts', async () => {
-    const contacts = await notificationContacts.list()
-    return { contacts: contacts.map(contactDto) }
-  })
-
-  app.post('/v1/notifications/contacts', async (request, reply) => {
-    const parsed = contactSchema.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
-    const input = parsed.data
+  /** Validates one contact payload once, for both create and update. */
+  const prepareContact = (input: z.infer<typeof contactSchema>) => {
     if (!input.email && !input.phone) {
-      return reply.status(400).send({ error: 'at_least_one_channel' })
+      return { ok: false as const, status: 400, body: { error: 'at_least_one_channel' } }
     }
 
     let phone: { e164: string; country?: string } | undefined
     if (input.phone) {
       const normalized = normalizePhone(input.phone, (input.phoneCountry?.toUpperCase() ?? 'CM') as never)
       if (!normalized.ok) {
-        return reply.status(422).send({ error: 'invalid_phone', reason: normalized.reason })
+        return { ok: false as const, status: 422, body: { error: 'invalid_phone', reason: normalized.reason } }
       }
       phone = {
         e164: normalized.phone.e164,
@@ -2224,13 +2222,39 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       email: Boolean(input.email),
       whatsapp: Boolean(phone),
     }
-    if (channels.email && !input.email) return reply.status(400).send({ error: 'email_consent_without_email' })
-    if (channels.whatsapp && !phone) return reply.status(400).send({ error: 'whatsapp_consent_without_phone' })
+    if (channels.email && !input.email) {
+      return { ok: false as const, status: 400, body: { error: 'email_consent_without_email' } }
+    }
+    if (channels.whatsapp && !phone) {
+      return { ok: false as const, status: 400, body: { error: 'whatsapp_consent_without_phone' } }
+    }
 
-    const email = input.email?.toLowerCase()
+    return {
+      ok: true as const,
+      value: {
+        name: input.name,
+        ...(input.email ? { email: input.email.toLowerCase() } : {}),
+        ...(phone ? { phone: phone.e164 } : {}),
+        ...(phone?.country ? { country: phone.country } : {}),
+        channels,
+      },
+    }
+  }
+
+  app.get('/v1/notifications/contacts', async () => {
+    const contacts = await notificationContacts.list()
+    return { contacts: contacts.map(contactDto) }
+  })
+
+  app.post('/v1/notifications/contacts', async (request, reply) => {
+    const parsed = contactSchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const prepared = prepareContact(parsed.data)
+    if (!prepared.ok) return reply.status(prepared.status).send(prepared.body)
+
     const duplicate = await notificationContacts.duplicate({
-      ...(email ? { email } : {}),
-      ...(phone ? { phone: phone.e164 } : {}),
+      ...(prepared.value.email ? { email: prepared.value.email } : {}),
+      ...(prepared.value.phone ? { phone: prepared.value.phone } : {}),
     })
     if (duplicate) {
       return reply.status(409).send({
@@ -2240,11 +2264,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const contact = await notificationContacts.add({
-      name: input.name,
-      ...(email ? { email } : {}),
-      ...(phone ? { phone: phone.e164 } : {}),
-      ...(phone?.country ? { country: phone.country } : {}),
-      channels,
+      ...prepared.value,
       createdBy: operatorOf(request).email,
     })
 
@@ -2253,12 +2273,53 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         actor: 'operator',
         userId: operatorOf(request).email,
         action: 'notification.contact_added',
-        target: `${input.name} · ${[email ? 'email' : null, phone ? 'whatsapp' : null].filter(Boolean).join('+')}`,
+        target: `${contact.name} · ${[contact.email ? 'email' : null, contact.phone ? 'whatsapp' : null].filter(Boolean).join('+')}`,
         lens: 'hybrid',
       })
       .catch(() => undefined)
 
     return reply.status(201).send({ contact: contactDto(contact) })
+  })
+
+  app.put('/v1/notifications/contacts/:id', async (request, reply) => {
+    const { id } = z.object({ id: z.string().min(1).max(120) }).parse(request.params)
+    const parsed = contactSchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+
+    const existing = await notificationContacts.get(id)
+    if (!existing) return reply.status(404).send({ error: 'not_found' })
+
+    const prepared = prepareContact(parsed.data)
+    if (!prepared.ok) return reply.status(prepared.status).send(prepared.body)
+
+    const duplicate = await notificationContacts.duplicate(
+      {
+        ...(prepared.value.email ? { email: prepared.value.email } : {}),
+        ...(prepared.value.phone ? { phone: prepared.value.phone } : {}),
+      },
+      id,
+    )
+    if (duplicate) {
+      return reply.status(409).send({
+        error: 'duplicate',
+        contact: { id: duplicate.id, name: duplicate.name },
+      })
+    }
+
+    const contact = await notificationContacts.update(id, prepared.value)
+    if (!contact) return reply.status(404).send({ error: 'not_found' })
+
+    await engine.audit
+      .logAction({
+        actor: 'operator',
+        userId: operatorOf(request).email,
+        action: 'notification.contact_updated',
+        target: `${contact.name} · ${[contact.email ? 'email' : null, contact.phone ? 'whatsapp' : null].filter(Boolean).join('+')}`,
+        lens: 'hybrid',
+      })
+      .catch(() => undefined)
+
+    return { contact: contactDto(contact) }
   })
 
   app.delete('/v1/notifications/contacts/:id', async (request, reply) => {
@@ -2275,6 +2336,222 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
       .catch(() => undefined)
     return { removed: true }
+  })
+
+  // ── Country & sector registry ─────────────────────────────────────────────
+  // One row per jurisdiction, with the sectors enabled for it. Shared across
+  // operators, seedable from the corpus, and guarded so the console cannot end
+  // up with no active country or delete a country its runs still reference.
+  const countryCodeSchema = z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z]{2}$/)
+
+  const countrySectorsSchema = z
+    .enum(COUNTRY_SECTORS as unknown as [Domain, ...Domain[]])
+    .array()
+    .min(1)
+    .max(COUNTRY_SECTORS.length)
+
+  const countryBodySchema = z.object({
+    code: countryCodeSchema,
+    name: z.string().trim().min(2).max(80),
+    nameFr: z.string().trim().min(2).max(80).optional(),
+    jurisdiction: z.enum(['national', 'regional', 'international']).optional(),
+    region: z.string().trim().max(80).optional(),
+    authority: z.string().trim().max(120).optional(),
+    currency: z.string().trim().max(8).optional(),
+    languages: z.array(z.string().trim().min(2).max(8)).max(6).optional(),
+    timezone: z.string().trim().max(60).optional(),
+    status: z.enum(['active', 'planned']).optional(),
+    notes: z.string().trim().max(600).optional(),
+    sectors: countrySectorsSchema.optional(),
+  })
+
+  const countryPatchSchema = countryBodySchema.omit({ code: true }).partial()
+
+  const countryDto = (country: CountryRecord) => ({ ...country, notes: country.notes ?? null })
+
+  /** Mean of the non-null composites, one decimal; null when nothing is scored. */
+  const meanComposite = (runs: Array<{ composite: number | null }>): number | null => {
+    const values = runs.map((run) => run.composite).filter((value): value is number => typeof value === 'number')
+    if (values.length === 0) return null
+    return Math.round((values.reduce((total, value) => total + value, 0) / values.length) * 10) / 10
+  }
+
+  app.get('/v1/countries', async () => {
+    return { countries: (await countries.list()).map(countryDto) }
+  })
+
+  app.post('/v1/countries', async (request, reply) => {
+    const parsed = countryBodySchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+
+    const country = await countries.add({ ...parsed.data, createdBy: operatorOf(request).email })
+    if (!country) return reply.status(409).send({ error: 'duplicate_code' })
+
+    await engine.audit
+      .logAction({
+        actor: 'operator',
+        userId: operatorOf(request).email,
+        action: 'country.created',
+        target: `${country.code} · ${country.name}`,
+        lens: 'readiness',
+      })
+      .catch(() => undefined)
+
+    return reply.status(201).send({ country: countryDto(country) })
+  })
+
+  app.get('/v1/countries/:code', async (request, reply) => {
+    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const country = await countries.get(code)
+    if (!country) return reply.status(404).send({ error: 'not_found' })
+    return { country: countryDto(country) }
+  })
+
+  app.patch('/v1/countries/:code', async (request, reply) => {
+    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const parsed = countryPatchSchema.safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+
+    const country = await countries.update(code, parsed.data)
+    if (!country) return reply.status(404).send({ error: 'not_found' })
+
+    await engine.audit
+      .logAction({
+        actor: 'operator',
+        userId: operatorOf(request).email,
+        action: 'country.updated',
+        target: `${country.code} · ${country.name}`,
+        lens: 'readiness',
+      })
+      .catch(() => undefined)
+
+    return { country: countryDto(country) }
+  })
+
+  app.put('/v1/countries/:code/sectors', async (request, reply) => {
+    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const parsed = z.object({ sectors: countrySectorsSchema }).safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+
+    const country = await countries.setSectors(code, parsed.data.sectors)
+    if (!country) return reply.status(404).send({ error: 'not_found' })
+
+    await engine.audit
+      .logAction({
+        actor: 'operator',
+        userId: operatorOf(request).email,
+        action: 'country.sectors_updated',
+        target: `${country.code} · ${country.sectors.join(',')}`,
+        lens: 'readiness',
+      })
+      .catch(() => undefined)
+
+    return { country: countryDto(country) }
+  })
+
+  app.delete('/v1/countries/:code', async (request, reply) => {
+    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const country = await countries.get(code)
+    if (!country) return reply.status(404).send({ error: 'not_found' })
+
+    const all = await countries.list()
+    if (country.status === 'active' && all.filter((row) => row.status === 'active').length <= 1) {
+      return reply.status(409).send({ error: 'last_active_country' })
+    }
+
+    const [readinessCount, scenarioCount] = await Promise.all([
+      readinessRuns.countForCountry(code),
+      scenarioRuns.countForCountry(code),
+    ])
+    if (readinessCount + scenarioCount > 0) {
+      return reply.status(409).send({
+        error: 'country_in_use',
+        readinessRuns: readinessCount,
+        scenarioRuns: scenarioCount,
+      })
+    }
+
+    await countries.remove(code)
+    await engine.audit
+      .logAction({
+        actor: 'operator',
+        userId: operatorOf(request).email,
+        action: 'country.removed',
+        target: `${country.code} · ${country.name}`,
+        lens: 'readiness',
+      })
+      .catch(() => undefined)
+
+    return { removed: true }
+  })
+
+  /** Country dashboard: what the runs and the corpus say, sector by sector. */
+  app.get('/v1/countries/:code/insights', async (request, reply) => {
+    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const country = await countries.get(code)
+    if (!country) return reply.status(404).send({ error: 'not_found' })
+
+    const [runs, scenarioRows, knowledgeStatus] = await Promise.all([
+      readinessRuns.byCountry(code, 200),
+      scenarioRuns.byCountry(code, 200),
+      knowledge.status().catch(() => null),
+    ])
+
+    const complete = runs.filter((run) => run.status === 'complete')
+    const knowledgeRow = knowledgeStatus?.byCountry?.find((row) => row.value.toLowerCase() === code)
+
+    const sectors = COUNTRY_SECTORS.map((sector) => {
+      const sectorRuns = runs.filter((run) => run.domain === sector)
+      const scored = sectorRuns.filter((run) => run.status === 'complete')
+      return {
+        sector,
+        enabled: country.sectors.includes(sector),
+        readinessRuns: sectorRuns.length,
+        latestComposite: scored[0]?.composite ?? null,
+        averageComposite: meanComposite(scored),
+        scenarioRuns: scenarioRows.filter((row) => row.domain === sector).length,
+      }
+    })
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const trend = Array.from({ length: 14 }, (_, index) => {
+      const day = new Date(today)
+      day.setDate(today.getDate() - (13 - index))
+      const key = day.toISOString().slice(0, 10)
+      const dayRuns = runs.filter((run) => run.createdAt.slice(0, 10) === key)
+      return {
+        date: key,
+        readinessRuns: dayRuns.length,
+        averageComposite: meanComposite(dayRuns.filter((run) => run.status === 'complete')),
+      }
+    })
+
+    return {
+      country: countryDto(country),
+      insights: {
+        totals: {
+          sectors: country.sectors.length,
+          availableSectors: COUNTRY_SECTORS.length,
+          readinessRuns: runs.length,
+          readinessComplete: complete.length,
+          readinessFailed: runs.length - complete.length,
+          readinessAverage: meanComposite(complete),
+          scenarioRuns: scenarioRows.length,
+          scenarioRunning: scenarioRows.filter((row) => row.status === 'running').length,
+          scenarioComplete: scenarioRows.filter((row) => row.status === 'complete').length,
+          scenarioFailed: scenarioRows.filter((row) => row.status === 'failed').length,
+          knowledgeChunks: knowledgeRow?.chunks ?? 0,
+          lastRunAt: runs[0]?.createdAt ?? null,
+        },
+        sectors,
+        trend,
+      },
+    }
   })
 
   /** Template review status, cached for a minute: the UI must not lie about PENDING. */
@@ -2310,6 +2587,69 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           })),
         templateError,
       },
+    }
+  })
+
+  /**
+   * Draft a notification summary from the run's latest joint report. The model
+   * only rephrases facts already stored on the run; the operator edits before sending.
+   */
+  app.post('/v1/notifications/summary-suggestion', async (request, reply) => {
+    const parsed = z
+      .object({
+        runId: z.string().trim().min(1).max(120),
+        kind: z.enum(['joint_report', 'approval_request']).default('joint_report'),
+        locale: z.enum(['en', 'fr']).default('en'),
+      })
+      .safeParse(request.body ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+
+    const run = await scenarioRuns.get(parsed.data.runId, operatorOf(request).email)
+    if (!run) return reply.status(404).send({ error: 'run_not_found' })
+
+    const latest = run.reports.at(-1)
+    const facts = [
+      `Run: ${run.title}`,
+      `Run id: ${run.id}`,
+      `Country: ${run.country} · Domain: ${run.domain} · Status: ${run.status}`,
+      `Progress: ${run.released} of ${run.total} ticks released`,
+      ...(latest
+        ? [
+            `Latest tick: ${latest.tick}`,
+            `Joint report summary: ${latest.summary}`,
+            ...(latest.agreements.length ? [`Agreements: ${latest.agreements.join(' | ')}`] : []),
+            ...(latest.conflicts.length
+              ? [`Conflicts: ${latest.conflicts.map((conflict) => conflict.summary).join(' | ')}`]
+              : []),
+            ...(latest.openQuestions.length
+              ? [`Open questions: ${latest.openQuestions.join(' | ')}`]
+              : []),
+          ]
+        : ['No joint report has been released yet.']),
+    ].join('\n')
+
+    const language = parsed.data.locale === 'fr' ? 'French' : 'English'
+    const purpose =
+      parsed.data.kind === 'approval_request'
+        ? 'an approval request that ends with the decision expected from the reader'
+        : 'a short situation update'
+    try {
+      const object = await generateStructured({
+        model: engine.model,
+        system: `You write ${purpose} for an institutional WhatsApp notification. Use only the facts in the prompt: never invent names, figures, legal claims or a decision. Write in ${language}.`,
+        prompt: `${facts}\n\nWrite one plain-text summary, at most 420 characters, no bullet list and no markdown.`,
+        schema: z.object({ summary: z.string().trim().min(1).max(900) }),
+        shape: '{"summary":"one paragraph"}',
+        maxOutputTokens: 500,
+      })
+      return {
+        runId: run.id,
+        summary: object.summary,
+        model: describeProvider(engine.provider),
+        generatedAt: new Date().toISOString(),
+      }
+    } catch (error) {
+      return reply.status(502).send({ error: 'suggestion_failed', message: (error as Error).message })
     }
   })
 
@@ -2590,39 +2930,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return report
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
-    }
-  })
-
-  // ── N9: public-communication drafts (Fulfulde / Hausa) ────────────────────
-  // The API drafts and gates; it never publishes. Every response is marked
-  // `pending_native_review`, and political or medical content is rejected.
-  app.get('/v1/communications/languages', async () => Object.values(COMMUNICATION_LANGUAGES))
-
-  app.post('/v1/communications/draft', async (request, reply) => {
-    const parsed = z
-      .object({
-        language: z.enum(['ff', 'ha']),
-        sourceLanguage: z.enum(['en', 'fr']).default('en'),
-        audience: z.string().min(1).max(300),
-        jurisdiction: z.string().min(1).max(120),
-        incidentSummary: z.string().min(1).max(8_000),
-        channels: z.array(z.enum(['radio', 'sms', 'social', 'press'])).max(4).optional(),
-        constraints: z.array(z.string().min(1).max(300)).max(10).optional(),
-      })
-      .safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
-
-    try {
-      return await draftCommunication({
-        model: engine.model,
-        modelLabel: describeProvider(engine.provider),
-        request: parsed.data,
-      })
-    } catch (error) {
-      if (error instanceof CommunicationPolicyError) {
-        return reply.status(422).send({ error: 'communication_policy', violations: error.violations })
-      }
       return reply.status(502).send({ error: (error as Error).message })
     }
   })

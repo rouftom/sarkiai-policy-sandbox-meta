@@ -9,8 +9,9 @@ import {
   Cpu,
   Database,
   Gauge,
-  Languages,
+  Globe2,
   LayoutDashboard,
+  Megaphone,
   Newspaper,
   Network,
   PanelLeftClose,
@@ -40,6 +41,7 @@ interface NavEntry {
 
 const GENERAL_NAV: NavEntry[] = [
   { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
+  { href: '/countries', labelKey: 'nav.countries', icon: Globe2 },
   { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
@@ -47,7 +49,7 @@ const GENERAL_NAV: NavEntry[] = [
 
 const OPERATIONS_NAV: NavEntry[] = [
   { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
-  { href: '/communications', labelKey: 'nav.communication', icon: Languages },
+  { href: '/communications', labelKey: 'nav.communication', icon: Megaphone },
   { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },
 ]
 

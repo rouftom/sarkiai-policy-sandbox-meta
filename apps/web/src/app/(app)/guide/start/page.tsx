@@ -30,8 +30,8 @@ export default function GuideStartPage() {
       <GuideSection title={fr ? 'Le sigle SPS' : 'What SPS stands for'} icon={BookOpen}>
         <p className="text-[12px] leading-relaxed text-muted-foreground">
           {fr
-            ? 'SPS signifie SarkiAI Policy Sandbox : le bac à sable de politiques publiques de SarkiAI. C’est une console opérateur qui simule des crises, mesure la maturité IA et rédige les communications, avec un journal d’audit chaîné par hachage.'
-            : 'SPS stands for SarkiAI Policy Sandbox: the public-policy sandbox of SarkiAI. It is an operator console that simulates crises, scores AI readiness and drafts communications, with a hash-chained audit log.'}
+            ? 'SPS signifie SarkiAI Policy Sandbox : le bac à sable de politiques publiques de SarkiAI. C’est une console opérateur qui simule des crises, mesure la maturité IA et notifie les points focaux, avec un journal d’audit chaîné par hachage.'
+            : 'SPS stands for SarkiAI Policy Sandbox: the public-policy sandbox of SarkiAI. It is an operator console that simulates crises, scores AI readiness and notifies focal points, with a hash-chained audit log.'}
         </p>
       </GuideSection>
 

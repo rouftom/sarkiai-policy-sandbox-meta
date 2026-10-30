@@ -47,6 +47,22 @@ function summaryOf(record: ScenarioRunRecord): ScenarioRunSummary {
   return rest
 }
 
+function summaryOfDoc(doc: Document): ScenarioRunSummary {
+  return {
+    id: String(doc._id),
+    country: String(doc.country),
+    domain: String(doc.domain),
+    lang: doc.lang === 'fr' ? 'fr' : 'en',
+    title: String(doc.title),
+    createdAt: String(doc.createdAt),
+    updatedAt: String(doc.updatedAt ?? doc.createdAt),
+    status: doc.status === 'failed' || doc.status === 'complete' ? doc.status : 'running',
+    ...(typeof doc.failure === 'string' ? { failure: doc.failure } : {}),
+    released: Number(doc.released ?? 0),
+    total: Number(doc.total ?? 0),
+  }
+}
+
 export class ScenarioRunStore {
   private readonly memory = new Map<string, ScenarioRunRecord>()
   private client: MongoClient | null = null
@@ -132,27 +148,42 @@ export class ScenarioRunStore {
         .limit(limit)
         .toArray()
         .catch(() => null)
-      if (docs) {
-        return docs.map((doc) => ({
-          id: String(doc._id),
-          country: String(doc.country),
-          domain: String(doc.domain),
-          lang: doc.lang === 'fr' ? 'fr' : 'en',
-          title: String(doc.title),
-          createdAt: String(doc.createdAt),
-          updatedAt: String(doc.updatedAt ?? doc.createdAt),
-          status: doc.status === 'failed' || doc.status === 'complete' ? doc.status : 'running',
-          ...(typeof doc.failure === 'string' ? { failure: doc.failure } : {}),
-          released: Number(doc.released ?? 0),
-          total: Number(doc.total ?? 0),
-        }))
-      }
+      if (docs) return docs.map(summaryOfDoc)
     }
     return [...this.memory.values()]
       .filter((run) => run.userId === userId)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit)
       .map(summaryOf)
+  }
+
+  /** Every scenario run for a country, across operators: the country dashboard. */
+  async byCountry(country: string, limit = 200): Promise<ScenarioRunSummary[]> {
+    const col = await this.col()
+    if (col) {
+      const docs = await col
+        .find({ country }, { projection: { reports: 0 } })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .toArray()
+        .catch(() => null)
+      if (docs) return docs.map(summaryOfDoc)
+    }
+    return [...this.memory.values()]
+      .filter((run) => run.country === country)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map(summaryOf)
+  }
+
+  /** How many scenario runs reference a country, across operators (deletion guard). */
+  async countForCountry(country: string): Promise<number> {
+    const col = await this.col()
+    if (col) {
+      const count = await col.countDocuments({ country }).catch(() => null)
+      if (count !== null) return count
+    }
+    return [...this.memory.values()].filter((run) => run.country === country).length
   }
 
   /**

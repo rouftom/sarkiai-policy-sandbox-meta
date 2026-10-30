@@ -75,10 +75,4 @@ describe.skipIf(!baseUrl)('API e2e', () => {
     expect(payload.addressed.length).toBeGreaterThan(0)
   })
 
-  test('the communications endpoints expose both target languages', async () => {
-    const response = await fetch(`${baseUrl}/v1/communications/languages`)
-    expect(response.ok).toBe(true)
-    const payload = (await response.json()) as Array<{ code: string }>
-    expect(payload.map((item) => item.code)).toEqual(['ff', 'ha'])
-  })
 })
