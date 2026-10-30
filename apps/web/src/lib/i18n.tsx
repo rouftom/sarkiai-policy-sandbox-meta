@@ -16,6 +16,8 @@ export type Locale = 'en' | 'fr'
 export const LOCALES: readonly Locale[] = ['en', 'fr'] as const
 
 export const LOCALE_STORAGE_KEY = 'sps.locale'
+/** Same choice as a cookie: readable by the server and kept across sessions (one year). */
+export const LOCALE_COOKIE = 'sps_lang'
 
 const en = {
   'app.tagline': 'One policy-grounded engine · two lenses · runs on Meta models',
@@ -686,6 +688,20 @@ const en = {
   'gazette.corpusHint':
     'Text zones and tables are added as one page document; stamps and signatures stay in the overlay and are never retrieved as law.',
   'gazette.empty': 'Load the sample page or a PNG/JPEG scan to see the segmentation overlay.',
+  'impact.title': 'Impact on open incidents',
+  'impact.hint': 'The page just added to the corpus may change incidents already running. Muse Spark ranks the runs that cite the same instrument or article; it cannot add a run.',
+  'impact.analyze': 'Analyze impact',
+  'impact.analyzing': 'Analyzing impact…',
+  'impact.noRuns': 'No incident run with a joint report yet: run a simulation first.',
+  'impact.none': 'No open incident is affected by this provision.',
+  'impact.deadlines': 'Deadline changes',
+  'impact.action': 'Action',
+  'impact.unaffected': 'Unaffected runs: {count}',
+  'impact.model': 'Model: {model}',
+  'impact.severity.low': 'Low',
+  'impact.severity.medium': 'Medium',
+  'impact.severity.high': 'High',
+  'impact.severity.critical': 'Critical',
 
   'approval.title': 'Human approval',
   'approval.loading': 'Verifying the approval link…',
@@ -2149,6 +2165,20 @@ const fr: Record<keyof typeof en, string> = {
   'gazette.corpusHint':
     'Les zones de texte et les tableaux forment un document de page ; les tampons et signatures restent dans l’overlay et ne sont jamais retrouvés comme du droit.',
   'gazette.empty': 'Chargez la page d’exemple ou un scan PNG/JPEG pour voir l’overlay de segmentation.',
+  'impact.title': 'Impact sur les incidents ouverts',
+  'impact.hint': 'La page ajoutée au corpus peut modifier des incidents en cours. Muse Spark classe les exécutions qui citent le même texte ou le même article ; il ne peut pas en ajouter.',
+  'impact.analyze': 'Analyser l’impact',
+  'impact.analyzing': 'Analyse de l’impact…',
+  'impact.noRuns': 'Aucune exécution avec rapport conjoint : lancez d’abord une simulation.',
+  'impact.none': 'Aucun incident ouvert n’est concerné par cette disposition.',
+  'impact.deadlines': 'Échéances modifiées',
+  'impact.action': 'Action',
+  'impact.unaffected': 'Exécutions non concernées : {count}',
+  'impact.model': 'Modèle : {model}',
+  'impact.severity.low': 'Faible',
+  'impact.severity.medium': 'Moyenne',
+  'impact.severity.high': 'Élevée',
+  'impact.severity.critical': 'Critique',
 
   'approval.title': 'Approbation humaine',
   'approval.loading': 'Vérification du lien d’approbation…',
@@ -2968,12 +2998,13 @@ interface I18nContextValue {
 
 const I18nContext = React.createContext<I18nContextValue | null>(null)
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = React.useState<Locale>(defaultLocale)
+export function I18nProvider({ children, initialLocale }: { children: React.ReactNode; initialLocale?: Locale }) {
+  const [locale, setLocaleState] = React.useState<Locale>(initialLocale ?? defaultLocale)
 
   // Restore the visitor's choice (the first render stays server-consistent).
   React.useEffect(() => {
-    const stored = localStorage.getItem(LOCALE_STORAGE_KEY)
+    const cookie = document.cookie.split('; ').find((entry) => entry.startsWith(`${LOCALE_COOKIE}=`))?.split('=')[1]
+    const stored = cookie ?? localStorage.getItem(LOCALE_STORAGE_KEY)
     if (stored && (LOCALES as readonly string[]).includes(stored)) setLocaleState(stored as Locale)
   }, [])
 
@@ -2984,6 +3015,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const setLocale = React.useCallback((next: Locale) => {
     setLocaleState(next)
     localStorage.setItem(LOCALE_STORAGE_KEY, next)
+    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000; SameSite=Lax`
   }, [])
 
   const value = React.useMemo<I18nContextValue>(
