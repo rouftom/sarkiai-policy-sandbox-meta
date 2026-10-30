@@ -11,7 +11,7 @@
 | 9 Nov 2026 | Top 10 announced, live final round |
 | 16 Nov 2026 | Community-vote winner announced |
 
-## Sprints (from scaffold to submission)
+## Sprints (baseline, then hackathon work)
 
 ### Sprint 0: foundations (written before the hackathon)
 
