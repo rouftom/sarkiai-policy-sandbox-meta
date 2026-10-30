@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { PNG } from 'pngjs'
 import type { LanguageModel } from 'ai'
 import type { InkMask } from './layout.js'
-import { analyzeGazettePage, toKbChunks } from './pipeline.js'
+import { analyzeGazettePage, mergeDetections, toKbChunks } from './pipeline.js'
 import { mapSamBoxes, parseSamBoxes, samText } from './sam.js'
 import {
   buildTranscriptionPrompt,
@@ -184,10 +184,10 @@ describe('gazette pipeline · with injected model', () => {
     expect(article?.provenance.href).toBe('https://example.gov.cm/jo/2026-special.pdf#page=3')
     expect(article?.provenance.bbox).toEqual(article!.bbox)
 
-    // 3 SAM calls + one transcription per zone, priced from real list prices.
-    expect(page.usage.segmentationCalls).toBe(3)
+    // 4 SAM calls + one transcription per zone, priced from real list prices.
+    expect(page.usage.segmentationCalls).toBe(4)
     expect(page.usage.transcriptionCalls).toBe(page.regions.length)
-    expect(page.usage.costUsd).toBeCloseTo(0.00995, 5)
+    expect(page.usage.costUsd).toBeCloseTo(0.01245, 5)
 
     const chunks = toKbChunks(page, {
       country: 'cm',
@@ -221,3 +221,33 @@ describe('gazette pipeline · with injected model', () => {
     expect(toKbChunks(page, { country: 'cm', jurisdiction: 'national', docType: 'regulation' })).toEqual([])
   })
 })
+
+describe('artefact detections', () => {
+  const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height })
+
+  test('the same object found by two phrases is counted once', () => {
+    const merged = mergeDetections([
+      { label: 'stamp', bbox: box(700, 1100, 320, 160), confidence: 0.7, frame: 0 },
+      { label: 'stamp', bbox: box(702, 1098, 318, 162), confidence: 0.9, frame: 0 },
+    ])
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.confidence).toBe(0.9)
+  })
+
+  test('a rectangle that is the frame of a table is not a stamp', () => {
+    const merged = mergeDetections([
+      { label: 'table', bbox: box(100, 300, 1000, 400), confidence: 0.87, frame: 0 },
+      { label: 'stamp', bbox: box(99, 300, 1002, 401), confidence: 0.71, frame: 0 },
+    ])
+    expect(merged.map((detection) => detection.label)).toEqual(['table'])
+  })
+
+  test('an isolated stamp is kept', () => {
+    const merged = mergeDetections([
+      { label: 'table', bbox: box(100, 300, 1000, 400), confidence: 0.87, frame: 0 },
+      { label: 'stamp', bbox: box(780, 1100, 320, 160), confidence: 0.68, frame: 0 },
+    ])
+    expect(merged.map((detection) => detection.label).sort()).toEqual(['stamp', 'table'])
+  })
+})
+
