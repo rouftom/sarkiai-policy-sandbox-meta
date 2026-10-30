@@ -72,7 +72,7 @@ We use these exact stage names throughout the codebase and the docs.
 | Concern | File | Notes |
 |---------|------|-------|
 | Hybrid retrieval: query embedding → Qdrant dense + sparse BM25 → RRF → rerank | `packages/retrieval/src/index.ts` | `PolicyRetriever`, `rrf()` |
-| LLM provider (local Ollama, qwen3.5:9b) | `packages/agents/src/model.ts` | `createModel()` |
+| LLM provider (local Ollama, Muse Glimmer by default) | `packages/agents/src/model.ts` | `createModel()` |
 | Model fine-tuning (sandbox credits, out-of-band) | `deploy/sandbox/README.md` §4 | point at tuned endpoint via env |
 
 ## 5. ML application
