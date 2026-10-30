@@ -89,7 +89,7 @@ export function SearchSelect({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[var(--radix-popover-trigger-width)] min-w-56 max-w-[22rem] p-1.5"
+        className="w-[var(--radix-popover-trigger-width)] min-w-[min(14rem,calc(100vw-2rem))] max-w-[min(22rem,calc(100vw-2rem))] p-1.5"
       >
         <div className="flex items-center gap-1.5 rounded-lg border border-border px-2">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />

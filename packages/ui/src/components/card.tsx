@@ -16,7 +16,11 @@ Card.displayName = 'Card'
 
 export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('flex h-11 items-center gap-2 px-4', className)} {...props} />
+    <div
+      ref={ref}
+      className={cn('flex min-h-11 min-w-0 flex-wrap items-center gap-2 px-4 py-1.5', className)}
+      {...props}
+    />
   ),
 )
 CardHeader.displayName = 'CardHeader'
@@ -27,7 +31,7 @@ export const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttribut
     <h3
       ref={ref}
       className={cn(
-        'text-[12px] font-semibold text-foreground',
+        'min-w-0 text-[12px] font-semibold text-foreground',
         className,
       )}
       {...props}
