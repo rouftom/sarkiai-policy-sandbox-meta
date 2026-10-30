@@ -250,12 +250,15 @@ function operatorOf(request: FastifyRequest) {
  * the boot hatch can be left in place. Meta Image draws the figure when the
  * provider is configured; otherwise a labelled sample is stored instead.
  */
+/** 16:9 landscape, as the report figures are laid out. */
+const REPORT_FIGURE_SIZE = '1792x1008'
+
 /** Two figures for the after-action report, drawn by Meta Image; labelled diagrams when it is unavailable. */
 async function exerciseFigures(definition: ExerciseDefinition, lang: 'fr' | 'en') {
   const access = providerAccess(engine.provider)
   const imageOptions =
     engine.provider.mode === 'cloud' && access.apiKey
-      ? { baseURL: engine.provider.baseURL, apiKey: access.apiKey, headers: access.headers }
+      ? { baseURL: engine.provider.baseURL, apiKey: access.apiKey, headers: access.headers, size: REPORT_FIGURE_SIZE }
       : null
   const briefs = figureBriefs(definition, lang)
   const captions =

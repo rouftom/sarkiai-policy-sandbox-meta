@@ -27,7 +27,7 @@ const DOMAIN_SETTING: Record<string, string> = {
   agriculture: 'an agricultural information system: field sensor maps, weather dashboards, warehouse records',
 }
 
-const STYLE = 'Realistic, muted teal and white palette, no readable text, no logos, no watermark.'
+const STYLE = 'Wide 16:9 landscape composition. Realistic, muted teal and white palette, no readable text, no logos, no watermark.'
 
 /** Institutions that see the exercise's injects, in the order they first appear. */
 function institutionsOf(definition: ExerciseDefinition): string[] {

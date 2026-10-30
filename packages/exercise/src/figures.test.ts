@@ -15,6 +15,10 @@ const base: ExerciseDefinition = {
 }
 
 describe('figure briefs', () => {
+  test('both figures ask for a 16:9 landscape composition', () => {
+    for (const brief of figureBriefs(base, 'en')) expect(brief.prompt).toContain('16:9')
+  })
+
   test('the timeline never shows people', () => {
     const timeline = figureBriefs(base, 'en').find((brief) => brief.id === 'timeline')!
     expect(timeline.prompt).toContain('No people')
