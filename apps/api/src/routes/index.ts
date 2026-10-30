@@ -1,6 +1,6 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { correctTranscript, generateStructured, providerAccess, providerApiKey, describeProvider, referenceImage } from '@sps/agents'
+import { correctTranscript, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, referenceImage } from '@sps/agents'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -248,6 +248,35 @@ function operatorOf(request: FastifyRequest) {
  * the boot hatch can be left in place. Meta Image draws the figure when the
  * provider is configured; otherwise a labelled sample is stored instead.
  */
+/** Two figures for the after-action report, drawn by Meta Image; labelled diagrams when it is unavailable. */
+async function exerciseFigures(definition: ExerciseDefinition, lang: 'fr' | 'en') {
+  const access = providerAccess(engine.provider)
+  const imageOptions =
+    engine.provider.mode === 'cloud' && access.apiKey
+      ? { baseURL: engine.provider.baseURL, apiKey: access.apiKey, headers: access.headers }
+      : null
+  const captions =
+    lang === 'fr'
+      ? { context: 'Contexte de l’exercice', timeline: 'Chronologie des incidents' }
+      : { context: 'Exercise context', timeline: 'Incident timeline' }
+  const [context, timeline] = await Promise.all([
+    referenceImage(
+      'Editorial illustration of an institutional crisis room facing a health data breach: large screens, a shared incident board, calm professionals. Realistic, muted teal and white palette, no readable text.',
+      { title: definition.title, lines: [`${definition.country.toUpperCase()} · ${definition.domain}`] },
+      imageOptions,
+    ),
+    referenceImage(
+      `Clean infographic timeline of a crisis exercise with ${definition.injects.length} milestones, flat vector style, white background, minimal short labels.`,
+      { title: captions.timeline, lines: definition.injects.map((inject) => `T+${inject.atMinute} · ${inject.title}`) },
+      imageOptions,
+    ),
+  ])
+  return [
+    { id: 'context', caption: captions.context, ...context },
+    { id: 'timeline', caption: captions.timeline, ...timeline },
+  ]
+}
+
 export async function seedReferenceImages(log: { info: (...args: unknown[]) => void; warn: (...args: unknown[]) => void }) {
   const docs = await knowledge.listDocuments({ limit: 200 })
   if (docs.length === 0) return { generated: 0, skipped: 0, documents: 0, source: 'none' as const }
@@ -1019,7 +1048,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         }),
         attempts: 2,
         reasoningEffort: 'low',
-        maxOutputTokens: 512,
+        maxOutputTokens: 2048,
       })
       const picked = choice.institutionIds.filter((id) => known.has(id))
       if (picked.length === 0) return fallback
@@ -2633,6 +2662,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       parsed.data.kind === 'approval_request'
         ? 'an approval request that ends with the decision expected from the reader'
         : 'a short situation update'
+    const replies: string[] = []
     try {
       const object = await generateStructured({
         model: engine.model,
@@ -2640,7 +2670,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         prompt: `${facts}\n\nWrite one plain-text summary, at most 420 characters, no bullet list and no markdown.`,
         schema: z.object({ summary: z.string().trim().min(1).max(900) }),
         shape: '{"summary":"one paragraph"}',
-        maxOutputTokens: 500,
+        attempts: 2,
+        reasoningEffort: 'low',
+        // Reasoning tokens count against the budget: a small cap leaves the
+        // visible reply empty on the Meta reasoning models.
+        maxOutputTokens: 4096,
+        onAttempt: ({ reply }) => {
+          if (reply.trim()) replies.push(reply)
+        },
       })
       return {
         runId: run.id,
@@ -2649,7 +2686,23 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         generatedAt: new Date().toISOString(),
       }
     } catch (error) {
-      return reply.status(502).send({ error: 'suggestion_failed', message: (error as Error).message })
+      // Some replies carry a usable summary outside the JSON envelope: keep it
+      // rather than failing the operator's click.
+      const plain = replies.map((reply) => plainTextReply(reply)).find((text) => text !== null)
+      if (plain) {
+        return {
+          runId: run.id,
+          summary: plain,
+          model: describeProvider(engine.provider),
+          generatedAt: new Date().toISOString(),
+        }
+      }
+      // Log the reason for the operator's administrator, never the provider body.
+      request.log.warn(
+        { reason: (error as Error).message, model: describeProvider(engine.provider) },
+        'notification summary suggestion failed',
+      )
+      return reply.status(502).send({ error: 'suggestion_failed' })
     }
   })
 
@@ -2875,6 +2928,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     scenarioRunId: z.string().min(1).max(120).optional(),
     durationMinutes: z.number().int().min(5).max(480),
     injects: z.array(exerciseInjectSchema).min(1).max(40),
+    references: z
+      .array(z.object({ title: z.string().min(1).max(300), authority: z.string().max(200).optional(), documentId: z.string().max(120).optional() }))
+      .max(20)
+      .optional(),
   })
 
   const exerciseLogSchema = z.object({
@@ -2890,6 +2947,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     definition: exerciseSchema,
     actions: z.array(exerciseLogSchema).max(500).default([]),
     evaluatedAtMinute: z.number().int().min(0).max(1_440),
+    lang: z.enum(['fr', 'en']).default('en'),
   })
 
   app.post('/v1/exercise/evaluate', async (request, reply) => {
@@ -2907,14 +2965,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
     const definition = parsed.data.definition as ExerciseDefinition
+    const lang = parsed.data.lang
     try {
-      const report = await writeAfterAction({
-        model: engine.model,
-        modelLabel: describeProvider(engine.provider),
-        definition,
-        log: parsed.data.actions,
-        evaluatedAtMinute: parsed.data.evaluatedAtMinute,
-      })
+      const [report, images] = await Promise.all([
+        writeAfterAction({
+          model: engine.model,
+          modelLabel: describeProvider(engine.provider),
+          definition,
+          log: parsed.data.actions,
+          evaluatedAtMinute: parsed.data.evaluatedAtMinute,
+          lang,
+        }),
+        exerciseFigures(definition, lang),
+      ])
+      const withImages = { ...report, images }
       try {
         await engine.audit.logAction({
           actor: 'facilitator',
@@ -2927,7 +2991,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       } catch {
         // The report is still returned; an unreachable audit store must not erase it.
       }
-      return report
+      return withImages
     } catch (error) {
       request.log.error(error)
       return reply.status(502).send({ error: (error as Error).message })

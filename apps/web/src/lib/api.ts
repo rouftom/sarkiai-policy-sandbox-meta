@@ -638,6 +638,13 @@ export interface ExerciseDefinitionDto {
   scenarioRunId?: string
   durationMinutes: number
   injects: ExerciseInjectDto[]
+  references?: ExerciseReferenceDto[]
+}
+
+export interface ExerciseReferenceDto {
+  title: string
+  authority?: string
+  documentId?: string
 }
 
 export interface ExerciseActionDto {
@@ -688,14 +695,51 @@ export interface ExerciseEvaluationDto {
 }
 
 export interface AfterActionNarrativeDto {
-  summary: string
-  lessons: string[]
+  title: string
+  intro: string
+  context: string
+  analysis: string
+  teamInputs: string
+  strengths: string[]
+  improvements: string[]
   recommendations: string[]
+  conclusion: string
   unresolved: string[]
+}
+
+export interface SituationDto {
+  injectId: string
+  title: string
+  detail: string
+  severity?: ExerciseSeverity
+  releasedAtMinute: number
+  expectedAction: string
+  outcome: 'addressed' | 'late' | 'missed'
+  latencyMinutes: number | null
+  responders: string[]
+}
+
+export interface TeamInputGroupDto {
+  actor: string
+  entries: ExerciseActionDto[]
+}
+
+export interface ReportImageDto {
+  id: string
+  caption: string
+  mime: string
+  dataBase64: string
+  source: 'meta-image' | 'sample'
+  model: string
 }
 
 export interface AfterActionDto extends ExerciseEvaluationDto {
   narrative: AfterActionNarrativeDto
+  situations: SituationDto[]
+  teamInputs: TeamInputGroupDto[]
+  references: ExerciseReferenceDto[]
+  images: ReportImageDto[]
+  lang: 'fr' | 'en'
   model: string
   generatedAt: string
 }
@@ -1174,7 +1218,7 @@ export const api = {
     request<ExerciseEvaluationDto>('/v1/exercise/evaluate', { method: 'POST', body: JSON.stringify(body) }),
 
   /** Same evidence, then a model-written narrative on top of it. */
-  exerciseAfterAction: (body: ExerciseBodyDto) =>
+  exerciseAfterAction: (body: ExerciseBodyDto & { lang?: 'fr' | 'en' }) =>
     request<AfterActionDto>('/v1/exercise/after-action', { method: 'POST', body: JSON.stringify(body) }),
 
   /**

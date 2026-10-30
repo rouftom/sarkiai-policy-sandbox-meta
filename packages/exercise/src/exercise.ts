@@ -38,7 +38,18 @@ export interface ExerciseDefinition {
   scenarioRunId?: string
   durationMinutes: number
   injects: ExerciseInject[]
+  /** Texts the exercise is built on, cited by the report. */
+  references?: ExerciseReference[]
 }
+
+export interface ExerciseReference {
+  title: string
+  authority?: string
+  /** Knowledge-base document id, when the reference is in the corpus. */
+  documentId?: string
+}
+
+export type ReportLang = 'fr' | 'en'
 
 export interface LoggedAction {
   id?: string
@@ -194,7 +205,88 @@ export function evaluateExercise(
   }
 }
 
-export function buildAfterActionPrompt(definition: ExerciseDefinition, evaluation: ExerciseEvaluation): string {
+export interface SituationRecord {
+  injectId: string
+  title: string
+  detail: string
+  severity?: InjectSeverity
+  releasedAtMinute: number
+  expectedAction: string
+  outcome: 'addressed' | 'late' | 'missed'
+  latencyMinutes: number | null
+  responders: string[]
+}
+
+export interface TeamInputGroup {
+  actor: string
+  entries: LoggedAction[]
+}
+
+/** The model's prose. Every figure and every list of facts is computed elsewhere. */
+export interface AfterActionNarrative {
+  title: string
+  intro: string
+  context: string
+  analysis: string
+  teamInputs: string
+  strengths: string[]
+  improvements: string[]
+  recommendations: string[]
+  conclusion: string
+  unresolved: string[]
+}
+
+/** One row per inject released by the cut-off, with what the team did about it. */
+export function buildSituations(
+  definition: ExerciseDefinition,
+  log: LoggedAction[],
+  evaluation: ExerciseEvaluation,
+): SituationRecord[] {
+  return injectsVisibleAt(definition, evaluation.evaluatedAtMinute).map((inject) => {
+    const addressed = evaluation.addressed.find((item) => item.injectId === inject.id)
+    const missed = evaluation.missed.find((item) => item.injectId === inject.id)
+    const outcome: SituationRecord['outcome'] = addressed?.withinWindow
+      ? 'addressed'
+      : missed?.reason === 'late'
+        ? 'late'
+        : 'missed'
+    const responders = [
+      ...new Set(
+        log
+          .filter((action) => action.injectId === inject.id && action.atMinute <= evaluation.evaluatedAtMinute)
+          .map((action) => action.actor),
+      ),
+    ]
+    return {
+      injectId: inject.id,
+      title: inject.title,
+      detail: inject.detail,
+      severity: inject.severity,
+      releasedAtMinute: inject.atMinute,
+      expectedAction: inject.expectedAction,
+      outcome,
+      latencyMinutes: addressed?.latencyMinutes ?? null,
+      responders,
+    }
+  })
+}
+
+/** What each institution logged, in time order, up to the cut-off. */
+export function buildTeamInputs(log: LoggedAction[], evaluatedAtMinute: number): TeamInputGroup[] {
+  const groups = new Map<string, LoggedAction[]>()
+  for (const action of byMinute(log)) {
+    if (action.atMinute > evaluatedAtMinute) continue
+    groups.set(action.actor, [...(groups.get(action.actor) ?? []), action])
+  }
+  return [...groups.entries()].map(([actor, entries]) => ({ actor, entries }))
+}
+
+export function buildAfterActionPrompt(
+  definition: ExerciseDefinition,
+  evaluation: ExerciseEvaluation,
+  log: LoggedAction[] = [],
+  lang: ReportLang = 'en',
+): string {
   const addressed = evaluation.addressed.map(
     (item) =>
       `- ${item.injectId} (${item.title}): answered by ${item.actor} at T+${item.atMinute}, latency ${item.latencyMinutes} min, within window: ${item.withinWindow}; action: ${item.action}`,
@@ -205,10 +297,18 @@ export function buildAfterActionPrompt(definition: ExerciseDefinition, evaluatio
   )
   const decisions = evaluation.decisions.map((item) => `- T+${item.atMinute} ${item.actor}: ${item.text}`)
   const escalations = evaluation.escalations.map((item) => `- T+${item.atMinute} ${item.actor}: ${item.text}`)
+  const entries = byMinute(log)
+    .filter((item) => item.atMinute <= evaluation.evaluatedAtMinute)
+    .map((item) => `- T+${item.atMinute} ${item.actor} [${item.kind}]${item.injectId ? ` → ${item.injectId}` : ''}: ${item.text}`)
+  const references = (definition.references ?? []).map(
+    (reference) => `- ${reference.title}${reference.authority ? ` (${reference.authority})` : ''}`,
+  )
+  const language = lang === 'fr' ? 'French' : 'English'
 
   return [
     'You are the facilitator writing the after-action report of a crisis exercise.',
-    'Use only the facts below. Do not invent an action, an institution, a number or a legal deadline.',
+    `Write in ${language}.`,
+    'Use only the facts below. Do not invent an action, an institution, a number, a legal deadline or a reference.',
     '',
     `EXERCISE ${definition.id} · ${definition.title} (${definition.country.toUpperCase()} · ${definition.domain})`,
     `Duration: ${definition.durationMinutes} min. Evaluated at T+${evaluation.evaluatedAtMinute}.`,
@@ -227,16 +327,28 @@ export function buildAfterActionPrompt(definition: ExerciseDefinition, evaluatio
     'ESCALATIONS',
     ...(escalations.length > 0 ? escalations : ['- (none)']),
     '',
+    'TEAM ENTRIES (verbatim, in time order)',
+    ...(entries.length > 0 ? entries : ['- (none)']),
+    '',
+    'REFERENCES (cite only these)',
+    ...(references.length > 0 ? references : ['- (none)']),
+    '',
     'Return JSON only, no prose and no code fence:',
-    '{"summary":"one paragraph","lessons":["..."],"recommendations":["..."],"unresolved":["..."]}',
-    'Lessons must point to a fact above. Recommendations must be operational and testable.',
+    '{"title":"short report title","intro":"purpose and scope, one paragraph","context":"the situation the exercise simulates, one paragraph","analysis":"what the team did well and where it lagged, one paragraph","teamInputs":"how the institutions worked together, one paragraph","strengths":["..."],"improvements":["..."],"recommendations":["..."],"conclusion":"one paragraph","unresolved":["..."]}',
+    'Strengths and improvements must each point to a fact above. Recommendations must be operational and testable. Keep every paragraph under 120 words.',
   ].join('\n')
 }
 
 interface RawAfterAction {
-  summary?: unknown
-  lessons?: unknown
+  title?: unknown
+  intro?: unknown
+  context?: unknown
+  analysis?: unknown
+  teamInputs?: unknown
+  strengths?: unknown
+  improvements?: unknown
   recommendations?: unknown
+  conclusion?: unknown
   unresolved?: unknown
 }
 
@@ -248,22 +360,27 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim() !== '') : []
 }
 
-export interface AfterActionNarrative {
-  summary: string
-  lessons: string[]
-  recommendations: string[]
-  unresolved: string[]
-}
-
 /** Tolerant JSON parse of the narrative; malformed output falls back to the metrics. */
-export function parseAfterAction(raw: string, evaluation: ExerciseEvaluation): AfterActionNarrative {
+export function parseAfterAction(raw: string, evaluation: ExerciseEvaluation, lang: ReportLang = 'en'): AfterActionNarrative {
+  const answered = evaluation.addressed.filter((item) => item.withinWindow).length
+  const fallbackIntro =
+    evaluation.releasedInjects === 0
+      ? lang === 'fr'
+        ? 'Aucun incident n’avait été diffusé à la date du rapport.'
+        : 'No inject had been released when the report was generated.'
+      : lang === 'fr'
+        ? `${answered}/${evaluation.releasedInjects} incidents ont reçu une réponse dans leur délai.`
+        : `${answered}/${evaluation.releasedInjects} injects were answered inside their window.`
   const fallback: AfterActionNarrative = {
-    summary:
-      evaluation.releasedInjects === 0
-        ? 'No inject had been released when the report was generated.'
-        : `${evaluation.addressed.filter((item) => item.withinWindow).length}/${evaluation.releasedInjects} injects were answered inside their window.`,
-    lessons: [],
+    title: evaluation.title,
+    intro: fallbackIntro,
+    context: '',
+    analysis: '',
+    teamInputs: '',
+    strengths: [],
+    improvements: [],
     recommendations: [],
+    conclusion: '',
     unresolved: evaluation.missed.map((item) => item.injectId),
   }
 
@@ -279,15 +396,25 @@ export function parseAfterAction(raw: string, evaluation: ExerciseEvaluation): A
   }
 
   return {
-    summary: asString(payload.summary) || fallback.summary,
-    lessons: asStringArray(payload.lessons),
+    title: asString(payload.title) || fallback.title,
+    intro: asString(payload.intro) || fallback.intro,
+    context: asString(payload.context),
+    analysis: asString(payload.analysis),
+    teamInputs: asString(payload.teamInputs),
+    strengths: asStringArray(payload.strengths),
+    improvements: asStringArray(payload.improvements),
     recommendations: asStringArray(payload.recommendations),
+    conclusion: asString(payload.conclusion),
     unresolved: asStringArray(payload.unresolved),
   }
 }
 
 export interface AfterActionReport extends ExerciseEvaluation {
   narrative: AfterActionNarrative
+  situations: SituationRecord[]
+  teamInputs: TeamInputGroup[]
+  references: ExerciseReference[]
+  lang: ReportLang
   model: string
   generatedAt: string
 }
@@ -298,31 +425,39 @@ export interface WriteAfterActionInput {
   definition: ExerciseDefinition
   log: LoggedAction[]
   evaluatedAtMinute: number
+  lang?: ReportLang
   maxOutputTokens?: number
   /** Inject a fake generator in tests. */
   deps?: { summarize?: (prompt: string) => Promise<string> }
 }
 
 export async function writeAfterAction(input: WriteAfterActionInput): Promise<AfterActionReport> {
+  const lang = input.lang ?? 'en'
   const evaluation = evaluateExercise(input.definition, input.log, input.evaluatedAtMinute)
-  const prompt = buildAfterActionPrompt(input.definition, evaluation)
+  const prompt = buildAfterActionPrompt(input.definition, evaluation, input.log, lang)
 
   let raw = ''
   if (input.deps?.summarize) {
     raw = await input.deps.summarize(prompt)
   } else {
+    // Reasoning tokens share the output budget: a small cap leaves no visible answer.
     const result = await generateText({
       model: input.model,
       prompt,
       temperature: 0.2,
-      maxOutputTokens: input.maxOutputTokens ?? 1200,
+      maxOutputTokens: input.maxOutputTokens ?? 6000,
+      providerOptions: { meta: { reasoningEffort: 'low' }, 'openai-compatible': { reasoningEffort: 'low' } },
     })
     raw = result.text
   }
 
   return {
     ...evaluation,
-    narrative: parseAfterAction(raw, evaluation),
+    narrative: parseAfterAction(raw, evaluation, lang),
+    situations: buildSituations(input.definition, input.log, evaluation),
+    teamInputs: buildTeamInputs(input.log, evaluation.evaluatedAtMinute),
+    references: input.definition.references ?? [],
+    lang,
     model: input.modelLabel,
     generatedAt: new Date().toISOString(),
   }

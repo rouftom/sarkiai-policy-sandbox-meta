@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import type { LanguageModel } from 'ai'
 import {
   buildAfterActionPrompt,
+  buildSituations,
+  buildTeamInputs,
   evaluateExercise,
   injectsVisibleAt,
   parseAfterAction,
@@ -125,7 +127,7 @@ describe('after-action report', () => {
 
   test('the prompt carries only computed facts', () => {
     const single: ExerciseDefinition = { ...definition, injects: [definition.injects[0]!] }
-    const prompt = buildAfterActionPrompt(single, evaluateExercise(single, log, 30))
+    const prompt = buildAfterActionPrompt(single, evaluateExercise(single, log, 30), log)
     expect(prompt).toContain('Coverage: 100%')
     expect(prompt).toContain('inj-1')
     expect(prompt).toContain('Ticket opened.')
@@ -143,16 +145,19 @@ describe('after-action report', () => {
         summarize: async (prompt) => {
           expect(prompt).toContain('inj-1')
           return JSON.stringify({
-            summary: 'The team opened the incident quickly.',
-            lessons: ['The cyber agency was paged before scope was known.'],
+            title: 'Health breach drill',
+            intro: 'The team opened the incident quickly.',
+            strengths: ['The cyber agency was paged before scope was known.'],
             recommendations: ['Add a 5-minute scope checkpoint.'],
             unresolved: ['inj-2', 'inj-3'],
           })
         },
       },
     })
-    expect(report.narrative.summary).toContain('opened the incident')
+    expect(report.narrative.intro).toContain('opened the incident')
     expect(report.narrative.recommendations).toHaveLength(1)
+    expect(report.situations.map((item) => item.outcome)).toEqual(['addressed', 'missed'])
+    expect(report.teamInputs[0]?.actor).toBe('cyber_agency')
     expect(report.model).toBe('muse-spark-1.3')
     expect(report.generatedAt).toBeTruthy()
   })
@@ -160,7 +165,38 @@ describe('after-action report', () => {
   test('falls back to the metrics when the model returns garbage', () => {
     const evaluation = evaluateExercise(definition, log, 30)
     const narrative = parseAfterAction('not json', evaluation)
-    expect(narrative.summary).toContain('1/2 injects')
+    expect(narrative.intro).toContain('1/2 injects')
     expect(narrative.unresolved).toEqual(['inj-2'])
+  })
+})
+
+describe('report sections', () => {
+  const log: LoggedAction[] = [
+    { atMinute: 10, actor: 'cyber_agency', kind: 'action', injectId: 'inj-1', text: 'Ticket opened.' },
+    { atMinute: 12, actor: 'ministry_health', kind: 'note', text: 'Briefing scheduled.' },
+    { atMinute: 55, actor: 'cyber_agency', kind: 'action', injectId: 'inj-2', text: 'Too late.' },
+  ]
+
+  test('situations classify each released inject as addressed, late or missed', () => {
+    const evaluation = evaluateExercise(definition, log, 60)
+    const situations = buildSituations(definition, log, evaluation)
+    expect(situations.map((item) => [item.injectId, item.outcome])).toEqual([
+      ['inj-1', 'addressed'],
+      ['inj-2', 'late'],
+      ['inj-3', 'missed'],
+    ])
+    expect(situations[0]?.responders).toEqual(['cyber_agency'])
+    expect(situations[1]?.latencyMinutes).toBe(25)
+  })
+
+  test('team inputs are grouped by institution, in time order, up to the cut-off', () => {
+    const groups = buildTeamInputs(log, 15)
+    expect(groups.map((group) => group.actor)).toEqual(['cyber_agency', 'ministry_health'])
+    expect(groups[0]?.entries).toHaveLength(1)
+  })
+
+  test('the French prompt asks for French prose', () => {
+    const evaluation = evaluateExercise(definition, log, 60)
+    expect(buildAfterActionPrompt(definition, evaluation, log, 'fr')).toContain('Write in French.')
   })
 })

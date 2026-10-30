@@ -10,6 +10,18 @@ export function healthBreachExercise(country: string): ExerciseDefinition {
     domain: 'health',
     scenarioRunId: 'health-data-breach',
     durationMinutes: 120,
+    references: [
+      {
+        title: 'Loi relative à la protection des données à caractère personnel au Cameroun (23 décembre 2024)',
+        authority: 'Présidence de la République / Parlement',
+        documentId: 'cm-data-protection-law-2024',
+      },
+      {
+        title: 'Plan Stratégique National de Santé Numérique (PSNSN) 2026-2030',
+        authority: 'Ministère de la Santé publique',
+        documentId: 'cm-health-digital-psnsn-2026-2030',
+      },
+    ],
     injects: [
       {
         id: 'inj-1',
