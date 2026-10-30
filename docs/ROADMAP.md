@@ -13,9 +13,9 @@
 
 ## Sprints (from scaffold to submission)
 
-### Sprint 0: foundations (baseline import)
+### Sprint 0: foundations (written before the hackathon)
 
-The baseline commit (tag `pre-hackathon-baseline`) imports the engine as a single commit at the start of the building period. The items below are what it already contained.
+The baseline commit (tag `pre-hackathon-baseline`) imports, as a single commit, the engine we wrote before the hackathon. The items below are what it already contained.
 - `[x]` Monorepo, Docker all-in-one + individual, lens profiles.
 - `[x]` Jurisdiction-aware ingestion (adapted, `country`/`jurisdiction`).
 - `[x]` Hybrid retrieval + RRF + local TEI rerank (optional).
