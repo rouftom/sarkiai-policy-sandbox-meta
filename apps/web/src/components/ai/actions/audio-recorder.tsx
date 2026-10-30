@@ -15,6 +15,8 @@ interface AudioRecorderProps {
    * is in.
    */
   onTranscript: (text: string, final: boolean) => void
+  /** A recording just started: the composer drops whatever the previous dictation left behind. */
+  onRecordingStart?: () => void
   onError?: (message: string) => void
   disabled?: boolean
   /** The institution's colour: the microphone takes it. */
@@ -29,7 +31,7 @@ const SEGMENT_MS = 6000
 
 const join = (...parts: string[]) => parts.filter(Boolean).join(' ')
 
-export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: AudioRecorderProps) => {
+export const AudioRecorder = ({ onTranscript, onRecordingStart, onError, disabled, accent }: AudioRecorderProps) => {
   const { t } = useI18n()
   const controls = useAnimationControls()
 
@@ -46,11 +48,11 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
   /** Segments are transcribed one after the other, so the text keeps its order. */
   const queue = useRef<Promise<void>>(Promise.resolve())
   const pending = useRef(0)
-  const callbacks = useRef({ onTranscript, onError })
+  const callbacks = useRef({ onTranscript, onRecordingStart, onError })
 
   useEffect(() => {
-    callbacks.current = { onTranscript, onError }
-  }, [onTranscript, onError])
+    callbacks.current = { onTranscript, onRecordingStart, onError }
+  }, [onTranscript, onRecordingStart, onError])
 
   useEffect(() => {
     return () => {
@@ -197,6 +199,7 @@ export const AudioRecorder = ({ onTranscript, onError, disabled, accent }: Audio
   const startRecording = useCallback(async () => {
     committed.current = ''
     stopRequested.current = false
+    callbacks.current.onRecordingStart?.()
     setIsRecording(true)
     void controls.start('recording')
     try {
