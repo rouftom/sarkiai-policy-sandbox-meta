@@ -130,7 +130,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <AppSidebar />
           <div className="flex h-dvh flex-1 flex-col overflow-hidden">
             <AppHeader />
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-4 pl-4 pr-6 md:pl-0 md:pr-8">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-4 pl-4 pr-4 md:pl-0 md:pr-8">
               <Group
                 orientation={isMobile ? 'vertical' : 'horizontal'}
                 className="relative mt-0 min-h-0 min-w-0 flex-1 overflow-hidden rounded-3xl bg-[var(--app-panel-bg)]"
