@@ -46,6 +46,7 @@ import { createEngine, createKnowledgeIngestor, createScenario, recordProviderSw
 import { ApprovalStore, type ApprovalDecision } from '../approvals.js'
 import { scenarioFor, type ScenarioLang } from '../scenarios.js'
 import { ScenarioRunStore, type ScenarioRunRecord } from '../scenario-runs.js'
+import { ExerciseReportStore } from '../exercise-reports.js'
 import { buildScenarioExport } from '../scenario-report.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
@@ -120,6 +121,7 @@ const mcpGateway = new McpGateway(process.env.SEA_MCP_API_KEY)
 const chatSessions = new ChatSessionStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const readinessRuns = new ReadinessRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const scenarioRuns = new ScenarioRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
+const exerciseReports = new ExerciseReportStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const notificationContacts = new NotificationContactStore({
   mongodbUri: config.mongodb.uri,
   dbName: config.mongodb.dbName,
@@ -2959,6 +2961,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     )
   })
 
+  app.get('/v1/exercise/reports', async (request, reply) => {
+    const query = z.object({ exerciseId: z.string().min(1).max(120) }).safeParse(request.query ?? {})
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    return { reports: await exerciseReports.list(operatorOf(request).email, query.data.exerciseId) }
+  })
+
+  app.get('/v1/exercise/reports/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const record = await exerciseReports.get(id, operatorOf(request).email)
+    if (!record) return reply.status(404).send({ error: 'report_not_found' })
+    return record
+  })
+
   app.post('/v1/exercise/after-action', async (request, reply) => {
     const parsed = exerciseBodySchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
@@ -2978,6 +2993,18 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         exerciseFigures(definition, lang),
       ])
       const withImages = { ...report, images }
+      const saved = await exerciseReports.create({
+        userId: operatorOf(request).email,
+        exerciseId: definition.id,
+        title: withImages.narrative.title || withImages.title,
+        evaluatedAtMinute: parsed.data.evaluatedAtMinute,
+        actionCount: parsed.data.actions.length,
+        lang,
+        model: withImages.model,
+        definition,
+        actions: parsed.data.actions,
+        report: withImages,
+      })
       try {
         await engine.audit.logAction({
           actor: 'facilitator',
@@ -2990,7 +3017,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       } catch {
         // The report is still returned; an unreachable audit store must not erase it.
       }
-      return withImages
+      return { ...withImages, reportId: saved.id, version: saved.version, savedAt: saved.createdAt }
     } catch (error) {
       request.log.error(error)
       return reply.status(502).send({ error: (error as Error).message })

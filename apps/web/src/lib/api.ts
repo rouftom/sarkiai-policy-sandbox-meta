@@ -742,6 +742,26 @@ export interface AfterActionDto extends ExerciseEvaluationDto {
   lang: 'fr' | 'en'
   model: string
   generatedAt: string
+  /** Set once the report is saved: the id and version of the stored copy. */
+  reportId?: string
+  version?: number
+  savedAt?: string
+}
+
+export interface ExerciseReportSummaryDto {
+  id: string
+  exerciseId: string
+  version: number
+  title: string
+  createdAt: string
+  evaluatedAtMinute: number
+  actionCount: number
+  lang: 'fr' | 'en'
+  model: string
+}
+
+export interface ExerciseReportRecordDto extends ExerciseReportSummaryDto {
+  report: AfterActionDto
 }
 
 export interface ExerciseBodyDto {
@@ -1220,6 +1240,12 @@ export const api = {
   /** Same evidence, then a model-written narrative on top of it. */
   exerciseAfterAction: (body: ExerciseBodyDto & { lang?: 'fr' | 'en' }) =>
     request<AfterActionDto>('/v1/exercise/after-action', { method: 'POST', body: JSON.stringify(body) }),
+
+  /** Saved versions of an exercise's reports, newest first, without the bodies. */
+  exerciseReports: (exerciseId: string) =>
+    request<{ reports: ExerciseReportSummaryDto[] }>(`/v1/exercise/reports?exerciseId=${encodeURIComponent(exerciseId)}`),
+
+  exerciseReport: (id: string) => request<ExerciseReportRecordDto>(`/v1/exercise/reports/${encodeURIComponent(id)}`),
 
   /**
    * Run dossier, fetched with the operator Bearer token. The API rejects

@@ -16,7 +16,7 @@ import { AnimatedTabsList, Button, Card, CardContent, CardHeader, CardTitle, Sel
 import { institutionsForDomain, type Domain } from '@sps/shared'
 import {
   api,
-  type AfterActionDto,
+  type ExerciseReportSummaryDto,
   type ExerciseActionDto,
   type ExerciseActionKind,
   type ExerciseDefinitionDto,
@@ -24,7 +24,7 @@ import {
 } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { ProcessingBar } from '@/components/processing-bar'
-import { ExerciseReport } from '@/components/exercise-report'
+import { ExerciseReportHistory } from '@/components/exercise-report-history'
 
 const KINDS: ExerciseActionKind[] = ['action', 'decision', 'escalation', 'note']
 
@@ -61,7 +61,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
   const [actions, setActions] = React.useState<ExerciseActionDto[]>([])
   const [clock, setClock] = React.useState(0)
   const [evaluation, setEvaluation] = React.useState<ExerciseEvaluationDto | null>(null)
-  const [afterAction, setAfterAction] = React.useState<AfterActionDto | null>(null)
+  const [history, setHistory] = React.useState<ExerciseReportSummaryDto[]>([])
   const [loading, setLoading] = React.useState(true)
   const [evaluating, setEvaluating] = React.useState(false)
   const [generating, setGenerating] = React.useState(false)
@@ -80,7 +80,6 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
     setActions([])
     setClock(0)
     setEvaluation(null)
-    setAfterAction(null)
     setError(null)
     setLoading(true)
     try {
@@ -103,7 +102,6 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
 
   const resetScoring = () => {
     setEvaluation(null)
-    setAfterAction(null)
   }
 
   const addAction = () => {
@@ -136,7 +134,6 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
       setEvaluation(
         await api.evaluateExercise({ definition, actions, evaluatedAtMinute: clock }),
       )
-      setAfterAction(null)
     } catch (cause) {
       setError((cause as Error).message)
     } finally {
@@ -156,7 +153,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
         lang: locale === 'fr' ? 'fr' : 'en',
       })
       setEvaluation(report)
-      setAfterAction(report)
+      setHistory((await api.exerciseReports(definition.id)).reports)
       setTab('report')
     } catch (cause) {
       setError((cause as Error).message)
@@ -164,6 +161,14 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
       setGenerating(false)
     }
   }
+
+  React.useEffect(() => {
+    if (!definition) return
+    api
+      .exerciseReports(definition.id)
+      .then((listed) => setHistory(listed.reports))
+      .catch(() => setHistory([]))
+  }, [definition])
 
   const coverage = evaluation ? Math.round(evaluation.coverage * 100) : null
 
@@ -182,7 +187,7 @@ export function ExercisePanel({ country, domain }: { country: string; domain: Do
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {tab === 'report' && <ExerciseReport report={afterAction} />}
+        {tab === 'report' && <ExerciseReportHistory reports={history} />}
 
         {tab === 'exercise' && (
           <>
