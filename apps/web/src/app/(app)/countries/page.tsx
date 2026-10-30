@@ -26,6 +26,7 @@ import { ApiError, countriesApi, type CountryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { PageIntro } from '@/components/page-intro'
 import { CountryDialog } from '@/components/country-dialog'
+import { CountryFlag } from '@/components/country-flag'
 import { FilterPopover } from '@/components/filter-popover'
 import { ICON_BUTTON_OUTLINE } from '@/components/icon-button-styles'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
@@ -333,9 +334,7 @@ export default function CountriesPage() {
                   >
                     <TableCell>
                       <div className="flex items-center gap-2 font-medium text-foreground">
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand-primary/10 text-brand-primary">
-                          <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        </span>
+                        <CountryFlag code={country.code} />
                         <span className="min-w-0">
                           <span className="block truncate text-[12px]">{nameOf(country)}</span>
                           <span className="block font-mono text-[9px] uppercase text-muted-foreground">{country.code}</span>

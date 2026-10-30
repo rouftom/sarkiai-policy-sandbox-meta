@@ -39,6 +39,34 @@ over **e-mail or WhatsApp**, with per-channel consent and an audited send.
 - **Primary domain:** healthcare, with cross-domain spillover (data protection, telecom, cybersecurity).
 - **Open by design:** permissive license (Apache-2.0 code, CC BY 4.0 content).
 
+## Live demo
+
+**<https://sps.djotta.com>**: the hosted console, in English and French, light and dark, running in `cloud` mode on the Meta Model API. Nothing is mocked: the corpus, the runs and the audit chain are live.
+
+### First connection
+
+The public deployment has two ways in: create your own operator account, or use the account handed out with the submission.
+
+1. Open <https://sps.djotta.com>. A signed-out visitor lands on `/login`; the console forwards to `/setup` only when the operator store is empty, which is not the case on the demo.
+2. **Own account:** open <https://sps.djotta.com/signup> (public sign-up is enabled on this deployment). Enter a first name, last name and a real address: the API mails a one-time password to it. If the mail cannot be delivered, the account is rolled back, so retry with another address.
+   **Provided account:** sign in directly; the credentials come with the submission, never from this repository.
+3. Replace the one-time password on the next screen (12 characters minimum, letters and digits), then scan the TOTP QR code with an authenticator app and store the ten recovery codes. They are shown once.
+4. Every later sign-in asks for the password **and** the 6-digit TOTP code.
+5. The workspace bar (country, domain, lens) is stored on the profile. For the announced demo, pick **Cameroon**, **health**, **simulation**.
+6. The free API sleeps: the first call after a quiet period can take up to 40 seconds. Open the overview once and wait for the provider badge before starting a run. See [`docs/DEMO.md`](docs/DEMO.md) for the 3-minute recording plan.
+
+### A look at the console
+
+| Countries & sectors registry | Crisis simulation |
+|---|---|
+| ![Countries and sectors registry, with search, funnel filter, pagination and the country flag](docs/screenshots/countries.png) | ![Crisis scenario process graph with mandated agents and a joint report](docs/screenshots/crisis-scenarios.png) |
+
+| AI-readiness assessment | In-app operations handbook |
+|---|---|
+| ![AI-readiness process graph with 13 dimensions scored by agents](docs/screenshots/readiness-agent-workflow.png) | ![Guide: taking-over runbooks, four pages](docs/screenshots/guide.png) |
+
+More screens (audit trail, knowledge graph, notifications, preferences, security) live in [`docs/screenshots/`](docs/screenshots): 1295×812 captures of the hosted app, palette-optimised with ImageMagick.
+
 ## One engine, two lenses
 
 | Lens | Purpose | Basis |

@@ -12,6 +12,11 @@ validation, audit chain), **Demo 25%** (a story with a visible causality).
 
 ## Before recording (T-15 min)
 
+The hosted console is <https://sps.djotta.com>; signing in for the first time
+(account, password change, TOTP, workspace) is described in
+[the README](../README.md#first-connection). The API is addressed below through a
+placeholder: substitute the host of the deployment under test.
+
 ```bash
 API=https://<api-host>
 curl -s $API/health
