@@ -31,7 +31,7 @@ import {
 import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
-import { hasLanguage, institutionsForDomain, institutionsForDomains } from '@sps/shared'
+import { hasLanguage, institutionsForDomain, institutionsForDomains, type ProviderDescriptor } from '@sps/shared'
 import {
   READINESS_DIMENSIONS,
   type DocType,
@@ -258,25 +258,41 @@ const scenarioSessions = new Map<string, ScenarioSession>()
 const GAZETTE_MAX_BYTES = 12 * 1024 * 1024
 
 /**
- * SAM 3.1 is a Meta Model API model: it exists in `cloud` mode only. In
+ * The Meta Model API descriptor of a cloud deployment, whatever chat model is
+ * active. SAM 3.1 and Muse Voice Transcribe are Meta-only services: they keep
+ * running when the reasoning moves to Muse Spark Open on Baseten (a hybrid the
+ * open-weight prize explicitly allows). Undefined in `sovereign` and `local`.
+ */
+function metaServices(): ProviderDescriptor | undefined {
+  return engine.catalogMode === 'cloud' ? engine.catalogProvider : undefined
+}
+
+/**
+ * SAM 3.1 is a Meta Model API model: it exists in a cloud deployment only. In
  * `sovereign` and `local` the pipeline still segments by projection profile and
  * transcribes zone by zone · the artefact overlay is simply absent.
  */
 function gazetteSam(): SamClient | undefined {
-  if (engine.provider.mode !== 'cloud' || !engine.provider.models.segmentation) return undefined
-  const access = providerAccess(engine.provider)
+  const meta = metaServices()
+  if (!meta?.models.segmentation) return undefined
+  const access = providerAccess(meta)
   if (!access.apiKey) return undefined
   return new SamClient({
-    baseUrl: engine.provider.baseURL,
+    baseUrl: meta.baseURL,
     apiKey: access.apiKey,
     headers: access.headers,
-    model: engine.provider.models.segmentation,
+    model: meta.models.segmentation,
   })
 }
 
-/** List prices are only meaningful when the work actually bills Meta. */
+/**
+ * List prices are only meaningful for work billed by Meta. When the zones are
+ * transcribed by a Baseten model, only the SAM calls are priced here.
+ */
 function gazettePricing() {
-  return engine.provider.mode === 'cloud' ? META_GAZETTE_PRICING : undefined
+  if (!metaServices()) return undefined
+  if (engine.provider.mode === 'cloud') return META_GAZETTE_PRICING
+  return { inputPerMTok: 0, outputPerMTok: 0, perSegmentationCall: META_GAZETTE_PRICING.perSegmentationCall }
 }
 
 
@@ -1853,6 +1869,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         concurrency: body.data.concurrency,
         pricing: gazettePricing(),
       })
+      if (metaServices() && engine.provider.mode !== 'cloud') {
+        page.warnings.push(
+          `Zones transcribed by ${engine.provider.models.vision} on ${engine.provider.servedBy}: its token cost is billed by ${engine.provider.servedBy} and not included in the cost shown.`,
+        )
+      }
 
       // The page image is content-addressed and kept with the analysis, so a
       // citation opened months later still resolves to the exact scan.
@@ -2011,13 +2032,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(413).send({ error: 'Audio too large (max 32 MB per recording).' })
     }
 
+    // Muse Voice Transcribe stays on Meta even when Baseten does the reasoning.
+    const meta = metaServices()
     const client =
-      engine.provider.mode === 'cloud' && engine.provider.models.transcription
+      meta?.models.transcription
         ? new MetaAsrClient({
-            baseUrl: engine.provider.baseURL,
-            apiKey: providerAccess(engine.provider).apiKey,
-            headers: providerAccess(engine.provider).headers,
-            model: engine.provider.models.transcription,
+            baseUrl: meta.baseURL,
+            apiKey: providerAccess(meta).apiKey,
+            headers: providerAccess(meta).headers,
+            model: meta.models.transcription,
           })
         : new LocalAsrClient({
             baseUrl: config.transcription.url,

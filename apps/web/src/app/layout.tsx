@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from 'next'
+import { cookies } from 'next/headers'
 import { Inter, Montserrat } from 'next/font/google'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ServiceWorkerRegister } from '@/components/service-worker-register'
 import { ToastProvider } from '@/components/shared/toast'
-import { I18nProvider } from '@/lib/i18n'
+import { I18nProvider, LOCALE_COOKIE, type Locale } from '@/lib/i18n'
 import { AuthProvider } from '@/lib/auth'
 import {
   DEFAULT_CORNER_STYLE,
@@ -72,7 +73,10 @@ export const viewport: Viewport = {
   ],
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // The language the visitor chose is known to the server: the first HTML already carries it.
+  const cookieStore = await cookies()
+  const lang: Locale = cookieStore.get(LOCALE_COOKIE)?.value === 'fr' ? 'fr' : 'en'
   const bootstrap = buildChromeBootstrapScript({
     themeStorageKey: THEME_PACK_STORAGE_KEY,
     modeStorageKey: MODE_STORAGE_KEY,
@@ -83,7 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   })
 
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${montserrat.variable}`}>
+    <html lang={lang} suppressHydrationWarning className={`${inter.variable} ${montserrat.variable}`}>
       <head>
         {/*
           Pre-paint: the bootstrap script sets `data-theme-pack` / `.dark` on
@@ -97,7 +101,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
-          <I18nProvider>
+          <I18nProvider initialLocale={lang}>
             <ToastProvider>
               <AuthProvider>{children}</AuthProvider>
             </ToastProvider>

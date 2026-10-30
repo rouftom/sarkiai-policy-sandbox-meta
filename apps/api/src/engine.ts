@@ -129,6 +129,12 @@ export function createEngine() {
      * active, so the operator can always switch back to a Meta model.
      */
     catalogMode: provider.mode,
+    /**
+     * The deployment's own provider, independent of the chat model in use. Meta-only
+     * services (SAM 3.1, Muse Voice Transcribe) read their endpoint and key from
+     * here, so they keep running when Muse Spark Open on Baseten does the reasoning.
+     */
+    catalogProvider: provider,
     /** Point the engine at a model id of the catalogue. Rebuilds the model stack. */
     useModel(modelId: string): ProviderDescriptor {
       if (provider.mode !== 'cloud') return engine.provider

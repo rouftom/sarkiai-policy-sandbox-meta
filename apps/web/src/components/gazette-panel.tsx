@@ -15,11 +15,27 @@
 import * as React from 'react'
 import { Check, FileScan, Plus, X } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@sps/ui'
-import { api, type GazetteBoxDto, type GazettePageDto } from '@/lib/api'
+import { api, type GazetteBoxDto, type GazettePageDto, type ImpactAnalysisDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { ProcessingBar } from '@/components/processing-bar'
 
 const SAMPLE_URL = '/samples/gazette-p1.png'
+
+/** The impact route accepts at most 20 run ids. */
+const MAX_IMPACT_RUNS = 20
+
+interface IngestedProvision {
+  title: string
+  text: string
+  articleNumber?: string
+}
+
+const SEVERITY_STYLE: Record<ImpactAnalysisDto['findings'][number]['severity'], string> = {
+  low: 'border-border bg-muted/40',
+  medium: 'border-amber-500/40 bg-amber-500/10',
+  high: 'border-orange-500/50 bg-orange-500/10',
+  critical: 'border-rose-500/50 bg-rose-500/10',
+}
 
 interface Source {
   filename: string
@@ -66,6 +82,11 @@ export function GazettePanel({ country }: { country: string }) {
   const [ingesting, setIngesting] = React.useState(false)
   const [toast, setToast] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+  // N7: the provision just added to the corpus, and its impact on open runs.
+  const [ingested, setIngested] = React.useState<IngestedProvision | null>(null)
+  const [impact, setImpact] = React.useState<ImpactAnalysisDto | null>(null)
+  const [impactBusy, setImpactBusy] = React.useState(false)
+  const [impactNote, setImpactNote] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (!toast) return
@@ -132,6 +153,17 @@ export function GazettePanel({ country }: { country: string }) {
         namespace: 'gazette',
       })
       setToast(t('gazette.ingested', { zones: result.zones, chunks: result.chunksInserted, page: result.page }))
+      // Keep the provision so its impact on open incidents can be analysed (N7).
+      const regions = page.regions.filter((region) => !region.blank && !region.skipped && region.text.trim())
+      setIngested({
+        title: `${page.filename} · p. ${page.page}`,
+        text: regions.map((region) => region.text.trim()).join('\n\n').slice(0, 20_000),
+        ...(regions.find((region) => region.articleNumber)?.articleNumber
+          ? { articleNumber: regions.find((region) => region.articleNumber)!.articleNumber }
+          : {}),
+      })
+      setImpact(null)
+      setImpactNote(null)
       // Done: the next page starts from an empty panel.
       setSource(null)
       reset()
@@ -139,6 +171,36 @@ export function GazettePanel({ country }: { country: string }) {
       setError((cause as Error).message)
     } finally {
       setIngesting(false)
+    }
+  }
+
+  const analyzeImpact = async () => {
+    if (!ingested) return
+    setImpactBusy(true)
+    setImpactNote(null)
+    setImpact(null)
+    try {
+      const { runs } = await api.scenarioRuns()
+      const runIds = runs
+        .filter((run) => run.status !== 'failed' && run.released > 0)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, MAX_IMPACT_RUNS)
+        .map((run) => run.id)
+      if (runIds.length === 0) {
+        setImpactNote(t('impact.noRuns'))
+        return
+      }
+      const result = await api.analyzeImpact({
+        provision: { ...ingested, docType: 'regulation' },
+        runIds,
+      })
+      setImpact(result)
+      if (result.findings.length === 0) setImpactNote(t('impact.none'))
+    } catch (cause) {
+      const message = (cause as Error).message
+      setImpactNote(/no persisted reports/i.test(message) ? t('impact.noRuns') : message)
+    } finally {
+      setImpactBusy(false)
     }
   }
 
@@ -340,6 +402,63 @@ export function GazettePanel({ country }: { country: string }) {
         )}
 
         {!source && !page && !busy && <p className="text-xs text-muted-foreground">{t('gazette.empty')}</p>}
+
+        {ingested && (
+          <section className="space-y-2 rounded-xl border border-border p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-xs font-semibold">{t('impact.title')}</h3>
+              <span className="max-w-[18rem] truncate text-[11px] text-muted-foreground" title={ingested.title}>
+                {ingested.title}
+              </span>
+              <Button size="sm" className="ml-auto" onClick={() => void analyzeImpact()} disabled={impactBusy}>
+                {impactBusy ? t('impact.analyzing') : t('impact.analyze')}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{t('impact.hint')}</p>
+            {impactBusy && <ProcessingBar label={t('impact.analyzing')} />}
+            {impactNote && <p className="text-xs text-muted-foreground">{impactNote}</p>}
+            {impact && (
+              <div className="space-y-2">
+                <p className="text-xs">{impact.summary}</p>
+                {impact.findings.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {impact.findings.map((finding) => (
+                      <li key={finding.runId} className={cn('rounded-xl border p-2 text-[11px]', SEVERITY_STYLE[finding.severity])}>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-[10px]">{finding.runId}</span>
+                          <span className="rounded bg-background/60 px-1 text-[10px] font-semibold">
+                            {t(`impact.severity.${finding.severity}` as 'impact.severity.low')}
+                          </span>
+                          {finding.affectedArticles.length > 0 && (
+                            <span className="text-[10px] text-muted-foreground">{finding.affectedArticles.join(', ')}</span>
+                          )}
+                        </div>
+                        <p className="mt-1">{finding.reason}</p>
+                        <p className="mt-1">
+                          <strong>{t('impact.action')}</strong> · {finding.action}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {impact.deadlineChanges.length > 0 && (
+                  <div className="text-[11px]">
+                    <strong>{t('impact.deadlines')}</strong>
+                    <ul className="mt-0.5 list-disc pl-4">
+                      {impact.deadlineChanges.map((change, index) => (
+                        <li key={index}>{change}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  {t('impact.unaffected', { count: impact.unaffectedRunIds.length })} ·{' '}
+                  {t('impact.model', { model: impact.model })}
+                </p>
+              </div>
+            )}
+          </section>
+        )}
       </CardContent>
     </Card>
   )

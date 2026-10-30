@@ -10,7 +10,7 @@ profiles.
 
 | Component | Disk | RAM/VRAM warm | CPU | Optional |
 |-----------|------|---------------|-----|----------|
-| **Ollama: qwen3.5:9b** (Q4, multimodal) | **~6.6 GB** | **~8–10 GB** | yes | no (default LLM) |
+| **Ollama: qwen3.5:9b** (Q4, multimodal) | **~6.6 GB** | **~8–10 GB** | yes | no (light alternative to Muse Glimmer) |
 | Ollama: qwen2.5:14b (Q4, text) | ~9 GB | ~11–16 GB | yes | alternative |
 | Ollama: qwen2.5:7b (Q4) | ~5 GB | ~6–8 GB | yes | light alternative |
 | Ollama: Muse Glimmer 30B (sovereign) | ~18–20 GB | ~24–32 GB | yes | alternative |

@@ -8,7 +8,7 @@ validator, gap engine and audit chain sit on top.
 |------|-----------|-----------|-----------------------------|
 | `cloud` | Meta Model API (Muse Spark 1.1, 1.2 and 1.3, Muse Wonder 1.0 selectable; default the newest Muse Spark), with SAM 3.1 for gazette vision and Muse Voice Transcribe for voice notes | Voyage embeddings + MongoDB Atlas Vector Search | prompts, retrieved passages, answers, audio |
 | `sovereign` | Muse Glimmer 30B on Ollama, open weights | `bge-m3` + Qdrant | nothing |
-| `local` | any Ollama model (`qwen3.5:9b` by default) | `bge-m3` + Qdrant | nothing |
+| `local` | any Ollama model (Muse Glimmer by default) | `bge-m3` + Qdrant | nothing |
 
 The mode is a single environment variable (`SANDBOX_MODE`), recorded in the audit
 chain as `provider.switched`, and each chain-of-thought step names the mode and
@@ -92,7 +92,7 @@ Three modes, one engine, one switch:
 |---------|----------|
 | `cloud` | Meta Model API for reasoning, vision and voice; Voyage `voyage-4` + `rerank-2` with Atlas Vector Search. Used by the public demo. |
 | `sovereign` | **Muse Glimmer 30B** on Ollama: same behaviour, nothing leaves the host |
-| `local` | `qwen3.5:9b` (or any Ollama model) for development and air-gapped demos |
+| `local` | Muse Glimmer by default (or any Ollama model, e.g. `qwen3.5:9b` on small machines) for development and air-gapped demos |
 | Reranking | provider reranker in `cloud`; TEI locally, or plain RRF |
 | Persistence | Mongo for audit and traces; Qdrant in local modes, Atlas chunks in cloud |
 | Fine-tuning | local LoRA/QLoRA, documented in [`LOCAL-FIRST-PLAN.md`](LOCAL-FIRST-PLAN.md) |

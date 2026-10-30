@@ -38,7 +38,7 @@ export function createModel(config: ModelConfig = {}): LanguageModel {
 function explicitLocal(config: ModelConfig): ProviderDescriptor {
   const base = (config.baseURL ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/$/, '')
   const baseURL = base.endsWith('/v1') ? base : `${base}/v1`
-  const model = config.model ?? process.env.OLLAMA_MODEL ?? 'qwen3.5:9b'
+  const model = config.model ?? process.env.OLLAMA_MODEL ?? 'muse-glimmer'
   return {
     mode: 'local',
     label: 'Local',

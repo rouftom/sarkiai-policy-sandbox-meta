@@ -137,7 +137,7 @@ services:
       MONGODB_DB_NAME: ${MONGODB_DB_NAME:-policy_sandbox}
       INGESTION_URL: http://ingestion:8000
       OLLAMA_BASE_URL: ${OLLAMA_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3.5:9b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-muse-glimmer}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-bge-m3}
       RERANK_URL: ${RERANK_URL:-}
       RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3}

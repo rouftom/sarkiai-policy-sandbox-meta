@@ -28,11 +28,27 @@ It runs on **Meta models**, in three interchangeable provider modes:
   `muse-spark-1.3`) and `muse-wonder-1.0`, all listed by the key itself and selectable from the
   assistant's **+ menu**. The default is the newest `muse-spark-<version>` the key lists (`muse-spark-1.3`
   today); contributor builds are never the default. Also `sam-3.1` for scanned-gazette segmentation,
-  `muse-voice-transcribe-1.0` for WhatsApp voice notes. Retrieval runs on **Voyage** embeddings +
-  **MongoDB Atlas** Vector Search.
+  `muse-voice-transcribe-1.0` for voice notes. Retrieval runs on **Voyage** embeddings and
+  reranking over **MongoDB Atlas**: Meta publishes neither an embedding nor a reranking model, so
+  `voyage-4` and `rerank-2` are the only non-Meta models in the pipeline. They produce no text and take
+  no decision; every reasoning, vision, segmentation and speech step runs on Meta. See
+  [Why Voyage](#why-voyage-for-retrieval).
 - **sovereign**: **Muse Glimmer** (30B, Apache-2.0) served locally by Ollama: same engine, no data
   leaving the institution, retrieval stays on `bge-m3` + Qdrant.
-- **local**: any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
+- **local**: any Ollama-served model, **Muse Glimmer by default** (+ `bge-m3` embeddings), for offline
+  development. On a machine without ~32 GB of VRAM, set `OLLAMA_MODEL` to a lighter model (e.g. `qwen3.5:9b`).
+
+### Open weights: where they run and what they do
+
+- **Muse Spark Open** (`meta-models/muse-spark-open-1026`) runs on **Baseten**. Pick it in the console's
+  model menu (or set `SANDBOX_MODE=sovereign` with `BASETEN_API_KEY`) and it takes over **all reasoning**:
+  mandated agents, coordinator, citation retries, impact analysis and exercise narrative. The audit chain
+  records the model id of every step.
+- **Muse Glimmer** (30B, Apache-2.0) runs on the institution's own hardware through Ollama (`make glimmer`)
+  and is the default model of the `local` mode: same reasoning, nothing leaves the machine.
+- SAM 3.1 and Muse Voice Transcribe stay on the Meta Model API in every mode.
+
+What was built during the hackathon, with commits and times: [`HACKATHON.md`](HACKATHON.md).
 
 Around the incident run, the sandbox also rehearses the team (**timed crisis
 injects with a deterministic after-action score**) and can notify focal points
@@ -60,15 +76,17 @@ The public deployment has two ways in: create your own operator account, or use 
 
 ### A look at the console
 
-| Countries & sectors registry | Crisis simulation |
-|---|---|
-| ![Countries and sectors registry, with search, funnel filter, pagination and the country flag](docs/screenshots/countries.png) | ![Crisis scenario process graph with mandated agents and a joint report](docs/screenshots/crisis-scenarios.png) |
+Screens built during the hackathon:
 
-| AI-readiness assessment | In-app operations handbook |
+| Scanned gazette: columns, zones and per-zone transcription | Incident audit trail |
 |---|---|
-| ![AI-readiness process graph with 13 dimensions scored by agents](docs/screenshots/readiness-agent-workflow.png) | ![Guide: taking-over runbooks, four pages](docs/screenshots/guide.png) |
+| ![Scanned gazette page segmented into columns and zones, each zone transcribed by the vision model](docs/screenshots/gazette.png) | ![Audit trail: hash-chained log of operator and engine actions, integrity verified](docs/screenshots/audit-trail.png) |
 
-More screens (audit trail, knowledge graph, notifications, preferences, security) live in [`docs/screenshots/`](docs/screenshots): 1295×812 captures of the hosted app, palette-optimised with ImageMagick.
+| Table-top crisis exercise | WhatsApp and e-mail notifications |
+|---|---|
+| ![Exercise clock with released injects, severity and expected actions](docs/screenshots/excercice.png) | ![Communications: address book and a WhatsApp joint-report message](docs/screenshots/whatsapp-mail-notifications.png) |
+
+More screens (crisis-scenario graph, knowledge graph, countries registry, AI-readiness lens, guide, preferences, security) live in [`docs/screenshots/`](docs/screenshots): 1295-pixel-wide captures of the hosted app, palette-optimised with ImageMagick.
 
 ## One engine, two lenses, three profiles
 
@@ -142,14 +160,15 @@ sarkiai-policy-sandbox/
 > Ollama, no key, nothing leaves the machine), `sovereign` (Muse Glimmer on
 > Ollama, or a hosted open-weight endpoint) or `cloud` (Meta Model API, requires
 > `MODEL_API_KEY`). The badge in the console shows which one is answering.
-> A first local run pulls ~6.6 GB (qwen3.5:9b) + ~1.2 GB (bge-m3).
+> A first local run pulls Muse Glimmer (30B, see `docs/HARDWARE-REQUIREMENTS.md`) + ~1.2 GB (bge-m3).
+> On a smaller machine, set `OLLAMA_MODEL=qwen3.5:9b` (~6.6 GB) before `make models`.
 
 ### Everything at once
 
 ```bash
 cp .env.example .env
 docker compose up --build -d
-make models                # pull qwen3.5:9b + bge-m3 into Ollama
+make models                # pull Muse Glimmer + bge-m3 into Ollama
 ```
 
 Then:
@@ -335,6 +354,26 @@ contract on **MongoDB Atlas**:
 2. `$vectorSearch` and `$search` (BM25, accent-folded analyser) run over
    `kb_chunks`;
 3. the two lists are fused with RRF, then re-scored with **Voyage `rerank-2`**.
+
+#### Why Voyage for retrieval
+
+- **No Meta equivalent.** Meta publishes no embedding model and no reranking
+  model, in the Meta Model API or as open weights. Retrieval needs both.
+- **They rank, they do not answer.** `voyage-4` turns text into vectors and
+  `rerank-2` orders candidate passages. Neither generates text, cites the law or
+  takes a decision. What the agents say, the citations they choose, the conflicts
+  the coordinator flags and every score are produced by Meta models.
+- **The law is checked after retrieval, not trusted to it.** The citation
+  validator compares every quote with the corpus: a poorly ranked passage can
+  cost an answer, never fake one.
+- **Why the reranker earns its place.** Legal questions match many near-identical
+  articles (the same obligation repeated across laws and decrees). Dense + BM25
+  fused with RRF finds them; the cross-encoder puts the applicable article first,
+  so the agents read fewer, better passages and spend fewer Muse Spark tokens.
+- **Swappable.** The corpus contract (`KbChunk`) is backend-neutral: `local` and
+  `sovereign` run on `bge-m3` + Qdrant with RRF, and the same engine works without
+  the reranker (it falls back to RRF if Voyage is unavailable). A Meta embedding
+  model would replace Voyage without touching the agents.
 
 `RETRIEVAL_BACKEND=auto` follows the provider mode (cloud → Atlas, otherwise
 Qdrant). The index definitions live in code

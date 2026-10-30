@@ -139,11 +139,39 @@ export interface AnalyzeGazetteInput {
   deps?: GazetteDeps
 }
 
+/**
+ * SAM 3.1 answers to what an object looks like, not to what it is called: on the
+ * hackathon sample pages "stamp", "seal" and "handwritten signature" found nothing,
+ * while "rectangle", "circle", "handwritten scribble" and "printed table with rows
+ * and columns" found the objects. Each label is therefore asked by its appearance.
+ */
 const ARTIFACT_PROMPTS: Array<{ label: GazetteArtifact['label']; phrase: string }> = [
   { label: 'table', phrase: 'printed table with rows and columns' },
-  { label: 'stamp', phrase: 'official ink stamp or seal' },
-  { label: 'signature', phrase: 'handwritten signature' },
+  { label: 'stamp', phrase: 'rectangle' },
+  { label: 'stamp', phrase: 'circle' },
+  { label: 'signature', phrase: 'handwritten scribble' },
 ]
+
+function iou(a: BBox, b: BBox): number {
+  const overlap = overlapArea(a, b)
+  return overlap > 0 ? overlap / (area(a) + area(b) - overlap) : 0
+}
+
+/**
+ * Several phrases can find the same object: keep one box per object, highest
+ * confidence first. A stamp inside a table is the table's ruled frame, not a stamp.
+ */
+export function mergeDetections(detections: SamDetection[]): SamDetection[] {
+  const sorted = [...detections].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+  const kept: SamDetection[] = []
+  for (const detection of sorted) {
+    if (!kept.some((other) => other.label === detection.label && iou(other.bbox, detection.bbox) >= 0.5)) kept.push(detection)
+  }
+  const tables = kept.filter((detection) => detection.label === 'table')
+  return kept.filter(
+    (detection) => detection.label === 'table' || !tables.some((table) => coverage(detection.bbox, table.bbox) >= 0.6),
+  )
+}
 
 /**
  * Meta Model API list prices at the time of the hackathon:
@@ -246,7 +274,7 @@ export async function analyzeGazettePage(input: AnalyzeGazetteInput): Promise<Ga
         return [] as SamDetection[]
       }
     })
-    artifacts = detections.flat().map((detection, index) => ({
+    artifacts = mergeDetections(detections.flat()).map((detection, index) => ({
       id: `a${index + 1}-${detection.label}`,
       label: detection.label as GazetteArtifact['label'],
       bbox: detection.bbox,
