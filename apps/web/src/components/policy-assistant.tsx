@@ -47,6 +47,7 @@ import { BrandMark } from '@/components/layout/brand-mark'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
 import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
+import { EFFORTS, useAssistantEffort, type AssistantEffort } from '@/lib/assistant-effort'
 import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 
 interface Attachment {
@@ -283,6 +284,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       country,
       domain: sectorOf,
       language: locale === 'fr' ? ('fr' as const) : ('en' as const),
+      ...(effort !== 'auto' ? { effort: effort as Exclude<AssistantEffort, 'auto'> } : {}),
       attachments: payload.length ? payload : undefined,
     }
     try {
@@ -503,14 +505,11 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // Rejects on failure: the confirmation dialog stays open and shows the reason.
   const removeSession = async (id: string) => {
-    try {
-      await deleteChatSession(id)
-      if (id === sessionId) newConversation()
-      await loadSessions()
-    } catch (error) {
-      setActionError((error as Error).message)
-    }
+    await deleteChatSession(id)
+    if (id === sessionId) newConversation()
+    await loadSessions()
   }
 
   const newConversation = () => {
@@ -532,6 +531,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
   const suggestions = [t('assistant.suggest1'), t('assistant.suggest2'), t('assistant.suggest3')]
   const [loader, setLoader] = useStreamLoader()
+  const [effort, setEffort] = useAssistantEffort()
 
   const optionsMenu = (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -566,6 +566,23 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="min-w-0 flex-1 truncate">{t('assistant.effort')}</span>
+            <span className="max-w-[6rem] truncate text-[10px] text-muted-foreground">{t(`assistant.effort.${effort}` as 'assistant.effort.auto')}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuLabel>{t('assistant.effort')}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={effort} onValueChange={(value) => setEffort(value as AssistantEffort)}>
+              {EFFORTS.map((value) => (
+                <DropdownMenuRadioItem key={value} value={value}>
+                  <span className="truncate">{t(`assistant.effort.${value}` as 'assistant.effort.auto')}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
@@ -690,6 +707,22 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           <p className="shrink-0 text-[12px] font-semibold text-foreground">{t('assistant.title')}</p>
         </div>
         <TooltipProvider>
+          {(turns.length > 0 || historyOpen) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('assistant.newChat')}
+                  onClick={newConversation}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('assistant.newChat')}</TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -723,7 +756,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             loading={sessionsLoading}
             activeId={sessionId}
             onOpen={(id) => void openSession(id)}
-            onDelete={(id) => void removeSession(id)}
+            onDelete={removeSession}
           />
         ) : sessionLoading ? (
           <ConversationShimmer />

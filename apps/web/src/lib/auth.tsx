@@ -25,6 +25,7 @@ import {
   type VerificationDto,
 } from './api'
 import { clearSession, readSession, readToken, writeSession } from './session'
+import { useI18n } from './i18n'
 
 interface AuthContextValue {
   operator: OperatorDto | null
@@ -61,8 +62,16 @@ function sessionFrom(dto: SessionDto): void {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const { locale, setLocale } = useI18n()
   const [operator, setOperator] = React.useState<OperatorDto | null>(null)
   const [loading, setLoading] = React.useState(true)
+
+  // The language saved on the profile follows the operator to every device.
+  const savedLocale = operator?.preferences?.locale
+  React.useEffect(() => {
+    if (savedLocale && savedLocale !== locale) setLocale(savedLocale)
+    // Only when the saved value changes: the header saves its choice to the profile itself.
+  }, [savedLocale])
   const [pending, setPending] = React.useState<AuthContextValue['pending']>(null)
   const [verificationEmail, setVerificationEmailState] = React.useState<string | null>(null)
 

@@ -187,10 +187,10 @@ export const config = {
     url: env('TRANSCRIPTION_URL', 'http://localhost:8003'),
   },
 
-  // Local LLM (Ollama, OpenAI-compatible). qwen3.5:9b is multimodal (text+image).
+  // Local LLM (Ollama, OpenAI-compatible). Muse Glimmer (Meta open weights) by default.
   ollama: {
     baseUrl: env('OLLAMA_BASE_URL', 'http://localhost:11434'),
-    model: env('OLLAMA_MODEL', 'qwen3.5:9b'),
+    model: env('OLLAMA_MODEL', 'muse-glimmer'),
   },
 
   // Local embeddings (Ollama).

@@ -15,7 +15,9 @@ import { useI18n } from '@/lib/i18n'
 import type { ActionRecord, ActionStatus } from '@/lib/agent-ui'
 import { ACTION_KIND_KEY, ACTION_RISK_KEY, ACTION_RISK_TONE, ACTION_STATUS_KEY } from './approval-card'
 
-const STATUS_FILTERS: ActionStatus[] = ['pending', 'approved', 'rejected', 'executed', 'failed']
+// An approved action runs at once and becomes "executed": the approved tab shows both.
+const STATUS_FILTERS: ActionStatus[] = ['pending', 'approved', 'rejected', 'failed']
+const STATUSES_OF_FILTER: Partial<Record<ActionStatus, ActionStatus[]>> = { approved: ['approved', 'executed'] }
 
 const STATUS_ICON: Record<ActionStatus | 'all', TabItem['icon']> = {
   all: ListChecks,
@@ -60,7 +62,7 @@ export function ActionCenter({ actions, loading = false, onDecide, onRefresh, on
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return actions.filter((action) => {
-      if (filter !== 'all' && action.status !== filter) return false
+      if (filter !== 'all' && !(STATUSES_OF_FILTER[filter] ?? [filter]).includes(action.status)) return false
       if (!needle) return true
       return [action.title, action.summary, t(ACTION_KIND_KEY[action.kind])].some((text) =>
         text.toLowerCase().includes(needle),

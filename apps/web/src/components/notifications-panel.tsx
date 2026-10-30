@@ -15,7 +15,7 @@ import {
   Feather,
   Loader,
   Mail,
-  Smartphone,
+  MessageCircle,
   Pencil,
   Plus,
   Send,
@@ -392,7 +392,7 @@ export function NotificationsPanel({ country }: { country: string }) {
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {value === 'whatsapp' ? <Smartphone className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}
+                  {value === 'whatsapp' ? <MessageCircle className="h-3.5 w-3.5" /> : <Mail className="h-3.5 w-3.5" />}
                   {t(`notify.channel.${value}` as 'notify.channel.email')}
                 </button>
               ))}

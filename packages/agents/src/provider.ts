@@ -5,8 +5,9 @@
  *              (segmentation), Muse Voice Transcribe (speech).
  *   sovereign  Muse Glimmer (30B, Apache-2.0) served on-premise by Ollama, or a
  *              hosted open-weight provider (Baseten / Modal).
- *   local      any Ollama-served model (qwen3.5:9b + bge-m3 embeddings) for
- *              offline development.
+ *   local      any Ollama-served model, Muse Glimmer by default (+ bge-m3
+ *              embeddings), for offline development. Set OLLAMA_MODEL to a
+ *              lighter model (e.g. qwen3.5:9b) on machines without 32 GB of VRAM.
  *
  * The mode is a configuration decision (`SANDBOX_MODE`), never a code path:
  * every agent, the coordinator and the readiness engine receive the same
@@ -17,6 +18,12 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModel } from 'ai'
 import type { ProviderDescriptor, ProviderMode } from '@sps/shared'
+
+/** Muse Spark open weights on Baseten: the model id the hackathon requires. */
+export const BASETEN_DEFAULT_MODEL = 'meta-models/muse-spark-open-1026'
+
+/** Default Ollama model for `local`: Muse Glimmer, Meta's open-weight model. */
+export const LOCAL_DEFAULT_MODEL = 'muse-glimmer'
 
 export const PROVIDER_MODES: readonly ProviderMode[] = ['cloud', 'sovereign', 'local'] as const
 
@@ -94,7 +101,7 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
   }
 
   if (mode === 'sovereign') {
-    // Preference order: Ollama on-premise, then a hosted open-weight provider.
+    // Resolution order: Modal endpoint, then Baseten, then Ollama on-premise.
     const modalUrl = env(source, 'MODAL_ENDPOINT_URL')
     const basetenKey = env(source, 'BASETEN_API_KEY')
     const model = env(source, 'MUSE_GLIMMER_MODEL', 'muse-glimmer')
@@ -119,7 +126,11 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
         label: PROVIDER_LABELS.sovereign,
         servedBy: 'Baseten',
         baseURL: withV1(env(source, 'BASETEN_BASE_URL', 'https://inference.baseten.co/v1')),
-        models: { reasoning: env(source, 'BASETEN_MODEL', model), vision: env(source, 'BASETEN_MODEL', model), embedding },
+        models: {
+          reasoning: env(source, 'BASETEN_MODEL', BASETEN_DEFAULT_MODEL),
+          vision: env(source, 'BASETEN_MODEL', BASETEN_DEFAULT_MODEL),
+          embedding,
+        },
         residency: 'cloud',
         openWeights: true,
         budgetUsd,
@@ -146,8 +157,8 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
     servedBy: 'Ollama',
     baseURL: withV1(env(source, 'OLLAMA_BASE_URL', 'http://localhost:11434')),
     models: {
-      reasoning: env(source, 'OLLAMA_MODEL', 'qwen3.5:9b'),
-      vision: env(source, 'OLLAMA_MODEL', 'qwen3.5:9b'),
+      reasoning: env(source, 'OLLAMA_MODEL', LOCAL_DEFAULT_MODEL),
+      vision: env(source, 'OLLAMA_MODEL', LOCAL_DEFAULT_MODEL),
       embedding,
     },
     residency: 'on-premise',
@@ -155,6 +166,53 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
     budgetUsd: 0,
     ready: true,
   }
+}
+
+
+/**
+ * Muse Spark open weights hosted on Baseten, offered next to the Meta models
+ * when `BASETEN_API_KEY` is set. Null without a key: the option does not exist.
+ */
+export function basetenProvider(source: Env = process.env): ProviderDescriptor | null {
+  if (!env(source, 'BASETEN_API_KEY')) return null
+  const model = env(source, 'BASETEN_MODEL', BASETEN_DEFAULT_MODEL)
+  return {
+    mode: 'sovereign',
+    label: PROVIDER_LABELS.sovereign,
+    servedBy: 'Baseten',
+    baseURL: withV1(env(source, 'BASETEN_BASE_URL', 'https://inference.baseten.co/v1')),
+    models: { reasoning: model, vision: model, embedding: env(source, 'EMBEDDING_MODEL', 'bge-m3') },
+    residency: 'cloud',
+    openWeights: true,
+    budgetUsd: Number(env(source, 'RUN_BUDGET_USD', '0')) || 0,
+    ready: true,
+  }
+}
+
+/**
+ * The Baseten entry of the model list. Its metadata is read from Baseten's own
+ * `GET /models` when that answers; otherwise the configured id is listed as is.
+ */
+export async function listBasetenModels(
+  source: Env = process.env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ProviderModelInfo[]> {
+  const descriptor = basetenProvider(source)
+  if (!descriptor) return []
+  const configured = descriptor.models.reasoning
+  try {
+    const response = await fetchImpl(`${descriptor.baseURL.replace(/\/+$/, '')}/models`, {
+      headers: { Authorization: `Bearer ${providerApiKey(descriptor, source)}` },
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (response.ok) {
+      const found = eligibleChatModels(await response.json()).find((entry) => entry.id === configured)
+      if (found) return [{ ...found, ownedBy: 'Baseten' }]
+    }
+  } catch {
+    // Unreachable right now: the configured id is still offered, and a failing call says why.
+  }
+  return [{ id: configured, ownedBy: 'Baseten' }]
 }
 
 /** API key for a descriptor · read at call time, never stored in the descriptor. */

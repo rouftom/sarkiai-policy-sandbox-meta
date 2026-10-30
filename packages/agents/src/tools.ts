@@ -14,7 +14,7 @@ import type { Retriever } from '@sps/retrieval'
 import type { KbChunk } from '@sps/shared'
 import type { WebAnswer, WebSearch } from './web-search'
 
-export type AgentActionKind = 'whatsapp_approval' | 'publish_communication' | 'record_gap' | 'request_tool'
+export type AgentActionKind = 'whatsapp_approval' | 'publish_communication' | 'record_gap' | 'request_tool' | 'delete_record'
 export type AgentActionRisk = 'low' | 'medium' | 'high'
 
 /** Stream events produced by the tools (forwarded to the console as SSE frames). */
@@ -35,6 +35,29 @@ export type AgentToolEvent =
         | { kind: 'approval'; id: string; action: AgentActionKind; title: string; summary: string; risk: AgentActionRisk; payload?: Record<string, unknown> }
         | { kind: 'mcp_app'; id: string; server: string; resourceUri: string; toolName: string; toolInput: Record<string, unknown>; toolResult: unknown }
     }
+
+/** Entities the agent can read through `list_records` and `get_record`. */
+export const DATA_ENTITIES = [
+  'readiness_runs',
+  'scenario_runs',
+  'exercise_reports',
+  'chat_sessions',
+  'audit_events',
+  'knowledge_documents',
+  'countries',
+] as const
+export type DataEntity = (typeof DATA_ENTITIES)[number]
+
+/** Records the agent may propose to delete. Deletion always waits for the operator. */
+export const DELETABLE_ENTITIES = ['readiness_runs', 'scenario_runs', 'chat_sessions'] as const
+export type DeletableEntity = (typeof DELETABLE_ENTITIES)[number]
+
+/** What the agent can read and, once approved, delete: scoped to the operator. */
+export interface DataPort {
+  list(entity: DataEntity, options: { limit: number; country?: string; query?: string }): Promise<unknown[]>
+  get(entity: DataEntity, id: string): Promise<unknown | null>
+  remove(entity: DeletableEntity, id: string): Promise<boolean>
+}
 
 /** Where proposed side effects are stored until the operator decides. */
 export interface ActionSink {
@@ -62,6 +85,10 @@ export interface AgentToolContext {
   webSearch?: WebSearch
   /** Receives every web answer, so the assessment can carry its sources. */
   onWebAnswer?: (answer: WebAnswer) => void
+  /** Receives the provisions each corpus search returned, so citations match what was actually read. */
+  onCorpusChunks?: (chunks: KbChunk[]) => void
+  /** Records the agent can read and propose to delete. */
+  data?: DataPort
   emit: (event: AgentToolEvent) => void
 }
 
@@ -104,9 +131,77 @@ export function createAgentTools(ctx: AgentToolContext): ToolSet {
       }),
       execute: async ({ query, topK }) => {
         const chunks = await ctx.retriever.search({ text: query, country: ctx.country, topK: topK ?? 6 })
+        ctx.onCorpusChunks?.(chunks)
         return { count: chunks.length, provisions: chunks.map(provisionOf) }
       },
     }),
+
+    ...(ctx.data
+      ? {
+          list_records: tool({
+            description:
+              'List records of the operator\'s workspace. entity: readiness_runs (AI-readiness assessments), scenario_runs (crisis simulations), exercise_reports (after-action reports), chat_sessions (saved conversations), audit_events (the audit trail, newest first), knowledge_documents (indexed documents), countries (the registry). Use country or query to narrow the list when the question names one.',
+            inputSchema: z.object({
+              entity: z.enum(DATA_ENTITIES),
+              limit: z.number().int().min(1).max(25).optional(),
+              country: z.string().min(2).max(3).optional(),
+              query: z.string().max(120).optional(),
+            }),
+            execute: async ({ entity, limit, country, query }) => {
+              const records = await ctx.data!.list(entity, { limit: limit ?? 10, ...(country ? { country } : {}), ...(query ? { query } : {}) })
+              return clipped({ entity, count: records.length, records })
+            },
+          }),
+
+          get_record: tool({
+            description:
+              'Read one record in full, by id, with the entity names of list_records. Use it to answer a question about a specific assessment, run, report or conversation.',
+            inputSchema: z.object({ entity: z.enum(DATA_ENTITIES), id: z.string().min(1).max(120) }),
+            execute: async ({ entity, id }) => {
+              const record = await ctx.data!.get(entity, id)
+              return record ? clipped({ entity, found: true, record }) : { entity, found: false }
+            },
+          }),
+        }
+      : {}),
+
+    ...(ctx.data && ctx.actions
+      ? {
+          propose_deletion: tool({
+            description:
+              'Propose to delete one record: a readiness assessment, a crisis simulation run or a saved conversation. Only the operator can delete: the card waits for approval, and you must say the deletion is pending, never done.',
+            inputSchema: z.object({
+              entity: z.enum(DELETABLE_ENTITIES),
+              id: z.string().min(1).max(120),
+              reason: z.string().min(5).max(300),
+            }),
+            execute: async (input) => {
+              const { id: actionId } = await ctx.actions!.propose({
+                kind: 'delete_record',
+                title: `Delete ${input.entity} ${input.id}`,
+                summary: input.reason,
+                risk: 'high',
+                payload: { entity: input.entity, id: input.id },
+                runId: ctx.runId,
+                ...(ctx.userId ? { userId: ctx.userId } : {}),
+              })
+              ctx.emit({
+                type: 'ui',
+                ui: {
+                  kind: 'approval',
+                  id: actionId,
+                  action: 'delete_record',
+                  title: `Delete ${input.entity} ${input.id}`,
+                  summary: input.reason,
+                  risk: 'high',
+                  payload: { entity: input.entity, id: input.id },
+                },
+              })
+              return { status: 'pending_approval', actionId }
+            },
+          }),
+        }
+      : {}),
 
     ...(ctx.webSearch
       ? {
@@ -129,21 +224,29 @@ export function createAgentTools(ctx: AgentToolContext): ToolSet {
 
     record_gap: tool({
       description:
-        'Record a gap: a question the corpus cannot answer, or a provision that is missing. The gap goes into the audit trail. Nothing is published.',
+        'Propose to record a gap: a question the corpus cannot answer, or a provision that is missing. The gap appears in the action center and enters the audit trail only once the operator approves it.',
       inputSchema: z.object({
         description: z.string().min(5).max(400),
         severity: z.enum(['low', 'medium', 'high', 'critical']),
       }),
       execute: async ({ description, severity }) => {
-        await ctx.audit?.logAction({
-          actor: ctx.institutionId,
-          action: 'gap.recorded',
-          target: `${severity}: ${description}`,
-          lens: 'hybrid',
+        if (!ctx.actions) return { status: 'unavailable', reason: 'No action store on this deployment.' }
+        const risk: AgentActionRisk = severity === 'low' ? 'low' : severity === 'medium' ? 'medium' : 'high'
+        const title = `Gap · ${severity}`
+        const { id } = await ctx.actions.propose({
+          kind: 'record_gap',
+          title,
+          summary: description,
+          risk,
+          payload: { severity, description },
           runId: ctx.runId,
           ...(ctx.userId ? { userId: ctx.userId } : {}),
         })
-        return { recorded: true, severity }
+        ctx.emit({
+          type: 'ui',
+          ui: { kind: 'approval', id, action: 'record_gap', title, summary: description, risk, payload: { severity } },
+        })
+        return { status: 'pending_approval', actionId: id }
       },
     }),
 
@@ -325,6 +428,8 @@ export function summarizeToolInput(name: string, input: unknown): string {
   if (name === 'record_gap') return String(value.severity ?? '')
   if (name === 'mcp_list_tools') return String(value.server ?? '')
   if (name === 'mcp_call_tool') return `${String(value.server ?? '')} · ${String(value.tool ?? '')}`
+  if (name === 'list_records' || name === 'get_record') return `${String(value.entity ?? '')}${value.id ? ` · ${String(value.id)}` : ''}`
+  if (name === 'propose_deletion') return `${String(value.entity ?? '')} · ${String(value.id ?? '')}`
   if (name === 'request_approval' || name === 'request_input' || name === 'ask_user') return String(value.question ?? value.label ?? value.title ?? '')
   return ''
 }

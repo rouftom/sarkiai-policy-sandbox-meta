@@ -338,7 +338,8 @@ export class AtlasIngestor {
     const [documents, images, rows] = await Promise.all([
       this.listDocuments({ query: filename, limit: 200, includeRetired: true }),
       this.listImages(filename),
-      (await this.chunks()).find({ filename }).sort({ chunkIndex: 1 }).limit(400).toArray(),
+      // Every passage of the document: a long policy has more than a few hundred.
+      (await this.chunks()).find({ filename }).sort({ chunkIndex: 1 }).limit(10_000).toArray(),
     ])
     const document = documents.find((entry) => entry.filename === filename) ?? null
     const chunks = rows.map((row) => ({
@@ -349,7 +350,8 @@ export class AtlasIngestor {
       ...(row.articleNumber ? { articleNumber: String(row.articleNumber) } : {}),
       images,
     }))
-    const selected = chunkIndex === undefined ? 0 : Math.max(0, chunks.findIndex((chunk) => chunk.chunkIndex === chunkIndex))
+    // -1 when the requested passage is not in the document: never a silent jump to the first one.
+    const selected = chunkIndex === undefined ? 0 : chunks.findIndex((chunk) => chunk.chunkIndex === chunkIndex)
     return { document, chunks, images, selected }
   }
 

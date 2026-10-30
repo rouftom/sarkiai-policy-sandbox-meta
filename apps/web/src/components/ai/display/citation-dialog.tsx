@@ -41,10 +41,17 @@ export function highlightRanges(passage: string, quote: string): Array<{ text: s
   return [{ text: passage, hit: false }]
 }
 
+/** Where the cited passage sits in the document, or -1 when it is not there: never a silent jump to the first one. */
+export function locatePassage(chunks: Array<{ chunkIndex: number }>, chunkIndex: number | undefined): number {
+  if (chunkIndex === undefined) return -1
+  return chunks.findIndex((chunk) => chunk.chunkIndex === chunkIndex)
+}
+
 export function CitationDialog({ citation, onClose }: { citation: CitationView | null; onClose: () => void }) {
   const { t } = useI18n()
   const [index, setIndex] = React.useState<number | undefined>(citation?.chunkIndex)
-  const [preview, setPreview] = React.useState<KbPreviewDto | null>(null)
+  // The whole document is loaded once per file: moving between its passages is local and instant.
+  const [loaded, setLoaded] = React.useState<{ filename: string; data: KbPreviewDto } | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [failure, setFailure] = React.useState<string | null>(null)
   const [figure, setFigure] = React.useState<KbImageDto | null>(null)
@@ -54,15 +61,17 @@ export function CitationDialog({ citation, onClose }: { citation: CitationView |
     setFigure(null)
   }, [citation])
 
+  const filename = citation?.filename
   React.useEffect(() => {
-    if (!citation) return
+    if (!filename) return
+    if (loaded?.filename === filename) return
     let cancelled = false
     setLoading(true)
     setFailure(null)
     knowledgeApi
-      .preview(citation.filename, index)
+      .preview(filename)
       .then((result) => {
-        if (!cancelled) setPreview(result)
+        if (!cancelled) setLoaded({ filename, data: result })
       })
       .catch((caught) => {
         if (!cancelled) setFailure(caught instanceof Error ? caught.message : String(caught))
@@ -73,10 +82,16 @@ export function CitationDialog({ citation, onClose }: { citation: CitationView |
     return () => {
       cancelled = true
     }
-  }, [citation, index])
+    // Keyed by the filename: the cached copy is reused when only the passage changes.
+  }, [filename])
 
-  const passage = preview?.chunks[preview.selected] ?? null
-  const passageText = passage?.text ?? citation?.quote ?? ''
+  const preview = loaded && loaded.filename === filename ? loaded.data : null
+  // Position of the cited passage in the document; -1 when it is not there (the cited excerpt is shown instead).
+  const selected = preview ? locatePassage(preview.chunks, index) : -1
+  const passage = preview && selected >= 0 ? (preview.chunks[selected] ?? null) : null
+  // The full passage when the document has it; otherwise the excerpt the answer cited, never a blank.
+  const passageText = passage?.text?.trim() ? passage.text : (citation?.quote ?? '')
+  const excerptOnly = !!preview && !passage
   const parts = highlightRanges(passageText, citation?.quote ?? '')
   const figures = React.useMemo(() => {
     const seen = new Map<string, KbImageDto>()
@@ -84,9 +99,8 @@ export function CitationDialog({ citation, onClose }: { citation: CitationView |
     return [...seen.values()]
   }, [citation, preview])
 
-  const position = preview && passage ? preview.selected : -1
   const neighbour = (delta: number) => {
-    const next = preview?.chunks[position + delta]
+    const next = preview?.chunks[selected + delta]
     if (next) setIndex(next.chunkIndex)
   }
 
@@ -113,6 +127,7 @@ export function CitationDialog({ citation, onClose }: { citation: CitationView |
           {citation && (
             <div className="space-y-2">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('citation.passage')}</p>
+              {excerptOnly && <p className="text-[10px] text-muted-foreground">{t('citation.excerptOnly')}</p>}
               <p className="whitespace-pre-wrap rounded-xl border border-border bg-card p-4 text-[12px] leading-relaxed text-foreground">
                 {parts.map((part, i) =>
                   part.hit ? (
@@ -126,16 +141,16 @@ export function CitationDialog({ citation, onClose }: { citation: CitationView |
               </p>
               {preview && preview.chunks.length > 1 && (
                 <div className="flex items-center justify-between gap-2">
-                  <Button variant="ghost" size="sm" disabled={position <= 0} onClick={() => neighbour(-1)} aria-label={t('citation.previous')}>
+                  <Button variant="ghost" size="sm" disabled={selected <= 0} onClick={() => neighbour(-1)} aria-label={t('citation.previous')}>
                     <ChevronLeft className="h-3.5 w-3.5" /> {t('citation.previous')}
                   </Button>
                   <span className="text-[10px] text-muted-foreground">
-                    {position + 1} / {preview.chunks.length}
+                    {selected + 1} / {preview.chunks.length}
                   </span>
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled={position < 0 || position >= preview.chunks.length - 1}
+                    disabled={selected < 0 || selected >= preview.chunks.length - 1}
                     onClick={() => neighbour(1)}
                     aria-label={t('citation.next')}
                   >

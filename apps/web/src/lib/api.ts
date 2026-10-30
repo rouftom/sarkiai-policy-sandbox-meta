@@ -820,6 +820,8 @@ async function streamAgentAnswer(
     lens?: string
     /** The language of the answer (the console's). */
     language?: 'fr' | 'en'
+    /** Reasoning effort; absent means the provider decides. */
+    effort?: 'minimal' | 'low' | 'medium' | 'high'
     attachments?: Array<{ mime: string; dataBase64: string }>
   },
   handlers: AgentStreamHandlers = {},

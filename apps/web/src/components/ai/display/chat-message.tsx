@@ -19,6 +19,7 @@ import { useI18n } from '@/lib/i18n'
 import type { AssessmentDto } from '@/lib/api'
 import { CitationDialog, type CitationView } from '@/components/ai/display/citation-dialog'
 import { StreamLoader } from '@/components/ai/display/stream-loaders'
+import { StreamLink } from '@/components/ai/display/stream-link'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 
 export interface ChatTurn {
@@ -108,7 +109,7 @@ export function ChatMessage({
       )}
 
       {turn.steps && turn.steps.length > 0 && (
-        <div className="w-full">
+        <div className={cn('w-full', turn.active && 'relative pb-7')}>
           <AgentActivityTrail
             steps={turn.steps}
             isStreaming={!!turn.active}
@@ -116,6 +117,7 @@ export function ChatMessage({
             endedAt={turn.endedAt}
             headerLabel={t('assistant.trail.header')}
           />
+          {turn.active && <StreamLink />}
         </div>
       )}
 
@@ -123,7 +125,7 @@ export function ChatMessage({
         <div className="min-w-0 break-words bg-transparent text-xs font-medium text-foreground sm:text-[13px]">
           {hasText && <AnimatedTextCompletion isLast={isLast} text={turn.content} isStreaming={!!turn.active} />}
 
-          {turn.active && (
+          {turn.active && !(turn.steps && turn.steps.length > 0) && (
             <div className="mt-3">
               <StreamLoader />
             </div>

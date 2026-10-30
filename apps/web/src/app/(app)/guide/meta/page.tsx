@@ -41,12 +41,12 @@ export default function GuideMetaPage() {
             {
               a: fr ? 'Raisonnement et chat' : 'Reasoning and chat',
               b: fr ? 'Évaluation, coordination, what-if, rédaction des brouillons, assistant.' : 'Assessment, coordination, what-if, draft writing, assistant.',
-              c: 'muse-spark-1.3-contributor',
+              c: 'muse-spark-1.3 (default) · 1.1, 1.2, muse-wonder-1.0',
             },
             {
               a: fr ? 'Vision' : 'Vision',
               b: fr ? 'Transcription des zones du journal officiel scanné.' : 'Zone transcription of the scanned gazette.',
-              c: 'muse-spark-1.3-contributor',
+              c: 'muse-spark-1.3',
             },
             {
               a: 'SAM',

@@ -26,11 +26,11 @@ up-qdrant: ## Launch only Qdrant (vector KB)
 up-ollama: ## Launch only Ollama (local LLM + embeddings)
 	$(COMPOSE) up -d ollama
 
-models: ## Pull the local models (qwen3.5:9b + bge-m3)
+models: ## Pull the local models (Muse Glimmer + bge-m3)
 	$(COMPOSE) up -d ollama
 	@echo "Waiting for Ollama..."
 	@until $(COMPOSE) exec -T ollama ollama list >/dev/null 2>&1; do sleep 2; done
-	$(COMPOSE) exec -T ollama ollama pull $${OLLAMA_MODEL:-qwen3.5:9b}
+	$(COMPOSE) exec -T ollama ollama pull $${OLLAMA_MODEL:-muse-glimmer}
 	$(COMPOSE) exec -T ollama ollama pull $${EMBEDDING_MODEL:-bge-m3}
 	@echo "Local models ready."
 

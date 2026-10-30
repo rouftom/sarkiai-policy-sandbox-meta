@@ -9,9 +9,15 @@ describe('provider layer', () => {
     const descriptor = resolveProvider(base)
     expect(descriptor.mode).toBe('local')
     expect(descriptor.residency).toBe('on-premise')
-    expect(descriptor.models.reasoning).toBe('qwen3.5:9b')
+    expect(descriptor.models.reasoning).toBe('muse-glimmer')
     expect(descriptor.budgetUsd).toBe(0)
     expect(descriptor.ready).toBe(true)
+  })
+
+  test('sovereign on Baseten defaults to the hackathon Muse Spark Open id', () => {
+    const descriptor = resolveProvider({ SANDBOX_MODE: 'sovereign', BASETEN_API_KEY: 'test' })
+    expect(descriptor.servedBy).toBe('Baseten')
+    expect(descriptor.models.reasoning).toBe('meta-models/muse-spark-open-1026')
   })
 
   test('rejects an unknown SANDBOX_MODE instead of silently falling back', () => {
@@ -127,6 +133,6 @@ describe('provider layer', () => {
   })
 
   test('describeProvider is a one-line mode · model summary', () => {
-    expect(describeProvider(resolveProvider({ SANDBOX_MODE: 'local' }))).toBe('local · qwen3.5:9b')
+    expect(describeProvider(resolveProvider({ SANDBOX_MODE: 'local' }))).toBe('local · muse-glimmer')
   })
 })
