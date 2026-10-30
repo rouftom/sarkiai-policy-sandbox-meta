@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { Loader, MessageSquare, Trash2 } from 'lucide-react'
+import { MessageSquare, Trash2 } from 'lucide-react'
+import { HistoryShimmer } from '@/components/ai/display/conversation-shimmer'
 import { useI18n } from '@/lib/i18n'
 import type { ChatSessionSummary } from '@/lib/chat-sessions-client'
 
@@ -38,11 +39,7 @@ export function ChatHistory({
   for (const session of sessions) groups.find((group) => group.key === bucketOf(session.updatedAt, now))?.items.push(session)
 
   if (loading && sessions.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
-        <Loader className="h-4 w-4 animate-spin" /> {t('history.loading')}
-      </div>
-    )
+    return <HistoryShimmer />
   }
 
   if (sessions.length === 0) {

@@ -9,7 +9,8 @@
 
 import * as React from 'react'
 import type { AgentUiRequest } from '@/lib/agent-ui'
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, GalleryHorizontal, List, RotateCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, GalleryHorizontal, List, RotateCw, ShieldCheck, ThumbsDown, ThumbsUp } from 'lucide-react'
+import { burstConfetti } from '@/lib/confetti'
 import { Button, StarBorder, cn } from '@sps/ui'
 import { AnimatedTextCompletion } from '@/components/ui/animated-text-completion'
 import { MessageReasoning } from '@/components/ai/display/message-reasoning'
@@ -38,6 +39,8 @@ export interface ChatTurn {
   endedAt?: number
   /** The turn is still being written. */
   active?: boolean
+  /** The operator's verdict on an answer. */
+  rating?: 'good' | 'bad'
   /** Interactive cards the agent opened on this turn (questions, approvals). */
   cards?: AgentUiRequest[]
 }
@@ -46,10 +49,12 @@ export function ChatMessage({
   turn,
   isLast,
   onRegenerate,
+  onRate,
 }: {
   turn: ChatTurn
   isLast: boolean
   onRegenerate?: () => void
+  onRate?: (rating: 'good' | 'bad') => void
 }) {
   const { t } = useI18n()
   const [copied, setCopied] = React.useState(false)
@@ -184,12 +189,52 @@ export function ChatMessage({
               >
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
+              {onRate && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      if (turn.rating === 'good') return
+                      const box = event.currentTarget.getBoundingClientRect()
+                      burstConfetti({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
+                      onRate('good')
+                    }}
+                    aria-label={t('assistant.rate.good')}
+                    aria-pressed={turn.rating === 'good'}
+                    className={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-muted',
+                      turn.rating === 'good' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <ThumbsUp className={cn('h-3.5 w-3.5', turn.rating === 'good' && 'fill-current')} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (turn.rating !== 'bad') onRate('bad')
+                    }}
+                    aria-label={t('assistant.rate.bad')}
+                    aria-pressed={turn.rating === 'bad'}
+                    className={cn(
+                      'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-muted',
+                      turn.rating === 'bad' ? 'text-rose-500' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <ThumbsDown className={cn('h-3.5 w-3.5', turn.rating === 'bad' && 'fill-current')} />
+                  </button>
+                </>
+              )}
               {isLast && onRegenerate && (
                 <button
                   type="button"
                   onClick={onRegenerate}
                   aria-label={t('assistant.regenerate')}
-                  className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className={cn(
+                    'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-muted',
+                    turn.rating === 'bad'
+                      ? 'bg-primary/10 text-primary ring-2 ring-primary/40 hover:text-primary'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
                 >
                   <RotateCw className="h-3.5 w-3.5" />
                 </button>
