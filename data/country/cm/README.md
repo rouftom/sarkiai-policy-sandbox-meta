@@ -1,46 +1,48 @@
-# Corpus Cameroun (CM)
+# Cameroon corpus (CM)
 
-Base de connaissances nationale (domaine **santé** prioritaire). Noms de fichiers
-**normalisés** (ASCII, snake_case) pour une ingestion fiable.
+The national knowledge base, with **health** as the priority domain. File names
+are **normalised** (ASCII, snake_case) so ingestion stays predictable. Payloads
+(PDF/TXT) are git-ignored: only `manifest.json` and this README are versioned.
 
-## Présent (copié localement)
+## Documents
 
-| Fichier | Type | OCR ? | Contenu |
-|---------|------|-------|---------|
-| `loi_2024_protection_donnees_personnelles.pdf` | law | — | Loi protection des données (23 déc. 2024) — **cœur** |
-| `actualite_strategie_ia_cameroun.pdf` | report | — | Article presse sur la stratégie IA nationale |
-| `plan_strategique_cameroun_numerique_2020.pdf` | strategy | — | Plan stratégique Cameroun Numérique |
-| `psnsn_sante_numerique_2026_2030.pdf` | policy | **oui** | Plan Stratégique National de Santé Numérique (114 p.) |
-| `compact_national_sante_2023.pdf` | policy | **oui** | Compact national santé / CSU (police partiellement non-unicode) |
-| `systeme_de_sante_camerounais.pdf` | report | — | Description du système de santé |
-| `resume_snd30.pdf` | strategy | — | Résumé SND30 |
-| `snd30_complet_2020_2030.pdf` | strategy | — | SND30 complet (collecté en ligne) |
-| `cemac_protection_droits_utilisateurs.pdf` | regulation | — | Directive CEMAC droits des utilisateurs (télécoms) |
-| `loi_2010_021_commerce_electronique.pdf` | law | **oui** | Loi n° 2010/021 commerce électronique (14 p. scanné) |
-| `art_observatoire_marche_telecom_2016.pdf` | report | — | Observatoire ART marché télécoms 2016 |
-| `loi_2010_012_cybersecurite_cybercriminalite.pdf` | law | — | Loi cybersécurité/cybercriminalité 2010/012 |
-| `loi_2013_013_communications_electroniques.pdf` | law | — | Loi communications électroniques |
-| `strategie_ia_collectivites_territoriales.pdf` | report | — | Papier : adoption IA collectivités territoriales |
-| `decret_2023_interconnexion.pdf` | regulation | — | Décret interconnexion/accès réseaux (2023) |
-| `art_recueil_textes_2018.pdf` | law | — | Recueil des textes télécoms (ART, 486 p.) |
-| `compendium_textes_poste_telecom_tic_2023.pdf` | law | **oui** | Compendium MINPOSTEL 2023 (456 p.) |
-| `decret_certification_electronique.pdf` | regulation | **oui** | Décret certification électronique |
-| `normes_standards_sr_pf_sante.pdf` | guidance | **oui** | Normes SR/PF (164 p.) |
-| `penal_code_2016.pdf` | law | **oui** | Code pénal (139 p.) |
-| `cameroon_id_cr_ecosystem_diagnostic.txt` | report | — | Diagnostic ID/état civil (converti docx→txt) |
+| File | Type | OCR? | Content |
+|------|------|------|---------|
+| `loi_2024_protection_donnees_personnelles.pdf` | law | — | Personal data protection law (23 Dec. 2024) — **core** |
+| `actualite_strategie_ia_cameroun.pdf` | report | — | Press article on the national AI strategy |
+| `plan_strategique_cameroun_numerique_2020.pdf` | strategy | — | Cameroon Digital strategic plan |
+| `psnsn_sante_numerique_2026_2030.pdf` | policy | **yes** | National Digital Health Strategic Plan (114 p.) |
+| `compact_national_sante_2023.pdf` | policy | **yes** | National health compact / UHC (partly non-Unicode font) |
+| `systeme_de_sante_camerounais.pdf` | report | — | Description of the Cameroonian health system |
+| `resume_snd30.pdf` | strategy | — | SND30 summary |
+| `snd30_complet_2020_2030.pdf` | strategy | — | Full SND30 |
+| `cemac_protection_droits_utilisateurs.pdf` | regulation | — | CEMAC directive on users' rights (telecoms) |
+| `loi_2010_021_commerce_electronique.pdf` | law | **yes** | Law 2010/021 on electronic commerce (14 p., scanned) |
+| `art_observatoire_marche_telecom_2016.pdf` | report | — | ART telecom market observatory, 2016 |
+| `loi_2010_012_cybersecurite_cybercriminalite.pdf` | law | — | Cybersecurity / cybercrime law 2010/012 |
+| `loi_2013_013_communications_electroniques.pdf` | law | — | Electronic communications law |
+| `strategie_ia_collectivites_territoriales.pdf` | report | — | Paper on AI adoption by local authorities |
+| `decret_2023_interconnexion.pdf` | regulation | — | Decree on network interconnection and access (2023) |
+| `art_recueil_textes_2018.pdf` | law | — | Compilation of telecom texts (ART, 486 p.) |
+| `compendium_textes_poste_telecom_tic_2023.pdf` | law | **yes** | MINPOSTEL compendium 2023 (456 p.) |
+| `decret_certification_electronique.pdf` | regulation | **yes** | Decree on electronic certification |
+| `normes_standards_sr_pf_sante.pdf` | guidance | **yes** | SR/PF standards (164 p.) |
+| `penal_code_2016.pdf` | law | **yes** | Penal code (139 p.) |
+| `cameroon_id_cr_ecosystem_diagnostic.txt` | report | — | ID / civil registration diagnostic (docx → txt) |
 
-Les payloads (PDF/TXT) sont **hors git** (`.gitignore`) ; seuls `manifest.json`
-et ce README sont versionnés.
+`manifest.json` is the machine-readable inventory: one entry per document, with
+its type, jurisdiction, readiness pillars, status, priority, OCR need and source
+URL.
 
 ## OCR
 
-4 PDF sont **scannés sans couche texte** (`needsOcr: true`). L'ingestion appelle
-automatiquement le service `ocr` (Tesseract) quand le texte extrait est
-insuffisant. Pour les volumineux (PSNSN 114 p., normes 164 p., code pénal 139 p.)
-prévoir le profil `full`/`ocr` et de la patience, ou un OCR hors-ligne en amont.
+Seven PDFs are **scanned without a text layer** (`needsOcr: true`). Ingestion
+calls the `ocr` service (Tesseract) automatically when the extracted text is too
+short. The large ones (PSNSN 114 p., standards 164 p., penal code 139 p.) take a
+while: use the `full`/`ocr` profile, or pre-OCR them offline.
 
-> L'ingestion ne lit que **PDF/TXT**. Les `.docx`/`.pptx` doivent être convertis
-> en `.txt` (ex. `unzip -p X.docx word/document.xml` puis suppression des balises).
+> Ingestion only reads **PDF/TXT**. Convert `.docx`/`.pptx` to `.txt` first
+> (e.g. `unzip -p X.docx word/document.xml`, then strip the tags).
 
 ## Ingest
 
@@ -52,7 +54,7 @@ prévoir le profil `full`/`ocr` et de la patience, ou un OCR hors-ligne en amont
 ./scripts/seed.sh --country cm --doc-type report   --dir data/country/cm
 ```
 
-Ou via l'API par document, pour un `docType` exact :
+Or one document at a time through the API, when the `docType` must be exact:
 
 ```bash
 curl -X POST "$INGESTION/v1/ingest/file" -H "X-API-Key: $SERVICE_API_KEY" \
@@ -60,17 +62,29 @@ curl -X POST "$INGESTION/v1/ingest/file" -H "X-API-Key: $SERVICE_API_KEY" \
   -F country=cm -F jurisdiction=national -F docType=law
 ```
 
-## Collecte en ligne
+## Sourcing and rights
 
-Un petit collecteur de documents publics est maintenu **hors du projet** :
-`../cm-corpus-tools/` (Python stdlib + fallback curl). Voir son `README.md` pour
-le dry-run, les sources officielles et les résultats (SND30 complet, directive
-CEMAC récupérés ; recueil ART 66 Mo à récupérer séparément). Maathis :
-résumés publics seulement (texte intégral derrière compte gratuit).
+Documents come from the issuing institutions' public publications: the
+Presidency and the National Assembly for laws, MINPOSTEL for digital, telecom
+and AI policy, the Ministry of Public Health for health instruments, ART for
+telecom regulation, ANTIC for cybersecurity and the data-protection authority
+for personal data. Each manifest entry carries its `sourceUrl`; keep the issuing
+authority and the original URL with any document added to the corpus.
 
-## À collecter (voir `manifest.json` → `to_confirm`)
+Payloads (PDF/TXT) are **not versioned**: only this README and `manifest.json`
+are committed. Each entry carries a `rights` field:
 
-Loi-cadre santé 96/03 · loi cybersécurité 2010/012 · loi communications
-électroniques 2010/013 · décret de l'autorité de protection des données ·
-mandat ANTIC · stratégie nationale de cybersécurité · **document officiel** de la
-stratégie IA (nous n'avons qu'un article de presse) · constitution.
+- `official-text` — laws, decrees, regulations, codes and official compilations,
+  generally outside copyright under Cameroonian law;
+- `open-licence` — explicit reuse licence (attribution and licence recorded);
+- `quotation-only` — press articles, journal articles and research papers
+  without a reuse licence: short attributed quotations only, payload not
+  published;
+- `to-confirm` — rights not established: do not publish the payload.
+
+`cm-ai-strategy` (press article), `cm-health-system` (authored article) and
+`cm-ai-adoption-local-authorities` (HAL paper) are `quotation-only`; the health
+compact, the ART observatory and the ID4D diagnostic are `to-confirm`. Do not
+serve them as full text in a public demo. Before publishing any payload, check
+its rights status, never ingest personal data, and keep the issuer and the
+source URL in the manifest. See [`../../../docs/LICENSING.md`](../../../docs/LICENSING.md).

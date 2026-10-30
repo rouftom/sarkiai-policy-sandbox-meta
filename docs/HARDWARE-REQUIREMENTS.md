@@ -1,75 +1,78 @@
-# Exigences matérielles de déploiement
+# Deployment hardware requirements
 
-Le système est **local-first** (aucun cloud) : la ressource dimensionnante est
-**Ollama** (LLM + embeddings). Qdrant, MongoDB, MinIO, l'ingestion, l'API et le
-web sont légers. L'OCR, le reranker et la transcription sont **optionnels**
-(profils compose).
+The sizing resource depends on the provider mode. In `local` and `sovereign`
+modes, **Ollama** (LLM + embeddings) dominates; Qdrant, MongoDB, MinIO,
+ingestion, the API and the web console are light. In `cloud` mode no model runs
+locally at all. OCR, the reranker and transcription are **optional** Compose
+profiles.
 
-## 1. Coût des composants
+## 1. Component cost
 
-| Composant | Disque | RAM/VRAM à chaud | CPU | Optionnel |
-|-----------|--------|------------------|-----|-----------|
-| **Ollama: qwen3.5:9b** (Q4, multimodal) | **~6,6 Go** | **~8–10 Go** | oui | non (LLM par défaut) |
-| Ollama: qwen2.5:14b (Q4, texte) | ~9 Go | ~11–16 Go | oui | alternative |
-| Ollama: qwen2.5:7b (Q4) | ~5 Go | ~6–8 Go | oui | alternative légère |
-| **Ollama: bge-m3** (embeddings) | **~1,2 Go** | ~1–2 Go | oui | non |
-| Qdrant (KB vectorielle) | < 1 Go (notre échelle) | ~1–2 Go | non | non |
-| MongoDB (audit + CoT) | < 1 Go | ~0,5–1 Go | non | non |
-| MinIO (pièces jointes image) | ~0,2 Go | ~0,5 Go | non | non |
-| ingestion (FastAPI + PyMuPDF + fastembed) | ~0,5 Go | ~1–2 Go | oui | non |
-| API (Bun/Fastify) |: | ~0,25–0,5 Go | non | non |
-| Web (Next.js) |: | ~0,5–1 Go | non | non |
-| OCR (Tesseract) |: | ~1–2 Go | oui (pic) | oui (`ocr`) |
-| Reranker TEI (bge-reranker-v2-m3) | ~2,3 Go | ~2–4 Go | oui | oui (profil `rerank`) |
-| Transcription (faster-whisper large-v3) | ~3 Go | ~4–6 Go | oui (lent) | oui (profil `media`) |
-| Images Docker (ollama, qdrant, mongo, minio, python, node, tei) | ~7–9 Go |: |: |: |
+| Component | Disk | RAM/VRAM warm | CPU | Optional |
+|-----------|------|---------------|-----|----------|
+| **Ollama: qwen3.5:9b** (Q4, multimodal) | **~6.6 GB** | **~8–10 GB** | yes | no (default LLM) |
+| Ollama: qwen2.5:14b (Q4, text) | ~9 GB | ~11–16 GB | yes | alternative |
+| Ollama: qwen2.5:7b (Q4) | ~5 GB | ~6–8 GB | yes | light alternative |
+| Ollama: Muse Glimmer 30B (sovereign) | ~18–20 GB | ~24–32 GB | yes | alternative |
+| **Ollama: bge-m3** (embeddings) | **~1.2 GB** | ~1–2 GB | yes | no in local/sovereign |
+| Qdrant (vector KB) | < 1 GB | ~1–2 GB | no | no |
+| MongoDB (audit + CoT) | < 1 GB | ~0.5–1 GB | no | no |
+| MinIO (image attachments) | ~0.2 GB | ~0.5 GB | no | no |
+| ingestion (FastAPI + PyMuPDF + fastembed) | ~0.5 GB | ~1–2 GB | yes | no |
+| API (Bun/Fastify) | — | ~0.25–0.5 GB | no | no |
+| Web (Next.js) | — | ~0.5–1 GB | no | no |
+| OCR (Tesseract) | — | ~1–2 GB | yes (peaks) | yes (`ocr`) |
+| Reranker TEI (bge-reranker-v2-m3) | ~2.3 GB | ~2–4 GB | yes | yes (`rerank`) |
+| Transcription (faster-whisper large-v3) | ~3 GB | ~4–6 GB | yes (slow) | yes (`media`) |
+| Docker images (ollama, qdrant, mongo, minio, python, node, tei) | ~7–9 GB | — | — | — |
 
-## 2. Profils de déploiement
+## 2. Deployment profiles
 
-### A. Minimal (démo économique, CPU)
-- **CPU** : 4–8 cœurs · **RAM** : **12–16 Go** · **Disque** : **20–25 Go** SSD · **GPU** : aucun
-- `qwen3.5:9b` (6,6 Go) + `bge-m3`, sans rerank ni transcription
+### A. Minimal (cloud mode, cheap demo)
+- **CPU**: 2 cores · **RAM**: **2–4 GB** · **Disk**: **5 GB** · **GPU**: none
+- No local model: reasoning, vision and voice go to the Meta Model API, retrieval
+  to Atlas + Voyage. The API, the web console and the ingestion service are the
+  only processes.
 
-### B. Recommandé (démo complète, CPU)
-- **CPU** : 8–16 cœurs · **RAM** : **16–32 Go** · **Disque** : **30–40 Go** SSD · **GPU** : aucun
-- `qwen3.5:9b` + `bge-m3`, rerank TEI optionnel ; multimodal (texte + image) activé
-- Alternative texte : `OLLAMA_MODEL=qwen2.5:14b`
+### B. Recommended (full local demo, CPU)
+- **CPU**: 8–16 cores · **RAM**: **16–32 GB** · **Disk**: **30–40 GB** SSD · **GPU**: none
+- `qwen3.5:9b` + `bge-m3`, optional TEI rerank; multimodal (text + image) enabled
+- Text alternative: `OLLAMA_MODEL=qwen2.5:14b`
 
-### C. Confortable / production (GPU)
-- **GPU NVIDIA** : **12–24 Go VRAM** (RTX 3060 12 Go, 4070 Ti/4080 16 Go, 4090/L4/A10 24 Go)
-- **CPU** : 8+ cœurs · **RAM** : **32–64 Go** · **Disque** : **100 Go** NVMe
-- `qwen3.5:9b` (ou `qwen3.5:27b` si 32 Go+), inférence rapide, reranker TEI GPU
+### C. Comfortable / production (sovereign, GPU)
+- **NVIDIA GPU**: **12–24 GB VRAM** (RTX 3060 12 GB, 4070 Ti/4080 16 GB, 4090/L4/A10 24 GB)
+- **CPU**: 8+ cores · **RAM**: **32–64 GB** · **Disk**: **100 GB** NVMe
+- `qwen3.5:9b`, or Muse Glimmer 30B with 32 GB+ of VRAM for the sovereign mode;
+  fast inference, GPU TEI reranker
 
 ### Apple Silicon (unified memory)
-- **16 Go** : `qwen3.5:9b` confortable
-- **32 Go+** : `qwen3.5:27b` confortable
+- **16 GB**: `qwen3.5:9b` comfortably
+- **48 GB+**: Muse Glimmer 30B comfortably
 
-> Référence croisée : le dépôt de référence officiel indique **~16 Go RAM / ~15 Go disque**
-> pour `qwen2.5:14b`: notre défaut `qwen3.5:9b` est **plus léger**.
+## 3. Disk detail (profile B, first run)
 
-## 3. Détail disque (profil B, premier lancement)
+| Item | Size |
+|------|------|
+| `qwen3.5:9b` | ~6.6 GB |
+| `bge-m3` | ~1.2 GB |
+| Docker images | ~7–9 GB |
+| Build cache + CM corpus | ~5–10 GB |
+| **Total** | **~20–27 GB** (plan for 30 GB) |
 
-| Poste | Taille |
-|-------|--------|
-| `qwen3.5:9b` | ~6,6 Go |
-| `bge-m3` | ~1,2 Go |
-| Images Docker | ~7–9 Go |
-| Build cache + corpus CM | ~5–10 Go |
-| **Total** | **~20–27 Go** (prévoir 30 Go) |
+## 4. Reducing the footprint (environment variables)
 
-## 4. Réduire l'empreinte (variables env)
+| Goal | Setting |
+|------|---------|
+| Cloud mode, no local model at all | `SANDBOX_MODE=cloud` |
+| Lighter LLM | `OLLAMA_MODEL=qwen2.5:7b` |
+| Text-only LLM | `OLLAMA_MODEL=qwen2.5:14b` |
+| No rerank | do not enable the `rerank` profile (`RERANK_URL=` empty) |
+| No transcription | do not enable the `media` profile |
+| Lighter Whisper | `WHISPER_MODEL=small` |
 
-| Objectif | Réglage |
-|----------|---------|
-| LLM plus léger | `OLLAMA_MODEL=qwen2.5:7b` |
-| LLM texte | `OLLAMA_MODEL=qwen2.5:14b` |
-| Pas de rerank | ne pas activer le profil `rerank` (`RERANK_URL=` vide) |
-| Pas de transcription | ne pas activer le profil `media` |
-| Whisper léger | `WHISPER_MODEL=small` |
+## 5. Readiness dimensions concerned
 
-## 5. Dimensions de readiness concernées
-
-Cette sobriété matérielle est un **argument** : elle alimente **D13 Digital
-Infrastructure** (compute/énergie) et **D11 Edge Privacy** (déploiement en
-bordure, sans egress), et démontre qu'une solution souveraine peut tourner sans
-GPU sur du matériel courant.
+This frugality is an argument in itself: it feeds **D13 Digital Infrastructure**
+(compute and energy) and **D11 Edge Privacy** (deployment at the edge, without
+egress), and shows that a sovereign deployment can run without a GPU on ordinary
+hardware.

@@ -1,79 +1,97 @@
-# Corpus Cameroun (CM): collecte et ingestion
+# Cameroon corpus (CM): sourcing and ingestion
 
-Objectif : constituer la base de connaissances nationale **scopée `country=cm`**,
-puis la référence mondiale (`country=global`) pour le moteur d'écarts.
+Goal: build the national knowledge base, scoped to `country=cm`, then the
+external reference (`country=global`) the gap engine compares it against.
 
-## 1. Checklist machine-lisible
+## 1. Machine-readable inventory
 
-- Corpus national : [`data/country/cm/manifest.json`](../data/country/cm/manifest.json)
-- Bonnes pratiques mondiales : [`data/global/standards/manifest.json`](../data/global/standards/manifest.json)
+- National corpus: [`data/country/cm/manifest.json`](../data/country/cm/manifest.json)
+- International standards: [`data/global/standards/manifest.json`](../data/global/standards/manifest.json)
+- African regional reference: [`data/global/africa/manifest.json`](../data/global/africa/manifest.json)
 
-Chaque entrée a un `status` :
+Each entry carries a `status`:
 
-| `status` | Signification |
-|----------|---------------|
-| `verified` | instrument public dont le numéro/intitulé est fiable |
-| `to_confirm` | **à vérifier avant ingestion** (numéro, version en vigueur, URL officielle) |
+| `status` | Meaning |
+|----------|---------|
+| `verified` | public instrument whose number and title are reliable |
+| `present` | payload copied locally (PDF/TXT stay out of git) |
+| `to_confirm` | **check before ingestion** (number, version in force, official URL) |
 
-> ⚠️ Règle d'or : une erreur factuelle dans la KB se propage aux réponses des
-> agents. Ne jamais ingérer un texte marqué `to_confirm` sans confirmation.
+> Golden rule: a factual error in the KB propagates into the agents' answers.
+> Never ingest a text marked `to_confirm` without confirming it first.
 
-## 2. Sources officielles à privilégier
+## 2. Official issuers to prefer
 
-| Émetteur | Rôle |
-|----------|------|
-| Primature / Présidence | constitution, décrets, textes fondateurs |
-| Assemblée Nationale | lois |
-| MINPOSTEL | stratégie numérique, télécoms, IA |
-| Ministère de la Santé Publique | loi-cadre santé, e-santé |
-| ANTIC | cybersécurité, mandats techniques |
-| ART | communications électroniques |
-| Autorité de protection des données | protection des données |
-| SND30 / MINEPAT | stratégie de développement |
-| OAPI / UA | propriété intellectuelle, traités régionaux |
+| Issuer | Role |
+|--------|------|
+| Presidency / Prime Minister's Office | constitution, decrees, founding texts |
+| National Assembly | laws |
+| MINPOSTEL | digital strategy, telecoms, AI |
+| Ministry of Public Health | health framework law, e-health |
+| ANTIC | cybersecurity, technical mandates |
+| ART | electronic communications |
+| Data Protection Authority | personal data protection |
+| MINEPAT / SND30 | development strategy |
+| OAPI / African Union | intellectual property, regional treaties |
 
-## 3. Catégories → dimensions de readiness
+## 3. Document types → readiness dimensions
 
-| Catégorie (`docType`) | Dimensions principalement informées |
-|-----------------------|-------------------------------------|
+| Type (`docType`) | Dimensions mainly informed |
+|------------------|----------------------------|
 | `law` | ai_policies, human_interface |
 | `strategy` | contextualization, digital_infrastructure |
 | `regulation` | ai_policies, human_interface |
 | `policy` | cross_domain, ai_integration |
 | `treaty` | data_marketplace, human_interface |
-| `guidance` / `standard` (global) | toutes: référence d'écart |
+| `guidance` / `standard` (global) | all: the external benchmark |
 
-## 4. Procédure d'ingestion
+## 4. Ingestion procedure
 
 ```bash
-# 1. placer les fichiers (PDF/TXT) dans data/country/cm/
-cp /chemin/vers/loi.pdf data/country/cm/
+# 1. place the files (PDF/TXT) in data/country/cm/
+cp /path/to/law.pdf data/country/cm/
 
-# 2. ingérer (Qdrant + bge-m3 local): le chunking extrait TITRE/CHAPITRE/ARTICLE
+# 2. ingest (Qdrant + local bge-m3): the chunker keeps TITLE/CHAPTER/ARTICLE
 ./scripts/seed.sh --country cm --doc-type law --dir data/country/cm
 
-# 3. corpus mondial
+# 3. external reference corpus
 ./scripts/seed.sh --country global --jurisdiction international --doc-type guidance --dir data/global/standards
+./scripts/seed.sh --country global --jurisdiction regional --doc-type strategy --dir data/global/africa
 ```
 
-Le service d'ingestion bascule automatiquement sur l'OCR (`services/ocr`) pour
-les PDF scannés (gazettes).
+The ingestion service switches to OCR (`services/ocr`) on its own for scanned
+PDFs (official gazettes).
 
-## 5. Contrôle qualité (avant soumission)
+The regional folder holds continental and regional instruments only. National
+strategies of other countries are deliberately not part of the reference corpus:
+the benchmark must not depend on another jurisdiction's policy choices.
 
-1. **Couverture** : chaque dimension de readiness a ≥ 1 disposition nationale et ≥ 1
-   référence mondiale.
-2. **Récupération** : `POST /v1/agents/ask` sur 5–10 questions de référence →
-   les citations pointent le bon article.
-3. **Écarts** : `POST /v1/readiness/report` → vérifier que les écarts citent une
-   source nationale **et** une bonne pratique mondiale.
-4. **Asymétrie** : le scénario santé libère bien les événements par blocs et
-   chaque agent ne voit que ce qui le concerne.
+## 5. Quality check (before submission)
 
-## 6. Éthique & légalité
+1. **Coverage**: every readiness dimension has at least one national provision
+   and at least one external reference.
+2. **Retrieval**: `POST /v1/agents/ask` on 5–10 reference questions; the
+   citations must point at the right article.
+3. **Gaps**: `POST /v1/readiness/report`; each gap must cite a national source
+   **and** a good-practice reference.
+4. **Asymmetry**: the health scenario releases its events in blocks, and each
+   agent sees only what concerns it.
 
-- Vérifier les droits de réutilisation des textes avant toute publication des
-  charges utiles (les lois/décrets sont généralement publics).
-- Ne pas ingérer de données personnelles (le corpus est réglementaire, pas
-  nominatif).
-- Citer systématiquement l'émetteur et l'URL d'origine.
+## 6. Ethics, rights and legality
+
+- **Access is not a licence.** Publicly readable documents are not automatically
+  redistributable. Check the `rights` field of each manifest entry.
+- **Official texts** (laws, decrees, regulations, codes, official compilations)
+  are generally outside copyright under Cameroonian law and may be ingested and
+  cited with their issuer.
+- **Other works** (press articles, journal articles, research papers, some
+  reports) keep their own terms: use an explicit licence when there is one, get
+  permission, or quote short passages with attribution. Never republish the full
+  text under CC BY 4.0.
+- **Payloads stay out of git.** Only the manifest is versioned, so the public
+  repository does not redistribute the documents.
+- Never ingest personal data: the corpus is regulatory, not nominal.
+- Always record the issuing authority, the original URL and the `rights` status.
+
+See [`LICENSING.md`](LICENSING.md) for the decision rule and the takedown
+process.

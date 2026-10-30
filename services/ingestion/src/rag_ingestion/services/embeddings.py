@@ -52,9 +52,9 @@ class EmbeddingService:
 class VoyageEmbeddingService:
     """Cloud embeddings through Voyage AI (default `voyage-4`, 1024-dim).
 
-    Meta has no embedding model, so cloud mode uses Voyage. The service fails
-    fast when the key is missing or the provider returns a different number of
-    vectors: writing zero vectors would silently poison Atlas.
+    Cloud mode embeds through Voyage. The service fails fast when the key is
+    missing or the provider returns a different number of vectors: writing zero
+    vectors would silently poison Atlas.
     """
 
     def __init__(self, api_key: str = None, base_url: str = None, model: str = None):

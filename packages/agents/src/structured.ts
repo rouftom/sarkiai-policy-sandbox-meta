@@ -41,7 +41,10 @@ export interface StructuredRequest<S extends ZodType> {
 /** The first balanced JSON object in a model reply, fences and prose stripped. */
 /** Reasoning models wrap their thinking in tags: it is never part of the answer. */
 export function stripThinking(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/i, '')
+  // Models wrap reasoning in think tags: the block, then any unclosed tag, is never part of the answer.
+  return text
+    .replace(/<\s*think(?:ing)?\s*>[\s\S]*?<\s*\/\s*think(?:ing)?\s*>/gi, '')
+    .replace(/<\s*think(?:ing)?\s*>[\s\S]*$/i, '')
 }
 
 /** Index of the brace closing the object opened at `start`, string-aware; -1 when truncated. */
@@ -117,6 +120,24 @@ export function extractJsonObject(text: string): unknown | null {
 /** Whether the reply holds an object at all (to tell "no JSON" from "broken JSON"). */
 export function hasJsonObject(text: string): boolean {
   return text.includes('{')
+}
+
+/**
+ * A usable reply when the model answers in plain text instead of the JSON
+ * envelope. Returns null when the text is empty or still looks like JSON;
+ * trims to `maxLength` so it fits the caller's schema.
+ */
+export function plainTextReply(text: string, maxLength = 900): string | null {
+  const unfenced = stripThinking(text)
+    .replace(/```(?:json)?/gi, '')
+    .trim()
+  if (!unfenced || unfenced.includes('{') || unfenced.includes('}')) return null
+  const line = unfenced
+    .replace(/^summary\s*:\s*/i, '')
+    .replace(/^["'“”]+|["'“”]+$/g, '')
+    .trim()
+  if (!line) return null
+  return line.length > maxLength ? `${line.slice(0, maxLength - 1).trimEnd()}…` : line
 }
 
 export async function generateStructured<S extends ZodType>(request: StructuredRequest<S>): Promise<z.output<S>> {

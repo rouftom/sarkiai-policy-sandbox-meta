@@ -1,7 +1,7 @@
 # SarkiAI Policy Sandbox
 
-> Policy-grounded, multi-agent AI engine for the **Meta Global AI Developer Hackathon** (Startup track).
-> One engine, two lenses: **error-scenario simulation** and **AI-readiness assessment**.
+> Policy-grounded, multi-agent AI engine for the Meta Global AI Developer Hackathon (Startup track).
+> One engine, two lenses: error-scenario simulation and AI-readiness assessment.
 
 [![Meta Model API](https://img.shields.io/badge/Meta%20Model%20API-Muse%20Spark-0866FF?style=for-the-badge)](https://dev.meta.ai)
 [![Open weights](https://img.shields.io/badge/Open%20weights-Muse%20Glimmer-0866FF?style=for-the-badge)](https://dev.meta.ai/models/muse-glimmer)
@@ -26,7 +26,7 @@ It runs on **Meta models**, in three interchangeable provider modes:
 
 - **cloud**: Meta Model API: `muse-spark-1.3` for reasoning, `sam-3.1` for scanned-gazette
   segmentation, `muse-voice-transcribe-1.0` for WhatsApp voice notes. Retrieval runs on
-  **Voyage** embeddings + **MongoDB Atlas** Vector Search (Meta publishes no embedding model).
+  **Voyage** embeddings + **MongoDB Atlas** Vector Search.
 - **sovereign**: **Muse Glimmer** (30B, Apache-2.0) served locally by Ollama: same engine, no data
   leaving the institution, retrieval stays on `bge-m3` + Qdrant.
 - **local**: any Ollama-served model (`qwen3.5:9b` + `bge-m3` embeddings) for offline development.
@@ -37,7 +37,7 @@ over **e-mail or WhatsApp**, with per-channel consent and an audited send.
 
 - **Primary country:** Cameroon (MINPOSTEL-aligned), with a country/sector registry ready for more jurisdictions.
 - **Primary domain:** healthcare, with cross-domain spillover (data protection, telecom, cybersecurity).
-- **Open by design:** permissive license (Apache-2.0 code, CC BY 4.0 content).
+- **Open by design:** permissive license (Apache-2.0 code, CC BY 4.0 for project-authored content; third-party documents keep their own terms).
 
 ## Live demo
 
@@ -67,13 +67,17 @@ The public deployment has two ways in: create your own operator account, or use 
 
 More screens (audit trail, knowledge graph, notifications, preferences, security) live in [`docs/screenshots/`](docs/screenshots): 1295×812 captures of the hosted app, palette-optimised with ImageMagick.
 
-## One engine, two lenses
+## One engine, two lenses, three profiles
 
 | Lens | Purpose | Basis |
 |------|---------|-----------|
 | `simulation` | Run a progressive, chunked error scenario across mandated agents; produce an audit trail + gap findings. | scenario engine |
 | `readiness` | Assess a country corpus against the 13 AI-readiness dimensions (6 factors); produce a gap report. | readiness framework |
 | `hybrid` | Simulation that emits the readiness / gap report as a by-product. | both |
+
+The two lenses are `simulation` and `readiness`; `hybrid` is the composition
+profile. WhatsApp, voice notes, impact analysis, the table-top exercise and the
+`/knowledge` console are capabilities of the same engine, not additional lenses.
 
 The lens is a **declarative workflow profile** (`packages/shared`), never a duplicated code path.
 Gap analysis is a **shared service** consumed by every lens, so no evaluation criterion is lost.
@@ -85,7 +89,7 @@ Gap analysis is a **shared service** consumed by every lens, so no evaluation cr
       │               │              │                 │                   │              │
  data/country     services/      services/         packages/kb        packages/agents   packages/audit
  data/global      ingestion      ingestion+ocr     packages/retrieval packages/scenarios (audit + CoT)
- data/standards   (fetch/load)   (chunk+embed)                        packages/readiness
+                 (fetch/load)   (chunk+embed)                        packages/readiness
                                                                       packages/citations
 ```
 
@@ -114,13 +118,13 @@ sarkiai-policy-sandbox/
 │  ├─ audit/          # immutable audit log + persisted CoT traces
 │  ├─ report/         # run dossier: audit + CoT + reports + citations
 │  ├─ ui/             # shared components (SarkiAI Compact charter)
-│  ├─ theme/          # admin theme packs (fada, green, ocean, sunset, mono)
+│  ├─ theme/          # admin theme packs (meta default, fada, green, ocean, sunset, mono)
 │  └─ storage/        # MinIO/S3 client (content-addressed attachments)
 ├─ services/          # Python microservices
 │  ├─ ingestion/      # structure-aware legal chunking + embeddings + Qdrant store
 │  ├─ ocr/            # scanned gazette OCR (Tesseract)
 │  └─ transcription/  # optional media → timestamped transcript
-├─ data/              # corpora: country/cm, global/standards (git-ignored payloads)
+├─ data/              # corpora: country/cm, global/africa + global/standards (payloads git-ignored)
 ├─ deploy/
 │  ├─ sandbox/        # locked-down sandbox deployment
 │  ├─ mongo/          # Atlas Search indexes (kb.indexes.json) + local seed
@@ -131,11 +135,11 @@ sarkiai-policy-sandbox/
 
 ## Quick start
 
-> **Pick a provider mode** with `SANDBOX_MODE` in `.env`: `local` (default , 
+> **Pick a provider mode** with `SANDBOX_MODE` in `.env`: `local` (default,
 > Ollama, no key, nothing leaves the machine), `sovereign` (Muse Glimmer on
 > Ollama, or a hosted open-weight endpoint) or `cloud` (Meta Model API, requires
 > `MODEL_API_KEY`). The badge in the console shows which one is answering.
-> First local run pulls ~9 GB (qwen3.5:9b) + ~2 GB (bge-m3).
+> A first local run pulls ~6.6 GB (qwen3.5:9b) + ~1.2 GB (bge-m3).
 
 ### Everything at once
 
@@ -239,8 +243,7 @@ link.
 
 ### Public sign-up (cloud demo only)
 
-The public demo at
-the public demo (address in the deployment notes)
+The public demo at <https://sps.djotta.com>
 opens self-service accounts so judges can walk the console with their own login:
 `/signup` shows what the sandbox does and the notice (prompts, answers and
 files **may be used by Meta to train or improve its models**) in the left
@@ -267,8 +270,7 @@ bun run demo:reset -- --yes       # operators, password_resets, audit_logs,
 It needs `MONGODB_URI` and never prints it. `kb_chunks`, the Atlas indexes and
 all configuration are left untouched; the console then shows `/setup` again.
 
-Hosts without a shell (Render free instances refuse SSH, one-off jobs,
-pre-deploy commands and start-command overrides) run the same wipe from the
+When the database is not reachable from your shell, run the same wipe from the
 service itself: commit `apps/api/scripts/reset-on-boot.flag`, let the deploy
 come live, then delete the flag and deploy again. The API logs
 `demo reset executed at boot` with the total deleted.
@@ -538,9 +540,9 @@ settings, environment variables and the warm-up strategy live in
 
 #### Model-call relay
 
-Some hosts' outbound traffic is refused by the Meta Model API: every model call
+If the API host's outbound traffic is refused by the Meta Model API (every call
 returns `404 model_not_found`, on every model id, while the same key works from
-the web host. In that case the API points `META_BASE_URL` at the web app's relay:
+the web host), point `META_BASE_URL` at the web app's relay:
 
 ```
 META_BASE_URL=https://<web-host>/api/meta
@@ -566,7 +568,8 @@ lists their exact bodies, ids and review status.
 ## License
 
 - **Code**: Apache-2.0 (see [`LICENSE`](LICENSE)).
-- **Knowledge base / docs**: CC BY 4.0 (see [`LICENSE-CONTENT`](LICENSE-CONTENT)); source documents retain their own terms.
+- **Project-authored content** (documentation, manifests, annotations, diagrams, own screenshots): CC BY 4.0 (see [`LICENSE-CONTENT`](LICENSE-CONTENT)).
+- **Third-party source documents**: not covered by either licence and not redistributed. They keep their own terms; official texts are generally outside copyright, while reports, articles and research papers are used under their licence, by permission, or as short attributed quotations. Every manifest entry carries a `rights` status (`official-text`, `open-licence`, `quotation-only`, `to-confirm`).
 
 See [`docs/LICENSING.md`](docs/LICENSING.md) for the rationale and provenance.
 

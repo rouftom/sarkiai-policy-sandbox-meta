@@ -1,8 +1,9 @@
 {
   "country": "global",
   "jurisdiction": "international",
-  "generated": "2026-10-03",
-  "note": "Corpus de bonnes pratiques mondiales utilisé comme référence d'écart par le moteur readiness. Les entrées to_confirm doivent être vérifiées avant ingestion.",
+  "generated": "2026-10-30",
+  "note": "International good-practice corpus, used by the readiness engine as the reference a national corpus is compared against. Entries marked to_confirm must be checked before ingestion.",
+  "rightsNote": "Per-document rights status. official-text = official legislative/administrative/judicial text, generally outside copyright under Cameroonian law; open-licence = explicit reuse licence (see the entry); quotation-only = third-party work, short attributed quotations only, payload not redistributed; to-confirm = rights not established, do not publish the payload. Third-party payloads are git-ignored; only manifests (and the project's own samples) are versioned. See docs/LICENSING.md.",
   "documents": [
     {
       "id": "who-ai-health-ethics",
@@ -18,6 +19,8 @@
         "ai_integration"
       ],
       "status": "verified",
+      "rights": "open-licence",
+      "rightsNote": "WHO publications are generally CC BY-NC-SA 3.0 IGO; confirm on the publication page and keep the attribution.",
       "priority": "critical",
       "sourceUrl": "https://www.who.int/publications/i/item/9789240029200"
     },
@@ -34,6 +37,8 @@
         "ai_inclusion"
       ],
       "status": "verified",
+      "rights": "open-licence",
+      "rightsNote": "UNESCO publications are generally CC BY-SA 3.0 IGO; keep attribution and share-alike.",
       "priority": "high",
       "sourceUrl": "https://unesdoc.unesco.org/ark:/48223/pf0000381137"
     },
@@ -50,6 +55,8 @@
         "ai_policies"
       ],
       "status": "verified",
+      "rights": "official-text",
+      "rightsNote": "Official African Union treaty text.",
       "priority": "high",
       "sourceUrl": "https://au.int/en/treaties"
     },
@@ -65,6 +72,8 @@
         "generated_content"
       ],
       "status": "verified",
+      "rights": "to-confirm",
+      "rightsNote": "OECD terms of use apply; verify before redistributing the text.",
       "priority": "medium",
       "sourceUrl": "https://legalinstruments.oecd.org/en/instruments/OECD-LEGAL-0449"
     }

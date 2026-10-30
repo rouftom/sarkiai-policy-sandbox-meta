@@ -9,17 +9,25 @@
 3. **Grounding is a hard post-condition.** A legal answer with zero citations is
    invalid.
 4. **Every decision is auditable.** Reasoning is persisted, not merely streamed.
-5. **Open and sovereign.** Apache-2.0; **all models run locally** (Ollama:
-   qwen2.5 LLM + bge-m3 embeddings; optional local TEI reranker); no cloud call;
-   runs entirely inside a locked-down sandbox: no data egress.
+5. **Open and provider-neutral.** Apache-2.0. The same engine runs in three
+   modes chosen by `SANDBOX_MODE`: `local` (any Ollama model + `bge-m3` +
+   Qdrant), `sovereign` (Muse Glimmer 30B on Ollama, same local stack) and
+   `cloud` (Meta Model API + Voyage + Atlas). `local` and `sovereign` make no
+   outbound call at all, so the engine runs inside a locked-down sandbox with
+   no data egress; `cloud` is an explicit, operator-chosen exception, visible
+   in the console badge and recorded in the audit chain.
 
 ## Storage split
 
 | Store | Holds | Why |
 |-------|-------|-----|
-| **Qdrant** | vector knowledge base (dense + sparse) | open source, multi-arch, native hybrid RRF, payload filtering |
-| **MongoDB** | audit log + chain-of-thought | operational documents, no vectors: portable anywhere |
+| **Qdrant** | vector knowledge base (dense + sparse) in `local`/`sovereign` | open source, multi-arch, native hybrid RRF, payload filtering |
+| **MongoDB** | audit log + chain-of-thought (self-hosted, or Atlas in `cloud` mode) | operational documents, no vectors: portable anywhere |
+| **MongoDB Atlas** | vector knowledge base (`cloud` mode, Vector Search over `kb_chunks`) | managed hybrid search without running a second datastore |
 | **MinIO** | assistant image attachments | S3-compatible local bucket, content-addressed (sha256) |
+
+The `KbChunk` contract is identical in both retrieval backends, so switching
+mode changes where vectors live, not what the engine reads or cites.
 
 Secrets are versioned with **SOPS + age** (see [`SECRETS.md`](./SECRETS.md)); no
 secret server. The UI follows the admin **SarkiAI Compact** charter via
@@ -59,10 +67,16 @@ store never dictates vector-search capabilities.
                                                         └──────────────┘
 ```
 
+In `cloud` mode the same diagram holds with two substitutions: model calls go
+to the Meta Model API instead of Ollama, and the vector leg goes to MongoDB
+Atlas (Voyage embeddings) instead of Qdrant/`bge-m3`.
+
 ## Data flow (simulation lens)
 
 1. **Ingest**: country corpus → `services/ingestion` → structure-aware chunks →
-   local bge-m3 embeddings (Ollama) → Qdrant points (dense + sparse BM25).
+   `bge-m3` embeddings (Ollama) → Qdrant points (dense + sparse BM25). In
+   `cloud` mode the same chunks are embedded with Voyage `voyage-4` and stored
+   in MongoDB Atlas.
 2. **Scenario start**: `ScenarioEngine.release()` yields event batches by tick.
 3. **Per agent**: `PolicyOrchestrator.runAgent()` retrieves country provisions
    from Qdrant, builds the mandate-grounded prompt, generates, enforces citations.
@@ -74,14 +88,15 @@ store never dictates vector-search capabilities.
 ## Readiness lens
 
 `ReadinessEngine.assess()` iterates the 13 readiness dimensions (Report 2.0, 6 factors), retrieves the
-country provisions **and** the global best-practice corpus from Qdrant, and asks
-the model to emit structured gaps. Output: a `ReadinessReport` (JSON + Markdown).
+country provisions **and** the external reference corpus (regional and
+international) from the active vector backend, and asks the model to emit
+structured gaps. Output: a `ReadinessReport` (JSON + Markdown).
 
 ## Why the two lenses share everything
 
 | Shared | Lens-specific |
 |--------|---------------|
-| KB + retrieval (Qdrant) | `ScenarioEngine` (simulation only) |
+| KB + retrieval (Qdrant or Atlas) | `ScenarioEngine` (simulation only) |
 | Citations | `readinessReport` stage (readiness/hybrid) |
 | Gap analysis (**always on**) | |
 | Agents + mandates | |

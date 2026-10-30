@@ -1,8 +1,8 @@
 /**
  * Atlas retrieval backend (cloud mode).
  *
- * Meta has no embedding model, so chunks are embedded with Voyage (`voyage-4`,
- * 1024 dimensions) and stored in MongoDB Atlas. Search fuses:
+ * Cloud mode embeds chunks with Voyage (`voyage-4`, 1024 dimensions) and stores
+ * them in MongoDB Atlas. Search fuses:
  *   1. `$vectorSearch` (dense, dotProduct)
  *   2. `$search` (BM25 over the same collection)
  *   3. reciprocal rank fusion (RRF)

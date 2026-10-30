@@ -111,10 +111,11 @@ for every chunk of one document (audit keeps the rows; retrieval stops seeing
 them), **Vectorise** runs one document with a journal, **Retrieval** is the
 playground, and the index card repairs the Atlas indexes.
 
-Reference state at submission time (cloud mode, Cameroon corpus):
-8 documents, 2,166 active chunks, 1,722,491 characters, 1024 dimensions, both
-indexes `READY`, retrieval producing 100 dense + 100 sparse → 158 fused → 3
-reranked in ~1.5 s.
+Snapshot at the time of writing (cloud mode, Cameroon corpus): the national
+corpus plus the regional and international reference documents, 1024-dimension
+vectors, both indexes `READY`, retrieval producing 100 dense + 100 sparse → 158
+fused → 3 reranked in ~1.5 s. Treat those counts as an order of magnitude: the
+live numbers are on `/knowledge`.
 
 ## 6. What this is not
 
