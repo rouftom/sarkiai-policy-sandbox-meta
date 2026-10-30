@@ -11,7 +11,7 @@ import { randomBytes } from 'node:crypto'
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { ActionSink } from '@sps/agents'
 
-export type ActionKind = 'whatsapp_approval' | 'publish_communication' | 'record_gap' | 'request_tool'
+export type ActionKind = 'whatsapp_approval' | 'publish_communication' | 'record_gap' | 'request_tool' | 'delete_record'
 export type ActionRisk = 'low' | 'medium' | 'high'
 export type ActionStatus = 'pending' | 'approved' | 'rejected' | 'executed' | 'failed'
 

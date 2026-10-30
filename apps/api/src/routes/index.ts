@@ -1,6 +1,6 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { correctTranscript, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, referenceImage } from '@sps/agents'
+import { correctTranscript, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, referenceImage, type DataPort } from '@sps/agents'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -76,6 +76,74 @@ const whatsapp = new WhatsAppClient({
   apiBaseUrl: config.whatsapp.apiBaseUrl,
 })
 /**
+ * What the assistant can read and, once the operator approves, delete. Every
+ * call is scoped to one operator: an agent never sees another operator's data.
+ */
+function buildDataPort(userId: string): DataPort {
+  const matches = (row: unknown, query?: string, country?: string) => {
+    const record = row as { country?: unknown }
+    if (country && String(record.country ?? '').toLowerCase() !== country.toLowerCase()) return false
+    return !query || JSON.stringify(row).toLowerCase().includes(query.toLowerCase())
+  }
+  return {
+    async list(entity, { limit, country, query }) {
+      const take = (rows: unknown[]) => rows.filter((row) => matches(row, query, country)).slice(0, limit)
+      switch (entity) {
+        case 'readiness_runs':
+          return take(await readinessRuns.list(userId, 50))
+        case 'scenario_runs':
+          return take(await scenarioRuns.list(userId, 50))
+        case 'exercise_reports':
+          return take(await exerciseReports.listAll(userId, 50))
+        case 'chat_sessions':
+          return take(await chatSessions.list(userId, 50))
+        case 'audit_events':
+          return (await engine.audit.listAudit(Math.min(limit * 4, 200), userId)).slice(0, limit)
+        case 'knowledge_documents':
+          return take(await knowledge.listDocuments({ limit: 50, ...(query ? { query } : {}) }))
+        case 'countries':
+          return take((await countries.list()).map((country) => ({ ...country, notes: country.notes ?? null })))
+      }
+    },
+    async get(entity, id) {
+      switch (entity) {
+        case 'readiness_runs':
+          return readinessRuns.get(id, userId)
+        case 'scenario_runs': {
+          const run = await scenarioRuns.get(id, userId)
+          return run ? { ...run, reports: run.reports.slice(-1) } : null
+        }
+        case 'exercise_reports': {
+          const saved = await exerciseReports.get(id, userId)
+          if (!saved) return null
+          const { images: _images, ...report } = saved.report as { images?: unknown }
+          return { ...saved, report }
+        }
+        case 'chat_sessions': {
+          const session = await chatSessions.get(id, userId)
+          return session ? { ...session, turns: session.turns.slice(-20) } : null
+        }
+        case 'countries':
+          return countries.get(id).then((country) => (country ? { ...country, notes: country.notes ?? null } : null))
+        case 'audit_events':
+        case 'knowledge_documents':
+          return null
+      }
+    },
+    async remove(entity, id) {
+      switch (entity) {
+        case 'readiness_runs':
+          return readinessRuns.delete(id, userId)
+        case 'scenario_runs':
+          return scenarioRuns.delete(id, userId)
+        case 'chat_sessions':
+          return chatSessions.remove(id, userId)
+      }
+    },
+  }
+}
+
+/**
  * What an approved action does. Side effects are the only thing the agent can
  * cause outside the console, so each one has a single explicit handler here.
  * Without WhatsApp configured the approval is recorded, never faked as sent.
@@ -112,6 +180,29 @@ async function executeAction(record: ActionRecord): Promise<string> {
   if (record.kind === 'publish_communication') {
     await engine.audit.logAction({ actor: 'operator', action: 'communication.approved', target: record.title, lens: 'hybrid', runId: record.runId, ...(record.userId ? { userId: record.userId } : {}) })
     return 'Approved and recorded in the audit trail. Nothing was published automatically.'
+  }
+  if (record.kind === 'record_gap') {
+    const severity = String(record.payload?.severity ?? 'medium')
+    const description = String(record.payload?.description ?? record.summary)
+    await engine.audit.logAction({
+      actor: 'operator',
+      action: 'gap.recorded',
+      target: `${severity}: ${description}`,
+      lens: 'hybrid',
+      runId: record.runId,
+      ...(record.userId ? { userId: record.userId } : {}),
+    })
+    return 'Gap recorded in the audit trail.'
+  }
+  if (record.kind === 'delete_record') {
+    const entity = String(record.payload?.entity ?? '')
+    const id = String(record.payload?.id ?? '')
+    if (entity !== 'readiness_runs' && entity !== 'scenario_runs' && entity !== 'chat_sessions') throw new Error(`Cannot delete "${entity}".`)
+    if (!record.userId) throw new Error('This deletion has no operator.')
+    const removed = await buildDataPort(record.userId).remove(entity, id)
+    if (!removed) throw new Error(`No ${entity} "${id}" for this operator.`)
+    await engine.audit.logAction({ actor: 'operator', action: 'record.deleted', target: `${entity}:${id}`, lens: 'hybrid', runId: record.runId, userId: record.userId })
+    return `Deleted ${entity} ${id}.`
   }
   return 'Recorded.'
 }
@@ -195,7 +286,7 @@ function gazettePricing() {
  * chat-capable model Meta lists for this key.
  */
 export async function selectBootModel(app: FastifyInstance): Promise<void> {
-  if (engine.provider.mode !== 'cloud') return
+  if (engine.catalogMode !== 'cloud') return
   const saved = await auth.activeModel().catch(() => null)
   try {
     const models = await engine.listModels()
@@ -361,7 +452,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Chat models: Meta's own list, one saved choice per operator ───────────
   app.get('/v1/models', async (request, reply) => {
-    if (engine.provider.mode !== 'cloud') {
+    if (engine.catalogMode !== 'cloud') {
       return { mode: engine.provider.mode, selected: engine.provider.models.reasoning, models: [] }
     }
     try {
@@ -381,7 +472,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!operator) return reply.status(401).send({ error: 'unauthenticated' })
     const body = z.object({ model: z.string().min(1).max(120) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
-    if (engine.provider.mode !== 'cloud') {
+    if (engine.catalogMode !== 'cloud') {
       return reply.status(409).send({ error: 'Model selection applies to the Meta Model API mode only.' })
     }
 
@@ -848,6 +939,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     /** The language of the answer: the console's. */
     language: z.enum(['fr', 'en']).default('en'),
     runId: z.string().optional(),
+    /** Reasoning effort chosen in the console; absent lets the provider decide. */
+    effort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     // Untrusted user files (context only, never citable): images, or documents read as reference text.
     attachments: z
       .array(z.object({ mime: z.string(), dataBase64: z.string(), name: z.string().max(200).optional() }))
@@ -989,6 +1082,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           withTools: true,
           actions: actionStore,
           mcp: mcpGateway,
+          data: buildDataPort(operatorOf(request).email),
+          ...(body.data.effort ? { effort: body.data.effort } : {}),
         },
         {
           onStage: (stage, detail) => send({ type: 'stage', stage, ...(detail ?? {}) }),
