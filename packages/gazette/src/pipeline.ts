@@ -152,6 +152,23 @@ const ARTIFACT_PROMPTS: Array<{ label: GazetteArtifact['label']; phrase: string 
   { label: 'signature', phrase: 'handwritten scribble' },
 ]
 
+/**
+ * A stamp or a signature covers a few percent of a page. "rectangle" also matches
+ * page borders and framed paragraphs; such a box would mark a text zone as an
+ * artefact and skip its transcription, so a law article would silently leave the
+ * corpus. Stamps and signatures above this share of the page are dropped.
+ */
+export const ARTEFACT_MAX_PAGE_RATIO = 0.12
+
+export function plausibleArtefacts(
+  detections: SamDetection[],
+  image: { width: number; height: number },
+): { kept: SamDetection[]; dropped: number } {
+  const limit = image.width * image.height * ARTEFACT_MAX_PAGE_RATIO
+  const kept = detections.filter((detection) => detection.label === 'table' || area(detection.bbox) <= limit)
+  return { kept, dropped: detections.length - kept.length }
+}
+
 function iou(a: BBox, b: BBox): number {
   const overlap = overlapArea(a, b)
   return overlap > 0 ? overlap / (area(a) + area(b) - overlap) : 0
@@ -274,7 +291,13 @@ export async function analyzeGazettePage(input: AnalyzeGazetteInput): Promise<Ga
         return [] as SamDetection[]
       }
     })
-    artifacts = mergeDetections(detections.flat()).map((detection, index) => ({
+    const plausible = plausibleArtefacts(detections.flat(), image)
+    if (plausible.dropped > 0) {
+      warnings.push(
+        `${plausible.dropped} stamp or signature box(es) larger than ${Math.round(ARTEFACT_MAX_PAGE_RATIO * 100)}% of the page ignored (page border or framed text).`,
+      )
+    }
+    artifacts = mergeDetections(plausible.kept).map((detection, index) => ({
       id: `a${index + 1}-${detection.label}`,
       label: detection.label as GazetteArtifact['label'],
       bbox: detection.bbox,
