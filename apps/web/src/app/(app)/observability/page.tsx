@@ -56,6 +56,7 @@ import {
   cn,
   type TabItem,
 } from '@sps/ui'
+import { INSTITUTIONS } from '@sps/shared'
 import {
   ASSISTANT_FINISHED,
   observabilityApi,
@@ -138,10 +139,14 @@ function formatTokens(value: number, locale: string): string {
  * Calls made outside an institution agent (the assistant turn itself, vision,
  * readiness, capability meters) carry no `agentId`. They are SarkiAI's own
  * work, not an unidentified third party: show the assistant's name instead of
- * the ledger's "unknown" bucket.
+ * the ledger's "unknown" bucket. Registry ids become their human names
+ * (`legal_advisor` → "Legal Advisor"), as in the rest of the console.
  */
+const AGENT_NAMES = new Map(INSTITUTIONS.map((agent) => [agent.id, agent.name]))
+
 function agentLabel(agentId: string | undefined, assistant: string): string {
-  return agentId && agentId !== 'unknown' ? agentId : assistant
+  if (!agentId || agentId === 'unknown') return assistant
+  return AGENT_NAMES.get(agentId) ?? agentId
 }
 
 function Kpi({
