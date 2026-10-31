@@ -303,25 +303,30 @@ export default function ObservabilityPage() {
 
   return (
     <>
-      <PageIntro title={t('observability.title')} subtitle={t('observability.pageSubtitle')}>
-        <div className="flex items-center rounded-lg border border-border p-0.5" role="group" aria-label={t('observability.range')}>
-          {([7, 30] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={days === value}
-              onClick={() => setDays(value)}
-              className={cn(
-                'rounded-md px-2 py-1 text-[11px] transition-colors',
-                days === value
-                  ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:text-brand-primary-light'
-                  : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {t(value === 7 ? 'observability.range7' : 'observability.range30')}
-            </button>
-          ))}
-        </div>
+      <PageIntro
+        title={t('observability.title')}
+        subtitle={t('observability.pageSubtitle')}
+        aside={
+          <div className="flex items-center rounded-lg border border-border p-0.5" role="group" aria-label={t('observability.range')}>
+            {([7, 30] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={days === value}
+                onClick={() => setDays(value)}
+                className={cn(
+                  'rounded-md px-2 py-1 text-[11px] transition-colors',
+                  days === value
+                    ? 'bg-brand-primary/10 font-medium text-brand-primary-dark dark:text-brand-primary-light'
+                    : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {t(value === 7 ? 'observability.range7' : 'observability.range30')}
+              </button>
+            ))}
+          </div>
+        }
+      >
         {isAdmin && (
           <Select
             value={scope}
@@ -329,7 +334,7 @@ export default function ObservabilityPage() {
             options={operatorOptions}
             ariaLabel={t('observability.operator')}
             size="sm"
-            className="w-48"
+            className="min-w-0 flex-1 md:w-48 md:flex-none"
           />
         )}
         <Select
@@ -342,7 +347,7 @@ export default function ObservabilityPage() {
           ]}
           ariaLabel={t('observability.status')}
           size="sm"
-          className="w-40"
+          className="min-w-0 flex-1 md:w-40 md:flex-none"
         />
         <Button
           variant="outline"
@@ -351,6 +356,7 @@ export default function ObservabilityPage() {
           disabled={loading}
           aria-label={t('observability.refresh')}
           title={t('observability.refresh')}
+          className="shrink-0"
         >
           {loading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
         </Button>
@@ -367,11 +373,18 @@ export default function ObservabilityPage() {
 
       {!unreachable && (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={summary?.scope === 'all' ? 'brand' : 'neutral'}>
-              {summary?.scope === 'all' ? t('observability.scopeAll') : scope || t('observability.scopeSelf')}
+          <div className="flex min-w-0 items-center gap-2">
+            <Badge
+              tone={summary?.scope === 'all' ? 'brand' : 'neutral'}
+              className="min-w-0 max-w-[55%] md:max-w-none"
+            >
+              <span className="min-w-0 truncate">
+                {summary?.scope === 'all' ? t('observability.scopeAll') : scope || t('observability.scopeSelf')}
+              </span>
             </Badge>
-            <span className="ml-auto text-[10px] text-muted-foreground">{t('observability.retention')}</span>
+            <span className="min-w-0 flex-1 truncate text-right text-[10px] text-muted-foreground">
+              {t('observability.retention')}
+            </span>
           </div>
 
           <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
