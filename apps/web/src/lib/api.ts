@@ -1756,6 +1756,34 @@ export interface ObservabilityForecastDto {
   series: Array<{ date: string; requests: number; costUsd: number }>
 }
 
+/** One run's spend, with the per-run ceiling verdict. */
+export interface UsageRunDto {
+  runId: string
+  operator?: string
+  requests: number
+  errors: number
+  inputTokens: number
+  outputTokens: number
+  units: number
+  costUsd: number
+  unpriced: number
+  overBudget: boolean
+}
+
+export interface ObservabilityBudgetDto {
+  /** Per-run ceiling; 0 when none is configured. */
+  ceilingUsd: number
+  runs: UsageRunDto[]
+}
+
+export interface ObservabilityRunDto {
+  runId: string
+  operator?: string
+  ceilingUsd: number
+  totals: UsageTotalsDto
+  overBudget: boolean
+}
+
 export interface ObservabilityQueryDto {
   from: Date
   to: Date
@@ -1785,4 +1813,8 @@ export const observabilityApi = {
     request<ObservabilityRequestsDto>(`/v1/observability/requests?${observabilityQuery(params)}`),
   forecast: (params: ObservabilityQueryDto) =>
     request<ObservabilityForecastDto>(`/v1/observability/forecast?${observabilityQuery(params)}`),
+  budget: (params: ObservabilityQueryDto) =>
+    request<ObservabilityBudgetDto>(`/v1/observability/budget?${observabilityQuery(params)}`),
+  run: (runId: string) =>
+    request<ObservabilityRunDto>(`/v1/observability/runs/${encodeURIComponent(runId)}`),
 }

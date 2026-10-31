@@ -360,6 +360,8 @@ const USAGE_DEFAULT_DAYS = 7
 const USAGE_FORECAST_DAYS = 14
 /** How far ahead the forecast projects. */
 const USAGE_FORECAST_HORIZON = 7
+/** Run spend is checked over a month: a run older than that is not news. */
+const USAGE_BUDGET_DAYS = 30
 const USAGE_MAX_DAYS = 366
 const USAGE_KINDS = ['chat', 'retrieval', 'image', 'voice', 'sam'] as const
 
@@ -3237,6 +3239,46 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const scope = usageScope(request, parsed.data.operator)
     if (!scope) return forbiddenScope(reply)
     return usageLedger.forecast({ ...range, ...usageDimensions(parsed.data), ...scope }, USAGE_FORECAST_HORIZON)
+  })
+
+  /**
+   * Run spend against the per-run ceiling (`RUN_BUDGET_USD`). Alert only: a run
+   * above its ceiling is flagged here, never interrupted.
+   */
+  app.get('/v1/observability/budget', async (request, reply) => {
+    const parsed = usageQuery.safeParse(request.query ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const range = usageRange(parsed.data, USAGE_BUDGET_DAYS)
+    if (!range) return reply.status(400).send({ error: 'invalid_range' })
+    const scope = usageScope(request, parsed.data.operator)
+    if (!scope) return forbiddenScope(reply)
+    const ceilingUsd = engine.provider.budgetUsd
+    return {
+      ceilingUsd,
+      runs: await usageLedger.runs({ ...range, ...usageDimensions(parsed.data), ...scope }, ceilingUsd),
+    }
+  })
+
+  /** One run's spend, for the budget badge on its own page. */
+  app.get('/v1/observability/runs/:runId', async (request, reply) => {
+    const params = z.object({ runId: z.string().min(1).max(200) }).safeParse(request.params ?? {})
+    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    const scope = usageScope(request)
+    if (!scope) return forbiddenScope(reply)
+    const summary = await usageLedger.summary({
+      from: new Date(0).toISOString(),
+      to: new Date(Date.now() + 60_000).toISOString(),
+      ...scope,
+      runId: params.data.runId,
+    })
+    const ceilingUsd = engine.provider.budgetUsd
+    return {
+      runId: params.data.runId,
+      ...(summary.operator ? { operator: summary.operator } : {}),
+      ceilingUsd,
+      totals: summary.totals,
+      overBudget: ceilingUsd > 0 && summary.totals.costUsd > ceilingUsd,
+    }
   })
 
   app.get('/v1/exercise/reports', async (request, reply) => {

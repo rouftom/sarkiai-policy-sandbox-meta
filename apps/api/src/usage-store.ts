@@ -40,6 +40,8 @@ export interface UsageFilter {
   model?: string
   route?: string
   agentId?: string
+  /** One scenario or readiness run. */
+  runId?: string
   kind?: UsageKind
   status?: UsageStatus
 }
@@ -127,6 +129,14 @@ export interface UsageForecast {
 /** Below this many complete days, a trend would be noise. */
 const FORECAST_MIN_DAYS = 5
 const DAY_MS = 86_400_000
+
+/** One run's spend, with the ceiling verdict attached by the store. */
+export interface UsageRun extends UsageTotals {
+  runId: string
+  operator?: string
+  /** True when the known spend is above the configured per-run ceiling. */
+  overBudget: boolean
+}
 
 const DAY_PREFIX = 10
 
@@ -242,6 +252,44 @@ export class MongoUsageStore implements UsageStore {
       ? await this.group(col, mongoMatch(filter), 'day')
       : bucket(this.memoryRows(filter), 'day')
     return buildForecast(filter, rows, horizonDays)
+  }
+
+  /**
+   * The costliest runs in the range, one row per `runId`, newest ceiling
+   * verdict attached. `ceilingUsd: 0` means no ceiling is configured: the rows
+   * still list their spend but nothing is flagged.
+   */
+  async runs(filter: UsageFilter, ceilingUsd: number, limit = 20): Promise<UsageRun[]> {
+    await this.flush()
+    const col = await this.col()
+    const rows = col
+      ? await this.runsMongo(col, mongoMatch(filter), limit)
+      : runsInMemory(this.memoryRows(filter), limit)
+    return rows.map((row) => ({
+      ...row,
+      overBudget: ceilingUsd > 0 && row.costUsd > ceilingUsd,
+    }))
+  }
+
+  private async runsMongo(col: Collection<Document>, match: Document, limit: number): Promise<Omit<UsageRun, 'overBudget'>[]> {
+    const docs = await col
+      .aggregate([
+        { $match: match },
+        // Calls made outside a run (a direct question, an image) are not a run.
+        { $match: { runId: { $type: 'string' } } },
+        { $group: { _id: { runId: '$runId', operator: { $ifNull: ['$operator', 'unknown'] } }, ...GROUP_ACCUMULATORS } },
+        { $sort: { costUsd: -1, requests: -1, '_id.runId': 1 } },
+        { $limit: limit },
+      ])
+      .toArray()
+    return docs.map((doc) => {
+      const operator = doc._id?.operator as string | undefined
+      return {
+        runId: String(doc._id?.runId ?? 'unknown'),
+        ...(operator && operator !== 'unknown' ? { operator } : {}),
+        ...totalsFromAccumulators(doc),
+      }
+    })
   }
 
   /** Every event this process could not write to Mongo. */
@@ -384,6 +432,7 @@ function mongoMatch(filter: UsageFilter): Document {
   if (filter.model) match.model = filter.model
   if (filter.route) match.route = filter.route
   if (filter.agentId) match.agentId = filter.agentId
+  if (filter.runId) match.runId = filter.runId
   if (filter.status === 'ok') {
     // Rows written before `status` existed were successful calls.
     match.$and = [{ $or: [{ status: 'ok' }, { status: { $exists: false } }] }]
@@ -413,6 +462,7 @@ function matches(event: UsageEvent, filter: UsageFilter): boolean {
   if (filter.model && event.model !== filter.model) return false
   if (filter.route && event.route !== filter.route) return false
   if (filter.agentId && event.agentId !== filter.agentId) return false
+  if (filter.runId && event.runId !== filter.runId) return false
   if (filter.status && (event.status ?? 'ok') !== filter.status) return false
   if (filter.kind && (event.kind ?? 'chat') !== filter.kind) return false
   return true
@@ -452,6 +502,26 @@ function bucket(rows: UsageEvent[], dimension: Dimension): UsageRow[] {
   return [...groups.entries()]
     .map(([key, group]) => ({ key, ...totalsOf(group) }))
     .sort((a, b) => b.requests - a.requests || a.key.localeCompare(b.key))
+}
+
+/** Groups the rows by run (and operator, so an admin never merges two owners). */
+function runsInMemory(rows: UsageEvent[], limit: number): Omit<UsageRun, 'overBudget'>[] {
+  const groups = new Map<string, UsageEvent[]>()
+  for (const row of rows) {
+    if (!row.runId) continue
+    const key = `${row.runId}\u0000${row.operator ?? ''}`
+    const list = groups.get(key)
+    if (list) list.push(row)
+    else groups.set(key, [row])
+  }
+  return [...groups.values()]
+    .map((group) => ({
+      runId: group[0]!.runId!,
+      ...(group[0]!.operator ? { operator: group[0]!.operator } : {}),
+      ...totalsOf(group),
+    }))
+    .sort((a, b) => b.costUsd - a.costUsd || b.requests - a.requests || a.runId.localeCompare(b.runId))
+    .slice(0, limit)
 }
 
 function latencyOf(rows: UsageEvent[]): UsageLatency {

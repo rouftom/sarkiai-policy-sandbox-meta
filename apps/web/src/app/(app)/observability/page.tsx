@@ -24,6 +24,7 @@ import {
   Route as RouteIcon,
   TrendingUp,
   Users,
+  Wallet,
 } from 'lucide-react'
 import {
   Bar,
@@ -57,6 +58,7 @@ import {
 } from '@sps/ui'
 import {
   observabilityApi,
+  type ObservabilityBudgetDto,
   type ObservabilityForecastDto,
   type ObservabilitySummaryDto,
   type UsageKindDto,
@@ -73,6 +75,8 @@ import { PageIntro } from '@/components/page-intro'
 const FETCH_SIZE = 500
 /** The forecast fits its trend on two weeks of history, whatever the KPI window. */
 const FORECAST_DAYS = 14
+/** Run spend is checked over a month, like the API's budget route. */
+const BUDGET_DAYS = 30
 
 const AXIS = { fontSize: 10, fill: 'var(--muted-foreground)' }
 const TOOLTIP_STYLE = { fontSize: 11, borderRadius: 8, border: '1px solid var(--border)' }
@@ -173,6 +177,7 @@ export default function ObservabilityPage() {
   const [status, setStatus] = React.useState<'' | UsageStatusDto>('')
   const [summary, setSummary] = React.useState<ObservabilitySummaryDto | null>(null)
   const [forecast, setForecast] = React.useState<ObservabilityForecastDto | null>(null)
+  const [budget, setBudget] = React.useState<ObservabilityBudgetDto | null>(null)
   const [requests, setRequests] = React.useState<UsageRequestDto[]>([])
   const [total, setTotal] = React.useState(0)
   const [operatorNames, setOperatorNames] = React.useState<string[]>([])
@@ -188,8 +193,9 @@ export default function ObservabilityPage() {
     const to = new Date()
     const from = new Date(to.getTime() - days * 86_400_000)
     const history = new Date(to.getTime() - FORECAST_DAYS * 86_400_000)
+    const budgetFrom = new Date(to.getTime() - BUDGET_DAYS * 86_400_000)
     try {
-      const [next, pageOfCalls, prediction] = await Promise.all([
+      const [next, pageOfCalls, prediction, spend] = await Promise.all([
         observabilityApi.summary({ from, to, ...(scope ? { operator: scope } : {}) }),
         observabilityApi.requests({
           from,
@@ -199,9 +205,11 @@ export default function ObservabilityPage() {
           limit: FETCH_SIZE,
         }),
         observabilityApi.forecast({ from: history, to, ...(scope ? { operator: scope } : {}) }),
+        observabilityApi.budget({ from: budgetFrom, to, ...(scope ? { operator: scope } : {}) }),
       ])
       setSummary(next)
       setForecast(prediction)
+      setBudget(spend)
       setRequests(pageOfCalls.requests)
       setTotal(pageOfCalls.total)
       // Keep the last known names: a single-operator view no longer lists them.
@@ -250,6 +258,7 @@ export default function ObservabilityPage() {
   const totalPages = Math.max(1, Math.ceil(requests.length / pageSize))
   const current = Math.min(page, totalPages)
   const visible = requests.slice((current - 1) * pageSize, current * pageSize)
+  const overBudgetRuns = (budget?.runs ?? []).filter((run) => run.overBudget)
 
   const series = (summary?.series ?? []).map((point) => ({
     date: point.date.slice(5),
@@ -438,6 +447,72 @@ export default function ObservabilityPage() {
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="h-auto flex-row items-center gap-2 py-2">
+              <Wallet className="h-4 w-4 text-brand-primary dark:text-brand-primary-light" />
+              <CardTitle>{t('observability.budget.title')}</CardTitle>
+              <span className="ml-auto text-[10px] text-muted-foreground">
+                {!budget
+                  ? '—'
+                  : budget.ceilingUsd > 0
+                    ? t('observability.budget.ceiling', { amount: formatCost(budget.ceilingUsd, locale) })
+                    : t('observability.budget.none')}
+              </span>
+            </CardHeader>
+            <CardContent className="p-0">
+              {!budget ? (
+                <p className="px-4 py-4 text-xs text-muted-foreground">{t('observability.loading')}</p>
+              ) : overBudgetRuns.length === 0 ? (
+                <p className="px-4 py-4 text-xs text-muted-foreground">
+                  {budget.ceilingUsd > 0
+                    ? t('observability.budget.clear')
+                    : t('observability.budget.noCeilingHint')}
+                </p>
+              ) : (
+                <div className="custom-scrollbar overflow-x-auto">
+                  <Table className="min-w-[620px]">
+                    <TableHeader>
+                      <TableRow className="border-b border-slate-200 hover:bg-transparent dark:border-brand-primary-dark/30">
+                        <TableHead>{t('observability.budget.run')}</TableHead>
+                        {isAdmin && <TableHead>{t('observability.operator')}</TableHead>}
+                        <TableHead className="text-right">{t('observability.chartCalls')}</TableHead>
+                        <TableHead className="text-right">{t('observability.costColumn')}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {overBudgetRuns.map((run) => (
+                        <TableRow key={`${run.runId}-${run.operator ?? ''}`}>
+                          <TableCell className="max-w-[280px] truncate font-mono text-[11px]">{run.runId}</TableCell>
+                          {isAdmin && (
+                            <TableCell className="max-w-[180px] truncate">{run.operator ?? 'n/a'}</TableCell>
+                          )}
+                          <TableCell className="text-right tabular-nums">
+                            {run.requests}
+                            {run.errors > 0 && (
+                              <span className="ml-1 text-[10px] text-destructive">({run.errors})</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <span className="inline-flex items-center gap-1">
+                              {formatCost(run.costUsd, locale)}
+                              {run.unpriced > 0 && (
+                                <AlertTriangle
+                                  className="h-3 w-3 text-amber-500"
+                                  aria-label={t('observability.unpriced', { count: run.unpriced })}
+                                />
+                              )}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              <p className="px-4 pb-3 text-[10px] text-muted-foreground">{t('observability.budget.alertOnly')}</p>
             </CardContent>
           </Card>
 

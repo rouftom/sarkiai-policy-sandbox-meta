@@ -219,6 +219,46 @@ describe('usage ledger forecast (memory)', () => {
   })
 })
 
+describe('usage ledger runs (memory)', () => {
+  async function withRuns(): Promise<MongoUsageStore> {
+    const store = memoryStore()
+    await store.append(event({ ts: '2026-10-29T10:00:00.000Z', runId: 'run-1' }))
+    await store.append(event({ ts: '2026-10-29T10:05:00.000Z', runId: 'run-1' }))
+    await store.append(event({ ts: '2026-10-29T11:00:00.000Z', runId: 'run-2', costUsd: 0.01, operator: 'bob@sps.dev' }))
+    await store.append(event({ ts: '2026-10-29T12:00:00.000Z', runId: 'run-3', kind: 'retrieval', costUsd: null, inputTokens: 500 }))
+    // A direct call, outside any run.
+    await store.append(event({ ts: '2026-10-29T13:00:00.000Z' }))
+    return store
+  }
+
+  test('groups by run, costliest first, and flags the ones above the ceiling', async () => {
+    const store = await withRuns()
+    const runs = await store.runs({ from: FROM, to: TO }, 0.005, 10)
+
+    expect(runs.map((run) => run.runId)).toEqual(['run-2', 'run-1', 'run-3'])
+    expect(runs[0]).toMatchObject({ runId: 'run-2', operator: 'bob@sps.dev', requests: 1, costUsd: 0.01, overBudget: true })
+    expect(runs[1]).toMatchObject({ runId: 'run-1', requests: 2, costUsd: 0.004, overBudget: false })
+    expect(runs[2]).toMatchObject({ runId: 'run-3', requests: 1, costUsd: 0, unpriced: 1, overBudget: false })
+  })
+
+  test('no ceiling configured flags nothing, and the limit caps the list', async () => {
+    const store = await withRuns()
+    const runs = await store.runs({ from: FROM, to: TO }, 0, 2)
+
+    expect(runs).toHaveLength(2)
+    expect(runs.every((run) => !run.overBudget)).toBe(true)
+  })
+
+  test('a runId narrows the ledger for the run screens', async () => {
+    const store = await withRuns()
+    const page = await store.list({ from: FROM, to: TO, runId: 'run-1' }, 10)
+    const summary = await store.summary({ from: FROM, to: TO, runId: 'run-1' })
+
+    expect(page.total).toBe(2)
+    expect(summary.totals).toMatchObject({ requests: 2, costUsd: 0.004 })
+  })
+})
+
 describe('usage ledger requests (memory)', () => {
   test('newest first, filtered and counted before the page limit', async () => {
     const store = await seeded()
