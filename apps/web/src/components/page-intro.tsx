@@ -26,7 +26,9 @@ export function PageIntro({
         <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
         </div>
       </div>
-      {children && <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">{children}</div>}
+      {children && (
+        <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">{children}</div>
+      )}
     </section>
   )
 }

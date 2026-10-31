@@ -44,6 +44,7 @@ import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
+import { BrandBackdrop } from '@/components/brand-backdrop'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
 import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
@@ -716,7 +717,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
+      <BrandBackdrop variant="panel" className="-z-10" />
       <input
         ref={fileRef}
         type="file"
@@ -776,8 +778,10 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         </TooltipProvider>
       </header>
 
-      <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
-        {historyOpen ? (
+      {historyOpen ? (
+        /* The history owns its scroller (Virtuoso): it needs a bounded height,
+           not the conversation's overflow container. */
+        <div className="min-h-0 flex-1 p-3">
           <ChatHistory
             sessions={sessions}
             loading={sessionsLoading}
@@ -785,58 +789,62 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             onOpen={(id) => void openSession(id)}
             onDelete={removeSession}
           />
-        ) : sessionLoading ? (
-          <ConversationShimmer />
-        ) : turns.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <BrandMark className="h-12 w-12" />
-            <div>
-              <p className="text-[14px] font-semibold text-foreground">{t('assistant.greeting')}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">{t('assistant.emptyBody')}</p>
+        </div>
+      ) : (
+        <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
+          {sessionLoading ? (
+            <ConversationShimmer />
+          ) : turns.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+              <BrandMark className="h-12 w-12" />
+              <div>
+                <p className="text-[14px] font-semibold text-foreground">{t('assistant.greeting')}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{t('assistant.emptyBody')}</p>
+              </div>
+              <div className="grid w-full gap-1.5">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => void send(suggestion)}
+                    disabled={busy}
+                    className="rounded-lg bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="grid w-full gap-1.5">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  onClick={() => void send(suggestion)}
-                  disabled={busy}
-                  className="rounded-lg bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          turns.map((turn, index) => (
-            <React.Fragment key={turn.id}>
-              <ChatMessage
-                turn={turn}
-                isLast={index === turns.length - 1}
-                onRate={
-                  turn.role === 'assistant' && !turn.active
-                    ? (rating) =>
-                        setTurns((previous) => previous.map((entry) => (entry.id === turn.id ? { ...entry, rating } : entry)))
-                    : undefined
-                }
-                onRegenerate={
-                  turn.role === 'assistant' && !turn.active && index === turns.length - 1
-                    ? () => {
-                        const question = turns[index - 1]?.content
-                        if (question) {
-                          setTurns((previous) => previous.slice(0, index - 1))
-                          void send(question)
+          ) : (
+            turns.map((turn, index) => (
+              <React.Fragment key={turn.id}>
+                <ChatMessage
+                  turn={turn}
+                  isLast={index === turns.length - 1}
+                  onRate={
+                    turn.role === 'assistant' && !turn.active
+                      ? (rating) =>
+                          setTurns((previous) => previous.map((entry) => (entry.id === turn.id ? { ...entry, rating } : entry)))
+                      : undefined
+                  }
+                  onRegenerate={
+                    turn.role === 'assistant' && !turn.active && index === turns.length - 1
+                      ? () => {
+                          const question = turns[index - 1]?.content
+                          if (question) {
+                            setTurns((previous) => previous.slice(0, index - 1))
+                            void send(question)
+                          }
                         }
-                      }
-                    : undefined
-                }
-              />
-              {turn.cards?.map((card) => renderCard(turn.id, card))}
-            </React.Fragment>
-          ))
-        )}
-      </div>
+                      : undefined
+                  }
+                />
+                {turn.cards?.map((card) => renderCard(turn.id, card))}
+              </React.Fragment>
+            ))
+          )}
+        </div>
+      )}
 
       <div className="shrink-0 space-y-1 px-3 pb-2 pt-3">
         {actionsOpen && (
