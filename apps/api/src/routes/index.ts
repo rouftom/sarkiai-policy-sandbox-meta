@@ -1,6 +1,6 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { correctTranscript, enterUsageContext, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, referenceImage, setUsageStore, type DataPort } from '@sps/agents'
+import { correctTranscript, enterUsageContext, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, recordCapabilityUsage, referenceImage, setUsageStore, type DataPort } from '@sps/agents'
 import { MongoUsageStore } from '../usage-store.js'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
@@ -352,6 +352,71 @@ function isPublicRoute(method: string, path: string): boolean {
 function operatorOf(request: FastifyRequest) {
   if (!request.operator) throw new Error('Operator missing after the auth guard.')
   return request.operator
+}
+
+/** The observability window: at most a year, seven days by default. */
+const USAGE_DEFAULT_DAYS = 7
+/** A trend needs more history than a KPI window: the forecast looks back two weeks. */
+const USAGE_FORECAST_DAYS = 14
+/** How far ahead the forecast projects. */
+const USAGE_FORECAST_HORIZON = 7
+/** Run spend is checked over a month: a run older than that is not news. */
+const USAGE_BUDGET_DAYS = 30
+const USAGE_MAX_DAYS = 366
+const USAGE_KINDS = ['chat', 'retrieval', 'image', 'voice', 'sam'] as const
+
+const usageQuery = z.object({
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+  /** Admin only: read another operator's scope. An operator may only repeat their own. */
+  operator: z.string().email().max(200).optional(),
+  status: z.enum(['ok', 'error']).optional(),
+  kind: z.enum(USAGE_KINDS).optional(),
+  model: z.string().min(1).max(200).optional(),
+  route: z.string().min(1).max(300).optional(),
+  agentId: z.string().min(1).max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+})
+
+/** Resolves `from`/`to`; null when the range is invalid or wider than a year. */
+function usageRange(
+  query: z.infer<typeof usageQuery>,
+  defaultDays = USAGE_DEFAULT_DAYS,
+): { from: string; to: string } | null {
+  const to = query.to ? new Date(query.to) : new Date()
+  const from = query.from ? new Date(query.from) : new Date(to.getTime() - defaultDays * 86_400_000)
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) return null
+  if (to.getTime() - from.getTime() > USAGE_MAX_DAYS * 86_400_000) return null
+  return { from: from.toISOString(), to: to.toISOString() }
+}
+
+/** Only the dimensions the caller actually asked for. */
+function usageDimensions(query: z.infer<typeof usageQuery>) {
+  return {
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.kind ? { kind: query.kind } : {}),
+    ...(query.model ? { model: query.model } : {}),
+    ...(query.route ? { route: query.route } : {}),
+    ...(query.agentId ? { agentId: query.agentId } : {}),
+  }
+}
+
+/**
+ * The ledger scope: an operator is always pinned to their own rows, an admin
+ * reads everyone unless they name one operator. Null means "out of scope".
+ */
+function usageScope(request: FastifyRequest, requested?: string): { operator?: string } | null {
+  const me = operatorOf(request)
+  if (me.role === 'admin') return requested ? { operator: requested } : {}
+  if (requested && requested !== me.email) return null
+  return { operator: me.email }
+}
+
+function forbiddenScope(reply: FastifyReply) {
+  return reply.status(403).send({
+    error: 'forbidden',
+    message: 'Only an administrator can read another operator’s usage.',
+  })
 }
 
 /**
@@ -1860,6 +1925,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(413).send({ error: 'Page too large (max 12 MB per page).' })
     }
 
+    const sam = gazetteSam()
+    const meta = metaServices()
     try {
       const page = await analyzeGazettePage({
         bytes,
@@ -1870,12 +1937,25 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         model: engine.model,
         modelLabel: engine.provider.models.vision,
         provider: engine.provider,
-        sam: gazetteSam(),
+        sam,
         maxZones: body.data.maxZones,
         concurrency: body.data.concurrency,
         pricing: gazettePricing(),
       })
-      if (metaServices() && engine.provider.mode !== 'cloud') {
+      // The zone transcriptions are already metered as chat inside the vision
+      // model; only the SAM lookups are billed per call, so only they get a row.
+      if (sam && meta?.models.segmentation && page.usage.segmentationCalls > 0) {
+        recordCapabilityUsage({
+          kind: 'sam',
+          units: page.usage.segmentationCalls,
+          unit: 'call',
+          model: meta.models.segmentation,
+          mode: 'cloud',
+          servedBy: 'Meta',
+          costUsd: page.usage.segmentationCalls * META_GAZETTE_PRICING.perSegmentationCall,
+        })
+      }
+      if (meta && engine.provider.mode !== 'cloud') {
         page.warnings.push(
           `Zones transcribed by ${engine.provider.models.vision} on ${engine.provider.servedBy}: its token cost is billed by ${engine.provider.servedBy} and not included in the cost shown.`,
         )
@@ -2040,20 +2120,32 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     // Muse Voice Transcribe stays on Meta even when Baseten does the reasoning.
     const meta = metaServices()
-    const client =
-      meta?.models.transcription
-        ? new MetaAsrClient({
-            baseUrl: meta.baseURL,
-            apiKey: providerAccess(meta).apiKey,
-            headers: providerAccess(meta).headers,
-            model: meta.models.transcription,
-          })
-        : new LocalAsrClient({
-            baseUrl: config.transcription.url,
-            apiKey: config.serviceApiKey,
-            model: 'faster-whisper',
-          })
+    const cloudVoice = Boolean(meta?.models.transcription)
+    const voiceModel = meta?.models.transcription ?? 'faster-whisper'
+    // Voice is billed by the second; no confirmed Muse Voice tariff in this
+    // repo, so a Meta call stays unpriced while on-premise runs cost 0.
+    const voiceUsage = {
+      kind: 'voice' as const,
+      unit: 'second' as const,
+      model: voiceModel,
+      mode: cloudVoice ? ('cloud' as const) : engine.provider.mode,
+      servedBy: cloudVoice ? 'Meta' : engine.provider.servedBy,
+      costUsd: cloudVoice ? null : 0,
+    }
+    const client = cloudVoice
+      ? new MetaAsrClient({
+          baseUrl: meta!.baseURL,
+          apiKey: providerAccess(meta!).apiKey,
+          headers: providerAccess(meta!).headers,
+          model: voiceModel,
+        })
+      : new LocalAsrClient({
+          baseUrl: config.transcription.url,
+          apiKey: config.serviceApiKey,
+          model: 'faster-whisper',
+        })
 
+    const startedAt = Date.now()
     try {
       const transcript = await client.transcribe({
         audio,
@@ -2063,9 +2155,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         ...(body.data.keywords ? { keywords: body.data.keywords } : {}),
         ...(body.data.sessionId ? { sessionId: body.data.sessionId } : {}),
       })
+      recordCapabilityUsage({
+        ...voiceUsage,
+        units: Math.max(1, Math.round(transcript.durationMs / 1000)),
+        latencyMs: Date.now() - startedAt,
+      })
       return { ...transcript, facts: toVoiceFacts(transcript) }
     } catch (error) {
-      const meta = metaServices()
+      recordCapabilityUsage({
+        ...voiceUsage,
+        units: 0,
+        latencyMs: Date.now() - startedAt,
+        status: 'error',
+      })
       const relayed = !!meta && Object.keys(providerAccess(meta).headers).length > 0
       request.log.error({ relayed, message: (error as Error).message }, 'voice transcription failed')
       return reply.status(422).send({ error: (error as Error).message, relayed })
@@ -3093,6 +3195,90 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/observability/events', async (request) => {
     const limit = z.coerce.number().int().min(1).max(500).default(50).parse((request.query as { limit?: unknown })?.limit ?? 50)
     return { events: await usageLedger.recent(operatorOf(request).email, limit) }
+  })
+
+  /** Totals, daily series and every breakdown the observability console shows. */
+  app.get('/v1/observability/summary', async (request, reply) => {
+    const parsed = usageQuery.safeParse(request.query ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const range = usageRange(parsed.data)
+    if (!range) return reply.status(400).send({ error: 'invalid_range' })
+    const scope = usageScope(request, parsed.data.operator)
+    if (!scope) return forbiddenScope(reply)
+    const me = operatorOf(request)
+    return usageLedger.summary(
+      { ...range, ...usageDimensions(parsed.data), ...scope },
+      { includeOperators: me.role === 'admin' && !scope.operator },
+    )
+  })
+
+  /** Newest calls, same scope and filters, capped for the requests table. */
+  app.get('/v1/observability/requests', async (request, reply) => {
+    const parsed = usageQuery.safeParse(request.query ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const range = usageRange(parsed.data)
+    if (!range) return reply.status(400).send({ error: 'invalid_range' })
+    const scope = usageScope(request, parsed.data.operator)
+    if (!scope) return forbiddenScope(reply)
+    return usageLedger.list(
+      { ...range, ...usageDimensions(parsed.data), ...scope },
+      parsed.data.limit ?? 50,
+    )
+  })
+
+  /**
+   * Straight-line projection of the next seven days, fitted on the complete
+   * days of the range. Under five days of history it returns `enoughData:
+   * false` rather than a number the operator could mistake for a plan.
+   */
+  app.get('/v1/observability/forecast', async (request, reply) => {
+    const parsed = usageQuery.safeParse(request.query ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const range = usageRange(parsed.data, USAGE_FORECAST_DAYS)
+    if (!range) return reply.status(400).send({ error: 'invalid_range' })
+    const scope = usageScope(request, parsed.data.operator)
+    if (!scope) return forbiddenScope(reply)
+    return usageLedger.forecast({ ...range, ...usageDimensions(parsed.data), ...scope }, USAGE_FORECAST_HORIZON)
+  })
+
+  /**
+   * Run spend against the per-run ceiling (`RUN_BUDGET_USD`). Alert only: a run
+   * above its ceiling is flagged here, never interrupted.
+   */
+  app.get('/v1/observability/budget', async (request, reply) => {
+    const parsed = usageQuery.safeParse(request.query ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const range = usageRange(parsed.data, USAGE_BUDGET_DAYS)
+    if (!range) return reply.status(400).send({ error: 'invalid_range' })
+    const scope = usageScope(request, parsed.data.operator)
+    if (!scope) return forbiddenScope(reply)
+    const ceilingUsd = engine.provider.budgetUsd
+    return {
+      ceilingUsd,
+      runs: await usageLedger.runs({ ...range, ...usageDimensions(parsed.data), ...scope }, ceilingUsd),
+    }
+  })
+
+  /** One run's spend, for the budget badge on its own page. */
+  app.get('/v1/observability/runs/:runId', async (request, reply) => {
+    const params = z.object({ runId: z.string().min(1).max(200) }).safeParse(request.params ?? {})
+    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    const scope = usageScope(request)
+    if (!scope) return forbiddenScope(reply)
+    const summary = await usageLedger.summary({
+      from: new Date(0).toISOString(),
+      to: new Date(Date.now() + 60_000).toISOString(),
+      ...scope,
+      runId: params.data.runId,
+    })
+    const ceilingUsd = engine.provider.budgetUsd
+    return {
+      runId: params.data.runId,
+      ...(summary.operator ? { operator: summary.operator } : {}),
+      ceilingUsd,
+      totals: summary.totals,
+      overBudget: ceilingUsd > 0 && summary.totals.costUsd > ceilingUsd,
+    }
   })
 
   app.get('/v1/exercise/reports', async (request, reply) => {

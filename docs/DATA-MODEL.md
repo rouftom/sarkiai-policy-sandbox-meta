@@ -54,6 +54,29 @@ Point ids are `uuid5(content_hash)` → re-ingestion is idempotent.
 `{ id, runId, agentId, step, thought, toolCalls[], model, ts }`: one document
 per reasoning step, queryable by `runId`.
 
+### `usage_events`
+
+One document per metered call, written by `MongoUsageStore`. Indexed on `ts`,
+`operator + ts`, `model + ts`, `agentId + ts` and a sparse `runId`; rows written
+before the ledger knew `kind` or `status` read as successful chat calls.
+
+| Field | Purpose |
+|-------|---------|
+| `ts`, `operator`, `route`, `runId`, `agentId` | when, who, which route and run/agent |
+| `kind`, `status`, `latencyMs` | capability (`chat`, `retrieval`, `image`, `voice`, `sam`), outcome, duration |
+| `mode`, `servedBy`, `model`, `inputTokens`, `outputTokens` | what answered and how many text tokens |
+| `units`, `unit`, `costUsd` | non-token volume (`image`, `second`, `call`), list-price estimate; `null` when the tariff is unknown |
+
+The ledger carries **no prompt, answer, audio, image or query string**: only the
+route template, counters and the operator's address. An operator reads their own
+rows; an administrator reads every row or one named operator. Rows are kept
+without expiry by design (cost history and run-budget checks); the console says
+so and marks estimates, unpriced calls and local free runs explicitly. A tariff
+missing from `LIST_PRICES` is stored as `null`, never `0`.
+
+When MongoDB is unreachable, rows are buffered in memory for the life of the
+process and retried on the next write, so metering never breaks a request.
+
 ## Retrieval filter contract
 
 The retriever builds a Qdrant `must` filter from the query taxonomy:
