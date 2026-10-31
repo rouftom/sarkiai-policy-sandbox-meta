@@ -1,6 +1,7 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { correctTranscript, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, referenceImage, type DataPort } from '@sps/agents'
+import { correctTranscript, enterUsageContext, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, referenceImage, setUsageStore, type DataPort } from '@sps/agents'
+import { MongoUsageStore } from '../usage-store.js'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -213,6 +214,8 @@ const chatSessions = new ChatSessionStore({ mongodbUri: config.mongodb.uri, dbNa
 const readinessRuns = new ReadinessRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const scenarioRuns = new ScenarioRunStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 const exerciseReports = new ExerciseReportStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
+const usageLedger = new MongoUsageStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
+setUsageStore(usageLedger)
 const notificationContacts = new NotificationContactStore({
   mongodbUri: config.mongodb.uri,
   dbName: config.mongodb.dbName,
@@ -460,6 +463,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
     }
     request.operator = operator
+    enterUsageContext({ operator: operator.email, route: request.routeOptions.url ?? path })
   })
 
   // Announce the active provider in the audit chain (no-op when unchanged).
@@ -3083,6 +3087,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       parsed.data.actions,
       parsed.data.evaluatedAtMinute,
     )
+  })
+
+  /** Token ledger, the operator's own events, newest first (phase 1 of the observability menu). */
+  app.get('/v1/observability/events', async (request) => {
+    const limit = z.coerce.number().int().min(1).max(500).default(50).parse((request.query as { limit?: unknown })?.limit ?? 50)
+    return { events: await usageLedger.recent(operatorOf(request).email, limit) }
   })
 
   app.get('/v1/exercise/reports', async (request, reply) => {
