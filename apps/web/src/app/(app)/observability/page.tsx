@@ -135,6 +135,24 @@ function formatTokens(value: number, locale: string): string {
   }).format(value)
 }
 
+type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string
+
+/**
+ * A latency reads in its natural unit: milliseconds under a second, then
+ * seconds, minutes, hours and days, so a slow call never prints "75432 ms".
+ */
+function formatLatency(ms: number, locale: string, t: Translate): string {
+  const format = (value: number) =>
+    new Intl.NumberFormat(locale === 'fr' ? 'fr-FR' : 'en-GB', {
+      maximumFractionDigits: value >= 10 ? 0 : 1,
+    }).format(value)
+  if (ms < 1000) return t('observability.duration.ms', { value: format(ms) })
+  if (ms < 60_000) return t('observability.duration.s', { value: format(ms / 1000) })
+  if (ms < 3_600_000) return t('observability.duration.min', { value: format(ms / 60_000) })
+  if (ms < 86_400_000) return t('observability.duration.h', { value: format(ms / 3_600_000) })
+  return t('observability.duration.d', { value: format(ms / 86_400_000) })
+}
+
 /**
  * Calls made outside an institution agent (the assistant turn itself, vision,
  * readiness, capability meters) carry no `agentId`. They are SarkiAI's own
@@ -430,11 +448,11 @@ export default function ObservabilityPage() {
                   value={
                     summary?.latency.p95Ms === null || summary?.latency.p95Ms === undefined
                       ? t('observability.noLatency')
-                      : `${summary.latency.p95Ms} ms`
+                      : formatLatency(summary.latency.p95Ms, locale, t)
                   }
                   hint={
                     summary?.latency.p50Ms !== null && summary?.latency.p50Ms !== undefined
-                      ? t('observability.p50', { ms: summary.latency.p50Ms })
+                      ? t('observability.p50', { value: formatLatency(summary.latency.p50Ms, locale, t) })
                       : t('observability.noLatency')
                   }
                 />
@@ -727,7 +745,9 @@ export default function ObservabilityPage() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {typeof row.latencyMs === 'number' ? `${row.latencyMs} ms` : t('observability.noLatency')}
+                              {typeof row.latencyMs === 'number'
+                                ? formatLatency(row.latencyMs, locale, t)
+                                : t('observability.noLatency')}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {row.unit && row.unit !== 'token' && typeof row.units === 'number' ? (
