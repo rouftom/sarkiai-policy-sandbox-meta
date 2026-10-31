@@ -40,6 +40,8 @@ export interface ChatTurn {
   endedAt?: number
   /** The turn is still being written. */
   active?: boolean
+  /** The operator stopped the stream before an answer was validated. */
+  stopped?: boolean
   /** The operator's verdict on an answer. */
   rating?: 'good' | 'bad'
   /** Interactive cards the agent opened on this turn (questions, approvals). */
@@ -129,6 +131,10 @@ export function ChatMessage({
             <div className="mt-3">
               <StreamLoader />
             </div>
+          )}
+
+          {turn.stopped && !turn.active && (
+            <p className="mt-1 text-[10px] font-medium text-muted-foreground">{t('assistant.stopped')}</p>
           )}
 
           {turn.validation && !turn.active && (

@@ -23,7 +23,7 @@ import {
   cn,
 } from '@sps/ui'
 import { institutionsForDomains, type Domain } from '@sps/shared'
-import { api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
+import { ASSISTANT_FINISHED, api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
 import type { ActionRecord, ActionStatus, AgentUiRequest } from '@/lib/agent-ui'
 import { decideAction, listActions } from '@/lib/actions-client'
 import { ActionCenter } from '@/components/ai/tools/action-center'
@@ -113,6 +113,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   inputRef.current = input
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+  /** The stream in flight: Stop aborts it, so the server stops generating too. */
+  const streamRef = React.useRef<AbortController | null>(null)
 
   // The institutions of every sector the operator works on (one list for the whole workspace).
   const institutions = React.useMemo(() => institutionsForDomains(domains), [domains])
@@ -126,6 +128,10 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [modelState, setModelState] = React.useState<'loading' | 'ready' | 'error'>('loading')
   const [model, setModel] = React.useState('')
   const [modelError, setModelError] = React.useState<string | null>(null)
+
+  // Closing the assistant panel unmounts it: the browser must stop reading the
+  // stream, or the connection outlives the view that asked for it.
+  React.useEffect(() => () => streamRef.current?.abort(), [])
 
   // A sector change can remove a chosen institution: it is dropped from the choice.
   React.useEffect(() => {
@@ -213,6 +219,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     // Whatever the recorder is still correcting belongs to the question just sent.
     dictation.current = { base: null, last: '', stale: true }
     setBusy(true)
+    // One controller per turn: Stop aborts the HTTP stream, not just the UI.
+    const controller = new AbortController()
+    streamRef.current = controller
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64, name: attachment.name }))
     // The files belong to this message: the next question starts without them.
     setAttachments([])
@@ -325,6 +334,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           }))
         },
         onUi: (ui) => patchLast((turn) => ({ ...turn, cards: [...(turn.cards ?? []), ui] })),
+        signal: controller.signal,
       })
       closeOpen(Date.now())
       patchLast((turn) => ({
@@ -339,16 +349,33 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       }))
     } catch (error) {
       closeOpen(Date.now())
-      const message = (error as Error).message
-      patchLast((turn) => ({
-        ...turn,
-        content: turn.content ? turn.content : `⚠️ ${message}`,
-        active: false,
-        endedAt: Date.now(),
-        steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step)),
-      }))
+      // Stop is a decision, not a failure: the turn ends where it was, the
+      // steps close normally, and no error banner is shown.
+      const stopped = controller.signal.aborted
+      if (!stopped) {
+        const message = (error as Error).message
+        patchLast((turn) => ({
+          ...turn,
+          content: turn.content ? turn.content : `⚠️ ${message}`,
+          active: false,
+          endedAt: Date.now(),
+          steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step)),
+        }))
+      } else {
+        patchLast((turn) => ({
+          ...turn,
+          active: false,
+          stopped: true,
+          endedAt: Date.now(),
+          steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'complete' } : step)),
+        }))
+      }
     } finally {
+      if (streamRef.current === controller) streamRef.current = null
       setBusy(false)
+      // Audit pages refresh their blocks from this event; a stopped turn is a
+      // finished turn too.
+      window.dispatchEvent(new CustomEvent(ASSISTANT_FINISHED))
     }
   }
 
@@ -852,6 +879,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         <ChatInput
           ref={textareaRef}
           accent={pinned ? institutionAccent(pinned.color) : undefined}
+          stop={() => streamRef.current?.abort()}
           input={input}
           handleInputChange={(event) => {
             const value = event.target.value
