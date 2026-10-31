@@ -31,6 +31,19 @@ type HistoryEntry =
 
 const BUCKETS: Bucket[] = ['today', 'week', 'older']
 
+/**
+ * Padding lives on Virtuoso's list, not on its scroller: the scrollbar then sits
+ * flush against the panel edge, where the conversation's own scroller puts it.
+ */
+const HistoryList = React.forwardRef<HTMLDivElement, React.ComponentProps<'div'>>(function HistoryList(
+  { className, ...props },
+  ref,
+) {
+  return <div ref={ref} {...props} className={className ? `py-2 ${className}` : 'py-2'} />
+})
+
+const HISTORY_COMPONENTS = { List: HistoryList }
+
 export function ChatHistory({
   sessions,
   loading,
@@ -63,12 +76,16 @@ export function ChatHistory({
   }, [sessions])
 
   if (loading && sessions.length === 0) {
-    return <HistoryShimmer />
+    return (
+      <div className="p-3">
+        <HistoryShimmer />
+      </div>
+    )
   }
 
   if (entries.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-3 text-center text-xs text-muted-foreground">
         <MessageSquare className="h-6 w-6 opacity-60" />
         {t('history.empty')}
       </div>
@@ -78,13 +95,14 @@ export function ChatHistory({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <Virtuoso
-        className="min-h-0 flex-1"
+        className="custom-scrollbar min-h-0 flex-1"
+        components={HISTORY_COMPONENTS}
         data={entries}
         computeItemKey={(_index, entry) => entry.key}
         itemContent={(_index, entry) => {
           if (entry.kind === 'header') {
             return (
-              <p className="px-2 pb-1 pt-2 text-[10px] font-medium text-muted-foreground">{t(`history.${entry.bucket}`)}</p>
+              <p className="mx-3 px-2 pb-1 pt-2 text-[10px] font-medium text-muted-foreground">{t(`history.${entry.bucket}`)}</p>
             )
           }
 
@@ -92,7 +110,7 @@ export function ChatHistory({
           const active = session.id === activeId
           return (
             <div
-              className={`group/row flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${
+              className={`group/row mx-3 flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${
                 active ? 'bg-brand-primary/10 dark:bg-brand-primary-dark/20' : 'hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
