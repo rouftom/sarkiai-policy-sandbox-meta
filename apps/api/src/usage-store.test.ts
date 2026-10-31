@@ -150,6 +150,75 @@ describe('usage ledger summary (memory)', () => {
   })
 })
 
+describe('usage ledger forecast (memory)', () => {
+  const DAY = 86_400_000
+  const START = '2026-10-20T00:00:00.000Z'
+
+  async function daily(days: number): Promise<MongoUsageStore> {
+    const store = memoryStore()
+    for (let index = 0; index < days; index += 1) {
+      const stamp = new Date(Date.parse(START) + index * DAY + 10 * 3_600_000).toISOString()
+      await store.append(event({ ts: stamp, inputTokens: 0, outputTokens: 0, costUsd: 0.002 }))
+      await store.append(event({ ts: stamp, inputTokens: 0, outputTokens: 0, costUsd: 0.002 }))
+    }
+    return store
+  }
+
+  test('projects calls and known cost from the complete days', async () => {
+    const store = await daily(6)
+    const forecast = await store.forecast({ from: START, to: '2026-10-27T00:00:00.000Z' }, 7)
+
+    // The trend is fitted on the six days that actually saw calls, not on the
+    // empty day between the last call and the end of the range.
+    expect(forecast.days).toBe(6)
+    expect(forecast.activeDays).toBe(6)
+    expect(forecast.enoughData).toBe(true)
+    expect(forecast.projectedCalls).toBe(14)
+    expect(forecast.projectedCostUsd).toBeCloseTo(0.028, 6)
+    expect(forecast.unpriced).toBe(0)
+  })
+
+  test('leaves out a partial day at either end of the range', async () => {
+    const store = await daily(6)
+    const forecast = await store.forecast({ from: '2026-10-21T00:00:00.000Z', to: '2026-10-27T12:00:00.000Z' }, 7)
+
+    // 21..25 are the whole days with calls inside the range.
+    expect(forecast.days).toBe(5)
+    expect(forecast.series.map((point) => point.date)).toEqual([
+      '2026-10-21',
+      '2026-10-22',
+      '2026-10-23',
+      '2026-10-24',
+      '2026-10-25',
+    ])
+  })
+
+  test('under five complete days it says so instead of inventing a trend', async () => {
+    const store = await daily(3)
+    const forecast = await store.forecast({ from: START, to: '2026-10-24T00:00:00.000Z' }, 7)
+
+    expect(forecast.days).toBe(3)
+    expect(forecast.activeDays).toBe(3)
+    expect(forecast.enoughData).toBe(false)
+    expect(forecast.projectedCalls).toBeNull()
+    expect(forecast.projectedCostUsd).toBeNull()
+  })
+
+  test('an unpriced history projects calls but not dollars', async () => {
+    const store = memoryStore()
+    for (let index = 0; index < 5; index += 1) {
+      const stamp = new Date(Date.parse(START) + index * DAY + 10 * 3_600_000).toISOString()
+      await store.append(event({ ts: stamp, costUsd: null }))
+    }
+    const forecast = await store.forecast({ from: START, to: '2026-10-27T00:00:00.000Z' }, 7)
+
+    expect(forecast.enoughData).toBe(true)
+    expect(forecast.projectedCalls).toBeGreaterThan(0)
+    expect(forecast.projectedCostUsd).toBeNull()
+    expect(forecast.unpriced).toBe(5)
+  })
+})
+
 describe('usage ledger requests (memory)', () => {
   test('newest first, filtered and counted before the page limit', async () => {
     const store = await seeded()

@@ -1737,6 +1737,25 @@ export interface ObservabilityRequestsDto {
   total: number
 }
 
+/** Straight-line projection of the next days, from the complete days in range. */
+export interface ObservabilityForecastDto {
+  from: string
+  to: string
+  scope: 'operator' | 'all'
+  operator?: string
+  /** Complete days the regression used. */
+  days: number
+  activeDays: number
+  horizonDays: number
+  /** Null when the history is too thin. */
+  projectedCalls: number | null
+  /** Null when too thin, or when nothing in the window has a known tariff. */
+  projectedCostUsd: number | null
+  unpriced: number
+  enoughData: boolean
+  series: Array<{ date: string; requests: number; costUsd: number }>
+}
+
 export interface ObservabilityQueryDto {
   from: Date
   to: Date
@@ -1764,4 +1783,6 @@ export const observabilityApi = {
     request<ObservabilitySummaryDto>(`/v1/observability/summary?${observabilityQuery(params)}`),
   requests: (params: ObservabilityQueryDto) =>
     request<ObservabilityRequestsDto>(`/v1/observability/requests?${observabilityQuery(params)}`),
+  forecast: (params: ObservabilityQueryDto) =>
+    request<ObservabilityForecastDto>(`/v1/observability/forecast?${observabilityQuery(params)}`),
 }

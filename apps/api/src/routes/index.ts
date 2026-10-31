@@ -356,6 +356,10 @@ function operatorOf(request: FastifyRequest) {
 
 /** The observability window: at most a year, seven days by default. */
 const USAGE_DEFAULT_DAYS = 7
+/** A trend needs more history than a KPI window: the forecast looks back two weeks. */
+const USAGE_FORECAST_DAYS = 14
+/** How far ahead the forecast projects. */
+const USAGE_FORECAST_HORIZON = 7
 const USAGE_MAX_DAYS = 366
 const USAGE_KINDS = ['chat', 'retrieval', 'image', 'voice', 'sam'] as const
 
@@ -373,9 +377,12 @@ const usageQuery = z.object({
 })
 
 /** Resolves `from`/`to`; null when the range is invalid or wider than a year. */
-function usageRange(query: z.infer<typeof usageQuery>): { from: string; to: string } | null {
+function usageRange(
+  query: z.infer<typeof usageQuery>,
+  defaultDays = USAGE_DEFAULT_DAYS,
+): { from: string; to: string } | null {
   const to = query.to ? new Date(query.to) : new Date()
-  const from = query.from ? new Date(query.from) : new Date(to.getTime() - USAGE_DEFAULT_DAYS * 86_400_000)
+  const from = query.from ? new Date(query.from) : new Date(to.getTime() - defaultDays * 86_400_000)
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) return null
   if (to.getTime() - from.getTime() > USAGE_MAX_DAYS * 86_400_000) return null
   return { from: from.toISOString(), to: to.toISOString() }
@@ -3215,6 +3222,21 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       { ...range, ...usageDimensions(parsed.data), ...scope },
       parsed.data.limit ?? 50,
     )
+  })
+
+  /**
+   * Straight-line projection of the next seven days, fitted on the complete
+   * days of the range. Under five days of history it returns `enoughData:
+   * false` rather than a number the operator could mistake for a plan.
+   */
+  app.get('/v1/observability/forecast', async (request, reply) => {
+    const parsed = usageQuery.safeParse(request.query ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const range = usageRange(parsed.data, USAGE_FORECAST_DAYS)
+    if (!range) return reply.status(400).send({ error: 'invalid_range' })
+    const scope = usageScope(request, parsed.data.operator)
+    if (!scope) return forbiddenScope(reply)
+    return usageLedger.forecast({ ...range, ...usageDimensions(parsed.data), ...scope }, USAGE_FORECAST_HORIZON)
   })
 
   app.get('/v1/exercise/reports', async (request, reply) => {

@@ -22,6 +22,7 @@ import {
   Loader,
   RefreshCw,
   Route as RouteIcon,
+  TrendingUp,
   Users,
 } from 'lucide-react'
 import {
@@ -56,6 +57,7 @@ import {
 } from '@sps/ui'
 import {
   observabilityApi,
+  type ObservabilityForecastDto,
   type ObservabilitySummaryDto,
   type UsageKindDto,
   type UsageRequestDto,
@@ -69,6 +71,8 @@ import { PageIntro } from '@/components/page-intro'
 
 /** The API caps a page at 500 records; the table pages through them locally. */
 const FETCH_SIZE = 500
+/** The forecast fits its trend on two weeks of history, whatever the KPI window. */
+const FORECAST_DAYS = 14
 
 const AXIS = { fontSize: 10, fill: 'var(--muted-foreground)' }
 const TOOLTIP_STYLE = { fontSize: 11, borderRadius: 8, border: '1px solid var(--border)' }
@@ -168,6 +172,7 @@ export default function ObservabilityPage() {
   const [scope, setScope] = React.useState('')
   const [status, setStatus] = React.useState<'' | UsageStatusDto>('')
   const [summary, setSummary] = React.useState<ObservabilitySummaryDto | null>(null)
+  const [forecast, setForecast] = React.useState<ObservabilityForecastDto | null>(null)
   const [requests, setRequests] = React.useState<UsageRequestDto[]>([])
   const [total, setTotal] = React.useState(0)
   const [operatorNames, setOperatorNames] = React.useState<string[]>([])
@@ -182,8 +187,9 @@ export default function ObservabilityPage() {
     setUnreachable(false)
     const to = new Date()
     const from = new Date(to.getTime() - days * 86_400_000)
+    const history = new Date(to.getTime() - FORECAST_DAYS * 86_400_000)
     try {
-      const [next, pageOfCalls] = await Promise.all([
+      const [next, pageOfCalls, prediction] = await Promise.all([
         observabilityApi.summary({ from, to, ...(scope ? { operator: scope } : {}) }),
         observabilityApi.requests({
           from,
@@ -192,8 +198,10 @@ export default function ObservabilityPage() {
           ...(status ? { status } : {}),
           limit: FETCH_SIZE,
         }),
+        observabilityApi.forecast({ from: history, to, ...(scope ? { operator: scope } : {}) }),
       ])
       setSummary(next)
+      setForecast(prediction)
       setRequests(pageOfCalls.requests)
       setTotal(pageOfCalls.total)
       // Keep the last known names: a single-operator view no longer lists them.
@@ -388,6 +396,50 @@ export default function ObservabilityPage() {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-4 p-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary-dark dark:text-brand-primary-light">
+                <TrendingUp className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {t('observability.forecast.title', { days: forecast?.horizonDays ?? 7 })}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {!forecast || !forecast.enoughData
+                    ? t('observability.forecast.insufficient')
+                    : t('observability.forecast.basis', { days: forecast.days })}
+                </p>
+                {forecast?.enoughData && forecast.unpriced > 0 && (
+                  <p className="mt-0.5 flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{t('observability.forecast.unpriced', { count: forecast.unpriced })}</span>
+                  </p>
+                )}
+              </div>
+              <div className="ml-auto flex items-end gap-6">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t('observability.forecast.calls')}</p>
+                  <p className="font-display text-lg font-bold tabular-nums">
+                    {typeof forecast?.projectedCalls === 'number' ? forecast.projectedCalls : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t('observability.forecast.cost')}</p>
+                  <p className="font-display text-lg font-bold tabular-nums">
+                    {typeof forecast?.projectedCostUsd === 'number' ? (
+                      formatCost(forecast.projectedCostUsd, locale)
+                    ) : forecast?.enoughData ? (
+                      <span className="text-[10px] font-normal text-muted-foreground">{t('observability.unknownTariff')}</span>
+                    ) : (
+                      '—'
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="h-auto flex-row items-center gap-2 py-2">

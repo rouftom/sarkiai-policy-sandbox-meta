@@ -96,6 +96,38 @@ export interface UsagePage {
   total: number
 }
 
+/**
+ * A straight-line projection of the next few days from the complete days in the
+ * range. A partial day (today, or the first day of a mid-day range) is left out:
+ * counting a half-spent day as a full one would pull the trend down.
+ */
+export interface UsageForecast {
+  from: string
+  to: string
+  scope: 'operator' | 'all'
+  operator?: string
+  /** Complete UTC days the regression used, first active day to last. */
+  days: number
+  /** Days among them with at least one call. */
+  activeDays: number
+  /** How many days the projection covers. */
+  horizonDays: number
+  /** Expected calls over the horizon; null when the history is too thin. */
+  projectedCalls: number | null
+  /** Expected spend on known tariffs; null when too thin or nothing is priced. */
+  projectedCostUsd: number | null
+  /** Calls in the window with no known tariff: their spend is outside the projection. */
+  unpriced: number
+  /** False under five complete days or when no call was recorded. */
+  enoughData: boolean
+  /** The complete daily points behind the trend, oldest first. */
+  series: Array<{ date: string; requests: number; costUsd: number }>
+}
+
+/** Below this many complete days, a trend would be noise. */
+const FORECAST_MIN_DAYS = 5
+const DAY_MS = 86_400_000
+
 const DAY_PREFIX = 10
 
 export class MongoUsageStore implements UsageStore {
@@ -200,6 +232,16 @@ export class MongoUsageStore implements UsageStore {
       col.countDocuments(match),
     ] as const)
     return { requests: docs.map(normalize), total }
+  }
+
+  /** Straight-line projection of the next `horizonDays` from the complete days. */
+  async forecast(filter: UsageFilter, horizonDays = 7): Promise<UsageForecast> {
+    await this.flush()
+    const col = await this.col()
+    const rows = col
+      ? await this.group(col, mongoMatch(filter), 'day')
+      : bucket(this.memoryRows(filter), 'day')
+    return buildForecast(filter, rows, horizonDays)
   }
 
   /** Every event this process could not write to Mongo. */
@@ -428,6 +470,70 @@ function latencyOf(rows: UsageEvent[]): UsageLatency {
 function percentile(sorted: number[], p: number): number {
   const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))
   return Math.round(sorted[index]!)
+}
+
+/**
+ * Least-squares straight line over the daily values, evaluated for the next
+ * `horizon` days. Negative days are clamped to zero: spend cannot go below it.
+ */
+function project(values: number[], horizon: number): number {
+  const n = values.length
+  if (n === 0 || horizon <= 0) return 0
+  const meanX = (n - 1) / 2
+  const meanY = values.reduce((sum, value) => sum + value, 0) / n
+  let covariance = 0
+  let variance = 0
+  values.forEach((value, x) => {
+    covariance += (x - meanX) * (value - meanY)
+    variance += (x - meanX) ** 2
+  })
+  const slope = variance === 0 ? 0 : covariance / variance
+  const intercept = meanY - slope * meanX
+  let total = 0
+  for (let step = 0; step < horizon; step += 1) {
+    total += Math.max(0, intercept + slope * (n + step))
+  }
+  return total
+}
+
+/** A daily bucket is usable only when the range covers the whole UTC day. */
+function isCompleteDay(row: UsageRow, from: string, to: string): boolean {
+  const start = Date.parse(`${row.key}T00:00:00.000Z`)
+  if (Number.isNaN(start)) return false
+  return start >= Date.parse(from) && start + DAY_MS <= Date.parse(to)
+}
+
+function buildForecast(filter: UsageFilter, rows: UsageRow[], horizonDays: number): UsageForecast {
+  const complete = rows
+    .filter((row) => isCompleteDay(row, filter.from, filter.to))
+    .sort((a, b) => a.key.localeCompare(b.key))
+  const active = complete.filter((row) => row.requests > 0)
+  // Trim the range to the observed history: a quiet day before the first call
+  // or after the last one says nothing about the trend, it just pads it.
+  const first = active[0]?.key
+  const last = active[active.length - 1]?.key
+  const used = first && last ? complete.filter((row) => row.key >= first && row.key <= last) : []
+  const enoughData = used.length >= FORECAST_MIN_DAYS && active.length > 0
+  const hasPricedCalls = used.some((row) => row.requests > row.unpriced)
+  const unpriced = used.reduce((sum, row) => sum + row.unpriced, 0)
+
+  return {
+    from: filter.from,
+    to: filter.to,
+    scope: filter.operator ? 'operator' : 'all',
+    ...(filter.operator ? { operator: filter.operator } : {}),
+    days: used.length,
+    activeDays: active.length,
+    horizonDays,
+    projectedCalls: enoughData ? Math.round(project(used.map((row) => row.requests), horizonDays)) : null,
+    projectedCostUsd:
+      enoughData && hasPricedCalls
+        ? Math.round(project(used.map((row) => row.costUsd), horizonDays) * 1_000_000) / 1_000_000
+        : null,
+    unpriced,
+    enoughData,
+    series: used.map((row) => ({ date: row.key, requests: row.requests, costUsd: row.costUsd })),
+  }
 }
 
 /** Every UTC day between `from` (inclusive) and `to` (exclusive), zeros included. */
