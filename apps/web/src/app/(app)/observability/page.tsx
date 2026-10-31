@@ -134,6 +134,16 @@ function formatTokens(value: number, locale: string): string {
   }).format(value)
 }
 
+/**
+ * Calls made outside an institution agent (the assistant turn itself, vision,
+ * readiness, capability meters) carry no `agentId`. They are SarkiAI's own
+ * work, not an unidentified third party: show the assistant's name instead of
+ * the ledger's "unknown" bucket.
+ */
+function agentLabel(agentId: string | undefined, assistant: string): string {
+  return agentId && agentId !== 'unknown' ? agentId : assistant
+}
+
 function Kpi({
   icon: Icon,
   label,
@@ -599,7 +609,11 @@ export default function ObservabilityPage() {
                         return (
                           <TableRow key={row.key}>
                             <TableCell className="max-w-[260px] truncate font-medium">
-                              {bucket === 'kind' ? t(KIND_LABEL[row.key as UsageKindDto] ?? 'observability.byKind') : row.key}
+                              {bucket === 'kind'
+                                ? t(KIND_LABEL[row.key as UsageKindDto] ?? 'observability.byKind')
+                                : bucket === 'agent'
+                                  ? agentLabel(row.key, t('assistant.title'))
+                                  : row.key}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {row.requests}
@@ -687,7 +701,7 @@ export default function ObservabilityPage() {
                               {t(KIND_LABEL[row.kind] ?? 'observability.byKind')}
                             </TableCell>
                             <TableCell className="max-w-[160px] truncate text-muted-foreground">
-                              {row.agentId ?? '—'}
+                              {agentLabel(row.agentId, t('assistant.title'))}
                             </TableCell>
                             <TableCell>
                               <Badge tone={row.status === 'error' ? 'danger' : 'success'}>

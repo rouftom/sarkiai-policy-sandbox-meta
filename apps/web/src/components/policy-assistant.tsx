@@ -781,7 +781,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       {historyOpen ? (
         /* The history owns its scroller (Virtuoso): it needs a bounded height,
            not the conversation's overflow container. */
-        <div className="min-h-0 flex-1 p-3">
+        <div className="min-h-0 flex-1">
           <ChatHistory
             sessions={sessions}
             loading={sessionsLoading}
