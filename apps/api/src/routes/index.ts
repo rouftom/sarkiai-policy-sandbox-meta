@@ -1786,12 +1786,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
     if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
-    const access = providerAccess(engine.provider)
+    // The cover is drawn by Muse Image on the Meta Model API, whatever chat model is active.
+    const meta = metaServices()
+    const access = meta ? providerAccess(meta) : null
     const report = await buildReadinessReport(run, {
       format: body.data.format,
       lang: body.data.lang ?? 'fr',
       mcp: mcpGateway,
-      image: engine.provider.mode === 'cloud' && access.apiKey ? { baseURL: engine.provider.baseURL, apiKey: access.apiKey, headers: access.headers } : null,
+      image: meta && access?.apiKey ? { baseURL: meta.baseURL, apiKey: access.apiKey, headers: access.headers } : null,
     })
     await engine.audit.logAction({
       actor: operator.email,
@@ -2059,7 +2061,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
       return { ...transcript, facts: toVoiceFacts(transcript) }
     } catch (error) {
-      const relayed = engine.provider.mode === 'cloud' && Object.keys(providerAccess(engine.provider).headers).length > 0
+      const meta = metaServices()
+      const relayed = !!meta && Object.keys(providerAccess(meta).headers).length > 0
       request.log.error({ relayed, message: (error as Error).message }, 'voice transcription failed')
       return reply.status(422).send({ error: (error as Error).message, relayed })
     }

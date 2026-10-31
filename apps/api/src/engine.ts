@@ -48,14 +48,17 @@ function buildModelStack(
   baseten: ProviderDescriptor | null,
 ) {
   // The Baseten model routes every request to Baseten; any other id stays on Meta.
-  const active: ProviderDescriptor =
+  const routeModel = (id: string): ProviderDescriptor =>
     provider.mode !== 'cloud'
-      ? provider
-      : baseten && modelId === baseten.models.reasoning
+      ? { ...provider, models: { ...provider.models, reasoning: id || provider.models.reasoning } }
+      : baseten && id === baseten.models.reasoning
         ? baseten
-        : { ...provider, models: { ...provider.models, reasoning: modelId, vision: modelId } }
+        : { ...provider, models: { ...provider.models, reasoning: id || provider.models.reasoning, vision: id || provider.models.vision } }
+  const active: ProviderDescriptor = provider.mode !== 'cloud' ? provider : routeModel(modelId)
   const model = createModel({ provider: active })
-  const webSearch = webSearchFor(active)
+  // Web search is a Meta tool (Responses API `web_search`): when Muse Spark Open on
+  // Baseten reasons, the search still runs on Meta's default model (hybrid).
+  const webSearch = webSearchFor(active) ?? (provider.mode === 'cloud' ? webSearchFor(provider) : undefined)
   const orchestrator = new PolicyOrchestrator({
     model,
     retriever,
@@ -65,7 +68,9 @@ function buildModelStack(
     maxOutputTokens: Number(process.env.AGENT_MAX_OUTPUT_TOKENS ?? 4096) || 4096,
   })
   const coordinator = new MultiAgentCoordinator({ model, orchestrator, audit })
-  const onModel = (id: string) => ({ ...active, models: { ...active.models, reasoning: id } })
+  // A per-stage model id is routed like the chat model: Baseten's id to Baseten, any
+  // other id to Meta, so a Meta web-search stage keeps working beside a Baseten one.
+  const onModel = (id: string): ProviderDescriptor => (provider.mode !== 'cloud' ? { ...active, models: { ...active.models, reasoning: id } } : routeModel(id))
   const readiness = new ReadinessEngine({
     model,
     retriever,
