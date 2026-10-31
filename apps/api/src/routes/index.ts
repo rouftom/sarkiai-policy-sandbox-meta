@@ -420,6 +420,42 @@ function forbiddenScope(reply: FastifyReply) {
 }
 
 /**
+ * Reading another operator's ledger is a privileged act, so it enters the same
+ * hash-chained audit log as every other privileged act. The record names the
+ * reader (actor `operator`, `userId` = their address) and the operator whose
+ * rows were read in `target`.
+ *
+ * One entry per admin, target and minute: the console fires four reads when it
+ * opens, and four records per page view would bury the event without adding
+ * evidence. Reading one's own rows is not a cross-operator read and is skipped.
+ * Best effort: an unreachable audit store never blocks the read itself.
+ */
+const usageReadAuditedAt = new Map<string, number>()
+const USAGE_READ_AUDIT_MS = 60_000
+
+async function auditUsageRead(request: FastifyRequest, target: string | undefined): Promise<void> {
+  const me = operatorOf(request)
+  if (me.role !== 'admin') return
+  const scopeName = target ?? 'all operators'
+  if (scopeName.toLowerCase() === me.email.toLowerCase()) return
+  const key = `${me.email}\u0000${scopeName}`
+  const now = Date.now()
+  if ((usageReadAuditedAt.get(key) ?? 0) + USAGE_READ_AUDIT_MS > now) return
+  usageReadAuditedAt.set(key, now)
+  try {
+    await engine.audit.logAction({
+      actor: 'operator',
+      action: 'observability.read',
+      target: scopeName,
+      userId: me.email,
+      lens: 'hybrid',
+    })
+  } catch {
+    /* the ledger read still succeeds when the audit store is down */
+  }
+}
+
+/**
  * Reference figure per readiness dimension (13), attached to an existing
  * document. Idempotent: a dimension whose figure already exists is skipped, so
  * the boot hatch can be left in place. Meta Image draws the figure when the
@@ -3205,6 +3241,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!range) return reply.status(400).send({ error: 'invalid_range' })
     const scope = usageScope(request, parsed.data.operator)
     if (!scope) return forbiddenScope(reply)
+    void auditUsageRead(request, scope.operator)
     const me = operatorOf(request)
     return usageLedger.summary(
       { ...range, ...usageDimensions(parsed.data), ...scope },
@@ -3220,6 +3257,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!range) return reply.status(400).send({ error: 'invalid_range' })
     const scope = usageScope(request, parsed.data.operator)
     if (!scope) return forbiddenScope(reply)
+    void auditUsageRead(request, scope.operator)
     return usageLedger.list(
       { ...range, ...usageDimensions(parsed.data), ...scope },
       parsed.data.limit ?? 50,
@@ -3238,6 +3276,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!range) return reply.status(400).send({ error: 'invalid_range' })
     const scope = usageScope(request, parsed.data.operator)
     if (!scope) return forbiddenScope(reply)
+    void auditUsageRead(request, scope.operator)
     return usageLedger.forecast({ ...range, ...usageDimensions(parsed.data), ...scope }, USAGE_FORECAST_HORIZON)
   })
 
@@ -3252,6 +3291,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!range) return reply.status(400).send({ error: 'invalid_range' })
     const scope = usageScope(request, parsed.data.operator)
     if (!scope) return forbiddenScope(reply)
+    void auditUsageRead(request, scope.operator)
     const ceilingUsd = engine.provider.budgetUsd
     return {
       ceilingUsd,
@@ -3271,6 +3311,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ...scope,
       runId: params.data.runId,
     })
+    void auditUsageRead(request, summary.operator)
     const ceilingUsd = engine.provider.budgetUsd
     return {
       runId: params.data.runId,
