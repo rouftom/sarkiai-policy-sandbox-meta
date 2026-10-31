@@ -152,7 +152,7 @@ function Kpi({
           <Icon className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+          <p className="truncate text-[10px] font-black tracking-widest text-muted-foreground">{label}</p>
           <p className="truncate font-display text-lg font-bold tabular-nums">{value}</p>
           {hint && <p className="truncate text-[10px] text-muted-foreground">{hint}</p>}
           {warning && (
@@ -412,7 +412,7 @@ export default function ObservabilityPage() {
                 <TrendingUp className="h-4 w-4" />
               </span>
               <div className="min-w-0">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                <p className="text-[10px] font-black tracking-widest text-muted-foreground">
                   {t('observability.forecast.title', { days: forecast?.horizonDays ?? 7 })}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
@@ -429,13 +429,13 @@ export default function ObservabilityPage() {
               </div>
               <div className="ml-auto flex items-end gap-6">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t('observability.forecast.calls')}</p>
+                  <p className="text-[10px] font-black tracking-widest text-muted-foreground">{t('observability.forecast.calls')}</p>
                   <p className="font-display text-lg font-bold tabular-nums">
                     {typeof forecast?.projectedCalls === 'number' ? forecast.projectedCalls : '—'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t('observability.forecast.cost')}</p>
+                  <p className="text-[10px] font-black tracking-widest text-muted-foreground">{t('observability.forecast.cost')}</p>
                   <p className="font-display text-lg font-bold tabular-nums">
                     {typeof forecast?.projectedCostUsd === 'number' ? (
                       formatCost(forecast.projectedCostUsd, locale)
