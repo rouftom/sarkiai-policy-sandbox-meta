@@ -236,3 +236,133 @@ describe('streamed answers', () => {
     expect(current).toBe(valid)
   })
 })
+
+describe('tool calls the SDK dropped', () => {
+  const valid = `Under loi_2024_protection_donnees.pdf · ARTICLE 12, “${PROVISION}” · consent is required.`
+
+  /**
+   * Some providers end a streamed step with a finish reason the SDK does not
+   * accept for tool execution (`stop` / `tool-calls`), and the SDK then drops
+   * the call: the turn used to stop on the preamble. The orchestrator runs the
+   * call itself and answers from its results in the same turn.
+   */
+  function droppedToolModel(preamble: string): { model: LanguageModel; calls: () => number; prompts: string[] } {
+    let calls = 0
+    const prompts: string[] = []
+    const model = {
+      specificationVersion: 'v3',
+      provider: 'test',
+      modelId: 'test-dropped-tools',
+      supportedUrls: {},
+      doGenerate: async () => {
+        throw new Error('buffered path not expected')
+      },
+      doStream: async (options: { prompt?: Array<{ content: unknown }> }) => {
+        const last = options.prompt?.[options.prompt.length - 1]
+        prompts.push(JSON.stringify(last?.content ?? ''))
+        const first = calls === 0
+        calls += 1
+        return {
+          stream: new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: 'stream-start', warnings: [] })
+              controller.enqueue({ type: 'text-start', id: 't1' })
+              controller.enqueue({ type: 'text-delta', id: 't1', delta: first ? preamble : valid })
+              controller.enqueue({ type: 'text-end', id: 't1' })
+              if (first) {
+                controller.enqueue({
+                  type: 'tool-call',
+                  toolCallId: 'call_dropped',
+                  toolName: 'search_corpus',
+                  input: JSON.stringify({ query: 'health data breach notification' }),
+                })
+              }
+              controller.enqueue({
+                type: 'finish',
+                // Not `stop` / `tool-calls`: the SDK refuses to execute the call.
+                finishReason: first ? 'other' : 'stop',
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+              })
+              controller.close()
+            },
+          }),
+        }
+      },
+    }
+    return { model: model as unknown as LanguageModel, calls: () => calls, prompts }
+  }
+
+  test('the orchestrator runs the call and answers from its result', async () => {
+    const preamble = 'I am locating the provision that governs health data breach notification.'
+    const { model, prompts } = droppedToolModel(preamble)
+    const searched: string[] = []
+    const counting = {
+      search: async (query: { text: string }) => {
+        searched.push(query.text)
+        return [chunk]
+      },
+    } as unknown as Retriever
+    const orchestrator = new PolicyOrchestrator({ model, retriever: counting })
+    const toolEvents: string[] = []
+
+    const assessment = await orchestrator.streamAgent(
+      { ...baseInput, withTools: true },
+      { onDelta: () => undefined, onTool: (event) => toolEvents.push(`${event.phase}:${event.name}`) },
+    )
+
+    // The dropped search really ran, once, with the arguments the model chose.
+    expect(searched).toEqual(['health data breach notification'])
+    // A second generation answered without tools, from the tool block.
+    expect(prompts).toHaveLength(2)
+    expect(prompts[1]).toContain('health data breach notification')
+    expect(prompts[1]).toContain('already ran')
+    // The announcement is replaced by the grounded answer.
+    expect(assessment.findings[0]).toBe(valid)
+    expect(assessment.findings[0]).not.toBe(preamble)
+    expect(assessment.validation?.ok).toBe(true)
+    expect(assessment.citations).toHaveLength(1)
+    // The trail is closed: the tool step gets its `end` event even though the SDK skipped it.
+    expect(toolEvents).toEqual(['start:search_corpus', 'end:search_corpus'])
+  })
+
+  test('an operator card ends the turn without inventing an answer', async () => {
+    const model = {
+      specificationVersion: 'v3',
+      provider: 'test',
+      modelId: 'test-ask-user',
+      supportedUrls: {},
+      doGenerate: async () => {
+        throw new Error('buffered path not expected')
+      },
+      doStream: async () => ({
+        stream: new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: 'stream-start', warnings: [] })
+            controller.enqueue({
+              type: 'tool-call',
+              toolCallId: 'call_ask',
+              toolName: 'ask_user',
+              input: JSON.stringify({ question: 'Which sector are you asking about?' }),
+            })
+            controller.enqueue({
+              type: 'finish',
+              finishReason: 'other',
+              usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            })
+            controller.close()
+          },
+        }),
+      }),
+    }
+    const orchestrator = new PolicyOrchestrator({ model: model as unknown as LanguageModel, retriever })
+    const cards: string[] = []
+
+    const assessment = await orchestrator.streamAgent(
+      { ...baseInput, withTools: true },
+      { onDelta: () => undefined, onUi: (ui) => cards.push(ui.kind) },
+    )
+
+    expect(cards).toEqual(['ask_user'])
+    expect(assessment.findings[0]).toBe('')
+  })
+})
