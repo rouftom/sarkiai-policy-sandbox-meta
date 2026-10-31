@@ -214,13 +214,29 @@ export class PolicyOrchestrator {
     let attempt = 0
     let text = ''
     let reasoningText = ''
+    let finishReason = 'unknown'
+    let droppedTools = 0
     let validation: CitationValidation = validateCitations('', [], { attempts: 0 })
     const webAnswers: WebAnswer[] = []
 
-    /** One generation, buffered or streamed depending on the caller. */
-    const generateOnce = async (prompt: string): Promise<{ text: string; reasoning: string }> => {
-      const useTools = Boolean(input.withTools && handlers?.onDelta)
-      const tools = useTools
+    /**
+     * A tool call the model asked for but that never ran: some providers end a
+     * streamed step without a finish reason the SDK accepts for tool execution
+     * (`stop` / `tool-calls`), and the SDK then drops the call. The turn must
+     * not end there, so the orchestrator runs those calls itself.
+     */
+    interface DroppedToolCall {
+      toolCallId: string
+      toolName: string
+      input: unknown
+    }
+
+    /**
+     * The tool set for this turn. Built once, outside `generateOnce`, so a call
+     * the SDK dropped can still be executed here with the same handlers.
+     */
+    const tools =
+      input.withTools && handlers?.onDelta
         ? createAgentTools({
             runId,
             ...(input.userId ? { userId: input.userId } : {}),
@@ -241,6 +257,13 @@ export class PolicyOrchestrator {
             },
           })
         : undefined
+
+    /** One generation, buffered or streamed depending on the caller. */
+    const generateOnce = async (
+      prompt: string,
+      options: { noTools?: boolean } = {},
+    ): Promise<{ text: string; reasoning: string; dropped: DroppedToolCall[]; finishReason: string }> => {
+      const useTools = Boolean(tools && !options.noTools)
       const effortOptions = input.effort
         ? {
             providerOptions: {
@@ -255,19 +278,30 @@ export class PolicyOrchestrator {
         maxOutputTokens: input.maxOutputTokens ?? this.deps.maxOutputTokens ?? 4096,
         ...effortOptions,
         ...(hasAttachments ? { messages: [{ role: 'user' as const, content: userContent(prompt) }] } : { prompt }),
-        ...(tools ? { tools, stopWhen: stepCountIs(5) } : {}),
+        ...(useTools && tools ? { tools, stopWhen: stepCountIs(5) } : {}),
       }
       if (!handlers?.onDelta) {
-        const { text: answer, reasoning } = await generateText(settings)
-        return { text: answer, reasoning: (reasoning ?? []).map((part) => part.text).join('\n') }
+        const generated = await generateText(settings)
+        const requested = generated.toolCalls ?? []
+        const answered = new Set((generated.toolResults ?? []).map((call) => call.toolCallId))
+        return {
+          text: generated.text,
+          reasoning: (generated.reasoning ?? []).map((part) => part.text).join('\n'),
+          dropped: requested.filter((call) => !answered.has(call.toolCallId)),
+          finishReason: generated.finishReason,
+        }
       }
       const result = streamText(settings)
+      const requested = new Map<string, DroppedToolCall>()
+      const answered = new Set<string>()
+      const streamErrors: string[] = []
       // One pass over the full stream: answer text and reasoning arrive as
       // they are written, in the order the model produced them.
       for await (const part of result.fullStream) {
         if (part.type === 'text-delta' && part.text) handlers.onDelta(part.text)
         else if (part.type === 'reasoning-delta' && part.text) handlers.onReasoning?.(part.text)
         else if (part.type === 'tool-call') {
+          requested.set(part.toolCallId, { toolCallId: part.toolCallId, toolName: part.toolName, input: part.input })
           handlers.onTool?.({
             type: 'tool',
             phase: 'start',
@@ -276,14 +310,58 @@ export class PolicyOrchestrator {
             summary: summarizeToolInput(part.toolName, part.input),
           })
         } else if (part.type === 'tool-result') {
+          answered.add(part.toolCallId)
           handlers.onTool?.({ type: 'tool', phase: 'end', id: part.toolCallId, name: part.toolName, ok: true })
         } else if (part.type === 'tool-error') {
+          answered.add(part.toolCallId)
           handlers.onTool?.({ type: 'tool', phase: 'end', id: part.toolCallId, name: part.toolName, ok: false })
+        } else if (part.type === 'error') {
+          // Never silent: a dropped frame is why some turns used to stop on a preamble.
+          streamErrors.push((part.error as Error)?.message ?? String(part.error))
         }
       }
       // The aggregated promise is authoritative (the stream can be split mid-token).
       const [answer, reasoning] = await Promise.all([result.text, result.reasoning])
-      return { text: answer, reasoning: (reasoning ?? []).map((part) => part.text).join('\n') }
+      const finishReason = await Promise.resolve(result.finishReason).catch(() => 'unknown')
+      const dropped = [...requested.values()].filter((call) => !answered.has(call.toolCallId))
+      if (dropped.length > 0 || streamErrors.length > 0) {
+        console.warn(
+          `[agent] step ended with finishReason=${finishReason} dropped=${dropped.map((call) => call.toolName).join(',') || 'none'} errors=${streamErrors.slice(0, 2).join(' | ') || 'none'}`,
+        )
+      }
+      return {
+        text: answer,
+        reasoning: (reasoning ?? []).map((part) => part.text).join('\n'),
+        dropped,
+        finishReason,
+      }
+    }
+
+    /** Run the tool calls the SDK dropped, so their cards/results are not lost. */
+    const runDropped = async (calls: DroppedToolCall[]): Promise<Array<{ toolName: string; input: unknown; output: unknown }>> => {
+      const done: Array<{ toolName: string; input: unknown; output: unknown }> = []
+      for (const call of calls) {
+        const definition = tools?.[call.toolName] as { execute?: (input: never, options: never) => Promise<unknown> } | undefined
+        if (!definition?.execute) continue
+        try {
+          const output = await definition.execute(call.input as never, {
+            toolCallId: call.toolCallId,
+            messages: [],
+            abortSignal: new AbortController().signal,
+          } as never)
+          handlers?.onTool?.({ type: 'tool', phase: 'end', id: call.toolCallId, name: call.toolName, ok: true })
+          done.push({ toolName: call.toolName, input: call.input, output })
+        } catch (error) {
+          handlers?.onTool?.({ type: 'tool', phase: 'end', id: call.toolCallId, name: call.toolName, ok: false })
+          done.push({ toolName: call.toolName, input: call.input, output: { error: (error as Error).message } })
+        }
+      }
+      return done
+    }
+
+    const awaitingOperator = (output: unknown): boolean => {
+      const status = (output as { status?: unknown })?.status
+      return status === 'awaiting_operator_answer' || status === 'awaiting_operator_input'
     }
 
     while (attempt < maxAttempts) {
@@ -291,7 +369,39 @@ export class PolicyOrchestrator {
       const prompt = attempt === 1 ? question : `${question}\n\n${citationRetryDirective(validation.rejected)}`
 
       handlers?.onStage?.('generating', { attempt })
-      const { text: answer, reasoning } = await generateOnce(prompt)
+      const generation = await generateOnce(prompt)
+      finishReason = generation.finishReason
+      droppedTools = generation.dropped.length
+      let answer = generation.text
+      let reasoning = generation.reasoning
+
+      // The provider ended the step in a way that made the SDK drop the tool
+      // call. Run it here, then answer from its results in the same turn: an
+      // announcement of a search is never the answer.
+      if (generation.dropped.length > 0) {
+        const results = await runDropped(generation.dropped)
+        if (!results.some((result) => awaitingOperator(result.output))) {
+          const block = results
+            .map(
+              (result) =>
+                `TOOL ${result.toolName}(${JSON.stringify(result.input)}):\n${String(JSON.stringify(result.output)).slice(0, 8000)}`,
+            )
+            .join('\n\n')
+          try {
+            const recovered = await generateOnce(
+              `${question}\n\n${block}\n\nThe tools above already ran for this turn. Answer the question now from their results, with the usual citations. Do not call the same tool again.`,
+              { noTools: true },
+            )
+            if (recovered.text.trim()) {
+              answer = recovered.text
+              reasoning = recovered.reasoning
+            }
+          } catch (error) {
+            // Keep the preamble rather than lose the turn; the trace says why.
+            console.warn(`[agent] recovery after dropped tools failed: ${(error as Error).message}`)
+          }
+        }
+      }
 
       text = answer
       reasoningText = reasoning
@@ -354,7 +464,13 @@ export class PolicyOrchestrator {
         {
           name: 'generate',
           input: { question, attempt },
-          output: { grounded, rejectedQuotes: validation.rejected.length, searches: collected.length },
+          output: {
+            grounded,
+            rejectedQuotes: validation.rejected.length,
+            searches: collected.length,
+            finishReason,
+            droppedTools,
+          },
         },
       ],
       model: this.modelLabel(),
