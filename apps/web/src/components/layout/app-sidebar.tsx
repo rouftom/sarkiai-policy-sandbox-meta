@@ -4,32 +4,21 @@ import * as React from 'react'
 import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Activity,
-  ChevronDown,
   Compass,
-  Cpu,
-  Database,
-  Gauge,
-  Globe2,
-  LayoutDashboard,
-  Layers,
   Loader,
-  Megaphone,
-  Newspaper,
-  Network,
   PanelLeftClose,
   PanelLeftOpen,
-  Rocket,
-  ScrollText,
-  Settings,
-  Settings2,
-  ShieldCheck,
-  Siren,
-  SlidersHorizontal,
 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, cn } from '@sps/ui'
 import { BrandMark, BrandWordmark } from './brand-mark'
 import { OperatorMenu } from './operator-menu'
+import {
+  GENERAL_NAV,
+  GUIDE_CHILDREN,
+  OPERATIONS_NAV,
+  SETTINGS_NAV,
+  type NavEntry,
+} from './nav-items'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 
 const COLLAPSE_KEY = 'sps-sidebar-collapsed'
@@ -50,42 +39,6 @@ function NavIcon({
   if (pending) return <Loader className={cn(className, 'animate-spin')} aria-hidden="true" />
   return <Icon className={className} />
 }
-
-interface NavEntry {
-  href: string
-  labelKey: MessageKey
-  icon: React.ComponentType<{ className?: string }>
-  /** Size of the icon in the sub-items; the default is the small glyph. */
-  iconClassName?: string
-  children?: NavEntry[]
-}
-
-const GUIDE_CHILDREN: NavEntry[] = [
-  { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
-  { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
-  { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
-  { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Layers },
-]
-
-const GENERAL_NAV: NavEntry[] = [
-  { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
-  { href: '/countries', labelKey: 'nav.countries', icon: Globe2 },
-  { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
-  { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
-  { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
-]
-
-const OPERATIONS_NAV: NavEntry[] = [
-  { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
-  { href: '/communications', labelKey: 'nav.communication', icon: Megaphone },
-  { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },
-  { href: '/observability', labelKey: 'nav.observability', icon: Activity },
-]
-
-const SETTINGS_NAV: NavEntry[] = [
-  { href: '/preferences', labelKey: 'nav.settings', icon: Settings },
-  { href: '/security', labelKey: 'nav.security', icon: ShieldCheck },
-]
 
 /**
  * Sidebar shell modelled on the FSM console: a product block, grouped sections
