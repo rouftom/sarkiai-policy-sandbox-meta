@@ -12,7 +12,17 @@ import { z } from 'zod'
 import type { AuditService } from '@sps/audit'
 import type { Retriever } from '@sps/retrieval'
 import type { KbChunk } from '@sps/shared'
+
 import type { WebAnswer, WebSearch } from './web-search'
+
+/**
+ * A proposal is never a pause: the operator decides in the action center, and the
+ * answer carries on in the same turn.
+ */
+const PROPOSED = {
+  status: 'pending_approval' as const,
+  next: 'Proposed to the operator. Continue your answer now and say the action is pending approval; do not wait for it.',
+}
 
 export type AgentActionKind = 'whatsapp_approval' | 'publish_communication' | 'record_gap' | 'request_tool' | 'delete_record'
 export type AgentActionRisk = 'low' | 'medium' | 'high'
@@ -197,7 +207,7 @@ export function createAgentTools(ctx: AgentToolContext): ToolSet {
                   payload: { entity: input.entity, id: input.id },
                 },
               })
-              return { status: 'pending_approval', actionId }
+              return { ...PROPOSED, actionId }
             },
           }),
         }
@@ -246,7 +256,7 @@ export function createAgentTools(ctx: AgentToolContext): ToolSet {
           type: 'ui',
           ui: { kind: 'approval', id, action: 'record_gap', title, summary: description, risk, payload: { severity } },
         })
-        return { status: 'pending_approval', actionId: id }
+        return { ...PROPOSED, actionId: id }
       },
     }),
 
@@ -336,7 +346,7 @@ export function createAgentTools(ctx: AgentToolContext): ToolSet {
             ...(input.payload ? { payload: input.payload } : {}),
           },
         })
-        return { status: 'pending_approval', actionId: id }
+        return { ...PROPOSED, actionId: id }
       },
     }),
 
@@ -414,7 +424,7 @@ export function createAgentTools(ctx: AgentToolContext): ToolSet {
             payload: { toolName: input.toolName },
           },
         })
-        return { status: 'pending_approval', actionId: id }
+        return { ...PROPOSED, actionId: id }
       },
     }),
   }

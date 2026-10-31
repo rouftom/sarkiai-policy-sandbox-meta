@@ -170,8 +170,9 @@ describe('tools: records and approved deletions', () => {
         },
       },
     })
-    const result = (await tools.propose_deletion!.execute!({ entity: 'scenario_runs', id: 's1', reason: 'Duplicate of the June run.' }, call)) as { status: string }
+    const result = (await tools.propose_deletion!.execute!({ entity: 'scenario_runs', id: 's1', reason: 'Duplicate of the June run.' }, call)) as { status: string; next: string }
     expect(result.status).toBe('pending_approval')
+    expect(result.next).toContain('Continue your answer now')
     expect(removed).toBe(false)
     expect(proposed[0]).toMatchObject({ kind: 'delete_record', payload: { entity: 'scenario_runs', id: 's1' }, risk: 'high' })
     expect(emitted.some((event) => (event as { ui?: { kind?: string } }).ui?.kind === 'approval')).toBe(true)
