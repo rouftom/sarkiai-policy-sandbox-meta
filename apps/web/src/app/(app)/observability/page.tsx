@@ -57,6 +57,7 @@ import {
   type TabItem,
 } from '@sps/ui'
 import {
+  ASSISTANT_FINISHED,
   observabilityApi,
   type ObservabilityBudgetDto,
   type ObservabilityForecastDto,
@@ -69,6 +70,7 @@ import {
 } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { useAuth } from '@/lib/auth'
+import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus'
 import { PageIntro } from '@/components/page-intro'
 
 /** The API caps a page at 500 records; the table pages through them locally. */
@@ -225,6 +227,15 @@ export default function ObservabilityPage() {
     void load()
   }, [load])
 
+  // Spend moves while the console stays open: coming back to the tab reads it
+  // again, and a finished assistant turn has just written new ledger rows.
+  useRefreshOnFocus(load)
+  React.useEffect(() => {
+    const onFinished = () => void load()
+    window.addEventListener(ASSISTANT_FINISHED, onFinished)
+    return () => window.removeEventListener(ASSISTANT_FINISHED, onFinished)
+  }, [load])
+
   React.useEffect(() => {
     setPage(1)
   }, [days, scope, status, pageSize])
@@ -318,9 +329,15 @@ export default function ObservabilityPage() {
           size="sm"
           className="w-40"
         />
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={() => void load()}
+          disabled={loading}
+          aria-label={t('observability.refresh')}
+          title={t('observability.refresh')}
+        >
           {loading ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          <span className="hidden sm:inline">{t('observability.refresh')}</span>
         </Button>
       </PageIntro>
 
