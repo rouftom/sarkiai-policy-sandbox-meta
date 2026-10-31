@@ -8,6 +8,13 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000
 /** Fired on the window after the operator chooses another chat model. The detail is the model id. */
 export const MODEL_CHANGED = 'sps:model-changed'
 
+/**
+ * Fired on the window when an assistant turn ends (answer, error or stop). The
+ * turn writes audit records server-side, so data pages can refresh their blocks
+ * without waiting for the operator to reload.
+ */
+export const ASSISTANT_FINISHED = 'sps:assistant-finished'
+
 /** HTTP failure with the status and the raw body kept apart, so panels can react. */
 export class ApiError extends Error {
   readonly status: number

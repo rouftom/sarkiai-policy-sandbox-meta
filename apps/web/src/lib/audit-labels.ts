@@ -26,6 +26,7 @@ export const AUDIT_ACTION_KEYS: Record<string, string> = {
   'gap.recorded': 'audit.action.gapRecorded',
   'impact.analyzed': 'audit.action.impactAnalyzed',
   'model.selected': 'audit.action.modelSelected',
+  'observability.read': 'audit.action.observabilityRead',
   'provider.switched': 'audit.action.providerSwitched',
   request_tool: 'audit.action.requestTool',
   'scenario.reconcile': 'audit.action.scenarioReconcile',

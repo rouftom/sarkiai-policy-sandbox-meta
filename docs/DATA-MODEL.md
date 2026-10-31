@@ -69,10 +69,14 @@ before the ledger knew `kind` or `status` read as successful chat calls.
 
 The ledger carries **no prompt, answer, audio, image or query string**: only the
 route template, counters and the operator's address. An operator reads their own
-rows; an administrator reads every row or one named operator. Rows are kept
-without expiry by design (cost history and run-budget checks); the console says
-so and marks estimates, unpriced calls and local free runs explicitly. A tariff
-missing from `LIST_PRICES` is stored as `null`, never `0`.
+rows; an administrator reads every row or one named operator. Every
+cross-operator read by an administrator appends an `observability.read` record
+to `audit_logs` (reader as `userId`, the operator whose rows were read as
+`target`; one record per reader, target and minute, because the console fires
+four reads when it opens). Rows are kept without expiry by design (cost history
+and run-budget checks); the console says so and marks estimates, unpriced calls
+and local free runs explicitly. A tariff missing from `LIST_PRICES` is stored as
+`null`, never `0`.
 
 When MongoDB is unreachable, rows are buffered in memory for the life of the
 process and retried on the next write, so metering never breaks a request.

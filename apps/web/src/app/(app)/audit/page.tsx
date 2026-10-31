@@ -25,8 +25,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@sps/ui'
-import { authApi, type AuditEventDto } from '@/lib/api'
+import { ASSISTANT_FINISHED, authApi, type AuditEventDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus'
 import { auditActionLabel, auditActorLabel } from '@/lib/audit-labels'
 import { PageIntro } from '@/components/page-intro'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
@@ -83,6 +84,15 @@ export default function AuditPage() {
 
   React.useEffect(() => {
     void load()
+  }, [load])
+
+  // The chain grows while the console stays open: refresh it when the operator
+  // returns to the tab, or when an assistant turn has just written records.
+  useRefreshOnFocus(load)
+  React.useEffect(() => {
+    const onFinished = () => void load()
+    window.addEventListener(ASSISTANT_FINISHED, onFinished)
+    return () => window.removeEventListener(ASSISTANT_FINISHED, onFinished)
   }, [load])
 
   const filtered = React.useMemo(() => {
