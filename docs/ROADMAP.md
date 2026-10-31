@@ -11,7 +11,11 @@
 | 9 Nov 2026 | Top 10 announced, live final round |
 | 16 Nov 2026 | Community-vote winner announced |
 
-## Sprints (baseline, then hackathon work)
+## Sprints
+
+This roadmap tracks the product. The boundary between the baseline and the
+hackathon work is set by [`HACKATHON.md`](../HACKATHON.md): Sprint 0 is the
+baseline, and the hackathon work is the N1 to N12 list in that file.
 
 ### Sprint 0: foundations (written before the hackathon)
 
@@ -48,6 +52,13 @@ The baseline commit (tag `pre-hackathon-baseline`) imports, as a single commit, 
 - `[x]` Multi-agent coordinator + conflict visualization in the web console.
 - `[x]` Surface `verifyChain()` + chain-of-thought trace viewer in the web app (`AuditPanel`).
 - `[x]` Readiness 0–5 scoring + causal what-if in the web console.
+
+### Hackathon: AI-readiness, Meta edition (N12 in `HACKATHON.md`)
+- `[x]` Several sectors assessed in one run, one live agent graph per sector.
+- `[x]` Three analysis modes: parallel, sequential, orchestrated by a lead agent (bounded decisions).
+- `[x]` Live web search per dimension (Meta `web_search` tool); sources labelled, never a legal basis.
+- `[x]` Bilingual reports (Markdown, HTML, Word) with charts, process diagram and Muse Image cover.
+- `[x]` Assessments on open weights (Muse Spark Open on Baseten, Muse Glimmer on Ollama), model recorded per stage.
 
 ### Sprint 4: demo & submission
 - `[ ]` Record the 3-minute demo video (runbook in `docs/DEMO.md`).
