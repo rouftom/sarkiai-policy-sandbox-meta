@@ -13,8 +13,8 @@ the same template if the focal points read French). Body variables are positiona
 | Template | Body | Button |
 |---|---|---|
 | `meta_hackathon_joint_report` | `Joint report for run {{1}}, crisis tick {{2}}.\n\nThe coordination cell cross-checked every claim against the retrieved policy corpus and published this summary:\n\n{{3}}\n\nOpen the console to review the citations before the next tick.` | None |
-| `meta_hackathon_deadline_alert` | `Deadline alert: {{1}}\n\nThe clock on this item stops at {{2}}. The coordination cell has flagged the outstanding clauses and prepared the review pack.\n\n{{3}}\n\nOpen the console to approve, amend or reject before the deadline.` | URL (static): `https://<WEB_PUBLIC_URL>/` |
-| `meta_hackathon_approval_request` | `Approval requested.\n\nA decision from the focal point is needed on the following item:\n\n{{1}}\n\nThe signed link below opens the approval page. It works once and expires on {{2}}. Nothing is published until you decide.` | URL (dynamic): `https://<WEB_PUBLIC_URL>/approve/{{1}}` |
+| `meta_hackathon_deadline_alert_v2` | `Deadline alert: {{1}}\n\nThe clock on this item stops at {{2}}. The coordination cell has flagged the outstanding clauses and prepared the review pack.\n\n{{3}}\n\nOpen the console to approve, amend or reject before the deadline.` | URL (static): `https://<WEB_PUBLIC_URL>/` |
+| `meta_hackathon_approval_request_v2` | `Approval requested.\n\nA decision from the focal point is needed on the following item:\n\n{{1}}\n\nThe signed link below opens the approval page. It works once and expires on {{2}}. Nothing is published until you decide.` | URL (dynamic): `https://<WEB_PUBLIC_URL>/approve/{{1}}` |
 
 A fourth template, `meta_hackathon_hello_world` (`Hello World`, no variable, no
 button), exists only to smoke-test the channel: send it first when the number or
@@ -68,8 +68,8 @@ runtime contract is unaffected, `bodyParams` stays positional.
 ```ts
 // apps/api/src/routes/index.ts: /v1/whatsapp/notify
 joint_report      → meta_hackathon_joint_report      body: [runId, tick, summary]
-deadline_alert    → meta_hackathon_deadline_alert    body: [title, deadline, actionUrl ?? 'Open the console']
-approval_request  → meta_hackathon_approval_request  body: [summary, expiresAtISO], button: signed token
+deadline_alert    → meta_hackathon_deadline_alert_v2  body: [title, deadline, actionUrl ?? 'Open the console']
+approval_request  → meta_hackathon_approval_request_v2  body: [summary, expiresAtISO], button: signed token
 ```
 
 The console does not use `/v1/whatsapp/notify` directly: it sends through

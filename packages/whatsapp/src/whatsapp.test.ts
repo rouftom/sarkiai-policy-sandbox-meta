@@ -44,7 +44,7 @@ describe('template transport', () => {
     const body = JSON.parse(String(captured!.init.body)) as Record<string, any>
     expect(body.to).toBe('237699001122')
     expect(body.type).toBe('template')
-    expect(body.template.name).toBe('meta_hackathon_approval_request')
+    expect(body.template.name).toBe('meta_hackathon_approval_request_v2')
     expect(body.template.language).toEqual({ code: 'en' })
     expect(body.template.components[0].type).toBe('header')
     expect(body.template.components[1].parameters).toHaveLength(2)
