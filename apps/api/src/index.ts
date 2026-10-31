@@ -41,6 +41,8 @@ export async function buildServer() {
     // Render terminates TLS in front of the service: without this, every
     // request shares the proxy's IP and the sign-up/sign-in throttles are global.
     trustProxy: true,
+    // A signed approval token in the URL is about 200 characters; Fastify's default limit is 100.
+    maxParamLength: 1024,
   })
 
   // Keep the raw bytes of JSON bodies: Meta signs the exact payload, so
