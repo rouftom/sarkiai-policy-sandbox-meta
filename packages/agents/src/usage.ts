@@ -3,8 +3,9 @@
  *
  * The model is wrapped once, in `createModel`, so every `generateText`,
  * `streamText` and `generateObject` in the engine reports its usage without each
- * call site knowing about it. The operator and the route come from an async
- * context set by the API for the request; the cost comes from a price table.
+ * call site knowing about it. The operator, the route, the run and the agent
+ * come from an async context set by the API and the orchestrator; the cost comes
+ * from a price table.
  *
  * A price that is not in the table is recorded as `costUsd: null`, never as 0:
  * a missing tariff must not look like a free model.
@@ -14,10 +15,15 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { wrapLanguageModel, type LanguageModel } from 'ai'
 import type { ProviderDescriptor } from '@sps/shared'
 
+export type UsageKind = 'chat' | 'retrieval' | 'image' | 'voice' | 'sam'
+export type UsageStatus = 'ok' | 'error'
+
 export interface UsageContext {
   operator?: string
   route?: string
   runId?: string
+  /** The agent that produced the call (institution id), when one is known. */
+  agentId?: string
 }
 
 const context = new AsyncLocalStorage<UsageContext>()
@@ -41,6 +47,12 @@ export interface UsageEvent {
   operator?: string
   route?: string
   runId?: string
+  agentId?: string
+  /** Which capability spent the tokens; rows written before this field existed are read as `chat`. */
+  kind: UsageKind
+  status: UsageStatus
+  /** Wall-clock duration of the call, when the meter could measure it. */
+  latencyMs?: number
   mode: ProviderDescriptor['mode']
   servedBy: string
   model: string
@@ -112,45 +124,82 @@ export function tokenCounts(usage: unknown): { inputTokens: number; outputTokens
   return { inputTokens: count(u.inputTokens), outputTokens: count(u.outputTokens) }
 }
 
-export function recordUsage(descriptor: ProviderDescriptor, usage: unknown): void {
+export interface RecordUsageOptions {
+  kind?: UsageKind
+  status?: UsageStatus
+  latencyMs?: number
+}
+
+export function recordUsage(descriptor: ProviderDescriptor, usage: unknown, options: RecordUsageOptions = {}): void {
   const { inputTokens, outputTokens } = tokenCounts(usage)
-  if (inputTokens === 0 && outputTokens === 0) return
-  const event: UsageEvent = {
-    ts: new Date().toISOString(),
-    ...currentUsageContext(),
+  const status = options.status ?? 'ok'
+  // A successful call that reported no tokens spent nothing worth a row; a
+  // failed call is recorded even with zero tokens so the error rate is real.
+  if (status === 'ok' && inputTokens === 0 && outputTokens === 0) return
+  void recordEvent({
+    kind: options.kind ?? 'chat',
+    status,
     mode: descriptor.mode,
     servedBy: descriptor.servedBy,
     model: descriptor.models.reasoning,
     inputTokens,
     outputTokens,
     costUsd: costOf(priceFor(descriptor), inputTokens, outputTokens),
-  }
-  void store.append(event).catch(() => undefined)
+    ...(options.latencyMs === undefined ? {} : { latencyMs: Math.max(0, Math.round(options.latencyMs)) }),
+  })
 }
 
-/** Wraps a language model so each call records its tokens. */
+function recordEvent(event: Omit<UsageEvent, 'ts'>): void {
+  const row: UsageEvent = { ts: new Date().toISOString(), ...currentUsageContext(), ...event }
+  void store.append(row).catch(() => undefined)
+}
+
+/** Wraps a language model so every call records its tokens, its latency and its failures. */
 export function meterLanguageModel(model: LanguageModel, descriptor: ProviderDescriptor): LanguageModel {
   return wrapLanguageModel({
     model: model as Parameters<typeof wrapLanguageModel>[0]['model'],
     middleware: {
       specificationVersion: 'v3',
       wrapGenerate: async ({ doGenerate }) => {
-        const result = await doGenerate()
-        recordUsage(descriptor, result.usage)
-        return result
+        const startedAt = Date.now()
+        try {
+          const result = await doGenerate()
+          recordUsage(descriptor, result.usage, { latencyMs: Date.now() - startedAt })
+          return result
+        } catch (error) {
+          recordUsage(descriptor, undefined, { status: 'error', latencyMs: Date.now() - startedAt })
+          throw error
+        }
       },
       wrapStream: async ({ doStream }) => {
-        const result = await doStream()
-        const stream = result.stream.pipeThrough(
+        const startedAt = Date.now()
+        let opened: Awaited<ReturnType<typeof doStream>>
+        try {
+          opened = await doStream()
+        } catch (error) {
+          recordUsage(descriptor, undefined, { status: 'error', latencyMs: Date.now() - startedAt })
+          throw error
+        }
+        // A stream reports its tokens once, on `finish`; a frame error before
+        // then is recorded as a failure and never counted twice.
+        let recorded = false
+        const stream = opened.stream.pipeThrough(
           new TransformStream({
             transform(part, controller) {
-              if (part.type === 'finish') recordUsage(descriptor, part.usage)
+              if (!recorded && part.type === 'finish') {
+                recorded = true
+                recordUsage(descriptor, part.usage, { latencyMs: Date.now() - startedAt })
+              } else if (!recorded && part.type === 'error') {
+                recorded = true
+                recordUsage(descriptor, undefined, { status: 'error', latencyMs: Date.now() - startedAt })
+              }
               controller.enqueue(part)
             },
           }),
         )
-        return { ...result, stream }
+        return { ...opened, stream }
       },
     },
   }) as LanguageModel
 }
+

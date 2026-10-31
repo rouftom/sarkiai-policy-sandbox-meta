@@ -354,6 +354,62 @@ function operatorOf(request: FastifyRequest) {
   return request.operator
 }
 
+/** The observability window: at most a year, seven days by default. */
+const USAGE_DEFAULT_DAYS = 7
+const USAGE_MAX_DAYS = 366
+const USAGE_KINDS = ['chat', 'retrieval', 'image', 'voice', 'sam'] as const
+
+const usageQuery = z.object({
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+  /** Admin only: read another operator's scope. An operator may only repeat their own. */
+  operator: z.string().email().max(200).optional(),
+  status: z.enum(['ok', 'error']).optional(),
+  kind: z.enum(USAGE_KINDS).optional(),
+  model: z.string().min(1).max(200).optional(),
+  route: z.string().min(1).max(300).optional(),
+  agentId: z.string().min(1).max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+})
+
+/** Resolves `from`/`to`; null when the range is invalid or wider than a year. */
+function usageRange(query: z.infer<typeof usageQuery>): { from: string; to: string } | null {
+  const to = query.to ? new Date(query.to) : new Date()
+  const from = query.from ? new Date(query.from) : new Date(to.getTime() - USAGE_DEFAULT_DAYS * 86_400_000)
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) return null
+  if (to.getTime() - from.getTime() > USAGE_MAX_DAYS * 86_400_000) return null
+  return { from: from.toISOString(), to: to.toISOString() }
+}
+
+/** Only the dimensions the caller actually asked for. */
+function usageDimensions(query: z.infer<typeof usageQuery>) {
+  return {
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.kind ? { kind: query.kind } : {}),
+    ...(query.model ? { model: query.model } : {}),
+    ...(query.route ? { route: query.route } : {}),
+    ...(query.agentId ? { agentId: query.agentId } : {}),
+  }
+}
+
+/**
+ * The ledger scope: an operator is always pinned to their own rows, an admin
+ * reads everyone unless they name one operator. Null means "out of scope".
+ */
+function usageScope(request: FastifyRequest, requested?: string): { operator?: string } | null {
+  const me = operatorOf(request)
+  if (me.role === 'admin') return requested ? { operator: requested } : {}
+  if (requested && requested !== me.email) return null
+  return { operator: me.email }
+}
+
+function forbiddenScope(reply: FastifyReply) {
+  return reply.status(403).send({
+    error: 'forbidden',
+    message: 'Only an administrator can read another operator’s usage.',
+  })
+}
+
 /**
  * Reference figure per readiness dimension (13), attached to an existing
  * document. Idempotent: a dimension whose figure already exists is skipped, so
@@ -3093,6 +3149,35 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/observability/events', async (request) => {
     const limit = z.coerce.number().int().min(1).max(500).default(50).parse((request.query as { limit?: unknown })?.limit ?? 50)
     return { events: await usageLedger.recent(operatorOf(request).email, limit) }
+  })
+
+  /** Totals, daily series and every breakdown the observability console shows. */
+  app.get('/v1/observability/summary', async (request, reply) => {
+    const parsed = usageQuery.safeParse(request.query ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const range = usageRange(parsed.data)
+    if (!range) return reply.status(400).send({ error: 'invalid_range' })
+    const scope = usageScope(request, parsed.data.operator)
+    if (!scope) return forbiddenScope(reply)
+    const me = operatorOf(request)
+    return usageLedger.summary(
+      { ...range, ...usageDimensions(parsed.data), ...scope },
+      { includeOperators: me.role === 'admin' && !scope.operator },
+    )
+  })
+
+  /** Newest calls, same scope and filters, capped for the requests table. */
+  app.get('/v1/observability/requests', async (request, reply) => {
+    const parsed = usageQuery.safeParse(request.query ?? {})
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    const range = usageRange(parsed.data)
+    if (!range) return reply.status(400).send({ error: 'invalid_range' })
+    const scope = usageScope(request, parsed.data.operator)
+    if (!scope) return forbiddenScope(reply)
+    return usageLedger.list(
+      { ...range, ...usageDimensions(parsed.data), ...scope },
+      parsed.data.limit ?? 50,
+    )
   })
 
   app.get('/v1/exercise/reports', async (request, reply) => {

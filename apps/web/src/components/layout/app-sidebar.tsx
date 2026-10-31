@@ -4,6 +4,7 @@ import * as React from 'react'
 import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
+  Activity,
   ChevronDown,
   Compass,
   Cpu,
@@ -78,6 +79,7 @@ const OPERATIONS_NAV: NavEntry[] = [
   { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
   { href: '/communications', labelKey: 'nav.communication', icon: Megaphone },
   { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },
+  { href: '/observability', labelKey: 'nav.observability', icon: Activity },
 ]
 
 const SETTINGS_NAV: NavEntry[] = [

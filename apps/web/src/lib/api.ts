@@ -1660,3 +1660,101 @@ export const knowledgeApi = {
       body: '{}',
     }),
 }
+
+// ── Observability: what the engine spent, per call and aggregated ───────────
+
+export type UsageKindDto = 'chat' | 'retrieval' | 'image' | 'voice' | 'sam'
+export type UsageStatusDto = 'ok' | 'error'
+
+export interface UsageTotalsDto {
+  requests: number
+  errors: number
+  inputTokens: number
+  outputTokens: number
+  /** Sum of the known tariffs; `unpriced` calls are not included. */
+  costUsd: number
+  unpriced: number
+}
+
+export interface UsageRowDto extends UsageTotalsDto {
+  key: string
+}
+
+export interface UsageLatencyDto {
+  p50Ms: number | null
+  p95Ms: number | null
+  samples: number
+}
+
+export interface UsagePointDto extends UsageTotalsDto {
+  date: string
+}
+
+export interface ObservabilitySummaryDto {
+  from: string
+  to: string
+  scope: 'operator' | 'all'
+  operator?: string
+  totals: UsageTotalsDto
+  latency: UsageLatencyDto
+  series: UsagePointDto[]
+  byModel: UsageRowDto[]
+  byRoute: UsageRowDto[]
+  byKind: UsageRowDto[]
+  byAgent: UsageRowDto[]
+  /** Admin view only: every operator that spent something in the range. */
+  operators: UsageRowDto[]
+}
+
+/** One row of the ledger: a single model call, with its outcome. */
+export interface UsageRequestDto {
+  ts: string
+  operator?: string
+  route?: string
+  runId?: string
+  agentId?: string
+  kind: UsageKindDto
+  status: UsageStatusDto
+  latencyMs?: number
+  mode: string
+  servedBy: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  costUsd: number | null
+}
+
+export interface ObservabilityRequestsDto {
+  requests: UsageRequestDto[]
+  /** Matching calls before the page limit. */
+  total: number
+}
+
+export interface ObservabilityQueryDto {
+  from: Date
+  to: Date
+  operator?: string
+  status?: UsageStatusDto
+  kind?: UsageKindDto
+  model?: string
+  agentId?: string
+  limit?: number
+}
+
+function observabilityQuery(params: ObservabilityQueryDto): string {
+  const query = new URLSearchParams({ from: params.from.toISOString(), to: params.to.toISOString() })
+  if (params.operator) query.set('operator', params.operator)
+  if (params.status) query.set('status', params.status)
+  if (params.kind) query.set('kind', params.kind)
+  if (params.model) query.set('model', params.model)
+  if (params.agentId) query.set('agentId', params.agentId)
+  if (params.limit) query.set('limit', String(params.limit))
+  return query.toString()
+}
+
+export const observabilityApi = {
+  summary: (params: ObservabilityQueryDto) =>
+    request<ObservabilitySummaryDto>(`/v1/observability/summary?${observabilityQuery(params)}`),
+  requests: (params: ObservabilityQueryDto) =>
+    request<ObservabilityRequestsDto>(`/v1/observability/requests?${observabilityQuery(params)}`),
+}

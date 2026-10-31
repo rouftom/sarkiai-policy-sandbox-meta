@@ -23,6 +23,7 @@ import type { AuditService } from '@sps/audit'
 import { attachmentGuardrail, buildSystemPrompt, citationDirective, type AnswerLanguage } from './prompt'
 import { describeProvider } from './provider'
 import { createAgentTools, summarizeToolInput, type ActionSink, type AgentToolEvent, type DataPort, type McpPort } from './tools'
+import { currentUsageContext, withUsageContext } from './usage'
 import type { WebAnswer, WebSearch } from './web-search'
 
 export interface Attachment {
@@ -259,7 +260,7 @@ export class PolicyOrchestrator {
         : undefined
 
     /** One generation, buffered or streamed depending on the caller. */
-    const generateOnce = async (
+    const generateWithContext = async (
       prompt: string,
       options: { noTools?: boolean } = {},
     ): Promise<{ text: string; reasoning: string; dropped: DroppedToolCall[]; finishReason: string }> => {
@@ -336,6 +337,16 @@ export class PolicyOrchestrator {
         finishReason,
       }
     }
+
+    /**
+     * One generation of this turn. The run and the agent travel with the call
+     * so the ledger can group every model call of a turn (and a recovery pass)
+     * under the same run, without each call site passing them around.
+     */
+    const generateOnce = (prompt: string, options: { noTools?: boolean } = {}): ReturnType<typeof generateWithContext> =>
+      withUsageContext({ ...currentUsageContext(), runId, agentId: institution.id }, () =>
+        generateWithContext(prompt, options),
+      )
 
     /** Run the tool calls the SDK dropped, so their cards/results are not lost. */
     const runDropped = async (calls: DroppedToolCall[]): Promise<Array<{ toolName: string; input: unknown; output: unknown }>> => {
