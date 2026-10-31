@@ -14,8 +14,8 @@ export const WHATSAPP_TEMPLATE_PREFIX = 'meta_hackathon_'
 /** Templates created in the WABA for this project. Names are exact, review-bound. */
 export const WHATSAPP_TEMPLATES = {
   jointReport: `${WHATSAPP_TEMPLATE_PREFIX}joint_report`,
-  deadlineAlert: `${WHATSAPP_TEMPLATE_PREFIX}deadline_alert`,
-  approvalRequest: `${WHATSAPP_TEMPLATE_PREFIX}approval_request`,
+  deadlineAlert: `${WHATSAPP_TEMPLATE_PREFIX}deadline_alert_v2`,
+  approvalRequest: `${WHATSAPP_TEMPLATE_PREFIX}approval_request_v2`,
   /** No variable, no button: the only way to smoke-test a number. */
   helloWorld: `${WHATSAPP_TEMPLATE_PREFIX}hello_world`,
 } as const

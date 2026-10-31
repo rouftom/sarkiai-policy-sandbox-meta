@@ -445,8 +445,8 @@ messages use approved utility templates prefixed `meta_hackathon_`:
 | Template | Used for |
 |---|---|
 | `meta_hackathon_joint_report` | a joint situation report at a scenario tick |
-| `meta_hackathon_deadline_alert` | an approaching legal deadline |
-| `meta_hackathon_approval_request` | a decision that needs a human |
+| `meta_hackathon_deadline_alert_v2` | an approaching legal deadline (button on the current console origin) |
+| `meta_hackathon_approval_request_v2` | a decision that needs a human (button on the current console origin) |
 | `meta_hackathon_hello_world` | channel smoke test, no variable (the only one already approved) |
 
 The approval message carries a **signed, expiring link** to the web app
