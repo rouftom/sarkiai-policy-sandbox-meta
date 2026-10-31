@@ -44,6 +44,7 @@ import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
+import { BrandBackdrop } from '@/components/brand-backdrop'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
 import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
@@ -716,7 +717,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
+      <BrandBackdrop variant="panel" className="-z-10" />
       <input
         ref={fileRef}
         type="file"
