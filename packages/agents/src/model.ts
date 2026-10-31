@@ -13,6 +13,7 @@
 import type { LanguageModel } from 'ai'
 import type { ProviderDescriptor } from '@sps/shared'
 import { createProviderModel, resolveProvider } from './provider'
+import { meterLanguageModel } from './usage'
 
 export interface ModelConfig {
   /** Ollama base URL, e.g. http://ollama:11434 (the `/v1` suffix is added). */
@@ -31,7 +32,7 @@ export function createModel(config: ModelConfig = {}): LanguageModel {
     (config.baseURL || config.model
       ? explicitLocal(config)
       : resolveProvider(process.env, config.mode))
-  return createProviderModel(descriptor)
+  return meterLanguageModel(createProviderModel(descriptor), descriptor)
 }
 
 /** An explicitly configured OpenAI-compatible endpoint (local development). */
