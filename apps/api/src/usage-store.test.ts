@@ -69,6 +69,7 @@ describe('usage ledger summary (memory)', () => {
       errors: 1,
       inputTokens: 1000,
       outputTokens: 200,
+      units: 0,
       costUsd: 0.002,
       unpriced: 0,
     })
@@ -113,6 +114,27 @@ describe('usage ledger summary (memory)', () => {
     const summary = await store.summary({ from: FROM, to: TO })
 
     expect(summary.latency).toEqual({ p50Ms: 200, p95Ms: 300, samples: 3 })
+  })
+
+  test('images, voice seconds and SAM calls are summed per capability', async () => {
+    const store = memoryStore()
+    await store.append(
+      event({ ts: '2026-10-29T10:00:00.000Z', kind: 'image', inputTokens: 0, outputTokens: 0, units: 1, unit: 'image', costUsd: null }),
+    )
+    await store.append(
+      event({ ts: '2026-10-29T11:00:00.000Z', kind: 'image', inputTokens: 0, outputTokens: 0, units: 1, unit: 'image', costUsd: null }),
+    )
+    await store.append(
+      event({ ts: '2026-10-29T12:00:00.000Z', kind: 'voice', inputTokens: 0, outputTokens: 0, units: 8, unit: 'second', costUsd: 0 }),
+    )
+    const summary = await store.summary({ from: FROM, to: TO })
+
+    expect(summary.byKind).toEqual([
+      expect.objectContaining({ key: 'image', requests: 2, units: 2, unpriced: 2 }),
+      expect.objectContaining({ key: 'voice', requests: 1, units: 8, costUsd: 0, unpriced: 0 }),
+    ])
+    const image = await store.list({ from: FROM, to: TO, kind: 'image' }, 10)
+    expect(image.requests.map((row) => row.unit)).toEqual(['image', 'image'])
   })
 
   test('a row written before kind and status existed reads as a successful chat call', async () => {

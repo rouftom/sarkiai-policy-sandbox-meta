@@ -1665,12 +1665,16 @@ export const knowledgeApi = {
 
 export type UsageKindDto = 'chat' | 'retrieval' | 'image' | 'voice' | 'sam'
 export type UsageStatusDto = 'ok' | 'error'
+/** What a ledger row counts: tokens, images, audio seconds or calls. */
+export type UsageUnitDto = 'token' | 'image' | 'second' | 'call'
 
 export interface UsageTotalsDto {
   requests: number
   errors: number
   inputTokens: number
   outputTokens: number
+  /** Non-token volume; only meaningful inside one capability. */
+  units: number
   /** Sum of the known tariffs; `unpriced` calls are not included. */
   costUsd: number
   unpriced: number
@@ -1721,6 +1725,9 @@ export interface UsageRequestDto {
   model: string
   inputTokens: number
   outputTokens: number
+  /** Images, audio seconds or calls; absent on token rows. */
+  units?: number
+  unit?: UsageUnitDto
   costUsd: number | null
 }
 

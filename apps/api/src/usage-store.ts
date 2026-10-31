@@ -49,6 +49,12 @@ export interface UsageTotals {
   errors: number
   inputTokens: number
   outputTokens: number
+  /**
+   * Sum of the non-token units (images, audio seconds, segmentation calls).
+   * Only meaningful inside a single kind: a `byKind` row sums one unit, a
+   * cross-capability total mixes them and is left for display per kind.
+   */
+  units: number
   /** Sum of the known tariffs only; `unpriced` says how many calls were left out. */
   costUsd: number
   /** Calls whose model has no known tariff (their cost is not in `costUsd`). */
@@ -305,6 +311,7 @@ const GROUP_ACCUMULATORS = {
   errors: { $sum: { $cond: [{ $eq: [{ $ifNull: ['$status', 'ok'] }, 'error'] }, 1, 0] } },
   inputTokens: { $sum: { $ifNull: ['$inputTokens', 0] } },
   outputTokens: { $sum: { $ifNull: ['$outputTokens', 0] } },
+  units: { $sum: { $ifNull: ['$units', 0] } },
   costUsd: {
     $sum: {
       $cond: [{ $ne: [{ $ifNull: ['$costUsd', null] }, null] }, { $ifNull: ['$costUsd', 0] }, 0],
@@ -319,13 +326,14 @@ function totalsFromAccumulators(doc: Document): UsageTotals {
     errors: Number(doc.errors ?? 0),
     inputTokens: Number(doc.inputTokens ?? 0),
     outputTokens: Number(doc.outputTokens ?? 0),
+    units: Number(doc.units ?? 0),
     costUsd: Number(doc.costUsd ?? 0),
     unpriced: Number(doc.unpriced ?? 0),
   }
 }
 
 function emptyTotals(): UsageTotals {
-  return { requests: 0, errors: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, unpriced: 0 }
+  return { requests: 0, errors: 0, inputTokens: 0, outputTokens: 0, units: 0, costUsd: 0, unpriced: 0 }
 }
 
 function mongoMatch(filter: UsageFilter): Document {
@@ -375,6 +383,7 @@ function totalsOf(rows: UsageEvent[]): UsageTotals {
     totals.errors += row.status === 'error' ? 1 : 0
     totals.inputTokens += row.inputTokens ?? 0
     totals.outputTokens += row.outputTokens ?? 0
+    totals.units += row.units ?? 0
     if (row.costUsd === null || row.costUsd === undefined) totals.unpriced += 1
     else totals.costUsd += row.costUsd
   }

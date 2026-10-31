@@ -1,6 +1,6 @@
 /** HTTP surface: knowledge base, agents, scenarios, readiness, audit. */
 
-import { correctTranscript, enterUsageContext, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, referenceImage, setUsageStore, type DataPort } from '@sps/agents'
+import { correctTranscript, enterUsageContext, generateStructured, plainTextReply, providerAccess, providerApiKey, describeProvider, recordCapabilityUsage, referenceImage, setUsageStore, type DataPort } from '@sps/agents'
 import { MongoUsageStore } from '../usage-store.js'
 import { ActionError, ActionStore, type ActionRecord } from '../actions.js'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
@@ -1916,6 +1916,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(413).send({ error: 'Page too large (max 12 MB per page).' })
     }
 
+    const sam = gazetteSam()
+    const meta = metaServices()
     try {
       const page = await analyzeGazettePage({
         bytes,
@@ -1926,12 +1928,25 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         model: engine.model,
         modelLabel: engine.provider.models.vision,
         provider: engine.provider,
-        sam: gazetteSam(),
+        sam,
         maxZones: body.data.maxZones,
         concurrency: body.data.concurrency,
         pricing: gazettePricing(),
       })
-      if (metaServices() && engine.provider.mode !== 'cloud') {
+      // The zone transcriptions are already metered as chat inside the vision
+      // model; only the SAM lookups are billed per call, so only they get a row.
+      if (sam && meta?.models.segmentation && page.usage.segmentationCalls > 0) {
+        recordCapabilityUsage({
+          kind: 'sam',
+          units: page.usage.segmentationCalls,
+          unit: 'call',
+          model: meta.models.segmentation,
+          mode: 'cloud',
+          servedBy: 'Meta',
+          costUsd: page.usage.segmentationCalls * META_GAZETTE_PRICING.perSegmentationCall,
+        })
+      }
+      if (meta && engine.provider.mode !== 'cloud') {
         page.warnings.push(
           `Zones transcribed by ${engine.provider.models.vision} on ${engine.provider.servedBy}: its token cost is billed by ${engine.provider.servedBy} and not included in the cost shown.`,
         )
@@ -2096,20 +2111,32 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     // Muse Voice Transcribe stays on Meta even when Baseten does the reasoning.
     const meta = metaServices()
-    const client =
-      meta?.models.transcription
-        ? new MetaAsrClient({
-            baseUrl: meta.baseURL,
-            apiKey: providerAccess(meta).apiKey,
-            headers: providerAccess(meta).headers,
-            model: meta.models.transcription,
-          })
-        : new LocalAsrClient({
-            baseUrl: config.transcription.url,
-            apiKey: config.serviceApiKey,
-            model: 'faster-whisper',
-          })
+    const cloudVoice = Boolean(meta?.models.transcription)
+    const voiceModel = meta?.models.transcription ?? 'faster-whisper'
+    // Voice is billed by the second; no confirmed Muse Voice tariff in this
+    // repo, so a Meta call stays unpriced while on-premise runs cost 0.
+    const voiceUsage = {
+      kind: 'voice' as const,
+      unit: 'second' as const,
+      model: voiceModel,
+      mode: cloudVoice ? ('cloud' as const) : engine.provider.mode,
+      servedBy: cloudVoice ? 'Meta' : engine.provider.servedBy,
+      costUsd: cloudVoice ? null : 0,
+    }
+    const client = cloudVoice
+      ? new MetaAsrClient({
+          baseUrl: meta!.baseURL,
+          apiKey: providerAccess(meta!).apiKey,
+          headers: providerAccess(meta!).headers,
+          model: voiceModel,
+        })
+      : new LocalAsrClient({
+          baseUrl: config.transcription.url,
+          apiKey: config.serviceApiKey,
+          model: 'faster-whisper',
+        })
 
+    const startedAt = Date.now()
     try {
       const transcript = await client.transcribe({
         audio,
@@ -2119,9 +2146,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         ...(body.data.keywords ? { keywords: body.data.keywords } : {}),
         ...(body.data.sessionId ? { sessionId: body.data.sessionId } : {}),
       })
+      recordCapabilityUsage({
+        ...voiceUsage,
+        units: Math.max(1, Math.round(transcript.durationMs / 1000)),
+        latencyMs: Date.now() - startedAt,
+      })
       return { ...transcript, facts: toVoiceFacts(transcript) }
     } catch (error) {
-      const meta = metaServices()
+      recordCapabilityUsage({
+        ...voiceUsage,
+        units: 0,
+        latencyMs: Date.now() - startedAt,
+        status: 'error',
+      })
       const relayed = !!meta && Object.keys(providerAccess(meta).headers).length > 0
       request.log.error({ relayed, message: (error as Error).message }, 'voice transcription failed')
       return reply.status(422).send({ error: (error as Error).message, relayed })

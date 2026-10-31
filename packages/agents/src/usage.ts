@@ -17,6 +17,8 @@ import type { ProviderDescriptor } from '@sps/shared'
 
 export type UsageKind = 'chat' | 'retrieval' | 'image' | 'voice' | 'sam'
 export type UsageStatus = 'ok' | 'error'
+/** What a row counts: tokens for text, images/seconds/calls for the other capabilities. */
+export type UsageUnit = 'token' | 'image' | 'second' | 'call'
 
 export interface UsageContext {
   operator?: string
@@ -58,6 +60,9 @@ export interface UsageEvent {
   model: string
   inputTokens: number
   outputTokens: number
+  /** Non-token work (images, audio seconds, calls); absent on token rows. */
+  units?: number
+  unit?: UsageUnit
   /** Estimated from the list price; null when no price is known for this model. */
   costUsd: number | null
 }
@@ -105,8 +110,15 @@ export const LIST_PRICES: Record<string, Record<string, UsagePrice>> = {
   },
 }
 
+/** What the meter needs to know about the provider: its mode, vendor and model id. */
+export interface UsageSource {
+  mode: ProviderDescriptor['mode']
+  servedBy: string
+  models: { reasoning: string }
+}
+
 /** Price for a deployment's model: free on the institution's hardware, null when unknown. */
-export function priceFor(descriptor: Pick<ProviderDescriptor, 'mode' | 'servedBy' | 'models'>): UsagePrice | null {
+export function priceFor(descriptor: UsageSource): UsagePrice | null {
   if (descriptor.mode === 'local') return { inputPerMTok: 0, outputPerMTok: 0 }
   return LIST_PRICES[descriptor.servedBy]?.[descriptor.models.reasoning] ?? null
 }
@@ -130,7 +142,7 @@ export interface RecordUsageOptions {
   latencyMs?: number
 }
 
-export function recordUsage(descriptor: ProviderDescriptor, usage: unknown, options: RecordUsageOptions = {}): void {
+export function recordUsage(descriptor: UsageSource, usage: unknown, options: RecordUsageOptions = {}): void {
   const { inputTokens, outputTokens } = tokenCounts(usage)
   const status = options.status ?? 'ok'
   // A successful call that reported no tokens spent nothing worth a row; a
@@ -152,6 +164,43 @@ export function recordUsage(descriptor: ProviderDescriptor, usage: unknown, opti
 function recordEvent(event: Omit<UsageEvent, 'ts'>): void {
   const row: UsageEvent = { ts: new Date().toISOString(), ...currentUsageContext(), ...event }
   void store.append(row).catch(() => undefined)
+}
+
+export interface CapabilityUsage {
+  kind: UsageKind
+  /** How many images, audio seconds or calls the work represents. */
+  units: number
+  unit: UsageUnit
+  model: string
+  mode: ProviderDescriptor['mode']
+  servedBy: string
+  /** Explicit price when the caller's capability table has one; null when unknown. */
+  costUsd: number | null
+  latencyMs?: number
+  status?: UsageStatus
+}
+
+/**
+ * Records a call that is not billed in tokens (an image, an audio second, a
+ * segmentation call). Costing stays with the caller: a capability without a
+ * confirmed tariff passes `costUsd: null`, never 0.
+ */
+export function recordCapabilityUsage(input: CapabilityUsage): void {
+  const status = input.status ?? 'ok'
+  if (status === 'ok' && input.units <= 0) return
+  void recordEvent({
+    kind: input.kind,
+    status,
+    mode: input.mode,
+    servedBy: input.servedBy,
+    model: input.model,
+    inputTokens: 0,
+    outputTokens: 0,
+    units: Math.max(0, input.units),
+    unit: input.unit,
+    costUsd: input.costUsd,
+    ...(input.latencyMs === undefined ? {} : { latencyMs: Math.max(0, Math.round(input.latencyMs)) }),
+  })
 }
 
 /** Wraps a language model so every call records its tokens, its latency and its failures. */

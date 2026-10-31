@@ -61,6 +61,7 @@ import {
   type UsageRequestDto,
   type UsageRowDto,
   type UsageStatusDto,
+  type UsageUnitDto,
 } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { useAuth } from '@/lib/auth'
@@ -78,6 +79,21 @@ const KIND_LABEL: Record<UsageKindDto, MessageKey> = {
   image: 'observability.kind.image',
   voice: 'observability.kind.voice',
   sam: 'observability.kind.sam',
+}
+
+/** Each capability counts in one unit: a kind row can label its volume directly. */
+const KIND_UNIT: Record<UsageKindDto, UsageUnitDto> = {
+  chat: 'token',
+  retrieval: 'token',
+  image: 'image',
+  voice: 'second',
+  sam: 'call',
+}
+
+const UNIT_LABEL: Record<'image' | 'second' | 'call', MessageKey> = {
+  image: 'observability.unit.image',
+  second: 'observability.unit.second',
+  call: 'observability.unit.call',
 }
 
 type Bucket = 'model' | 'route' | 'kind' | 'agent' | 'operator'
@@ -427,7 +443,7 @@ export default function ObservabilityPage() {
                       <TableRow className="border-b border-slate-200 hover:bg-transparent dark:border-brand-primary-dark/30">
                         <TableHead>{t('observability.key')}</TableHead>
                         <TableHead className="text-right">{t('observability.chartCalls')}</TableHead>
-                        <TableHead className="text-right">{t('observability.tokensColumn')}</TableHead>
+                        <TableHead className="text-right">{t('observability.volume')}</TableHead>
                         <TableHead className="text-right">{t('observability.costColumn')}</TableHead>
                         <TableHead className="text-right">{t('observability.share')}</TableHead>
                       </TableRow>
@@ -435,6 +451,7 @@ export default function ObservabilityPage() {
                     <TableBody>
                       {rows.map((row) => {
                         const share = totals && totals.requests > 0 ? (row.requests / totals.requests) * 100 : 0
+                        const unit = bucket === 'kind' ? KIND_UNIT[row.key as UsageKindDto] : 'token'
                         return (
                           <TableRow key={row.key}>
                             <TableCell className="max-w-[260px] truncate font-medium">
@@ -447,7 +464,14 @@ export default function ObservabilityPage() {
                               )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatTokens(row.inputTokens + row.outputTokens, locale)}
+                              {unit === 'token' ? (
+                                formatTokens(row.inputTokens + row.outputTokens, locale)
+                              ) : (
+                                <>
+                                  {formatTokens(row.units, locale)}{' '}
+                                  <span className="text-[10px] text-muted-foreground">{t(UNIT_LABEL[unit])}</span>
+                                </>
+                              )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {row.requests > 0 && row.unpriced === row.requests ? (
@@ -501,7 +525,7 @@ export default function ObservabilityPage() {
                           <TableHead>{t('observability.byAgent')}</TableHead>
                           <TableHead>{t('observability.status')}</TableHead>
                           <TableHead className="text-right">{t('observability.latencyColumn')}</TableHead>
-                          <TableHead className="text-right">{t('observability.tokensColumn')}</TableHead>
+                          <TableHead className="text-right">{t('observability.volume')}</TableHead>
                           <TableHead className="text-right">{t('observability.costColumn')}</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -530,7 +554,14 @@ export default function ObservabilityPage() {
                               {typeof row.latencyMs === 'number' ? `${row.latencyMs} ms` : t('observability.noLatency')}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatTokens(row.inputTokens + row.outputTokens, locale)}
+                              {row.unit && row.unit !== 'token' && typeof row.units === 'number' ? (
+                                <>
+                                  {formatTokens(row.units, locale)}{' '}
+                                  <span className="text-[10px] text-muted-foreground">{t(UNIT_LABEL[row.unit])}</span>
+                                </>
+                              ) : (
+                                formatTokens(row.inputTokens + row.outputTokens, locale)
+                              )}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {row.costUsd === null ? (
