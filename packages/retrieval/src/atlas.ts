@@ -16,6 +16,7 @@ import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { DocType, Jurisdiction, KbChunk, ReadinessDimension, RetrievalQuery } from '@sps/shared'
 import { VoyageClient, type VoyageConfig } from './voyage'
 import type { Retriever } from './types'
+import { mongoPoolOptions } from '@sps/shared'
 
 export interface AtlasRetrieverConfig {
   mongodbUri: string
@@ -366,7 +367,7 @@ export class AtlasRetriever implements Retriever {
 
   private async collection(): Promise<Collection<Document>> {
     if (!this.client) {
-      this.client = new MongoClient(this.config.mongodbUri)
+      this.client = new MongoClient(this.config.mongodbUri, mongoPoolOptions())
       await this.client.connect()
     }
     return this.client.db(this.config.dbName).collection(this.collectionName)

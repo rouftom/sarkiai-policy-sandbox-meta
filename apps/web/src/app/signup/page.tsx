@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/auth'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { AuthLayout, DemoAccessContent, ErrorNote, StepIntro } from '@/components/auth/auth-frame'
 import { PasswordInput } from '@/components/auth/password-input'
+import { TurnstileWidget, useTurnstileCheck } from '@/components/auth/turnstile-check'
 
 /** Same floor as the API (`assertPassword`). */
 const MIN_PASSWORD = 12
@@ -40,6 +41,9 @@ export default function SignupPage() {
   const [busy, setBusy] = React.useState(false)
   const [failure, setFailure] = React.useState<string | null>(null)
   const checked = React.useRef(false)
+  // Human check, decided by the API: cloud deployments require it, local and
+  // sovereign installs (or a deployment without keys) get `required: false`.
+  const turnstile = useTurnstileCheck()
 
   const schema = React.useMemo(
     () =>
@@ -100,20 +104,33 @@ export default function SignupPage() {
   }, [pending, verificationEmail, router])
 
   const submit = form.handleSubmit(async (values) => {
+    if (turnstile.required && !turnstile.token) {
+      setFailure(t('signup.captchaRequired'))
+      return
+    }
+
     setBusy(true)
     setFailure(null)
     try {
-      await signUp({
-        firstName: values.firstName.trim(),
-        lastName: values.lastName.trim(),
-        email: values.email.trim().toLowerCase(),
-        password: values.password,
-      })
+      await signUp(
+        {
+          firstName: values.firstName.trim(),
+          lastName: values.lastName.trim(),
+          email: values.email.trim().toLowerCase(),
+          password: values.password,
+        },
+        turnstile.required ? (turnstile.token ?? undefined) : undefined,
+      )
       // The auth provider keeps the address waiting for its link: the sign-in
       // page shows the confirmation step, then the 2FA steps.
       router.replace('/login')
     } catch (cause) {
-      setFailure(signupMessage(cause, t))
+      if (cause instanceof ApiError && cause.json<{ error?: string }>()?.error === 'captcha_failed') {
+        setFailure(t('signup.captchaFailed'))
+        turnstile.reset()
+      } else {
+        setFailure(signupMessage(cause, t))
+      }
     } finally {
       setBusy(false)
     }
@@ -239,7 +256,14 @@ export default function SignupPage() {
 
             {failure && <ErrorNote>{failure}</ErrorNote>}
 
-            <Button type="submit" disabled={busy} size="lg" className="mt-1 w-full">
+            <TurnstileWidget check={turnstile} action="signup" />
+
+            <Button
+              type="submit"
+              disabled={busy || turnstile.loading || (turnstile.required && !turnstile.token)}
+              size="lg"
+              className="mt-1 w-full"
+            >
               {busy ? <Loader className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               {busy ? t('signup.submitting') : t('signup.submit')}
             </Button>

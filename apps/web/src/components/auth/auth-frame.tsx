@@ -15,21 +15,15 @@ import {
   Check,
   Copy,
   FileCheck2,
-  FileText,
-  Gavel,
-  Landmark,
-  Languages,
   Moon,
-  Network,
   Scale,
-  ScrollText,
   Send,
   ShieldCheck,
   Sun,
 } from 'lucide-react'
-import { cn } from '@sps/ui'
 import { ApiError, NetworkError } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
+import { BrandBackdrop } from '@/components/brand-backdrop'
 import { useTheme } from '@/components/theme-provider'
 import { BrandMark } from '@/components/layout/brand-mark'
 
@@ -63,7 +57,7 @@ export function AuthLayout({ children, aside }: { children: React.ReactNode; asi
   return (
     <div className="grid min-h-dvh bg-background text-foreground lg:grid-cols-2">
       <section className="relative hidden overflow-hidden bg-brand-primary/10 px-12 py-14 text-foreground dark:bg-brand-primary-dark/20 lg:flex lg:flex-col lg:justify-between">
-        <Backdrop />
+        <BrandBackdrop />
         {aside ?? <BrandContent />}
       </section>
       <main className="relative flex min-h-dvh flex-col justify-center overflow-hidden bg-background px-6 py-12 sm:px-10 lg:px-16">
@@ -220,26 +214,5 @@ export function DemoAccessContent() {
 
       <p className="relative text-[10px] text-muted-foreground">{t('auth.madeBy')}</p>
     </>
-  )
-}
-
-/** Policy-themed backdrop: the same quiet layout as the org screens, with governance icons. */
-function Backdrop() {
-  const icon = 'pointer-events-none absolute text-brand-primary/25 dark:text-brand-primary-light/20'
-  return (
-    <div className="pointer-events-none absolute inset-0" aria-hidden>
-      <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-brand-primary/25 blur-3xl" />
-      <div className="absolute -right-16 bottom-16 h-64 w-64 rounded-full bg-brand-accent/15 blur-3xl" />
-      <div className="absolute right-16 top-24 h-40 w-40 rotate-12 rounded-[2rem] border border-brand-primary/15" />
-      <div className="absolute bottom-28 left-16 h-24 w-24 -rotate-12 rounded-3xl border border-brand-primary/20" />
-      <Scale className={`${icon} left-12 top-28 h-7 w-7 -rotate-12`} />
-      <Landmark className={`${icon} right-24 top-44 h-8 w-8 rotate-12`} />
-      <Gavel className={`${icon} bottom-44 right-1/3 h-6 w-6 rotate-12`} />
-      <FileText className={`${icon} bottom-28 left-1/3 h-7 w-7 -rotate-6`} />
-      <Network className={`${icon} right-10 top-1/2 h-8 w-8 -rotate-12`} />
-      <ScrollText className={`${icon} bottom-16 right-28 h-7 w-7 rotate-6`} />
-      <ShieldCheck className={`${icon} right-1/3 top-16 h-6 w-6 rotate-12`} />
-      <Languages className={`${icon} bottom-24 left-12 h-7 w-7 -rotate-12`} />
-    </div>
   )
 }

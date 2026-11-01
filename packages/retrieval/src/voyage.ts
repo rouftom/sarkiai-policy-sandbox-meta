@@ -14,6 +14,17 @@ export interface VoyageConfig {
   rerankModel?: string
   fetchImpl?: typeof fetch
   timeoutMs?: number
+  /** Reported after every call, so the ledger can meter retrieval separately. */
+  onUsage?: (usage: VoyageUsage) => void
+}
+
+/** One Voyage call: tokens billed, duration, and whether it succeeded. */
+export interface VoyageUsage {
+  operation: 'embedding' | 'rerank'
+  model: string
+  tokens: number
+  latencyMs: number
+  ok: boolean
 }
 
 export interface VoyageRerankHit {
@@ -39,6 +50,7 @@ export class VoyageClient {
   private readonly rerankModel: string
   private readonly fetchImpl: typeof fetch
   private readonly timeoutMs: number
+  private readonly onUsage?: (usage: VoyageUsage) => void
 
   constructor(config: VoyageConfig) {
     this.apiKey = config.apiKey.trim()
@@ -47,6 +59,7 @@ export class VoyageClient {
     this.rerankModel = config.rerankModel ?? DEFAULT_RERANK_MODEL
     this.fetchImpl = config.fetchImpl ?? fetch
     this.timeoutMs = config.timeoutMs ?? 30_000
+    this.onUsage = config.onUsage
   }
 
   get model(): string {
@@ -60,44 +73,71 @@ export class VoyageClient {
   /** Embed one or more texts. `input_type` must match ingestion (`document`) or search (`query`). */
   async embed(texts: string[], inputType: 'document' | 'query' = 'document'): Promise<number[][]> {
     if (texts.length === 0) return []
-    const payload = (await this.post('/embeddings', {
-      input: texts,
-      model: this.embeddingModel,
-      input_type: inputType,
-      truncation: true,
-    })) as {
-      data?: Array<{ embedding?: number[]; index?: number }>
-      usage?: { total_tokens?: number }
-    }
-
-    const rows = payload.data ?? []
-    if (rows.length !== texts.length) {
-      throw new Error(`Voyage embed returned ${rows.length} vectors for ${texts.length} inputs.`)
-    }
-
-    const ordered = [...rows].sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
-    return ordered.map((row, position) => {
-      if (!Array.isArray(row.embedding) || row.embedding.length === 0) {
-        throw new Error(`Voyage returned no vector for input ${position}.`)
+    const startedAt = Date.now()
+    try {
+      const payload = (await this.post('/embeddings', {
+        input: texts,
+        model: this.embeddingModel,
+        input_type: inputType,
+        truncation: true,
+      })) as {
+        data?: Array<{ embedding?: number[]; index?: number }>
+        usage?: { total_tokens?: number }
       }
-      return row.embedding
-    })
+
+      const rows = payload.data ?? []
+      if (rows.length !== texts.length) {
+        throw new Error(`Voyage embed returned ${rows.length} vectors for ${texts.length} inputs.`)
+      }
+
+      const ordered = [...rows].sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+      const vectors = ordered.map((row, position) => {
+        if (!Array.isArray(row.embedding) || row.embedding.length === 0) {
+          throw new Error(`Voyage returned no vector for input ${position}.`)
+        }
+        return row.embedding
+      })
+      this.report({ operation: 'embedding', model: this.embeddingModel, tokens: payload.usage?.total_tokens ?? 0, latencyMs: Date.now() - startedAt, ok: true })
+      return vectors
+    } catch (error) {
+      this.report({ operation: 'embedding', model: this.embeddingModel, tokens: 0, latencyMs: Date.now() - startedAt, ok: false })
+      throw error
+    }
   }
 
   /** Re-score candidate documents against the query. Returns indices into `documents`. */
   async rerank(query: string, documents: string[], topK?: number): Promise<VoyageRerankHit[]> {
     if (documents.length === 0) return []
-    const payload = (await this.post('/rerank', {
-      query,
-      documents,
-      model: this.rerankModel,
-      ...(topK === undefined ? {} : { top_k: topK }),
-      truncation: true,
-    })) as { data?: Array<{ index?: number; relevance_score?: number }> }
+    const startedAt = Date.now()
+    try {
+      const payload = (await this.post('/rerank', {
+        query,
+        documents,
+        model: this.rerankModel,
+        ...(topK === undefined ? {} : { top_k: topK }),
+        truncation: true,
+      })) as {
+        data?: Array<{ index?: number; relevance_score?: number }>
+        usage?: { total_tokens?: number }
+      }
 
-    return (payload.data ?? [])
-      .filter((row): row is { index: number; relevance_score?: number } => Number.isInteger(row.index))
-      .map((row) => ({ index: row.index, score: row.relevance_score ?? 0 }))
+      const hits = (payload.data ?? [])
+        .filter((row): row is { index: number; relevance_score?: number } => Number.isInteger(row.index))
+        .map((row) => ({ index: row.index, score: row.relevance_score ?? 0 }))
+      this.report({ operation: 'rerank', model: this.rerankModel, tokens: payload.usage?.total_tokens ?? 0, latencyMs: Date.now() - startedAt, ok: true })
+      return hits
+    } catch (error) {
+      this.report({ operation: 'rerank', model: this.rerankModel, tokens: 0, latencyMs: Date.now() - startedAt, ok: false })
+      throw error
+    }
+  }
+
+  private report(usage: VoyageUsage): void {
+    try {
+      this.onUsage?.(usage)
+    } catch {
+      // Metering must never break retrieval.
+    }
   }
 
   private async post(path: string, body: unknown): Promise<unknown> {

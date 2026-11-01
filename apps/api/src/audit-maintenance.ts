@@ -7,6 +7,7 @@
  */
 import { MongoClient } from 'mongodb'
 import { AuditService } from '@sps/audit'
+import { mongoPoolOptions } from '@sps/shared'
 
 export interface AuditMaintenanceOptions {
   uri: string
@@ -20,7 +21,7 @@ export async function maintainAuditChain(options: AuditMaintenanceOptions) {
     const before = await audit.verifyChain()
     if (options.mode === 'check') return { before, after: before, archive: null as string | null }
 
-    const client = new MongoClient(options.uri)
+    const client = new MongoClient(options.uri, mongoPoolOptions())
     await client.connect()
     let archive: string
     let archived: number

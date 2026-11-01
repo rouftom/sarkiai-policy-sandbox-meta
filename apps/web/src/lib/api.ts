@@ -8,6 +8,13 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000
 /** Fired on the window after the operator chooses another chat model. The detail is the model id. */
 export const MODEL_CHANGED = 'sps:model-changed'
 
+/**
+ * Fired on the window when an assistant turn ends (answer, error or stop). The
+ * turn writes audit records server-side, so data pages can refresh their blocks
+ * without waiting for the operator to reload.
+ */
+export const ASSISTANT_FINISHED = 'sps:assistant-finished'
+
 /** HTTP failure with the status and the raw body kept apart, so panels can react. */
 export class ApiError extends Error {
   readonly status: number
@@ -1313,10 +1320,20 @@ export interface SetupStatusDto {
   signup: boolean
 }
 
+/** Human check for the reset form. `required: false` means "render no widget". */
+export interface CaptchaConfigDto {
+  required: boolean
+  siteKey: string | null
+}
+
 export interface SetupResultDto {
   ok: boolean
   email: string
   storage: 'mongo' | 'memory'
+  /** `local` means the API returned the one-time password (no mail transport). */
+  delivery?: 'email' | 'local'
+  /** One-time password, only when `delivery` is `local`. Never persisted client-side. */
+  password?: string
 }
 
 export interface EnrollmentDto {
@@ -1347,10 +1364,15 @@ export interface AuditFeedDto {
 
 export const authApi = {
   setupStatus: () => request<SetupStatusDto>('/v1/auth/setup'),
+  captcha: () => request<CaptchaConfigDto>('/v1/auth/captcha'),
   setup: (body: { firstName: string; lastName: string; email: string }) =>
     request<SetupResultDto>('/v1/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
-  signup: (body: { firstName: string; lastName: string; email: string; password: string }) =>
-    request<VerificationDto>('/v1/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
+  signup: (body: { firstName: string; lastName: string; email: string; password: string }, turnstileToken?: string) =>
+    request<VerificationDto>('/v1/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...(turnstileToken ? { headers: { 'x-turnstile-token': turnstileToken } } : {}),
+    }),
   login: (body: { email: string; password: string }) =>
     request<ChallengeDto>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   verifyEmail: (token: string) =>
@@ -1363,10 +1385,11 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
-  forgotPassword: (email: string) =>
+  forgotPassword: (email: string, turnstileToken?: string) =>
     request<{ ok: boolean }>('/v1/auth/password/forgot', {
       method: 'POST',
       body: JSON.stringify({ email }),
+      ...(turnstileToken ? { headers: { 'x-turnstile-token': turnstileToken } } : {}),
     }),
   resetPassword: (token: string, password: string) =>
     request<{ ok: boolean }>('/v1/auth/password/reset', {
@@ -1659,4 +1682,162 @@ export const knowledgeApi = {
       method: 'POST',
       body: '{}',
     }),
+}
+
+// ── Observability: what the engine spent, per call and aggregated ───────────
+
+export type UsageKindDto = 'chat' | 'retrieval' | 'image' | 'voice' | 'sam'
+export type UsageStatusDto = 'ok' | 'error'
+/** What a ledger row counts: tokens, images, audio seconds or calls. */
+export type UsageUnitDto = 'token' | 'image' | 'second' | 'call'
+
+export interface UsageTotalsDto {
+  requests: number
+  errors: number
+  inputTokens: number
+  outputTokens: number
+  /** Non-token volume; only meaningful inside one capability. */
+  units: number
+  /** Sum of the known tariffs; `unpriced` calls are not included. */
+  costUsd: number
+  unpriced: number
+}
+
+export interface UsageRowDto extends UsageTotalsDto {
+  key: string
+}
+
+export interface UsageLatencyDto {
+  p50Ms: number | null
+  p95Ms: number | null
+  samples: number
+}
+
+export interface UsagePointDto extends UsageTotalsDto {
+  date: string
+}
+
+export interface ObservabilitySummaryDto {
+  from: string
+  to: string
+  scope: 'operator' | 'all'
+  operator?: string
+  totals: UsageTotalsDto
+  latency: UsageLatencyDto
+  series: UsagePointDto[]
+  byModel: UsageRowDto[]
+  byRoute: UsageRowDto[]
+  byKind: UsageRowDto[]
+  byAgent: UsageRowDto[]
+  /** Admin view only: every operator that spent something in the range. */
+  operators: UsageRowDto[]
+}
+
+/** One row of the ledger: a single model call, with its outcome. */
+export interface UsageRequestDto {
+  ts: string
+  operator?: string
+  route?: string
+  runId?: string
+  agentId?: string
+  kind: UsageKindDto
+  status: UsageStatusDto
+  latencyMs?: number
+  mode: string
+  servedBy: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  /** Images, audio seconds or calls; absent on token rows. */
+  units?: number
+  unit?: UsageUnitDto
+  costUsd: number | null
+}
+
+export interface ObservabilityRequestsDto {
+  requests: UsageRequestDto[]
+  /** Matching calls before the page limit. */
+  total: number
+}
+
+/** Straight-line projection of the next days, from the complete days in range. */
+export interface ObservabilityForecastDto {
+  from: string
+  to: string
+  scope: 'operator' | 'all'
+  operator?: string
+  /** Complete days the regression used. */
+  days: number
+  activeDays: number
+  horizonDays: number
+  /** Null when the history is too thin. */
+  projectedCalls: number | null
+  /** Null when too thin, or when nothing in the window has a known tariff. */
+  projectedCostUsd: number | null
+  unpriced: number
+  enoughData: boolean
+  series: Array<{ date: string; requests: number; costUsd: number }>
+}
+
+/** One run's spend, with the per-run ceiling verdict. */
+export interface UsageRunDto {
+  runId: string
+  operator?: string
+  requests: number
+  errors: number
+  inputTokens: number
+  outputTokens: number
+  units: number
+  costUsd: number
+  unpriced: number
+  overBudget: boolean
+}
+
+export interface ObservabilityBudgetDto {
+  /** Per-run ceiling; 0 when none is configured. */
+  ceilingUsd: number
+  runs: UsageRunDto[]
+}
+
+export interface ObservabilityRunDto {
+  runId: string
+  operator?: string
+  ceilingUsd: number
+  totals: UsageTotalsDto
+  overBudget: boolean
+}
+
+export interface ObservabilityQueryDto {
+  from: Date
+  to: Date
+  operator?: string
+  status?: UsageStatusDto
+  kind?: UsageKindDto
+  model?: string
+  agentId?: string
+  limit?: number
+}
+
+function observabilityQuery(params: ObservabilityQueryDto): string {
+  const query = new URLSearchParams({ from: params.from.toISOString(), to: params.to.toISOString() })
+  if (params.operator) query.set('operator', params.operator)
+  if (params.status) query.set('status', params.status)
+  if (params.kind) query.set('kind', params.kind)
+  if (params.model) query.set('model', params.model)
+  if (params.agentId) query.set('agentId', params.agentId)
+  if (params.limit) query.set('limit', String(params.limit))
+  return query.toString()
+}
+
+export const observabilityApi = {
+  summary: (params: ObservabilityQueryDto) =>
+    request<ObservabilitySummaryDto>(`/v1/observability/summary?${observabilityQuery(params)}`),
+  requests: (params: ObservabilityQueryDto) =>
+    request<ObservabilityRequestsDto>(`/v1/observability/requests?${observabilityQuery(params)}`),
+  forecast: (params: ObservabilityQueryDto) =>
+    request<ObservabilityForecastDto>(`/v1/observability/forecast?${observabilityQuery(params)}`),
+  budget: (params: ObservabilityQueryDto) =>
+    request<ObservabilityBudgetDto>(`/v1/observability/budget?${observabilityQuery(params)}`),
+  run: (runId: string) =>
+    request<ObservabilityRunDto>(`/v1/observability/runs/${encodeURIComponent(runId)}`),
 }

@@ -35,6 +35,37 @@ import { buildScenario, maturityLabel } from './scoring'
 export * from './causal'
 export * from './scoring'
 
+/**
+ * Runs `task` over `items` with at most `limit` in flight, keeping the input
+ * order in the settled results. Used for the dimension fan-out: the same
+ * behaviour as `Promise.allSettled`, only bounded.
+ */
+export async function settlePool<T, R>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<R>,
+): Promise<Array<PromiseSettledResult<R>>> {
+  const results: Array<PromiseSettledResult<R>> = new Array(items.length)
+  let next = 0
+
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = next
+      next += 1
+      if (index >= items.length) return
+      try {
+        results[index] = { status: 'fulfilled', value: await task(items[index]!) }
+      } catch (error) {
+        results[index] = { status: 'rejected', reason: error }
+      }
+    }
+  }
+
+  const workers = Math.max(1, Math.min(limit, items.length))
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+  return results
+}
+
 export interface ReadinessInput {
   country: string
   domain: Domain
@@ -56,6 +87,14 @@ export interface ReadinessInput {
    * order a lead agent decides (`orchestrated`, see `lead`).
    */
   concurrency?: 'parallel' | 'sequential' | 'orchestrated'
+  /**
+   * In `parallel` mode, how many dimensions may be in flight at once (default 4).
+   * Thirteen cells at once per sector multiplies into a burst no single
+   * instance should absorb.
+   */
+  dimensionConcurrency?: number
+  /** Aborted when the caller goes away: the run stops instead of burning credits. */
+  signal?: AbortSignal
   /** Orchestrated mode: the most decisions the lead may take (default 20). */
   maxDecisions?: number
   /** Orchestrated mode: the lead agent's next decision, given what is scored so far. */
@@ -267,6 +306,8 @@ export class ReadinessEngine {
     const kept = new Map((input.completed ?? []).map((score) => [score.dimension, score]))
     const pending = dimensions.filter((dimension) => !kept.has(dimension))
     const maxDecisions = input.maxDecisions ?? 20
+    /** Bounded fan-out: 13 cells at once per sector is an avoidable burst. */
+    const dimensionLimit = Math.max(1, input.dimensionConcurrency ?? 4)
 
     const results: ReadinessReport['dimensions'] = []
     const scores: DimensionScore[] = []
@@ -304,7 +345,9 @@ export class ReadinessEngine {
       return answer
     }
     // Gathered first and in parallel, except in orchestrated mode: the lead reaches each dimension in its own order.
-    if (input.concurrency !== 'orchestrated') await Promise.all(pending.map(searchOf))
+    if (input.concurrency !== 'orchestrated') {
+      await settlePool(pending, dimensionLimit, searchOf)
+    }
 
     /** Evaluates one dimension: its score is pushed when it is done. Throws when it fails. */
     const evaluateOne = async (dimension: ReadinessDimension, options: { again?: boolean; hint?: string } = {}): Promise<void> => {
@@ -336,6 +379,7 @@ export class ReadinessEngine {
           attempts: 3,
           maxOutputTokens: 8192,
           reasoningEffort: input.reasoningEffort ?? 'low',
+          ...(input.signal ? { signal: input.signal } : {}),
           onAttempt: (info) => attempts.push({ attempt: info.attempt, reasoning: info.reasoning, valid: info.valid }),
           system: `You assess country "${input.country}" AI readiness on the dimension "${def.name}" (factors: ${def.factors.join(', ')}), domain "${input.domain}".
 Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNTRY provisions to GLOBAL best practice. Identify concrete gaps: unclear responsibilities, missing standards, legislative gaps, coordination problems, conflicts between objectives. Ground every claim in the passages. Do not analyse specific geographies; focus on domain-specific gaps and relevant global examples. ${BILINGUAL_RULE}`,
@@ -449,7 +493,7 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
       }
     } else {
       // In parallel, every dimension runs to its end: one failure does not discard the others.
-      const outcomes = await Promise.allSettled(dimensions.map((dimension) => evaluateOne(dimension)))
+      const outcomes = await settlePool(dimensions, dimensionLimit, (dimension) => evaluateOne(dimension))
       const failed = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
       if (failed) throw new ReadinessInterrupted((failed.reason as Error).message, [...scores])
     }
@@ -472,7 +516,7 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
     for (const lang of ['en', 'fr'] as const) {
       if (hasLanguage(report.scores, lang)) continue
       try {
-        report = await this.localize(report, lang, input.models?.synthesis)
+        report = await this.localize(report, lang, input.models?.synthesis, input.signal)
       } catch {
         // The report keeps the language it has; the other is added when it is opened.
       }
@@ -502,6 +546,7 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
         attempts: 2,
         maxOutputTokens: 4096,
         reasoningEffort: 'low',
+        ...(input.signal ? { signal: input.signal } : {}),
         system: `You write the national summary of an AI-readiness assessment for "${input.country}", domain "${input.domain}". "situation" states where the country stands today against the global best practice, in 3 to 5 sentences grounded in the scores. "context" says what this means for the domain and what matters most next, in 2 to 3 sentences. "headline" is one line. ${BILINGUAL_RULE}`,
         prompt: `Composite score: ${composite}/5.\n${table}`,
       })
@@ -515,7 +560,12 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
    * Adds the text of a saved assessment in `lang`, from the text it already has.
    * Used for assessments made before bilingual output, or when a language is missing.
    */
-  async localize(report: ReadinessReport, lang: ReadinessLang, synthesisModel?: string): Promise<ReadinessReport> {
+  async localize(
+    report: ReadinessReport,
+    lang: ReadinessLang,
+    synthesisModel?: string,
+    signal?: AbortSignal,
+  ): Promise<ReadinessReport> {
     const source = report.scores.map((score) => ({
       dimensionId: score.dimensionId,
       name: score.dimensionName,
@@ -543,6 +593,7 @@ Score maturity on 0–5 (0 Not Started, 3 Established, 5 Leading). Compare COUNT
       attempts: 3,
       maxOutputTokens: 12000,
       reasoningEffort: 'low',
+      ...(signal ? { signal } : {}),
       system: `Translate the assessment text below into ${languageName}. Keep the meaning, the figures and the list lengths exactly; keep each dimensionId. Do not add or drop points.`,
       prompt: JSON.stringify({ dimensions: source, situation: report.situation?.en ?? report.situation?.fr ?? null }),
     })

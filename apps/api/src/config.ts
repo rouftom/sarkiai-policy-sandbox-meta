@@ -71,7 +71,7 @@ const publicOrigins = [
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 const PRIVATE_SUFFIXES = ['.local', '.internal', '.lan', '.home.arpa']
 
-function isLocalOrigin(origin: string): boolean {
+export function isLocalOrigin(origin: string): boolean {
   try {
     const { protocol, hostname } = new URL(origin)
     if (protocol !== 'http:' && protocol !== 'https:') return false
@@ -95,6 +95,15 @@ function isLocalOrigin(origin: string): boolean {
   } catch {
     return false
   }
+}
+
+/**
+ * A local install with no mail transport may return the root one-time password
+ * in the setup response: it is the only way in, and the screen shows it once.
+ * A public host never does — a mail failure there still rolls the account back.
+ */
+export function localSetupPasswordFallback(errorCode: string | undefined, canonicalUrl: string): boolean {
+  return errorCode === 'mail_not_configured' && isLocalOrigin(canonicalUrl)
 }
 
 export interface OriginPolicy {
@@ -240,6 +249,35 @@ export const config = {
      */
     signup: env('AUTH_SIGNUP', cloudDeployment ? 'true' : 'false') === 'true',
     maxOperators: Number(env('AUTH_MAX_OPERATORS', '12')) || 12,
+  },
+
+  /**
+   * Per-caller request budgets. `RATE_LIMIT_MAX` covers the authenticated API
+   * as a whole, `RATE_LIMIT_EXPENSIVE_MAX` the routes that spend model credits.
+   * Counters are in-process: one instance today, and `RATE_LIMIT_ENABLED=false`
+   * is the escape hatch if a console workflow ever needs a higher burst.
+   */
+  rateLimit: {
+    enabled: env('RATE_LIMIT_ENABLED', 'true') !== 'false',
+    windowMs: Number(env('RATE_LIMIT_WINDOW_MS', '60000')) || 60_000,
+    max: Number(env('RATE_LIMIT_MAX', '240')) || 240,
+    expensiveMax: Number(env('RATE_LIMIT_EXPENSIVE_MAX', '20')) || 20,
+  },
+
+  /**
+   * Caps on in-flight model work. One readiness series legitimately runs five
+   * streams at once, so the per-operator default sits above that; past it the
+   * API answers 429 rather than queueing. `AI_CONCURRENCY_PER_OPERATOR=0` turns
+   * the gate off (0 means "no cap" for both values).
+   */
+  concurrency: {
+    perOperator: Number(env('AI_CONCURRENCY_PER_OPERATOR', '8')) || 0,
+    global: Number(env('AI_CONCURRENCY_GLOBAL', '16')) || 0,
+    /**
+     * Dimensions one readiness run evaluates at the same time. Cells are the
+     * expensive part: 13 in parallel per sector multiplies fast.
+     */
+    dimensions: Math.max(1, Number(env('READINESS_DIMENSION_CONCURRENCY', '4')) || 4),
   },
 
   // Transactional e-mail (Resend): only used to mail an operator's first password.

@@ -102,3 +102,48 @@ services:
         value: "true"
       - key: AUTH_MAX_OPERATORS
         value: "12"
+
+      # ── bot protection (sign-up + password reset) ──────────────────────────
+      # Cloudflare Turnstile. The site key is public (served to the console by
+      # GET /v1/auth/captcha), the secret validates tokens. With no keys the
+      # check is off; an unreachable Cloudflare never blocks a reset request.
+      - key: NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET
+        sync: false
+      - key: TURNSTILE_HOSTNAMES
+        sync: false
+
+      # ── request budgets ────────────────────────────────────────────────────
+      # Per-caller rate limiting. The demo runs one instance; a burst of console
+      # polls stays far below the global cap, and the model routes (readiness,
+      # scenarios, chat, ingestion) have their own tighter budget. Raise these
+      # if a legitimate workflow ever hits 429 (Retry-After says for how long).
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: RATE_LIMIT_MAX
+        value: "240"
+      - key: RATE_LIMIT_EXPENSIVE_MAX
+        value: "20"
+
+      # ── backpressure ───────────────────────────────────────────────────────
+      # In-flight model work. A readiness series runs five streams at once, so
+      # the per-operator default is above that; past the cap the API answers 429
+      # at once instead of queueing. The dimensions cap bounds each stream's
+      # internal fan-out (13 cells per sector otherwise).
+      - key: AI_CONCURRENCY_PER_OPERATOR
+        value: "8"
+      - key: AI_CONCURRENCY_GLOBAL
+        value: "16"
+      - key: READINESS_DIMENSION_CONCURRENCY
+        value: "4"
+
+      # ── Mongo pools ────────────────────────────────────────────────────────
+      # Every service opens its own client; each is bounded so a slow cluster
+      # queues at most this many connections for at most this long.
+      - key: MONGODB_MAX_POOL_SIZE
+        value: "10"
+      - key: MONGODB_WAIT_QUEUE_TIMEOUT_MS
+        value: "5000"

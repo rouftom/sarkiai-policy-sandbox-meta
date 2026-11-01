@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   DIMENSION_FACTORS,
+  mongoPoolOptions,
   READINESS_DIMENSION_IDS,
   READINESS_DIMENSIONS,
   READINESS_FACTORS,
@@ -83,5 +84,27 @@ describe('institutions of several sectors', () => {
 
   test('one sector gives the same list as before', () => {
     expect(institutionsForDomains(['education']).map((i) => i.id)).toEqual(institutionsForDomain('education').map((i) => i.id))
+  })
+})
+
+describe('mongoPoolOptions', () => {
+  test('bounds the pool and the wait by default', () => {
+    const options = mongoPoolOptions()
+    expect(options.maxPoolSize).toBe(10)
+    expect(options.waitQueueTimeoutMS).toBe(5000)
+    expect(options.serverSelectionTimeoutMS).toBe(4000)
+  })
+
+  test('reads the env overrides and ignores nonsense', () => {
+    const before = { ...process.env }
+    process.env.MONGODB_MAX_POOL_SIZE = '25'
+    process.env.MONGODB_WAIT_QUEUE_TIMEOUT_MS = 'nonsense'
+    try {
+      const options = mongoPoolOptions()
+      expect(options.maxPoolSize).toBe(25)
+      expect(options.waitQueueTimeoutMS).toBe(5000)
+    } finally {
+      process.env = before
+    }
   })
 })

@@ -7,6 +7,7 @@
  */
 
 import { MongoClient, type Collection, type Document } from 'mongodb'
+import { mongoPoolOptions } from '@sps/shared'
 
 export type ApprovalDecision = 'approved' | 'rejected'
 
@@ -49,7 +50,7 @@ export class ApprovalStore {
 
   private async collection(): Promise<Collection<ApprovalDocument>> {
     if (!this.client) {
-      this.client = new MongoClient(this.config.mongodbUri)
+      this.client = new MongoClient(this.config.mongodbUri, mongoPoolOptions())
       await this.client.connect()
     }
     return this.client.db(this.config.dbName).collection<ApprovalDocument>(this.collectionName)
