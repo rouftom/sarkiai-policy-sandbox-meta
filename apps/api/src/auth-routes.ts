@@ -12,6 +12,7 @@ import { z, ZodError } from 'zod'
 import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
+import { resolveAuditWindow } from './audit-window.js'
 import { config, localSetupPasswordFallback } from './config.js'
 import { MailError, sendEmailVerification, sendInvitation, sendPasswordReset } from './mailer.js'
 import { RateLimiter, type RateLimitRule } from './rate-limit.js'
@@ -470,28 +471,20 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     const { limit, offset, q, stats, tz, from } = query.data
 
-    if (stats !== undefined) {
-      if (!tz || !from) return reply.status(400).send({ error: 'stats_requires_tz_and_from' })
-      try {
-        new Intl.DateTimeFormat('en-US', { timeZone: tz })
-      } catch {
-        return reply.status(400).send({ error: 'invalid_timezone' })
-      }
-      const fromMs = Date.parse(from)
-      const now = Date.now()
-      if (Number.isNaN(fromMs) || fromMs > now || now - fromMs > (stats + 1) * 86_400_000) {
-        return reply.status(400).send({ error: 'invalid_window' })
-      }
-    }
+    // `stats` alone is not enough: the dashboard must say which days it wants.
+    const statsWindow = stats === undefined ? null : resolveAuditWindow({ stats, tz, from })
+    if (statsWindow && !statsWindow.ok) return reply.status(400).send({ error: statsWindow.error })
 
     try {
       const [events, chain, total, rows] = await Promise.all([
         audit.listAudit(limit, operator.email, offset, q),
         audit.verifyChainCached(),
         audit.countAudit(operator.email, q),
-        stats !== undefined && tz && from ? audit.auditWindow(operator.email, from, tz) : Promise.resolve([]),
+        statsWindow?.ok
+          ? audit.auditWindow(operator.email, statsWindow.from, statsWindow.timeZone)
+          : Promise.resolve([]),
       ])
-      if (stats === undefined) return { events, chain, total }
+      if (!statsWindow?.ok) return { events, chain, total }
       const days = new Map<string, number>()
       const actions = new Map<string, number>()
       for (const row of rows) {
@@ -502,6 +495,8 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
         events,
         chain,
         total,
+        // UTC when the requested zone was unknown: the dashboard can say so.
+        timeZone: statsWindow.timeZone,
         days: [...days]
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([day, count]) => ({ day, count })),

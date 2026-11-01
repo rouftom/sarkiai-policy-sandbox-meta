@@ -45,3 +45,18 @@ export async function maintainAuditChain(options: AuditMaintenanceOptions) {
     await audit.close()
   }
 }
+
+/**
+ * Create the console's read index at boot (idempotent). The API calls this after
+ * the optional demo reset, which drops `audit_logs` and its indexes; reads keep
+ * a lazy creation as a safety net. Returns false when the index could not be
+ * created, so the caller logs a warning instead of failing boot.
+ */
+export async function ensureAuditReadIndexes(options: { uri: string; dbName: string }): Promise<boolean> {
+  const audit = new AuditService({ mongodbUri: options.uri, dbName: options.dbName })
+  try {
+    return await audit.ensureReadIndexes()
+  } finally {
+    await audit.close()
+  }
+}

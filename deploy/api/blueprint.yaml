@@ -100,8 +100,9 @@ services:
       # automatically in cloud mode; the explicit value survives a config drift.
       - key: AUTH_SIGNUP
         value: "true"
+      # Raised from 12 to 32 for the judging period (Nov 5-9, 2026).
       - key: AUTH_MAX_OPERATORS
-        value: "12"
+        value: "32"
 
       # ── bot protection (sign-up + password reset) ──────────────────────────
       # Cloudflare Turnstile. The site key is public (served to the console by

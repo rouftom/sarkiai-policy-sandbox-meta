@@ -21,6 +21,38 @@ function getTarget(req: NextRequest) {
 const CLIENT_AUTH_HEADERS = new Set(['x-api-key', 'authorization', 'api-key', 'apikey', 'x-apikey', 'api-token', 'x-auth-token', 'cookie'])
 
 const UNKNOWN_SERVER = () => Response.json({ error: 'Unknown or missing MCP server' }, { status: 400 })
+const UNAUTHORIZED = () => Response.json({ error: 'unauthorized' }, { status: 401 })
+
+/**
+ * The proxy adds the server-side MCP key, so it only serves signed-in operators:
+ * the console's Bearer session is checked against the API (`/v1/auth/me`) and
+ * the answer cached for a minute. The Bearer header itself is never forwarded.
+ */
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+const SESSION_CACHE_MS = 60_000
+const sessionCache = new Map<string, number>()
+
+async function isSignedIn(req: NextRequest): Promise<boolean> {
+  const header = req.headers.get('authorization') ?? ''
+  if (!header.startsWith('Bearer ')) return false
+  const token = header.slice('Bearer '.length).trim()
+  if (!token) return false
+  const now = Date.now()
+  const cachedUntil = sessionCache.get(token)
+  if (cachedUntil && cachedUntil > now) return true
+  try {
+    const response = await fetch(`${API_URL}/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    if (!response.ok) return false
+    if (sessionCache.size > 500) sessionCache.clear()
+    sessionCache.set(token, now + SESSION_CACHE_MS)
+    return true
+  } catch {
+    return false
+  }
+}
 
 /**
  * MCP Proxy that acts as a transparent pass-through to support
@@ -29,6 +61,7 @@ const UNKNOWN_SERVER = () => Response.json({ error: 'Unknown or missing MCP serv
  */
 export async function POST(req: NextRequest) {
   try {
+    if (!(await isSignedIn(req))) return UNAUTHORIZED()
     const target = getTarget(req)
     if (!target) return UNKNOWN_SERVER()
 
@@ -65,6 +98,7 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
+    if (!(await isSignedIn(req))) return UNAUTHORIZED()
     const target = getTarget(req)
     if (!target) return UNKNOWN_SERVER()
 
