@@ -4,77 +4,45 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Compass, Cpu, Database, Gauge, Globe, LayoutDashboard, Megaphone, Menu, Newspaper, Network,
-  Layers, Rocket, ScrollText, Settings, Settings2, ShieldCheck, Siren, SlidersHorizontal, X,
+  Compass, Globe, Menu, X,
 } from 'lucide-react'
 import { cn, Select } from '@sps/ui'
 import { BrandMark, BrandWordmark } from './brand-mark'
 import { OperatorMenu } from './operator-menu'
 import { ThemeSwitcher } from './theme-switcher'
+import {
+  GENERAL_NAV,
+  GUIDE_CHILDREN,
+  OPERATIONS_NAV,
+  SETTINGS_NAV,
+  type NavEntry,
+} from './nav-items'
 import { useI18n, type Locale, type MessageKey } from '@/lib/i18n'
 import { useAuth } from '@/lib/auth'
 
+/**
+ * The app bar title for each route. The nav arrays are the source of truth, so
+ * a page added to the rail and the drawer also gets its title here.
+ */
 const TITLES: Array<{ href: string; labelKey: MessageKey }> = [
-  { href: '/guide/start', labelKey: 'nav.guide_start' },
-  { href: '/guide/engine', labelKey: 'nav.guide_engine' },
-  { href: '/guide/operations', labelKey: 'nav.guide_operations' },
-  { href: '/guide/meta', labelKey: 'nav.guide_meta' },
+  ...GUIDE_CHILDREN,
   { href: '/guide', labelKey: 'nav.guide' },
-  { href: '/knowledge', labelKey: 'nav.knowledge' },
-  { href: '/readiness', labelKey: 'nav.readiness' },
-  { href: '/scenarios', labelKey: 'nav.scenarios' },
-  { href: '/exercise', labelKey: 'nav.exercise' },
-  { href: '/communications', labelKey: 'nav.communication' },
-  { href: '/audit', labelKey: 'nav.audit' },
-  { href: '/preferences', labelKey: 'nav.preferences' },
-  { href: '/security', labelKey: 'nav.security' },
   { href: '/', labelKey: 'overview.title' },
+  ...GENERAL_NAV.filter((entry) => entry.href !== '/'),
+  ...OPERATIONS_NAV,
+  ...SETTINGS_NAV,
 ]
 
-interface MobileNavEntry {
-  href: string
-  labelKey: MessageKey
-  icon: React.ComponentType<{ className?: string }>
-  iconClassName?: string
-}
-
 /** Same sections, same order as the desktop rail: the drawer is not a second navigation. */
-const MOBILE_NAV: Array<{ groupKey: MessageKey; entries: MobileNavEntry[]; children?: MobileNavEntry[] }> = [
+const MOBILE_NAV: Array<{ groupKey: MessageKey; entries: NavEntry[]; children?: NavEntry[] }> = [
   {
     groupKey: 'nav.group_guide',
     entries: [{ href: '/guide', labelKey: 'nav.guide', icon: Compass }],
-    children: [
-      { href: '/guide/start', labelKey: 'nav.guide_start', icon: Rocket },
-      { href: '/guide/engine', labelKey: 'nav.guide_engine', icon: Cpu },
-      { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
-      { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Layers },
-    ],
+    children: GUIDE_CHILDREN,
   },
-  {
-    groupKey: 'nav.group_general',
-    entries: [
-      { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
-      { href: '/countries', labelKey: 'nav.countries', icon: Globe },
-      { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
-      { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
-      { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
-    ],
-  },
-  {
-    groupKey: 'nav.group_operations',
-    entries: [
-      { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },
-      { href: '/communications', labelKey: 'nav.communication', icon: Megaphone },
-      { href: '/audit', labelKey: 'nav.audit', icon: ScrollText },
-    ],
-  },
-  {
-    groupKey: 'nav.group_settings',
-    entries: [
-      { href: '/preferences', labelKey: 'nav.settings', icon: Settings },
-      { href: '/security', labelKey: 'nav.security', icon: ShieldCheck },
-    ],
-  },
+  { groupKey: 'nav.group_general', entries: GENERAL_NAV },
+  { groupKey: 'nav.group_operations', entries: OPERATIONS_NAV },
+  { groupKey: 'nav.group_settings', entries: SETTINGS_NAV },
 ]
 
 /**

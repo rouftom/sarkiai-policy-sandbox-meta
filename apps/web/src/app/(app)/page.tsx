@@ -18,7 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle, Skeleton, cn } from '@sps/ui'
 import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
-import { MODEL_CHANGED, api, authApi, knowledgeApi, type AuditEventDto, type KbDocumentDto, type KbStatusDto, type ProviderDto } from '@/lib/api'
+import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus'
+import { ASSISTANT_FINISHED, MODEL_CHANGED, api, authApi, knowledgeApi, type AuditEventDto, type KbDocumentDto, type KbStatusDto, type ProviderDto } from '@/lib/api'
 import { actionCategory, auditActorLabel, AUDIT_ACTION_KEYS, humaniseAction } from '@/lib/audit-labels'
 
 function relativeTime(value: string, locale: string): string {
@@ -31,6 +32,9 @@ function relativeTime(value: string, locale: string): string {
   if (Math.abs(hours) < 24) return formatter.format(-hours, 'hour')
   return formatter.format(-Math.round(hours / 24), 'day')
 }
+
+/** The API caps the audit feed at 500 records: enough for a full seven-day chart. */
+const AUDIT_PAGE = 500
 
 /** The last seven days, oldest first, with the number of audit records on each. */
 function lastSevenDays(events: AuditEventDto[]): Array<{ key: string; day: Date; count: number }> {
@@ -97,48 +101,69 @@ export default function OverviewPage() {
   /** The operator's chat model: the one saved for this account, updated when it changes. */
   const [model, setModel] = React.useState<string | null>(null)
 
-  React.useEffect(() => {
-    let cancelled = false
-    void api
-      .provider()
-      .then((value) => !cancelled && setProvider(value))
-      .catch(() => {})
-    void api
-      .models()
-      .then((result) => !cancelled && setModel(result.selected))
-      .catch(() => {})
-    const onChange = (event: Event) => setModel((event as CustomEvent<string>).detail)
-    window.addEventListener(MODEL_CHANGED, onChange)
-    return () => {
-      cancelled = true
-      window.removeEventListener(MODEL_CHANGED, onChange)
+  // One generation counter: a slower reload never overwrites the answer of the
+  // newer one, and a reload started after unmount is dropped.
+  const generation = React.useRef(0)
+  React.useEffect(
+    () => () => {
+      generation.current += 1
+    },
+    [],
+  )
+
+  /**
+   * Everything the dashboard shows, in one pass. Each block owns its own
+   * failure: a missing audit store must not blank the corpus KPIs.
+   */
+  const load = React.useCallback(async () => {
+    const ticket = ++generation.current
+    const current = () => ticket === generation.current
+    const [providerResult, modelsResult, statusResult, documentsResult, auditResult] = await Promise.allSettled([
+      api.provider(),
+      api.models(),
+      knowledgeApi.status(),
+      knowledgeApi.documents({ limit: 200 }),
+      authApi.auditEvents(AUDIT_PAGE),
+    ])
+    if (!current()) return
+    if (providerResult.status === 'fulfilled') setProvider(providerResult.value)
+    if (modelsResult.status === 'fulfilled') setModel(modelsResult.value.selected)
+    if (statusResult.status === 'fulfilled') setStatus(statusResult.value)
+    setDocuments(documentsResult.status === 'fulfilled' ? documentsResult.value.documents : [])
+    if (auditResult.status === 'fulfilled') {
+      setEvents(auditResult.value.events)
+      setChain(auditResult.value.chain)
+      setAuditState('ready')
+    } else {
+      setAuditState('unavailable')
     }
   }, [])
 
+  // `operator.email` is the session identity: loading again when it resolves
+  // closes the race between the first render and a freshly signed-in session.
+  const operatorEmail = operator?.email
   React.useEffect(() => {
-    let cancelled = false
-    void knowledgeApi
-      .status()
-      .then((next) => !cancelled && setStatus(next))
-      .catch(() => {})
-    void knowledgeApi
-      .documents({ limit: 200 })
-      .then((next) => !cancelled && setDocuments(next.documents))
-      .catch(() => !cancelled && setDocuments([]))
-    void authApi
-      .auditEvents(100)
-      .then((feed) => {
-        if (cancelled) return
-        setEvents(feed.events)
-        setChain(feed.chain)
-        setAuditState('ready')
-      })
-      .catch(() => {
-        if (!cancelled) setAuditState('unavailable')
-      })
-    return () => {
-      cancelled = true
-    }
+    void load()
+  }, [load, operatorEmail])
+
+  // A visited route is cached by Next: coming back to it does not remount the
+  // page, so the blocks would keep their first values. Focus is the signal that
+  // the operator is looking again.
+  useRefreshOnFocus(load)
+
+  // A finished assistant turn writes audit records server-side. The dashboard
+  // listens, so the activity chart, the recent list and the chain card follow
+  // without asking the operator to reload.
+  React.useEffect(() => {
+    const onFinished = () => void load()
+    window.addEventListener(ASSISTANT_FINISHED, onFinished)
+    return () => window.removeEventListener(ASSISTANT_FINISHED, onFinished)
+  }, [load])
+
+  React.useEffect(() => {
+    const onChange = (event: Event) => setModel((event as CustomEvent<string>).detail)
+    window.addEventListener(MODEL_CHANGED, onChange)
+    return () => window.removeEventListener(MODEL_CHANGED, onChange)
   }, [])
 
   const quick = [

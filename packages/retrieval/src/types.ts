@@ -6,6 +6,8 @@ export type RetrievalBackend = 'qdrant' | 'atlas'
 
 export interface Retriever {
   search(query: RetrievalQuery): Promise<KbChunk[]>
+  /** Releases pooled connections; absent for backends that hold none. */
+  close?(): Promise<void>
 }
 
 /** Resolve the backend from an explicit override, else the provider mode. */

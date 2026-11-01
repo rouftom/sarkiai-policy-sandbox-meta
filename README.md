@@ -65,6 +65,23 @@ over **e-mail or WhatsApp**, with per-channel consent and an audited send.
 
 **<https://sps.djotta.com>**: the hosted console, in English and French, light and dark, running in `cloud` mode on the Meta Model API. Nothing is mocked: the corpus, the runs and the audit chain are live.
 
+### How to judge
+
+The hosted console is **optional**; everything below runs from this repository.
+Three paths are enough:
+
+| Path | What you need | What it shows |
+|---|---|---|
+| **A — Run locally, no key** | Docker only. The **default model is Muse Glimmer 30B** (~32 GB VRAM, or 48 GB+ unified memory); on a smaller machine set `OLLAMA_MODEL=qwen3.5:9b` before `make models` (16–32 GB RAM, no GPU required) | The full engine offline: ingestion, retrieval, agents, scenario, readiness, audit chain. |
+| **B — Run on your own keys** | Path A, then `SANDBOX_MODE=cloud` + `MODEL_API_KEY`, or `SANDBOX_MODE=sovereign` + `BASETEN_API_KEY` | The same workflow on Muse Spark (Meta Model API) or Muse Spark Open (Baseten). |
+| **C — Review the recorded run** | Nothing | The 3-minute video ([`docs/DEMO.md`](docs/DEMO.md)) and the captures in [`docs/screenshots/`](docs/screenshots/). |
+
+The *replay* path is the audit trail: every run keeps its prompts, answers,
+model ids, citations and a hash-chained audit entry, so a recorded run can be
+replayed from the log. [`HACKATHON.md`](HACKATHON.md) is the commit-level
+ledger, and the screenshots are captures of the hosted deployment. A judge can
+therefore re-run the demo live (A or B) or audit the recorded evidence (C).
+
 ### First connection
 
 The public deployment has two ways in: create your own operator account, or use the account handed out with the submission.
@@ -159,10 +176,12 @@ sarkiai-policy-sandbox/
 
 ## Quick start
 
-> **Pick a provider mode** with `SANDBOX_MODE` in `.env`: `local` (default,
-> Ollama, no key, nothing leaves the machine), `sovereign` (Muse Glimmer on
-> Ollama, or a hosted open-weight endpoint) or `cloud` (Meta Model API, requires
-> `MODEL_API_KEY`). The badge in the console shows which one is answering.
+> **No key is required for a local run.** `SANDBOX_MODE=local` (the default)
+> uses Ollama, so nothing leaves the machine. Meta Model API (`MODEL_API_KEY`,
+> cloud mode) and Baseten (`BASETEN_API_KEY`, sovereign mode) are **optional**:
+> set one to run the same workflow on the hackathon models. Resend and Cloudflare
+> Turnstile are optional too — see [Optional keys and limits](#optional-keys-and-limits).
+> The badge in the console shows which provider is answering.
 > A first local run pulls Muse Glimmer (30B, see `docs/HARDWARE-REQUIREMENTS.md`) + ~1.2 GB (bge-m3).
 > On a smaller machine, set `OLLAMA_MODEL=qwen3.5:9b` (~6.6 GB) before `make models`.
 
@@ -170,8 +189,10 @@ sarkiai-policy-sandbox/
 
 ```bash
 cp .env.example .env
+# Default model: Muse Glimmer 30B (needs ~32 GB VRAM).
+# No GPU or a smaller machine? set OLLAMA_MODEL=qwen3.5:9b in .env *before* this step.
 docker compose up --build -d
-make models                # pull Muse Glimmer + bge-m3 into Ollama
+make models                # pulls $OLLAMA_MODEL (Muse Glimmer by default) + bge-m3
 ```
 
 Then:
@@ -216,6 +237,33 @@ For a browser to reach the API from another machine, `NEXT_PUBLIC_API_URL` must
 name the API as that machine sees it (`http://<host>:8000`), not `localhost`.
 
 
+### Optional keys and limits
+
+Nothing in this table is required to run the console and the full workflow
+locally.
+
+| Capability | Variables | Without them |
+|---|---|---|
+| Meta Model API (`cloud`) | `MODEL_API_KEY` (+ `VOYAGE_API_KEY` and an Atlas `MONGODB_URI` for cloud retrieval) | `cloud` mode unavailable; `local` and `sovereign` still work |
+| Baseten open weights (`sovereign`) | `BASETEN_API_KEY`, `BASETEN_MODEL` | Muse Spark Open unavailable; choose another model |
+| E-mail (invitation, reset, notifications) | `AUTH_RESEND_KEY`, `AUTH_RESEND_EMAIL_FROM` | a local `/setup` shows the one-time password once; e-mail features answer `mail_not_configured` |
+| Cloudflare Turnstile | `TURNSTILE_SECRET` (+ optional `TURNSTILE_HOSTNAMES`) | the human check is off; forms keep working. `local` never calls Cloudflare |
+| WhatsApp channel | `WHATSAPP_*`, `APPROVAL_SECRET` | the channel is not configured; the rest of the console works |
+| Voyage + Atlas retrieval | `VOYAGE_API_KEY`, Atlas `MONGODB_URI` | local mode uses Qdrant + bge-m3 |
+| Budget alert | `RUN_BUDGET_USD` | no alert; spend is displayed but never enforced (alert-only) |
+| Rate limiting / backpressure | `RATE_LIMIT_*`, `AI_CONCURRENCY_*` | defaults stay on; `RATE_LIMIT_ENABLED=false` lifts both caps |
+
+Cloudflare Turnstile is **optional in every mode** and disabled in `local` by
+design. With no `TURNSTILE_SECRET` the API serves an empty config, the forms
+render without a widget, and an unreachable Cloudflare never blocks a request.
+Resend works the same way: a missing key never breaks a local install, it only
+switches delivery to the on-screen one-time password.
+
+Keys stay out of the repository and out of the browser. `.env` is gitignored;
+the web client only receives `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WEB_URL`.
+Provider keys are read by the API process alone, and the Turnstile site key is
+public by design and fetched from the API.
+
 ### Operator accounts (first run)
 
 There is no seeded operator and no password in the source tree or in an
@@ -224,23 +272,39 @@ empty?*
 
 1. On the first visit, `/login` forwards to `/setup`. The screen asks for the
    root operator's first name, last name and e-mail.
-2. The API creates the account with a **random one-time password** and mails it
-   through [Resend](https://resend.com) (`POST /v1/auth/setup`). If the message
-   cannot be delivered, the account is rolled back and the screen can be retried.
+2. The API creates the account with a **random one-time password**
+   (`POST /v1/auth/setup`):
+   - **E-mail configured** (`AUTH_RESEND_KEY` set): the password is mailed
+     through [Resend](https://resend.com). If delivery fails, the account is
+     rolled back and the screen can be retried.
+   - **No e-mail, local install** (no `AUTH_RESEND_KEY`, and `WEB_PUBLIC_URL` is
+     unset or points at localhost / a private network — the default
+     `docker compose` run): the password is returned **once** to the setup page
+     and displayed with a copy button. It is never stored by the console.
+   - **E-mail not configured on a public host**: setup answers
+     `503 mail_not_configured` and rolls the account back. A public deployment
+     must configure Resend; it never displays the password.
 3. The first sign-in returns `password_change_required`: the console asks for a
    new password (12 characters minimum, letters and digits).
 4. The same sign-in then continues into TOTP enrolment: QR code, 6-digit
    confirmation, ten single-use recovery codes shown once.
 
-Setup requires three variables, shared with the enterprise stack:
+A local judge needs **no** e-mail variable at all. For e-mail delivery on a
+public host, set the Resend values (shared with the enterprise stack):
 
 ```bash
-AUTH_RESEND_KEY=re_...                       # Resend API key
+AUTH_RESEND_KEY=re_...                       # optional locally, required on a public host
 AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
 AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
 WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
 WEB_PUBLIC_URL_ALIASES=https://your-project.vercel.app  # optional, comma-separated
+TURNSTILE_SECRET=...                         # optional: human check on the auth forms
+TURNSTILE_HOSTNAMES=your-console.example     # optional: hostnames siteverify accepts
 ```
+
+The Turnstile **site key** is public and is served by the API on
+`GET /v1/auth/captcha`; the web app reads it there, so no `NEXT_PUBLIC_*`
+variable is needed.
 
 Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators
 live in MongoDB when it is reachable; otherwise the service keeps them in memory
@@ -265,6 +329,43 @@ TOTP enrolled. The request endpoint answers `200` even for an unknown address, s
 the console never reveals which e-mails are registered. It uses the same Resend
 credentials as the invitation (`AUTH_RESEND_KEY`), and `WEB_PUBLIC_URL` builds the
 link.
+
+In `cloud` and `sovereign` deployments that configure Cloudflare Turnstile, the
+sign-up and password-reset forms also require the human check before sending
+anything. The API exposes `GET /v1/auth/captcha` so the console knows whether to
+render the widget and with which public site key; with no keys the check is off,
+and an unreachable Cloudflare never blocks a request.
+
+### Request budgets
+
+Every authenticated call is counted per operator: `RATE_LIMIT_MAX` requests per
+`RATE_LIMIT_WINDOW_MS` for the API, and a tighter `RATE_LIMIT_EXPENSIVE_MAX` for
+the routes that spend model credits (readiness, scenarios, agents, ingestion,
+voice). A refused call answers `429` with `Retry-After` and `RateLimit-*`
+headers. Counters live in the process — one instance, reset on deploy — and
+`RATE_LIMIT_ENABLED=false` removes both caps. The public auth screens keep their
+own windows: 5–6 attempts per 15 minutes per IP, and sign-in is now capped per
+IP as well as per address.
+
+### Backpressure
+
+Model work is bounded rather than queued. `AI_CONCURRENCY_PER_OPERATOR` (default
+8, above the five parallel sector streams of a series) and
+`AI_CONCURRENCY_GLOBAL` (default 16) cap in-flight runs; past a cap the API
+answers `429` with `error: "busy"` immediately, so the instance stays responsive
+for everyone else. `READINESS_DIMENSION_CONCURRENCY` (default 4) bounds the
+dimensions one assessment evaluates at once. When the console disconnects, the
+run is aborted: an interrupted readiness run keeps the dimensions already scored
+and can be resumed. Live voice accepts one socket per operator (20 per
+instance) with a 256 KiB frame ceiling.
+
+### Shutdown and pools
+
+On `SIGTERM`/`SIGINT` the API stops accepting, drains in-flight requests for at
+most 20 seconds, then closes its Mongo clients. Every client is bounded:
+`MONGODB_MAX_POOL_SIZE` (10) connections and `MONGODB_WAIT_QUEUE_TIMEOUT_MS`
+(5000) of waiting when the pool is saturated, so a slow cluster queues instead
+of holding an unbounded number of requests.
 
 ### Public sign-up (cloud demo only)
 
@@ -310,6 +411,17 @@ SANDBOX_MODE=sovereign docker compose up -d api web  # Muse Glimmer on Ollama
 Cloud mode also needs `MODEL_API_KEY`, `VOYAGE_API_KEY` and a `mongodb+srv`
 `MONGODB_URI`; the API creates the Atlas indexes at startup (see below). Local
 and sovereign modes ignore those variables.
+
+If you only have a **Meta key** and want to keep the corpus local, run cloud
+mode with local retrieval instead of provisioning Atlas and Voyage:
+
+```bash
+SANDBOX_MODE=cloud
+MODEL_API_KEY=...
+RETRIEVAL_BACKEND=qdrant   # qdrant + bge-m3, the same corpus as the local run
+```
+
+The Qdrant path keeps the local embeddings, so no new index has to be built.
 
 The switch is recorded in the audit chain as a `provider.switched` event, and
 each chain-of-thought step names the mode and model that produced it.

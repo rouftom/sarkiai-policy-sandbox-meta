@@ -23,7 +23,7 @@ import {
   cn,
 } from '@sps/ui'
 import { institutionsForDomains, type Domain } from '@sps/shared'
-import { api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
+import { ASSISTANT_FINISHED, api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
 import type { ActionRecord, ActionStatus, AgentUiRequest } from '@/lib/agent-ui'
 import { decideAction, listActions } from '@/lib/actions-client'
 import { ActionCenter } from '@/components/ai/tools/action-center'
@@ -40,10 +40,12 @@ import {
 import { AskUserPanel } from '@/components/ai/tools/ask-user-panel'
 import { RequestInputCard } from '@/components/ai/tools/request-input-card'
 import { ApprovalCard } from '@/components/ai/tools/approval-card'
+import { failureMessage } from '@/lib/failure'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
+import { BrandBackdrop } from '@/components/brand-backdrop'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
 import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
 import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
@@ -113,6 +115,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   inputRef.current = input
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+  /** The stream in flight: Stop aborts it, so the server stops generating too. */
+  const streamRef = React.useRef<AbortController | null>(null)
 
   // The institutions of every sector the operator works on (one list for the whole workspace).
   const institutions = React.useMemo(() => institutionsForDomains(domains), [domains])
@@ -126,6 +130,10 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [modelState, setModelState] = React.useState<'loading' | 'ready' | 'error'>('loading')
   const [model, setModel] = React.useState('')
   const [modelError, setModelError] = React.useState<string | null>(null)
+
+  // Closing the assistant panel unmounts it: the browser must stop reading the
+  // stream, or the connection outlives the view that asked for it.
+  React.useEffect(() => () => streamRef.current?.abort(), [])
 
   // A sector change can remove a chosen institution: it is dropped from the choice.
   React.useEffect(() => {
@@ -213,6 +221,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     // Whatever the recorder is still correcting belongs to the question just sent.
     dictation.current = { base: null, last: '', stale: true }
     setBusy(true)
+    // One controller per turn: Stop aborts the HTTP stream, not just the UI.
+    const controller = new AbortController()
+    streamRef.current = controller
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64, name: attachment.name }))
     // The files belong to this message: the next question starts without them.
     setAttachments([])
@@ -325,6 +336,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           }))
         },
         onUi: (ui) => patchLast((turn) => ({ ...turn, cards: [...(turn.cards ?? []), ui] })),
+        signal: controller.signal,
       })
       closeOpen(Date.now())
       patchLast((turn) => ({
@@ -339,16 +351,33 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       }))
     } catch (error) {
       closeOpen(Date.now())
-      const message = (error as Error).message
-      patchLast((turn) => ({
-        ...turn,
-        content: turn.content ? turn.content : `⚠️ ${message}`,
-        active: false,
-        endedAt: Date.now(),
-        steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step)),
-      }))
+      // Stop is a decision, not a failure: the turn ends where it was, the
+      // steps close normally, and no error banner is shown.
+      const stopped = controller.signal.aborted
+      if (!stopped) {
+        const message = failureMessage(error, t('common.error'), t)
+        patchLast((turn) => ({
+          ...turn,
+          content: turn.content ? turn.content : `⚠️ ${message}`,
+          active: false,
+          endedAt: Date.now(),
+          steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step)),
+        }))
+      } else {
+        patchLast((turn) => ({
+          ...turn,
+          active: false,
+          stopped: true,
+          endedAt: Date.now(),
+          steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'complete' } : step)),
+        }))
+      }
     } finally {
+      if (streamRef.current === controller) streamRef.current = null
       setBusy(false)
+      // Audit pages refresh their blocks from this event; a stopped turn is a
+      // finished turn too.
+      window.dispatchEvent(new CustomEvent(ASSISTANT_FINISHED))
     }
   }
 
@@ -689,7 +718,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
+      <BrandBackdrop variant="panel" className="-z-10" />
       <input
         ref={fileRef}
         type="file"
@@ -749,8 +779,10 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         </TooltipProvider>
       </header>
 
-      <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
-        {historyOpen ? (
+      {historyOpen ? (
+        /* The history owns its scroller (Virtuoso): it needs a bounded height,
+           not the conversation's overflow container. */
+        <div className="min-h-0 flex-1">
           <ChatHistory
             sessions={sessions}
             loading={sessionsLoading}
@@ -758,58 +790,62 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             onOpen={(id) => void openSession(id)}
             onDelete={removeSession}
           />
-        ) : sessionLoading ? (
-          <ConversationShimmer />
-        ) : turns.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <BrandMark className="h-12 w-12" />
-            <div>
-              <p className="text-[14px] font-semibold text-foreground">{t('assistant.greeting')}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">{t('assistant.emptyBody')}</p>
+        </div>
+      ) : (
+        <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3">
+          {sessionLoading ? (
+            <ConversationShimmer />
+          ) : turns.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+              <BrandMark className="h-12 w-12" />
+              <div>
+                <p className="text-[14px] font-semibold text-foreground">{t('assistant.greeting')}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{t('assistant.emptyBody')}</p>
+              </div>
+              <div className="grid w-full gap-1.5">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => void send(suggestion)}
+                    disabled={busy}
+                    className="rounded-lg bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="grid w-full gap-1.5">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  onClick={() => void send(suggestion)}
-                  disabled={busy}
-                  className="rounded-lg bg-card px-3 py-2 text-left text-[11px] text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          turns.map((turn, index) => (
-            <React.Fragment key={turn.id}>
-              <ChatMessage
-                turn={turn}
-                isLast={index === turns.length - 1}
-                onRate={
-                  turn.role === 'assistant' && !turn.active
-                    ? (rating) =>
-                        setTurns((previous) => previous.map((entry) => (entry.id === turn.id ? { ...entry, rating } : entry)))
-                    : undefined
-                }
-                onRegenerate={
-                  turn.role === 'assistant' && !turn.active && index === turns.length - 1
-                    ? () => {
-                        const question = turns[index - 1]?.content
-                        if (question) {
-                          setTurns((previous) => previous.slice(0, index - 1))
-                          void send(question)
+          ) : (
+            turns.map((turn, index) => (
+              <React.Fragment key={turn.id}>
+                <ChatMessage
+                  turn={turn}
+                  isLast={index === turns.length - 1}
+                  onRate={
+                    turn.role === 'assistant' && !turn.active
+                      ? (rating) =>
+                          setTurns((previous) => previous.map((entry) => (entry.id === turn.id ? { ...entry, rating } : entry)))
+                      : undefined
+                  }
+                  onRegenerate={
+                    turn.role === 'assistant' && !turn.active && index === turns.length - 1
+                      ? () => {
+                          const question = turns[index - 1]?.content
+                          if (question) {
+                            setTurns((previous) => previous.slice(0, index - 1))
+                            void send(question)
+                          }
                         }
-                      }
-                    : undefined
-                }
-              />
-              {turn.cards?.map((card) => renderCard(turn.id, card))}
-            </React.Fragment>
-          ))
-        )}
-      </div>
+                      : undefined
+                  }
+                />
+                {turn.cards?.map((card) => renderCard(turn.id, card))}
+              </React.Fragment>
+            ))
+          )}
+        </div>
+      )}
 
       <div className="shrink-0 space-y-1 px-3 pb-2 pt-3">
         {actionsOpen && (
@@ -852,6 +888,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         <ChatInput
           ref={textareaRef}
           accent={pinned ? institutionAccent(pinned.color) : undefined}
+          stop={() => streamRef.current?.abort()}
           input={input}
           handleInputChange={(event) => {
             const value = event.target.value

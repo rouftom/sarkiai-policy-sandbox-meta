@@ -5,6 +5,7 @@ import {
   createModel,
   listBasetenModels,
   listProviderModels,
+  recordUsage,
   resolveProvider,
   PolicyOrchestrator,
   MultiAgentCoordinator,
@@ -20,6 +21,7 @@ import {
   resolveRetrievalBackend,
   type Retriever,
   type RetrievalBackend,
+  type VoyageUsage,
 } from '@sps/retrieval'
 import { ReadinessEngine } from '@sps/readiness'
 import { AuditService } from '@sps/audit'
@@ -34,6 +36,26 @@ import {
   type WorkflowLens,
 } from '@sps/shared'
 import { config } from './config.js'
+
+/**
+ * Voyage bills embeddings and reranking per token, on its own line: retrieval is
+ * a separate capability, never folded into the Meta total. No tariff for
+ * `voyage-4` / `rerank-2` is confirmed in this repo, so the cost stays null
+ * (unknown), never 0.
+ */
+function reportVoyageUsage(usage: VoyageUsage): void {
+  // The API reports one total; it is booked as input tokens so the ledger's
+  // token sums stay meaningful across every capability.
+  recordUsage(
+    { mode: 'cloud', servedBy: 'Voyage', models: { reasoning: usage.model } },
+    { inputTokens: usage.tokens, outputTokens: 0 },
+    {
+      kind: 'retrieval',
+      status: usage.ok ? 'ok' : 'error',
+      latencyMs: usage.latencyMs,
+    },
+  )
+}
 
 /**
  * Everything that talks to the chat model. Rebuilt when the operator picks a
@@ -101,6 +123,7 @@ export function createEngine() {
             baseUrl: config.retrieval.voyage.baseUrl,
             embeddingModel: config.retrieval.voyage.embeddingModel,
             rerankModel: config.retrieval.voyage.rerankModel,
+            onUsage: reportVoyageUsage,
           },
         })
       : new PolicyRetriever({
@@ -213,6 +236,7 @@ export function createKnowledgeIngestor(): AtlasIngestor {
       baseUrl: config.retrieval.voyage.baseUrl,
       embeddingModel: config.retrieval.voyage.embeddingModel,
       rerankModel: config.retrieval.voyage.rerankModel,
+      onUsage: reportVoyageUsage,
     },
   })
 }

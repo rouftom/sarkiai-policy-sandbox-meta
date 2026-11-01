@@ -47,6 +47,21 @@ function fakeModel(): LanguageModel {
   } as unknown as LanguageModel
 }
 
+function failingModel(): LanguageModel {
+  return {
+    specificationVersion: 'v3',
+    provider: 'test',
+    modelId: 'test',
+    supportedUrls: {},
+    doGenerate: async () => {
+      throw new Error('provider down')
+    },
+    doStream: async () => {
+      throw new Error('provider down')
+    },
+  } as unknown as LanguageModel
+}
+
 function freshStore(): MemoryUsageStore {
   const store = new MemoryUsageStore()
   setUsageStore(store)
@@ -87,6 +102,8 @@ describe('token metering', () => {
     expect(events[0]).toMatchObject({
       operator: 'op@example.org',
       route: '/v1/assistant/chat',
+      kind: 'chat',
+      status: 'ok',
       mode: 'cloud',
       servedBy: 'Meta',
       model: 'muse-spark-1.3',
@@ -94,6 +111,40 @@ describe('token metering', () => {
       outputTokens: 200,
     })
     expect(events[0]!.costUsd).toBeCloseTo((1000 * 1.25 + 200 * 4.25) / 1_000_000, 9)
+    expect(typeof events[0]!.latencyMs).toBe('number')
+  })
+
+  test('a generation carries the run and the agent from the request context', async () => {
+    const store = freshStore()
+    const model = meterLanguageModel(fakeModel(), meta)
+    await withUsageContext(
+      { operator: 'op@example.org', route: '/v1/agents/ask', runId: 'run-1', agentId: 'legal_advisor' },
+      () => generateText({ model, prompt: 'hello' }),
+    )
+    expect(store.events[0]).toMatchObject({ runId: 'run-1', agentId: 'legal_advisor' })
+  })
+
+  test('a failed generation is recorded once, as an error with no tokens', async () => {
+    const store = freshStore()
+    const model = meterLanguageModel(failingModel(), meta)
+    await expect(generateText({ model, prompt: 'hello', maxRetries: 0 })).rejects.toThrow('provider down')
+    expect(store.events).toHaveLength(1)
+    expect(store.events[0]).toMatchObject({
+      kind: 'chat',
+      status: 'error',
+      inputTokens: 0,
+      outputTokens: 0,
+    })
+    expect(typeof store.events[0]!.latencyMs).toBe('number')
+  })
+
+  test('a stream that cannot open is recorded once, as an error', async () => {
+    const store = freshStore()
+    const model = meterLanguageModel(failingModel(), meta)
+    const result = streamText({ model, prompt: 'hello', maxRetries: 0 })
+    await expect(result.text).rejects.toThrow()
+    expect(store.events).toHaveLength(1)
+    expect(store.events[0]).toMatchObject({ status: 'error', kind: 'chat' })
   })
 
   test('a streamed answer records once, when the stream finishes', async () => {

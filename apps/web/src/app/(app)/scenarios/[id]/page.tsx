@@ -6,6 +6,7 @@ import { Button } from '@sps/ui'
 import { AuditPanel } from '@/components/audit-panel'
 import { PageIntro } from '@/components/page-intro'
 import { ScenarioConsole } from '@/components/scenario-console'
+import { RunBudgetBadge } from '@/components/run-budget'
 import { useI18n } from '@/lib/i18n'
 
 /** One saved run, at its own address: reopened with its process, reports and CoT trail. */
@@ -32,7 +33,9 @@ export default function ScenarioRunPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         }
-      />
+      >
+        <RunBudgetBadge runId={runId} />
+      </PageIntro>
 
       <ScenarioConsole runId={runId} />
 

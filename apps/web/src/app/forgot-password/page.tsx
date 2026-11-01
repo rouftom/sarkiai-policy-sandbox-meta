@@ -10,6 +10,7 @@ import { Button, Input, Label } from '@sps/ui'
 import { ApiError, authApi } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { AuthLayout, ErrorNote, StepIntro } from '@/components/auth/auth-frame'
+import { TurnstileWidget, useTurnstileCheck } from '@/components/auth/turnstile-check'
 
 /**
  * Request a password-reset link.
@@ -23,6 +24,9 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [failure, setFailure] = React.useState<string | null>(null)
+  // Human check, decided by the API: cloud deployments require it, local and
+  // sovereign installs (or a deployment without keys) get `required: false`.
+  const turnstile = useTurnstileCheck()
 
   const schema = React.useMemo(
     () =>
@@ -38,13 +42,26 @@ export default function ForgotPasswordPage() {
   })
 
   const submit = form.handleSubmit(async (values) => {
+    if (turnstile.required && !turnstile.token) {
+      setFailure(t('reset.captchaRequired'))
+      return
+    }
+
     setBusy(true)
     setFailure(null)
     try {
-      await authApi.forgotPassword(values.email.trim().toLowerCase())
+      await authApi.forgotPassword(
+        values.email.trim().toLowerCase(),
+        turnstile.required ? (turnstile.token ?? undefined) : undefined,
+      )
       setSent(values.email.trim().toLowerCase())
     } catch (cause) {
-      setFailure(resetMessage(cause, t('reset.forgotFailed'), t))
+      if (cause instanceof ApiError && cause.json<{ error?: string }>()?.error === 'captcha_failed') {
+        setFailure(t('reset.captchaFailed'))
+        turnstile.reset()
+      } else {
+        setFailure(resetMessage(cause, t('reset.forgotFailed'), t))
+      }
     } finally {
       setBusy(false)
     }
@@ -107,7 +124,13 @@ export default function ForgotPasswordPage() {
               {form.formState.errors.email && <FieldNote>{form.formState.errors.email.message}</FieldNote>}
             </div>
             {failure && <ErrorNote>{failure}</ErrorNote>}
-            <Button type="submit" disabled={busy} size="lg" className="mt-1 w-full">
+            <TurnstileWidget check={turnstile} action="password_reset" />
+            <Button
+              type="submit"
+              disabled={busy || turnstile.loading || (turnstile.required && !turnstile.token)}
+              size="lg"
+              className="mt-1 w-full"
+            >
               {busy ? <Loader className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {busy ? t('reset.sending') : t('reset.send')}
             </Button>

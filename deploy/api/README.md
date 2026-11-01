@@ -27,6 +27,47 @@ Requirements for the host:
    | `MONGODB_URI` | database connection string (user with read and write on the application database) |
    | `WHATSAPP_*` | messaging provider app settings |
    | `APPROVAL_SECRET` | a random value, for example `openssl rand -hex 32` |
+   | `TURNSTILE_SECRET` | Cloudflare Turnstile widget secret (optional; `CLOUDFLARE_TURNSITE_SITE_SECRET` is still read) |
+   | `NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` | the same widget's public site key (optional) |
+   | `TURNSTILE_HOSTNAMES` | console hostnames siteverify accepts, comma-separated (optional, but set it in production) |
+
+4. Bot protection (optional). The sign-up and password-reset forms ask for a
+   Cloudflare Turnstile token when `SANDBOX_MODE` is `cloud` or `sovereign` and
+   both keys are set. `GET /v1/auth/captcha` tells the console whether to render
+   the widget and with which site key, so the web build needs no Turnstile
+   variable. With no keys the check is off; if Cloudflare is unreachable
+   (network, timeout, 5xx) the request is not blocked, while an explicit refusal
+   still is.
+   List the accepted hostnames in `TURNSTILE_HOSTNAMES` (comma-separated) to pin
+   the widget domain, and allow the console's domain on the widget in the
+   Cloudflare dashboard.
+
+5. Request budgets (rate limiting). Every authenticated call is counted per
+   operator: `RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW_MS` for the API as a whole,
+   `RATE_LIMIT_EXPENSIVE_MAX` for the routes that spend model credits
+   (`/v1/readiness/*`, `/v1/scenarios/*`, `/v1/agents/*`, ingest, voice). A
+   refused call answers `429` with `Retry-After` and `RateLimit-*` headers.
+   Counters live in the process, so they reset on deploy and are per instance;
+   `RATE_LIMIT_ENABLED=false` lifts both caps. The public auth screens keep
+   their own windows (5–6 attempts per 15 minutes per IP, sign-in also capped
+   per IP in addition to the per-address lockout).
+
+6. Backpressure. Model work is capped in flight rather than queued:
+   `AI_CONCURRENCY_PER_OPERATOR` (default 8, above the five parallel sector
+   streams of a series) and `AI_CONCURRENCY_GLOBAL` (default 16, one instance).
+   Past a cap the API answers `429` with `error: "busy"` immediately — retry
+   once a run finishes. `READINESS_DIMENSION_CONCURRENCY` (default 4) bounds the
+   dimensions one assessment evaluates at once (13 otherwise, per sector).
+   Closing the console tab aborts the run; a readiness run stopped this way is
+   saved as interrupted with the dimensions already scored, and can be resumed.
+   Live voice allows one socket per operator and 20 per instance, with a 256 KiB
+   frame ceiling.
+
+7. Shutdown and database pools. On `SIGTERM`/`SIGINT` the API stops accepting,
+   waits at most 20 seconds for in-flight requests, then closes its Mongo
+   clients (a deploy no longer cuts a write mid-query). Every client carries
+   `MONGODB_MAX_POOL_SIZE` (10) and `MONGODB_WAIT_QUEUE_TIMEOUT_MS` (5000): a
+   slow cluster queues instead of holding an unbounded number of requests.
 
 3. Start the service and wait for the first build to finish.
 

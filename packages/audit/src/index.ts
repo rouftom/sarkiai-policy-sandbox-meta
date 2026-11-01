@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto'
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { AuditRecord, Citation, CoTTrace, WorkflowLens } from '@sps/shared'
+import { mongoPoolOptions } from '@sps/shared'
 
 export interface AuditConfig {
   mongodbUri: string
@@ -89,7 +90,7 @@ export class AuditService {
 
   private async db(): Promise<{ audit: Collection<Document>; cot: Collection<Document>; head: Collection<Document> }> {
     if (!this.client) {
-      this.client = new MongoClient(this.config.mongodbUri)
+      this.client = new MongoClient(this.config.mongodbUri, mongoPoolOptions())
       await this.client.connect()
     }
     const db = this.client.db(this.config.dbName)

@@ -15,6 +15,11 @@ import type { AuthService } from '@sps/auth'
 const VOICE_MODEL = 'muse-voice-transcribe-1.0'
 const MAX_SESSION_MS = 10 * 60 * 1000
 const MAX_PENDING_FRAMES = 500
+/** One dictation at a time per operator, and a hard ceiling for the instance. */
+const MAX_SOCKETS_PER_OPERATOR = 1
+const MAX_SOCKETS_GLOBAL = 20
+/** Audio frames are a few KiB: 256 KiB leaves room for a coalesced blob. */
+const MAX_PAYLOAD_BYTES = 256 * 1024
 
 export interface VoiceRouteOptions {
   auth: AuthService
@@ -63,16 +68,42 @@ function safeCloseCode(code: number): number {
 
 export async function registerVoiceRoutes(app: FastifyInstance, options: VoiceRouteOptions): Promise<void> {
   const { auth, apiKey, baseURL, model = VOICE_MODEL } = options
-  await app.register(websocket)
+  // Explicit frame ceiling: ws defaults to 100 MiB per message, which one client
+  // could use to pin memory. Audio frames are orders of magnitude smaller.
+  await app.register(websocket, { options: { maxPayload: MAX_PAYLOAD_BYTES } })
+
+  /** Live dictations, counted per operator and for the instance. */
+  const openSockets = new Map<string, number>()
+  let openTotal = 0
 
   app.get('/v1/voice/realtime', { websocket: true }, (socket, request) => {
     const query = request.query as { token?: string; sampleRate?: string; languageBias?: string }
-    const verified = Boolean(query.token) && auth.verifySession(query.token!)
-    request.log.info({ verified }, 'voice socket handshake')
-    if (!query.token || !verified) {
+    const operator = query.token ? auth.verifySession(query.token) : null
+    request.log.info({ verified: Boolean(operator) }, 'voice socket handshake')
+    if (!operator) {
       socket.close(4401, 'unauthorized')
       request.log.info('voice socket closed: unauthorized')
       return
+    }
+
+    // The relay is the longest-lived connection in the app: one per operator
+    // keeps a second tab from doubling the upstream stream, and the global
+    // ceiling protects the single instance.
+    if (openTotal >= MAX_SOCKETS_GLOBAL || (openSockets.get(operator.email) ?? 0) >= MAX_SOCKETS_PER_OPERATOR) {
+      socket.close(4429, 'too_many_sessions')
+      request.log.info({ operator: operator.email }, 'voice socket refused: session cap')
+      return
+    }
+    openTotal += 1
+    openSockets.set(operator.email, (openSockets.get(operator.email) ?? 0) + 1)
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
+      openTotal = Math.max(0, openTotal - 1)
+      const mine = (openSockets.get(operator.email) ?? 1) - 1
+      if (mine <= 0) openSockets.delete(operator.email)
+      else openSockets.set(operator.email, mine)
     }
 
     const audioEncoding = query.sampleRate === '24000' ? 'PCM_24KHZ' : 'PCM_16KHZ'
@@ -84,6 +115,9 @@ export async function registerVoiceRoutes(app: FastifyInstance, options: VoiceRo
     const upstream = new WebSocket(realtimeUrl(baseURL))
 
     const closeAll = (code: number, reason: string) => {
+      // Reached on every exit path, including a failed handshake close event:
+      // the counters must come back even when the socket never opened.
+      release()
       if (closed) return
       closed = true
       clearTimeout(timer)

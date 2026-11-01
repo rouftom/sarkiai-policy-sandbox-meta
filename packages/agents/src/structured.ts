@@ -36,6 +36,8 @@ export interface StructuredRequest<S extends ZodType> {
    */
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
   maxOutputTokens?: number
+  /** Aborted when the caller goes away; the provider call stops with it. */
+  signal?: AbortSignal
 }
 
 /** The first balanced JSON object in a model reply, fences and prose stripped. */
@@ -156,6 +158,7 @@ export async function generateStructured<S extends ZodType>(request: StructuredR
         meta: { reasoningEffort: request.reasoningEffort ?? 'low' },
         'openai-compatible': { reasoningEffort: request.reasoningEffort ?? 'low' },
       },
+      ...(request.signal ? { abortSignal: request.signal } : {}),
     })
 
     // Some models answer in the reasoning channel only: read it when the answer is empty.
