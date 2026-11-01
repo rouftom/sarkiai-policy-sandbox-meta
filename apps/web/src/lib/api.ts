@@ -1477,6 +1477,7 @@ export interface KbIngestResultDto {
   filename: string
   country: string
   docType: string
+  rights: 'official-text' | 'open-licence' | 'quotation-only' | 'to-confirm'
   collection: string
   chunks: number
   inserted: number
@@ -1526,6 +1527,7 @@ export interface KbDocumentDto {
   characters: number
   country: string
   docType: string
+  rights: 'official-text' | 'open-licence' | 'quotation-only' | 'to-confirm'
   namespace?: string
   version?: string
   sourceUrl?: string
@@ -1616,6 +1618,7 @@ export const knowledgeApi = {
     country: string
     jurisdiction: 'national' | 'regional' | 'international'
     docType: string
+    rights: 'official-text' | 'open-licence' | 'quotation-only' | 'to-confirm'
     namespace?: string
     version?: string
     sourceUrl?: string
@@ -1637,6 +1640,7 @@ export const knowledgeApi = {
     country: string
     jurisdiction: 'national' | 'regional' | 'international'
     docType: string
+    rights: 'official-text' | 'open-licence' | 'quotation-only' | 'to-confirm'
     namespace?: string
     version?: string
   }) => request<KbIngestResultDto>('/v1/kb/ingest/file', { method: 'POST', body: JSON.stringify(body) }),

@@ -30,6 +30,8 @@ const ACCEPT_PATTERN = /\.(pdf|txt|md|markdown|csv|json)$/i
 const MAX_BYTES = 25 * 1024 * 1024
 const DEFAULT_PAGE_SIZE = 10
 const DOC_TYPES = ['law', 'policy', 'regulation', 'strategy', 'report', 'guidance']
+const RIGHTS = ['official-text', 'open-licence', 'quotation-only', 'to-confirm'] as const
+const PUBLISHABLE = new Set<string>(['official-text', 'open-licence'])
 
 function toBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -63,6 +65,8 @@ export function KbDocuments({
   const { countries } = useWorkspace()
   const [country, setCountry] = React.useState('cm')
   const [docType, setDocType] = React.useState('policy')
+  /** Fail closed: the operator must pick a publishable bucket before upload. */
+  const [rights, setRights] = React.useState<(typeof RIGHTS)[number]>('to-confirm')
   /** The documents added in this dialog: the figures attach to each of them. */
   const [addedFilenames, setAddedFilenames] = React.useState<string[]>([])
   const [query, setQuery] = React.useState('')
@@ -76,6 +80,9 @@ export function KbDocuments({
 
   const upload = React.useCallback(
     async (file: File): Promise<UploadOutcome> => {
+      if (!PUBLISHABLE.has(rights)) {
+        throw new UploadFailure(t('knowledge.vectorise.rightsBlocked'), [])
+      }
       try {
         const result: KbIngestResultDto = await knowledgeApi.ingestFile({
           filename: file.name,
@@ -83,6 +90,7 @@ export function KbDocuments({
           country,
           jurisdiction: 'national',
           docType,
+          rights,
           version: '2026',
         })
         setAddedFilenames((current) => (current.includes(file.name) ? current : [...current, file.name]))
@@ -98,7 +106,7 @@ export function KbDocuments({
         )
       }
     },
-    [country, docType, t],
+    [country, docType, rights, t],
   )
 
   const visible = React.useMemo(() => {
@@ -148,9 +156,18 @@ export function KbDocuments({
                     size="sm"
                     className="w-36"
                   />
+                  <Select
+                    value={rights}
+                    onValueChange={(value) => setRights(value as (typeof RIGHTS)[number])}
+                    options={RIGHTS.map((value) => ({ value, label: t(`knowledge.rights.${value}`) }))}
+                    ariaLabel={t('knowledge.rights.label')}
+                    size="sm"
+                    className="w-40"
+                  />
                 </>
               }
             />
+            <p className="text-[10px] text-muted-foreground">{t('knowledge.vectorise.rightsHint')}</p>
             <div className="space-y-2 border-t border-border pt-3">
               <p className="text-[12px] font-semibold text-foreground">{t('kb.image.sectionTitle')}</p>
               <p className="text-[10px] text-muted-foreground">{t('kb.image.sectionHint')}</p>

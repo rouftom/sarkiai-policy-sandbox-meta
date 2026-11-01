@@ -23,6 +23,11 @@ class IngestTaxonomy(BaseModel):
         "policy",
         description="law | strategy | regulation | policy | treaty | standard | guidance",
     )
+    rights: Optional[str] = Field(
+        None,
+        description="official-text | open-licence | quotation-only | to-confirm; "
+        "absent or unknown is treated as to-confirm and refused",
+    )
     pillar: Optional[List[str]] = Field(None, description="AI-readiness dimensions informed")
     namespace: Optional[str] = Field(None, description="Optional sub-corpus partition")
     version: Optional[str] = Field(None, description="Source version / revision tag")

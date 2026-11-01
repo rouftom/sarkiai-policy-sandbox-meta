@@ -102,9 +102,21 @@ SPS_API_URL=https://sps-api.example bun run kb:seed
 bun run kb:seed -- --only snd30,psnsn
 bun run kb:seed -- --dry-run
 
+# after a rights change: report, then delete restricted documents still in Atlas
+MONGODB_URI=... bun run kb:purge
+MONGODB_URI=... bun run kb:purge -- --apply
+SPS_API_URL=https://sps-api.example bun run kb:seed   # re-seed to stamp rights on the rest
+
 # indexes only
 MONGODB_URI=... MONGODB_DB_NAME=policy_sandbox bun run kb:indexes
 ```
+
+The rights gate is enforced at every ingestion path: `official-text` and
+`open-licence` documents may be chunked and stored, `quotation-only` and
+`to-confirm` ones are refused with a 403, and a missing `rights` field fails
+closed to `to-confirm`. `scripts/seed.sh` reads the directory's `manifest.json`
+(or requires `--rights`) and skips any document whose rights are not publishable.
+See [`LICENSING.md`](LICENSING.md).
 
 `/knowledge` → **Corpus** lists documents, **Retire/Restore** flips `isActive`
 for every chunk of one document (audit keeps the rows; retrieval stops seeing
