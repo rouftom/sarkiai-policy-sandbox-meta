@@ -63,6 +63,12 @@ Requirements for the host:
    Live voice allows one socket per operator and 20 per instance, with a 256 KiB
    frame ceiling.
 
+7. Shutdown and database pools. On `SIGTERM`/`SIGINT` the API stops accepting,
+   waits at most 20 seconds for in-flight requests, then closes its Mongo
+   clients (a deploy no longer cuts a write mid-query). Every client carries
+   `MONGODB_MAX_POOL_SIZE` (10) and `MONGODB_WAIT_QUEUE_TIMEOUT_MS` (5000): a
+   slow cluster queues instead of holding an unbounded number of requests.
+
 3. Start the service and wait for the first build to finish.
 
 ## 2. Point the web app at it

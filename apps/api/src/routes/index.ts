@@ -239,6 +239,31 @@ const approvals = new ApprovalStore({
   dbName: config.mongodb.dbName,
 })
 
+/**
+ * Releases the process-wide stores when the host stops the process.
+ *
+ * Render sends SIGTERM on every deploy. Closing the clients after Fastify has
+ * drained its requests keeps in-flight writes from being cut mid-query, and
+ * ends the pooled sockets cleanly instead of leaving them to time out upstream.
+ */
+export async function closeStores(): Promise<void> {
+  await Promise.allSettled([
+    chatSessions.close(),
+    readinessRuns.close(),
+    scenarioRuns.close(),
+    exerciseReports.close(),
+    usageLedger.close(),
+    notificationContacts.close(),
+    countries.close(),
+    actionStore.close(),
+    approvals.close(),
+    engine.audit.close(),
+    engine.reports.close(),
+    engine.retriever.close?.(),
+    auth.close(),
+  ])
+}
+
 const lensSchema = z.enum(['simulation', 'readiness', 'hybrid'])
 
 /** In-memory facilitator session for tick-by-tick scenario release. */

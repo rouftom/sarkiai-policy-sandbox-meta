@@ -8,6 +8,7 @@
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { JointSituationReport } from '@sps/shared'
 import type { ScenarioLang } from './scenarios.js'
+import { mongoPoolOptions } from '@sps/shared'
 
 export type ScenarioRunStatus = 'running' | 'complete' | 'failed'
 
@@ -70,12 +71,20 @@ export class ScenarioRunStore {
 
   constructor(private readonly options: { mongodbUri?: string; dbName?: string }) {}
 
+  /** Releases the client on shutdown: a deploy stops this process. */
+  async close(): Promise<void> {
+    const client = this.client
+    this.client = null
+    this.collection = null
+    await client?.close().catch(() => undefined)
+  }
+
   private async col(): Promise<Collection<Document> | null> {
     if (!this.options.mongodbUri) return null
     if (this.collection) return this.collection
     try {
       if (!this.client) {
-        this.client = new MongoClient(this.options.mongodbUri, { serverSelectionTimeoutMS: 4000 })
+        this.client = new MongoClient(this.options.mongodbUri, mongoPoolOptions())
         await this.client.connect()
       }
       this.collection = this.client.db(this.options.dbName ?? 'policy_sandbox').collection('scenario_runs')

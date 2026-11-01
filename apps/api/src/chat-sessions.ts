@@ -7,6 +7,7 @@
  * scoped to the operator who owns them.
  */
 import { MongoClient, type Collection, type Document } from 'mongodb'
+import { mongoPoolOptions } from '@sps/shared'
 
 export interface ChatSessionSummary {
   id: string
@@ -37,7 +38,7 @@ export class ChatSessionStore {
     if (this.collection) return this.collection
     try {
       if (!this.client) {
-        this.client = new MongoClient(this.options.mongodbUri, { serverSelectionTimeoutMS: 4000 })
+        this.client = new MongoClient(this.options.mongodbUri, mongoPoolOptions())
         await this.client.connect()
       }
       this.collection = this.client.db(this.options.dbName ?? 'policy_sandbox').collection('chat_sessions')

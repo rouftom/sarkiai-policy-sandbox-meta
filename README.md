@@ -298,6 +298,14 @@ run is aborted: an interrupted readiness run keeps the dimensions already scored
 and can be resumed. Live voice accepts one socket per operator (20 per
 instance) with a 256 KiB frame ceiling.
 
+### Shutdown and pools
+
+On `SIGTERM`/`SIGINT` the API stops accepting, drains in-flight requests for at
+most 20 seconds, then closes its Mongo clients. Every client is bounded:
+`MONGODB_MAX_POOL_SIZE` (10) connections and `MONGODB_WAIT_QUEUE_TIMEOUT_MS`
+(5000) of waiting when the pool is saturated, so a slow cluster queues instead
+of holding an unbounded number of requests.
+
 ### Public sign-up (cloud demo only)
 
 The public demo at <https://sps.djotta.com>
