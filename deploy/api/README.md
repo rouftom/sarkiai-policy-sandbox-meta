@@ -31,6 +31,24 @@ Requirements for the host:
    | `NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` | the same widget's public site key (optional) |
    | `TURNSTILE_HOSTNAMES` | console hostnames siteverify accepts, comma-separated (optional, but set it in production) |
 
+   **The API refuses to start on a public cloud origin without a private
+   session secret.** `SANDBOX_MODE=cloud` (or the presence of `MODEL_API_KEY`,
+   which also selects the cloud profile) combined with a non-local
+   `WEB_PUBLIC_URL` makes a missing `SESSION_SECRET` / `APPROVAL_SECRET` — or
+   the public placeholder `change-me-approval-secret` — a startup error, not a
+   warning. Anyone who knows that value could forge an operator session. Generate
+   one with `openssl rand -hex 32` and set it in the host's secret settings:
+
+   ```bash
+   SESSION_SECRET=<openssl rand -hex 32>
+   ```
+
+   Session tokens are signed with it: changing the value signs every operator
+   out. A local or on-premise install only logs a warning and keeps the insecure
+   development key, so a LAN demo needs no configuration. The same cloud gate
+   applies to `WHATSAPP_APP_SECRET`: without it, the WhatsApp webhook answers
+   `503 webhook_secret_missing` instead of accepting unsigned events.
+
 4. Bot protection (optional). The sign-up and password-reset forms ask for a
    Cloudflare Turnstile token when `SANDBOX_MODE` is `cloud` or `sovereign` and
    both keys are set. `GET /v1/auth/captcha` tells the console whether to render
@@ -90,7 +108,12 @@ WEB_PUBLIC_URL_ALIASES=https://<project>.vercel.app
 ```
 
 Both are origins (scheme + host, no path). `WEB_PUBLIC_URL_ALIASES` accepts a
-comma-separated list; `*.vercel.app` previews are always accepted.
+comma-separated list. Vercel previews of **this project** are accepted too:
+`VERCEL_PROJECT_NAME` (default `sarkiai-policy-sandbox-meta`) allows
+`<project>.vercel.app` and `<project>-<suffix>.vercel.app`; when
+`VERCEL_TEAM_SLUG` is set, a preview host must also end with `-<team-slug>`.
+Any other `*.vercel.app` host is refused, so another Vercel project cannot call
+the API from a browser.
 
 ### Self-hosted and on-premise installs
 

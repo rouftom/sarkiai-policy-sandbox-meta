@@ -54,8 +54,24 @@ describe('console origins', () => {
     expect(isOriginAllowed('http://172.32.0.1:3000', configured)).toBe(false)
   })
 
-  test('accepts a Vercel preview', () => {
-    expect(isOriginAllowed('https://any-project-git-branch.vercel.app', configured)).toBe(true)
+  test('accepts this project on Vercel (production and previews)', () => {
+    const policy = { ...configured, vercelProject: 'sarkiai-policy-sandbox-meta' }
+    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta.vercel.app', policy)).toBe(true)
+    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta-git-develop-rouftom.vercel.app', policy)).toBe(true)
+    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta-a1b2c3-rouftom.vercel.app', policy)).toBe(true)
+  })
+
+  test('refuses another Vercel project', () => {
+    const policy = { ...configured, vercelProject: 'sarkiai-policy-sandbox-meta' }
+    expect(isOriginAllowed('https://any-project-git-branch.vercel.app', policy)).toBe(false)
+    expect(isOriginAllowed('https://evil-sarkiai-policy-sandbox-meta.vercel.app', policy)).toBe(false)
+    expect(isOriginAllowed('http://sarkiai-policy-sandbox-meta.vercel.app', policy)).toBe(false)
+  })
+
+  test('with a team slug, a preview must belong to that team', () => {
+    const policy = { ...configured, vercelProject: 'sarkiai-policy-sandbox-meta', vercelScope: 'rouftom' }
+    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta-git-develop-rouftom.vercel.app', policy)).toBe(true)
+    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta-copy-attacker.vercel.app', policy)).toBe(false)
   })
 
   test('refuses an unrelated origin', () => {

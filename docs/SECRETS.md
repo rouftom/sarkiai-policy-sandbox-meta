@@ -29,6 +29,26 @@ git.
 - For a team/UI workflow, an alternative is self-hosted Infisical: but SOPS+age
   is the default here (no server, aligned with the local/sovereign posture).
 
+## Cloud deployment gate
+
+A public cloud deployment will not boot with a missing or public session secret.
+The API treats `SANDBOX_MODE=cloud` (or any deployment that received
+`MODEL_API_KEY`) plus a non-local `WEB_PUBLIC_URL` as public, and refuses to start
+when `SESSION_SECRET` / `APPROVAL_SECRET` is absent or still set to the public
+placeholder `change-me-approval-secret`. Generate a private value with
+`openssl rand -hex 32` and store it in the host's secret settings, not in a
+committed file:
+
+```bash
+SESSION_SECRET=<openssl rand -hex 32>
+```
+
+Rotating it invalidates every signed-in session. Local and on-premise installs
+keep the insecure development key with a warning, so a LAN demo still boots.
+The same gate protects `WHATSAPP_APP_SECRET`: in cloud mode an unsigned webhook
+answers `503` rather than trusting the payload. See `deploy/api/README.md` for
+the host-side checklist.
+
 ## Per-environment layering
 
 Combine SOPS with compose layers:

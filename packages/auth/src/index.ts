@@ -69,6 +69,8 @@ export interface OperatorRecord {
   emailVerificationPending?: boolean
   totpSecret?: string
   totpEnrolledAt?: string
+  /** Last accepted TOTP time step: a code cannot be used twice. */
+  totpLastStep?: number
   backupCodes?: string[]
   preferences: Preferences
   createdAt: string
@@ -271,14 +273,19 @@ export function totpCode(secret: string, now = Date.now(), step = 30, digits = 6
 
 /** Accepts the previous and next step (clock drift, code typed slowly). */
 export function verifyTotp(secret: string, code: string, now = Date.now(), window = 1, step = 30): boolean {
+  return totpStep(secret, code, now, window, step) !== null
+}
+
+/** The time step a valid code belongs to, or null: lets a caller refuse a replay. */
+export function totpStep(secret: string, code: string, now = Date.now(), window = 1, step = 30): number | null {
   const normalized = code.replace(/\s/g, '')
-  if (!/^\d{6}$/.test(normalized)) return false
+  if (!/^\d{6}$/.test(normalized)) return null
   const counter = Math.floor(now / 1000 / step)
   for (let drift = -window; drift <= window; drift += 1) {
     const candidate = hotp(base32Decode(secret), counter + drift)
-    if (timingSafeEqual(Buffer.from(candidate), Buffer.from(normalized))) return true
+    if (timingSafeEqual(Buffer.from(candidate), Buffer.from(normalized))) return counter + drift
   }
-  return false
+  return null
 }
 
 export function otpauthUrl(issuer: string, account: string, secret: string): string {
@@ -540,13 +547,15 @@ export class AuthService {
   async isEmpty(): Promise<boolean> {
     if (this.memory.size > 0) return false
     const collection = await this.operators()
-    if (!collection) return true
+    // Fail closed: with a configured store that cannot be read, the deployment
+    // is never treated as empty, or a database outage would reopen the root setup.
+    if (!collection) return !this.config.mongodbUri
     try {
       const doc = await collection.findOne({}, { projection: { _id: 1 } })
       return !doc
     } catch {
       this.markMongoFailure()
-      return true
+      return false
     }
   }
 
@@ -977,7 +986,16 @@ export class AuthService {
 
     const normalized = code.trim().toLowerCase()
     if (/^\d{6}$/.test(normalized)) {
-      if (!verifyTotp(record.totpSecret, normalized)) throw new AuthError('code_invalid', 'Invalid or expired code.')
+      const step = totpStep(record.totpSecret, normalized)
+      if (step === null) throw new AuthError('code_invalid', 'Invalid or expired code.')
+      // A code is valid for about 90 seconds: refuse one already used, so a code
+      // seen over a shoulder or in a log cannot open a second session.
+      if (record.totpLastStep !== undefined && step <= record.totpLastStep) {
+        throw new AuthError('code_invalid', 'This code was already used. Wait for the next one.')
+      }
+      const before: OperatorRecord = { ...record }
+      record.totpLastStep = step
+      await this.persistOrFail(record, before)
     } else {
       const digest = sha256(normalized)
       const index = (record.backupCodes ?? []).indexOf(digest)

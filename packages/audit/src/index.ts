@@ -84,10 +84,10 @@ export class AuditService {
   private appendQueue: Promise<unknown> = Promise.resolve()
   /**
    * The compound index that serves the console's reads: per-operator count,
-   * newest-first page and seven-day window. Created once per process, on the
-   * first read, so a cold start never pays for it twice.
+   * newest-first page and seven-day window. Created once per process, at boot
+   * when the API runs or on the first read, so a cold start never pays twice.
    */
-  private indexesReady: Promise<void> | null = null
+  private indexesReady: Promise<boolean> | null = null
   /**
    * The chain verdict is O(all records). Records are append-only and every
    * append moves the shared `head` document, so the cached verdict is only
@@ -216,20 +216,30 @@ export class AuditService {
 
   /**
    * The index that makes the console's reads index scans instead of collection
-   * scans. A failure is logged once and never blocks the audit feed.
+   * scans. Public so the API can create it at boot, after the optional demo
+   * reset (which drops the collection); reads still call it lazily as a safety
+   * net. A failure is logged once, reported to the caller and never blocks the
+   * audit feed.
    */
-  private async ensureIndexes(): Promise<void> {
+  async ensureReadIndexes(): Promise<boolean> {
     if (!this.indexesReady) {
       this.indexesReady = (async () => {
         try {
           const { audit } = await this.db()
           await audit.createIndex({ userId: 1, ts: -1 }, { name: 'audit_user_ts' })
+          return true
         } catch (error) {
           console.warn('[audit] audit_user_ts index unavailable; reads will be slower', error)
+          return false
         }
       })()
     }
     return this.indexesReady
+  }
+
+  /** Lazy call site: the index is best-effort, so the result is ignored. */
+  private async ensureIndexes(): Promise<void> {
+    await this.ensureReadIndexes()
   }
 
   /** Per-operator scope plus the console's raw-field filter (`q`). */
