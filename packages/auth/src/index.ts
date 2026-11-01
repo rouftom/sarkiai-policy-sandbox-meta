@@ -125,6 +125,8 @@ export class AuthError extends Error {
   constructor(
     readonly code: AuthErrorCode,
     message: string,
+    /** Seconds the client should wait, when the error is a rate limit. */
+    readonly retryAfter?: number,
   ) {
     super(message)
     this.name = 'AuthError'

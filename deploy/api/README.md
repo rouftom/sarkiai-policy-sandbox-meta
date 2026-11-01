@@ -42,6 +42,16 @@ Requirements for the host:
    the widget domain, and allow the console's domain on the widget in the
    Cloudflare dashboard.
 
+5. Request budgets (rate limiting). Every authenticated call is counted per
+   operator: `RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW_MS` for the API as a whole,
+   `RATE_LIMIT_EXPENSIVE_MAX` for the routes that spend model credits
+   (`/v1/readiness/*`, `/v1/scenarios/*`, `/v1/agents/*`, ingest, voice). A
+   refused call answers `429` with `Retry-After` and `RateLimit-*` headers.
+   Counters live in the process, so they reset on deploy and are per instance;
+   `RATE_LIMIT_ENABLED=false` lifts both caps. The public auth screens keep
+   their own windows (5–6 attempts per 15 minutes per IP, sign-in also capped
+   per IP in addition to the per-address lockout).
+
 3. Start the service and wait for the first build to finish.
 
 ## 2. Point the web app at it

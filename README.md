@@ -275,6 +275,17 @@ anything. The API exposes `GET /v1/auth/captcha` so the console knows whether to
 render the widget and with which public site key; with no keys the check is off,
 and an unreachable Cloudflare never blocks a request.
 
+### Request budgets
+
+Every authenticated call is counted per operator: `RATE_LIMIT_MAX` requests per
+`RATE_LIMIT_WINDOW_MS` for the API, and a tighter `RATE_LIMIT_EXPENSIVE_MAX` for
+the routes that spend model credits (readiness, scenarios, agents, ingestion,
+voice). A refused call answers `429` with `Retry-After` and `RateLimit-*`
+headers. Counters live in the process — one instance, reset on deploy — and
+`RATE_LIMIT_ENABLED=false` removes both caps. The public auth screens keep their
+own windows: 5–6 attempts per 15 minutes per IP, and sign-in is now capped per
+IP as well as per address.
+
 ### Public sign-up (cloud demo only)
 
 The public demo at <https://sps.djotta.com>

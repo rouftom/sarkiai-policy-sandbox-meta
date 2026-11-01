@@ -242,6 +242,19 @@ export const config = {
     maxOperators: Number(env('AUTH_MAX_OPERATORS', '12')) || 12,
   },
 
+  /**
+   * Per-caller request budgets. `RATE_LIMIT_MAX` covers the authenticated API
+   * as a whole, `RATE_LIMIT_EXPENSIVE_MAX` the routes that spend model credits.
+   * Counters are in-process: one instance today, and `RATE_LIMIT_ENABLED=false`
+   * is the escape hatch if a console workflow ever needs a higher burst.
+   */
+  rateLimit: {
+    enabled: env('RATE_LIMIT_ENABLED', 'true') !== 'false',
+    windowMs: Number(env('RATE_LIMIT_WINDOW_MS', '60000')) || 60_000,
+    max: Number(env('RATE_LIMIT_MAX', '240')) || 240,
+    expensiveMax: Number(env('RATE_LIMIT_EXPENSIVE_MAX', '20')) || 20,
+  },
+
   // Transactional e-mail (Resend): only used to mail an operator's first password.
   mail: {
     apiKey: env('AUTH_RESEND_KEY'),
