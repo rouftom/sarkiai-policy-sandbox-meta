@@ -72,7 +72,7 @@ Three paths are enough:
 
 | Path | What you need | What it shows |
 |---|---|---|
-| **A — Run locally, no key** | Docker; 16–32 GB RAM with `OLLAMA_MODEL=qwen3.5:9b` (no GPU required), or ~32 GB VRAM for Muse Glimmer | The full engine offline: ingestion, retrieval, agents, scenario, readiness, audit chain. |
+| **A — Run locally, no key** | Docker only. The **default model is Muse Glimmer 30B** (~32 GB VRAM, or 48 GB+ unified memory); on a smaller machine set `OLLAMA_MODEL=qwen3.5:9b` before `make models` (16–32 GB RAM, no GPU required) | The full engine offline: ingestion, retrieval, agents, scenario, readiness, audit chain. |
 | **B — Run on your own keys** | Path A, then `SANDBOX_MODE=cloud` + `MODEL_API_KEY`, or `SANDBOX_MODE=sovereign` + `BASETEN_API_KEY` | The same workflow on Muse Spark (Meta Model API) or Muse Spark Open (Baseten). |
 | **C — Review the recorded run** | Nothing | The 3-minute video ([`docs/DEMO.md`](docs/DEMO.md)) and the captures in [`docs/screenshots/`](docs/screenshots/). |
 
@@ -189,8 +189,10 @@ sarkiai-policy-sandbox/
 
 ```bash
 cp .env.example .env
+# Default model: Muse Glimmer 30B (needs ~32 GB VRAM).
+# No GPU or a smaller machine? set OLLAMA_MODEL=qwen3.5:9b in .env *before* this step.
 docker compose up --build -d
-make models                # pull Muse Glimmer + bge-m3 into Ollama
+make models                # pulls $OLLAMA_MODEL (Muse Glimmer by default) + bge-m3
 ```
 
 Then:
