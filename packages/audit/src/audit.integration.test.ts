@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { MongoClient } from 'mongodb'
 import { AuditService } from './index'
 
 /**
@@ -121,6 +122,61 @@ describe.skipIf(!mongoUri)('AuditService (integration: MongoDB)', () => {
       expect((await audit.verifyChainCached()).valid).toBe(true)
       expect((await audit.verifyChain()).valid).toBe(true)
     } finally {
+      await audit.close()
+    }
+  })
+
+  test('ensureReadIndexes creates the console index and is idempotent', async () => {
+    const dbName = `sps_test_index_${Date.now()}`
+    const audit = new AuditService({ mongodbUri: mongoUri!, dbName })
+    const client = new MongoClient(mongoUri!)
+    try {
+      await client.connect()
+      expect(await audit.ensureReadIndexes()).toBe(true)
+      expect(await audit.ensureReadIndexes()).toBe(true)
+      const indexes = await client.db(dbName).collection('audit_logs').indexes()
+      expect(indexes.some((index) => index.name === 'audit_user_ts')).toBe(true)
+    } finally {
+      await client.db(dbName).dropDatabase().catch(() => undefined)
+      await client.close()
+      await audit.close()
+    }
+  })
+
+  test('pages past 500 records without capping the total', async () => {
+    const dbName = `sps_test_501_${Date.now()}`
+    const audit = new AuditService({ mongodbUri: mongoUri!, dbName })
+    const client = new MongoClient(mongoUri!)
+    try {
+      // The route allows a page of 500; the 501st record must stay reachable on
+      // the next page. Direct inserts avoid 501 serialised chain appends.
+      await client.connect()
+      const base = Date.now()
+      await client
+        .db(dbName)
+        .collection('audit_logs')
+        .insertMany(
+          Array.from({ length: 501 }, (_, index) => ({
+            id: `page-${index}`,
+            userId: 'ada@sarkiai.dev',
+            ts: new Date(base - index * 1_000).toISOString(),
+            actor: 'agent-a',
+            action: 'readiness.run',
+            lens: 'hybrid',
+            citations: [],
+          })),
+        )
+
+      expect(await audit.countAudit('ada@sarkiai.dev')).toBe(501)
+      const first = await audit.listAudit(500, 'ada@sarkiai.dev', 0)
+      const second = await audit.listAudit(500, 'ada@sarkiai.dev', 500)
+      expect(first).toHaveLength(500)
+      expect(second).toHaveLength(1)
+      expect(first.some((record) => record.id === second[0]!.id)).toBe(false)
+      expect(new Set([...first, ...second].map((record) => record.id)).size).toBe(501)
+    } finally {
+      await client.db(dbName).dropDatabase().catch(() => undefined)
+      await client.close()
       await audit.close()
     }
   })
