@@ -80,7 +80,7 @@ export function TurnstileWidget({ check, action }: { check: TurnstileCheck; acti
   }
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-start gap-1.5">
       <Turnstile
         key={check.generation}
         sitekey={check.siteKey}
@@ -96,7 +96,7 @@ export function TurnstileWidget({ check, action }: { check: TurnstileCheck; acti
         onError={fail}
       />
       {/* Without this line a blocked widget looks like a dead button. */}
-      {failed && <p className="text-center text-[10px] text-destructive">{t('turnstile.unavailable')}</p>}
+      {failed && <p className="text-left text-[10px] text-destructive">{t('turnstile.unavailable')}</p>}
     </div>
   )
 }
