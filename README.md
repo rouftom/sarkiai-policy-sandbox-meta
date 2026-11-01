@@ -4,7 +4,10 @@
 > Mandated AI agents that help governments respond to data incidents under their own laws,
 > built on Meta models: Muse Spark, Muse Spark Open (Baseten), Muse Glimmer, SAM 3.1 and Muse Voice Transcribe.
 > What was built during the hackathon: [HACKATHON.md](HACKATHON.md).
+>
+> ▶ **Demo video (2:30):** https://youtu.be/yAD7Qp7JQHQ  ·  **Try it live:** https://sps.djotta.com
 
+[![CI](https://github.com/rouftom/sarkiai-policy-sandbox-meta/actions/workflows/ci.yml/badge.svg)](https://github.com/rouftom/sarkiai-policy-sandbox-meta/actions/workflows/ci.yml)
 [![Meta Model API](https://img.shields.io/badge/Meta%20Model%20API-Muse%20Spark-0866FF?style=for-the-badge)](https://dev.meta.ai)
 [![Open weights](https://img.shields.io/badge/Open%20weights-Muse%20Glimmer-0866FF?style=for-the-badge)](https://dev.meta.ai/models/muse-glimmer)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
@@ -74,7 +77,7 @@ Three paths are enough:
 |---|---|---|
 | **A — Run locally, no key** | Docker only. The **default model is Muse Glimmer 30B** (~32 GB VRAM, or 48 GB+ unified memory); on a smaller machine set `OLLAMA_MODEL=qwen3.5:9b` before `make models` (16–32 GB RAM, no GPU required) | The full engine offline: ingestion, retrieval, agents, scenario, readiness, audit chain. |
 | **B — Run on your own keys** | Path A, then `SANDBOX_MODE=cloud` + `MODEL_API_KEY`, or `SANDBOX_MODE=sovereign` + `BASETEN_API_KEY` | The same workflow on Muse Spark (Meta Model API) or Muse Spark Open (Baseten). |
-| **C — Review the recorded run** | Nothing | The 3-minute video ([`docs/DEMO.md`](docs/DEMO.md)) and the captures in [`docs/screenshots/`](docs/screenshots/). |
+| **C — Review the recorded run** | Nothing | The demo video (https://youtu.be/yAD7Qp7JQHQ, shot list in [`docs/DEMO.md`](docs/DEMO.md)) and the captures in [`docs/screenshots/`](docs/screenshots/). |
 
 The *replay* path is the audit trail: every run keeps its prompts, answers,
 model ids, citations and a hash-chained audit entry, so a recorded run can be
@@ -92,7 +95,7 @@ The public deployment has two ways in: create your own operator account, or use 
 3. Replace the one-time password on the next screen (12 characters minimum, letters and digits), then scan the TOTP QR code with an authenticator app and store the ten recovery codes. They are shown once.
 4. Every later sign-in asks for the password **and** the 6-digit TOTP code.
 5. The workspace bar (country, domain, lens) is stored on the profile. For the announced demo, pick **Cameroon**, **health**, **simulation**.
-6. The free API sleeps: the first call after a quiet period can take up to 40 seconds. Open the overview once and wait for the provider badge before starting a run. See [`docs/DEMO.md`](docs/DEMO.md) for the 3-minute recording plan.
+6. The free API sleeps: the first call after a quiet period can take up to 40 seconds. Open the overview once and wait for the provider badge before starting a run. The recorded run is on YouTube: https://youtu.be/yAD7Qp7JQHQ (shot list in [`docs/DEMO.md`](docs/DEMO.md)).
 
 ### A look at the console
 
@@ -206,8 +209,8 @@ Then:
 - MinIO console (attachments) → http://localhost:9001
 - MongoDB (audit + CoT) → `mongodb://localhost:27017`
 
-Recording the submission video? [`docs/DEMO.md`](docs/DEMO.md) is the 3-minute
-runbook, pre-flight checks included.
+The submitted demo video is https://youtu.be/yAD7Qp7JQHQ. [`docs/DEMO.md`](docs/DEMO.md) is its shot
+list, with the voice-over, the source of every shot and the pre-flight checks for a re-take.
 
 ### Origins, local and on-premise
 

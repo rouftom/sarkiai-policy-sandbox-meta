@@ -61,7 +61,7 @@ The baseline commit (tag `pre-hackathon-baseline`) imports, as a single commit, 
 - `[x]` Assessments on open weights (Muse Spark Open on Baseten, Muse Glimmer on Ollama), model recorded per stage.
 
 ### Sprint 4: demo & submission
-- `[ ]` Record the 3-minute demo video (runbook in `docs/DEMO.md`).
+- `[x]` Record the demo video: https://youtu.be/yAD7Qp7JQHQ (shot list in `docs/DEMO.md`).
 - `[x]` Finalize `HACKATHON.md` (built-during-the-hackathon ledger) and the README.
 - `[x]` Publish the repository and the public demo at <https://sps.djotta.com>.
 - `[x]` Document corpus rights: per-document `rights` status in the manifests, payloads out of git, decision rules in `docs/LICENSING.md`.
