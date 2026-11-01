@@ -718,9 +718,11 @@ lists their exact bodies, ids and review status.
 
 ## Contributing
 
-- Branch model and conventions: [`docs/RULES.md`](docs/RULES.md)
-- Data model: [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md)
-- Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- Workflow (branches, PRs, hotfix, release): [`docs/agent-workflow.md`](docs/agent-workflow.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- Agent rules and playbooks: [`AGENTS.md`](AGENTS.md), [`.opencode/skills/`](.opencode/skills/).
+- Code conventions: [`docs/RULES.md`](docs/RULES.md).
+- Data model: [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md).
+- Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 
