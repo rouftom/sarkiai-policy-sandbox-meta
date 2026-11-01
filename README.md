@@ -240,6 +240,8 @@ AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
 AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
 WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
 WEB_PUBLIC_URL_ALIASES=https://your-project.vercel.app  # optional, comma-separated
+CLOUDFLARE_TURNSITE_SITE_SECRET=...          # optional: reset-form human check
+NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY=... # the same widget's public key
 ```
 
 Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators
@@ -265,6 +267,12 @@ TOTP enrolled. The request endpoint answers `200` even for an unknown address, s
 the console never reveals which e-mails are registered. It uses the same Resend
 credentials as the invitation (`AUTH_RESEND_KEY`), and `WEB_PUBLIC_URL` builds the
 link.
+
+In `cloud` and `sovereign` deployments that configure Cloudflare Turnstile, the
+form also requires the human check before sending the link. The API exposes
+`GET /v1/auth/captcha` so the console knows whether to render the widget and
+with which public site key; with no keys the check is off, and an unreachable
+Cloudflare never blocks a reset request.
 
 ### Public sign-up (cloud demo only)
 

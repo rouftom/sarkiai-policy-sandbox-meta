@@ -335,6 +335,7 @@ function isPublicRoute(method: string, path: string): boolean {
   if (path.startsWith('/v1/whatsapp/approvals/')) return true
   if (path.startsWith('/v1/kb/images/') && method === 'GET') return true
   if (path === '/v1/auth/setup') return true
+  if (path === '/v1/auth/captcha') return true
   if (path === '/v1/auth/signup') return true
   if (path === '/v1/auth/login') return true
   if (path === '/v1/auth/password') return true

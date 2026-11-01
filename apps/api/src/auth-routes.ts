@@ -13,6 +13,7 @@ import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
 import { MailError, sendEmailVerification, sendInvitation, sendPasswordReset } from './mailer.js'
+import { turnstileConfig, verifyTurnstile } from './turnstile.js'
 
 function bearer(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization
@@ -129,6 +130,11 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     signup: auth.signupEnabled,
   }))
 
+  // What the console needs to render the reset form's human check. Public: the
+  // site key is meant for browsers, and `required` lets the widget disappear on
+  // installs that run without Turnstile.
+  app.get('/v1/auth/captcha', async () => turnstileConfig())
+
   // ── Public sign-up (cloud demo only) ──────────────────────────────────────
   // The judge creates an account with their own password, then enrols TOTP:
   // no session is issued before the second factor exists.
@@ -242,8 +248,20 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/password/forgot', async (request, reply) => {
     try {
-      throttleForgot(request.ip)
       const body = forgotInput.parse(request.body)
+
+      // Human check before anything else: no token, no e-mail. Disabled (local,
+      // sovereign, or keys missing) the helper accepts every request.
+      const header = request.headers['x-turnstile-token']
+      const raw = Array.isArray(header) ? header[0] : header
+      if (!(await verifyTurnstile(raw, 'password_reset', request.ip))) {
+        return reply.status(403).send({
+          error: 'captcha_failed',
+          message: 'Human verification failed.',
+        })
+      }
+
+      throttleForgot(request.ip)
       const reset = await auth.createPasswordReset(body.email)
       if (reset) {
         try {
