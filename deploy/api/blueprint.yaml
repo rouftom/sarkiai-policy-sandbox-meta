@@ -102,3 +102,14 @@ services:
         value: "true"
       - key: AUTH_MAX_OPERATORS
         value: "12"
+
+      # ── bot protection (password-reset form) ───────────────────────────────
+      # Cloudflare Turnstile. The site key is public (served to the console by
+      # GET /v1/auth/captcha), the secret validates tokens. With no keys the
+      # check is off; an unreachable Cloudflare never blocks a reset request.
+      - key: NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY
+        sync: false
+      - key: CLOUDFLARE_TURNSITE_SITE_SECRET
+        sync: false
+      - key: TURNSTILE_HOSTNAMES
+        sync: false
