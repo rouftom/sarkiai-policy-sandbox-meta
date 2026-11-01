@@ -7,6 +7,8 @@
 This file is the honest ledger the rulebook asks for: what already existed, what
 was built during the building period, and which Meta model does what.
 
+**Demo video (2:30):** https://youtu.be/yAD7Qp7JQHQ  ·  **Try it live:** https://sps.djotta.com
+
 ## What existed before the hackathon
 
 The baseline commit [`bdb8a11`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/bdb8a11b51487edc9f1b8633f8efa6034d2bd672) (`baseline: SarkiAI Policy Sandbox engine (v0.1.0)`, tag `pre-hackathon-baseline`) imports, as a single commit, the SarkiAI Policy Sandbox engine that **we wrote before the hackathon**. It already contained the items listed below. Everything from N1 onward was built during the hackathon, with the commits shown in the table.

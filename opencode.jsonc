@@ -1,0 +1,6 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Project rules and skills live in .agent/ so the layout is not tied to a
+  // single agent tool. OpenCode is pointed at that directory here.
+  "skills": [".agent/skills"]
+}

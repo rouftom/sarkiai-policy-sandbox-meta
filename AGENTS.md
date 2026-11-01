@@ -12,7 +12,7 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 # SarkiAI Policy Sandbox — agent guide
 
 Entry point for every agent working in this repository. Read this file, then
-load the matching skill from `.opencode/skills/` instead of exploring blindly.
+load the matching skill from `.agent/skills/` instead of exploring blindly.
 
 ## What this repository is
 
@@ -87,7 +87,9 @@ A change is done when:
 
 ## Skills
 
-`.opencode/skills/` contains the project playbooks. Load them by ID:
+`.agent/skills/` contains the project playbooks, in the portable Agent Skills
+format. `opencode.jsonc` points OpenCode at that directory, so the layout stays
+tool-agnostic. Load them by ID:
 
 `sps-onboarding`, `sps-architecture`, `sps-backend`, `sps-web-console`,
 `sps-data`, `sps-quality-gates`, `sps-provider-modes`, `sps-auth-and-secrets`,
