@@ -255,6 +255,22 @@ export const config = {
     expensiveMax: Number(env('RATE_LIMIT_EXPENSIVE_MAX', '20')) || 20,
   },
 
+  /**
+   * Caps on in-flight model work. One readiness series legitimately runs five
+   * streams at once, so the per-operator default sits above that; past it the
+   * API answers 429 rather than queueing. `AI_CONCURRENCY_PER_OPERATOR=0` turns
+   * the gate off (0 means "no cap" for both values).
+   */
+  concurrency: {
+    perOperator: Number(env('AI_CONCURRENCY_PER_OPERATOR', '8')) || 0,
+    global: Number(env('AI_CONCURRENCY_GLOBAL', '16')) || 0,
+    /**
+     * Dimensions one readiness run evaluates at the same time. Cells are the
+     * expensive part: 13 in parallel per sector multiplies fast.
+     */
+    dimensions: Math.max(1, Number(env('READINESS_DIMENSION_CONCURRENCY', '4')) || 4),
+  },
+
   // Transactional e-mail (Resend): only used to mail an operator's first password.
   mail: {
     apiKey: env('AUTH_RESEND_KEY'),

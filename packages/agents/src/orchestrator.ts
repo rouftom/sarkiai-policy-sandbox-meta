@@ -66,6 +66,8 @@ export interface AgentRunInput {
   attachmentMeta?: AttachmentMeta[]
   /** Interactive runs can call tools (search, questions, approvals). Scenarios never do. */
   withTools?: boolean
+  /** Aborted when the caller goes away: the generation stops with it. */
+  signal?: AbortSignal
   /** Action store for this run's proposals (defaults to the orchestrator's). */
   actions?: ActionSink
   /** First-party MCP servers the agent may call (interactive runs only). */
@@ -280,6 +282,7 @@ export class PolicyOrchestrator {
         ...effortOptions,
         ...(hasAttachments ? { messages: [{ role: 'user' as const, content: userContent(prompt) }] } : { prompt }),
         ...(useTools && tools ? { tools, stopWhen: stepCountIs(5) } : {}),
+        ...(input.signal ? { abortSignal: input.signal } : {}),
       }
       if (!handlers?.onDelta) {
         const generated = await generateText(settings)

@@ -40,6 +40,7 @@ import {
 import { AskUserPanel } from '@/components/ai/tools/ask-user-panel'
 import { RequestInputCard } from '@/components/ai/tools/request-input-card'
 import { ApprovalCard } from '@/components/ai/tools/approval-card'
+import { failureMessage } from '@/lib/failure'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { institutionAccent, institutionInk } from '@/lib/institutions'
@@ -354,7 +355,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       // steps close normally, and no error banner is shown.
       const stopped = controller.signal.aborted
       if (!stopped) {
-        const message = (error as Error).message
+        const message = failureMessage(error, t('common.error'), t)
         patchLast((turn) => ({
           ...turn,
           content: turn.content ? turn.content : `⚠️ ${message}`,

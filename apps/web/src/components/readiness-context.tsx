@@ -23,6 +23,7 @@ import {
 } from '@/lib/api'
 import type { WebSourceView } from '@/components/ai/display/source-drawer'
 import { useToast } from '@/components/shared/toast'
+import { failureMessage } from '@/lib/failure'
 import { useI18n } from '@/lib/i18n'
 
 export type ReportFormat = 'markdown' | 'html' | 'docx'
@@ -367,7 +368,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       const label = format === 'docx' ? 'Word' : format === 'html' ? 'HTML' : 'Markdown'
       toast.success(t('toast.reportReady', { format: label }))
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught)
+      const message = failureMessage(caught, t('toast.failed'), t)
       setFailure(message)
       toast.error(t('toast.failed'), message)
     } finally {
@@ -454,7 +455,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       if (outcome.status === 'fulfilled') {
         if (outcome.value) saved.push(outcome.value)
       } else if (!failure) {
-        failure = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)
+        failure = failureMessage(outcome.reason, t('toast.failed'), t)
       }
     }
     if (failure) setFailure(failure)
@@ -514,7 +515,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       refreshHistory()
       if (saved.length > 0) toast.success(t('toast.readinessFinished', { count: saved.length }))
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught)
+      const message = failureMessage(caught, t('toast.failed'), t)
       setFailure(message)
       toast.error(t('toast.failed'), message)
     } finally {
@@ -552,7 +553,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       refreshHistory()
       toast.success(t('toast.readinessResumed'))
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught)
+      const message = failureMessage(caught, t('toast.failed'), t)
       setFailure(message)
       toast.error(t('toast.failed'), message)
     } finally {
@@ -597,7 +598,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
         }
       })
       .catch((caught) => {
-        if (!cancelled) setFailure(caught instanceof Error ? caught.message : String(caught))
+        if (!cancelled) setFailure(failureMessage(caught, t('toast.failed'), t))
       })
       .finally(() => setLoading(false))
     return () => {
@@ -652,7 +653,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
         router.replace('/readiness')
       }
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught)
+      const message = failureMessage(caught, t('toast.failed'), t)
       setFailure(message)
       toast.error(t('toast.failed'), message)
     } finally {
@@ -682,7 +683,7 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
       const result = await api.whatIf({ country, domain: subject.domain || domain, changes: { [dimension]: change.delta }, scores: subject.scores })
       if (seq === simulateSeq.current) setWhatIf(result)
     } catch (caught) {
-      if (seq === simulateSeq.current) setFailure(caught instanceof Error ? caught.message : String(caught))
+      if (seq === simulateSeq.current) setFailure(failureMessage(caught, t('toast.failed'), t))
     } finally {
       if (seq === simulateSeq.current) setSimulateBusy(false)
     }
