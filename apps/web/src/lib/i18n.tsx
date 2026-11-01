@@ -1232,7 +1232,7 @@ const en = {
   'setup.submit': 'Create the account and send the password',
   'setup.submitting': 'Creating the account…',
   'setup.footnote':
-    'The first sign-in forces a password change, then two-factor enrolment. The temporary password is never displayed on screen.',
+    'The first sign-in forces a password change, then two-factor enrolment. On a local install without e-mail, the temporary password is shown once on the next screen.',
   'setup.checking': 'Checking the operator store…',
   'setup.sentTitle': 'Check your inbox',
   'setup.sentBody':
@@ -1241,6 +1241,18 @@ const en = {
   'setup.sentStep1': 'Open the e-mail and sign in with the temporary password.',
   'setup.sentStep2': 'Choose a new password (12 characters minimum).',
   'setup.sentStep3': 'Scan the TOTP QR code and keep the ten recovery codes.',
+  'setup.localTitle': 'Account created — copy the password',
+  'setup.localBody':
+    'This local install has no e-mail transport (AUTH_RESEND_KEY is empty), so the API returns the one-time password here. It is valid for a single sign-in.',
+  'setup.localAccount': 'Account',
+  'setup.localPassword': 'One-time password',
+  'setup.localStep1': 'Copy the password and sign in with it.',
+  'setup.localStep2': 'Choose a new password (12 characters minimum).',
+  'setup.localStep3': 'Scan the TOTP QR code and keep the ten recovery codes.',
+  'setup.localWarning':
+    'Shown once and never stored by the console. Set AUTH_RESEND_KEY to send it by e-mail instead.',
+  'setup.copy': 'Copy',
+  'setup.copied': 'Copied',
   'setup.goToLogin': 'Go to sign-in',
   'setup.doneTitle': 'This deployment is already set up',
   'setup.alreadyBody': 'A root operator already exists. Sign in with your account.',
@@ -2803,7 +2815,7 @@ const fr: Record<keyof typeof en, string> = {
   'setup.submit': 'Créer le compte et envoyer le mot de passe',
   'setup.submitting': 'Création du compte…',
   'setup.footnote':
-    'La première connexion impose le changement de mot de passe, puis l’activation du second facteur. Le mot de passe provisoire n’est jamais affiché à l’écran.',
+    'La première connexion impose le changement de mot de passe, puis l’activation du second facteur. Sur une installation locale sans e-mail, le mot de passe provisoire est affiché une fois à l’écran suivant.',
   'setup.checking': 'Vérification du magasin d’opérateurs…',
   'setup.sentTitle': 'Vérifiez votre boîte de réception',
   'setup.sentBody':
@@ -2812,6 +2824,18 @@ const fr: Record<keyof typeof en, string> = {
   'setup.sentStep1': 'Ouvrez l’e-mail et connectez-vous avec le mot de passe provisoire.',
   'setup.sentStep2': 'Choisissez un nouveau mot de passe (12 caractères minimum).',
   'setup.sentStep3': 'Scannez le QR code TOTP et conservez les dix codes de secours.',
+  'setup.localTitle': 'Compte créé — copiez le mot de passe',
+  'setup.localBody':
+    'Cette installation locale n’a pas de transport e-mail (AUTH_RESEND_KEY est vide) : l’API renvoie donc le mot de passe provisoire ici. Il ne vaut que pour une seule connexion.',
+  'setup.localAccount': 'Compte',
+  'setup.localPassword': 'Mot de passe provisoire',
+  'setup.localStep1': 'Copiez le mot de passe et connectez-vous avec.',
+  'setup.localStep2': 'Choisissez un nouveau mot de passe (12 caractères minimum).',
+  'setup.localStep3': 'Scannez le QR code TOTP et conservez les dix codes de secours.',
+  'setup.localWarning':
+    'Affiché une seule fois, jamais conservé par la console. Renseignez AUTH_RESEND_KEY pour l’envoyer par e-mail à la place.',
+  'setup.copy': 'Copier',
+  'setup.copied': 'Copié',
   'setup.goToLogin': 'Aller à la connexion',
   'setup.doneTitle': 'Ce déploiement est déjà configuré',
   'setup.alreadyBody': 'Un opérateur racine existe déjà. Connectez-vous avec votre compte.',

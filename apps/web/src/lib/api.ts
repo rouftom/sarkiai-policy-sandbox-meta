@@ -1330,6 +1330,10 @@ export interface SetupResultDto {
   ok: boolean
   email: string
   storage: 'mongo' | 'memory'
+  /** `local` means the API returned the one-time password (no mail transport). */
+  delivery?: 'email' | 'local'
+  /** One-time password, only when `delivery` is `local`. Never persisted client-side. */
+  password?: string
 }
 
 export interface EnrollmentDto {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { config, isAllowedOrigin, isOriginAllowed } from './config'
+import { config, isAllowedOrigin, isOriginAllowed, localSetupPasswordFallback } from './config'
 
 /** A configured deployment: canonical host plus the local dev origin. */
 const configured = {
@@ -85,5 +85,31 @@ describe('console origins', () => {
     expect(config.web.canonicalUrl).toMatch(/^https?:\/\//)
     expect(config.mail.publicUrl).toBe(config.web.canonicalUrl)
     expect(config.whatsapp.webPublicUrl).toBe(config.web.canonicalUrl)
+  })
+})
+
+/**
+ * First-run setup without Resend: only a local console may receive the one-time
+ * password in the response. A public host must keep refusing and roll back.
+ */
+describe('local setup password fallback', () => {
+  test('allows a loopback console with no mail transport', () => {
+    expect(localSetupPasswordFallback('mail_not_configured', 'http://localhost:3000')).toBe(true)
+    expect(localSetupPasswordFallback('mail_not_configured', 'http://127.0.0.1:3000')).toBe(true)
+  })
+
+  test('allows a LAN or container-name console', () => {
+    expect(localSetupPasswordFallback('mail_not_configured', 'http://192.168.1.20:3000')).toBe(true)
+    expect(localSetupPasswordFallback('mail_not_configured', 'http://policy-server:3000')).toBe(true)
+  })
+
+  test('never displays the password on a public host', () => {
+    expect(localSetupPasswordFallback('mail_not_configured', 'https://sps.djotta.com')).toBe(false)
+    expect(localSetupPasswordFallback('mail_not_configured', 'https://console.example')).toBe(false)
+  })
+
+  test('only covers the missing-transport case', () => {
+    expect(localSetupPasswordFallback('mail_failed', 'http://localhost:3000')).toBe(false)
+    expect(localSetupPasswordFallback(undefined, 'http://localhost:3000')).toBe(false)
   })
 })
