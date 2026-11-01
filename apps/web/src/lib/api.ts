@@ -1360,6 +1360,12 @@ export interface AuditEventDto {
 export interface AuditFeedDto {
   events: AuditEventDto[]
   chain: { valid: boolean; brokenAt?: string; forks?: number }
+  /** Exact number of records selected by the same operator + query filter. */
+  total: number
+  /** Present only with `stats`: exact daily totals, local days. */
+  days?: Array<{ day: string; count: number }>
+  /** Present only with `stats`: exact action totals for the window. */
+  actions?: Array<{ action: string; count: number }>
 }
 
 export const authApi = {
@@ -1424,7 +1430,17 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),
-  auditEvents: (limit = 50) => request<AuditFeedDto>(`/v1/audit/events?limit=${limit}`),
+  auditEvents: (limit = 50, options: { offset?: number; q?: string; stats?: number; tz?: string; from?: string } = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (options.offset) params.set('offset', String(options.offset))
+    if (options.q) params.set('q', options.q)
+    if (options.stats) {
+      params.set('stats', String(options.stats))
+      if (options.tz) params.set('tz', options.tz)
+      if (options.from) params.set('from', options.from)
+    }
+    return request<AuditFeedDto>(`/v1/audit/events?${params.toString()}`)
+  },
 }
 
 
@@ -1483,6 +1499,7 @@ export interface KbStatusDto {
     chunks: number
     activeChunks: number
     documents: number
+    figures: number
     characters: number
     lastIngestedAt: string | null
   }
