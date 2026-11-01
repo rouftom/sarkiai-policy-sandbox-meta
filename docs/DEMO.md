@@ -1,22 +1,68 @@
-# Demo sheet: 3 minutes, one operator, one voice-over
+# Demo video: shot list
+
+**Watch it:** https://youtu.be/yAD7Qp7JQHQ (2:30, English voice-over and subtitles).
 
 The video shows **only what was built during the hackathon** (see
 [`HACKATHON.md`](../HACKATHON.md)) and the Meta models doing real work: Muse
-Spark, SAM 3.1, Muse Voice Transcribe, and **Muse Spark Open on Baseten**.
-The retrieval playground and the readiness lens are not in the video.
-
-Judging weights this sequence targets: **Impact 30%** (a real institutional
-problem, a real country, a real legal corpus), **Meta tooling 25%** (five Meta
-models, each with a visible job), **Depth 20%** (citation validator, deterministic
-scores, hash-chained audit), **Demo 25%** (one story, told end to end).
+Spark, Muse Spark Open on Baseten, SAM 3.1, Muse Voice Transcribe and the Meta
+`web_search` tool. The retrieval playground is not in the video. A 2:18 cut
+without section cards and without the live-demo end card is used for X.
 
 ## The story
 
 A health-data leak at a fictional regional hospital in Cameroon. Four
-institutions must respond under their own laws. A new decree arrives mid-incident.
-The ministry rehearses the next one on open weights. A human signs off on WhatsApp.
+institutions must respond under their own laws. A new decree arrives on paper.
+The same agents move to open weights. The ministry measures its AI readiness and
+rehearses the next crisis. The focal point is notified on WhatsApp.
 
-## Before recording (T-30 min)
+## Shot list
+
+Timecodes are those of the YouTube chapters. Each sequence opens with a
+one-second section card. Waiting time is sped up in the edit; nothing displayed
+by the application is altered.
+
+| Time | Sequence | What is on screen | Hackathon work | Meta models |
+|---|---|---|---|---|
+| 0:00 | Title | Project name and one-line pitch | | |
+| 0:10 | 1 · A crisis cell, on Muse Spark | Crisis scenario: live process graph of the mandated agents, a cited source opened, the joint report with conflicting mandates | N1, N2, N10 | Muse Spark |
+| 0:36 | 2 · A new decree, on paper | Gazette tab: sample page segmented into columns and zones, SAM 3.1 artefacts (stamp 0.855, table 0.816) shown in a zoom, per-zone transcription, page added to the corpus, impact analysis on the open incidents | N3, N7 | SAM 3.1, Muse Spark |
+| 0:59 | 3 · Same engine, open weights | Model menu: Muse Spark Open (Baseten) selected; audit trail records the change; a question dictated in French; answer with citations, an unfound quote reported as a gap | N5, N6, N2 | Muse Spark Open, Muse Voice Transcribe |
+| 1:21 | 4 · AI readiness, live | New assessment: web search on Muse Spark, evaluation and synthesis on Muse Spark Open; two sectors assessed with live agent graphs; sector comparison | N12 | Muse Spark, Muse Spark Open, `web_search` |
+| 1:44 | 5 · Rehearse the next crisis | Timed injects, actions logged by the team, rule-based score, after-action report | N8 | Muse Spark |
+| 2:03 | 6 · The focal point is notified | Split screen: approval request sent from the console, WhatsApp message received on the phone; audit trail with integrity verified | N4 | WhatsApp Cloud API |
+| 2:19 | End card | Meta models used, live demo, repository | | |
+
+Two honest notes on the cut:
+
+- **Impact analysis (sequence 2).** The sample decree cites no instrument used by
+  the open simulation, so the panel answers *"No open incident is affected by
+  this provision"*. The voice-over presents it as such: the agent flags only the
+  runs that cite the same law, and invents no impact.
+- **Approval (sequence 6).** The cut stops at the reception of the WhatsApp
+  message. The signed, single-use approval page is part of N4 and can be tested
+  in the console; it is not filmed.
+
+The phone number of the recipient is blurred in the edit.
+
+## Voice-over
+
+Generated with ElevenLabs (voice "Chris"), about 330 words. Music: "Business
+Marketing" by atlasaudio (Pixabay licence).
+
+| Sequence | Text |
+|---|---|
+| Title | When patient records leak from a public hospital, four institutions must act, each under its own law. |
+| 1 | SarkiAI Policy Sandbox turns that moment into a crisis cell. Each institution is an agent with a legal mandate, running on Muse Spark. As the incident unfolds, every claim must quote the law, and a quote that is not in the corpus is rejected. The coordinator then merges the four views into one joint report, and flags where mandates collide: who notifies the patients, and by when. |
+| 2 | Much of African law still lives on scanned paper. SAM 3.1 finds the stamps, signatures and tables, so they never pollute the text, and Muse Spark transcribes each zone. Once the decree joins the corpus, the system checks the running incidents, and only flags those that cite the same law. No false alarms. |
+| 3 | A ministry cannot always send an incident to the cloud. One switch, and the same agents run on Muse Spark Open, Meta's open-weight model, served by Baseten. The audit trail records the change. Officials can simply ask, in French, by voice, and every answer is checked against the law. |
+| 4 | Before the next crisis, how ready is the country? One agent per dimension assesses thirteen dimensions, sector by sector, live. Muse Spark searches the web for current evidence, Muse Spark Open scores and writes the synthesis, and the sectors are compared side by side. |
+| 5 | Teams can also rehearse. Injects arrive on a clock, the team logs what it does, and the score is computed by rules, not by the model: addressed, late, or missed. The model only writes the after-action report. |
+| 6 | When a joint report is ready, the focal point is notified on WhatsApp, with the request and a signed, single-use link. Every send lands in the same hash-chained audit trail as every agent step. |
+| End | Laws, institutions, open weights, and a trail anyone can verify. Built for Cameroon. Ready for the next country. |
+
+## Re-taking a sequence
+
+### Pre-flight checks
 
 The hosted console is `https://<web-host>`; sign-in is described in the
 [README](../README.md#first-connection). Replace `<api-host>` below.
@@ -44,8 +90,7 @@ curl -s $API/v1/notifications/status | jq
       theme, `meta` pack. Phone: WhatsApp open, do-not-disturb on.
 - [ ] API warm: hit `/health` 40 s before recording (free plan cold start).
 
-Record each segment as a separate take and cut them together. Speed up waiting
-time (×4 max) and say so on screen ("sped up").
+Record each segment as a separate take. Waiting time can be sped up in the edit.
 
 ## What must not appear on screen
 
@@ -54,105 +99,15 @@ time (×4 max) and say so on screen ("sped up").
   person's data. The scenario, people and hospital are fictional.
 - Third-party documents marked `quotation-only` or `to-confirm` in the manifest.
 
-## Shot list and voice-over
-
-The voice-over is generated (ElevenLabs, English, calm documentary tone) from the
-lines below: about 330 words, which leaves room for pauses in 3 minutes. Each
-paragraph is timed to its segment.
-
-### 0:00–0:15 · Hook
-
-Screen: overview page, provider badge **Meta Model API**. On-screen text:
-*Everything shown was built during the hackathon.*
-
-> When patient records leak from a public hospital in Cameroon, four institutions
-> share the response: health, data protection, telecoms and cyber security. The
-> deadlines are in the law, but nobody has the full picture. We built a crisis cell
-> that runs on Meta models and answers with the law itself.
-
-### 0:15–0:55 · Joint report on Muse Spark (N1, N2, N10)
-
-Screen: `/scenarios` → the prepared run → **release the next tick**.
-
-1. The mandated agents stream their assessments; the badge reads Muse Spark.
-2. Show one **rejected citation** and the agent's retry.
-3. Open the **joint report**: obligations, deadlines, the **conflicts** block.
-4. Click one citation: the provision opens.
-
-> Each institution is an agent with a legal mandate, running on Muse Spark. Every
-> claim must quote the law. Here, a quote that does not exist in the corpus is
-> rejected, and the agent has to try again. The coordinator merges the four views
-> into one joint report, and flags where mandates collide: who notifies the
-> patients, and by when.
-
-### 0:55–1:35 · A new decree on paper (N3, N7)
-
-Screen: `/knowledge` → **Gazette** tab → **Sample page** → **Analyze**.
-
-1. The overlay: columns, zones, and the **SAM 3.1** artefacts (stamp, signature,
-   table) circled in green. Hover one artefact to show its label.
-2. Open two zones: the per-zone transcription.
-3. **Add to corpus**, then **Analyze impact**: the open run is listed with its
-   severity, the reason, the action and the deadline change.
-
-> Much of African law still lives on scanned paper. SAM 3.1 finds the stamps,
-> signatures and tables on the page, so they never pollute the text, and Muse Spark
-> reads each zone separately. Once the decree joins the corpus, the system checks
-> the incidents already running. It finds ours, and tells us which deadline just
-> changed and what has to be redone.
-
-### 1:35–2:05 · Same engine, open weights (N5, N6)
-
-Screen: assistant **+** menu → select **Muse Spark Open (Baseten)**.
-
-1. The badge changes. Release the next tick on the same run: the agents now answer
-   on Muse Spark Open.
-2. Open `/audit`: the `model.selected` event and the reasoning steps carry
-   `meta-models/muse-spark-open-1026`.
-3. In the assistant, **dictate a question in French** (microphone): Muse Voice
-   Transcribe writes it, Muse Spark Open answers with citations.
-
-> A ministry cannot always send an incident to a cloud. One switch, and the same
-> agents run on Muse Spark Open, Meta's open-weight model, served by Baseten, or on
-> Muse Glimmer on the institution's own hardware. The audit chain records which model
-> produced every step. And officials can simply speak, in French.
-
-### 2:05–2:30 · Rehearse the next crisis (N8)
-
-Screen: `/exercise` → start the authored exercise → release two injects → log one
-action → **end** → after-action report.
-
-> Before the next crisis, the team trains on its own scenarios. Injects arrive on a
-> clock, the team logs what it does, and the score is computed by rules, not by the
-> model: addressed, late or missed, against the legal deadlines. The model only
-> writes the narrative. It cannot change the score.
-
-### 2:30–2:52 · A human decides (N4)
-
-Screen: `/communications` → WhatsApp → **approval request** for the run → phone:
-the template arrives → tap the link → `/approve/:token` → **Approve** with a note →
-back to `/audit`.
-
-> Nothing is published without a person. The focal point gets the request on
-> WhatsApp, opens a signed link that works once, and decides. The decision lands in
-> the same hash-chained audit trail as every agent step.
-
-### 2:52–3:00 · Close
-
-Screen: `/audit` → **chain valid**. End card: the five Meta models, the repository URL.
-
-> Laws, institutions, open weights, and a trail anyone can verify. Built for
-> Cameroon, ready for the next country.
-
 ## What to say if asked
 
 | Question | Answer |
 |---|---|
-| What was built during the hackathon? | Everything in [`HACKATHON.md`](../HACKATHON.md), with commits and times. The engine is imported as the first commit; N1 to N11 are the hackathon work. |
+| What was built during the hackathon? | Everything in [`HACKATHON.md`](../HACKATHON.md), with commits and times. The engine is imported as the first commit; N1 to N12 are the hackathon work (N9 dropped, as stated). |
 | Where does the open-weight model run, and what does it do? | Muse Spark Open runs on Baseten and takes over all reasoning (agents, coordinator, citation retries, impact analysis, exercise narrative). Muse Glimmer runs on the institution's hardware through Ollama. See the README section *Open weights*. |
 | Why Voyage for retrieval? | Meta publishes neither an embedding nor a reranking model. `voyage-4` and `rerank-2` only rank passages: they generate no text and take no decision. Every reasoning, vision, segmentation and speech step runs on Meta, and the citation validator checks every quote against the corpus anyway. |
 | Is the corpus real? | The manifest is the Cameroon national corpus. Laws and decrees are official texts; other works keep their own terms, and each manifest entry carries a `rights` status. The demo gazette page is a generated sample. |
-| Is this a RAG app? | No: retrieval is a component. The product is mandated agents, a coordinator that detects conflicts, a citation validator, legislative impact analysis, a scored exercise and an audited human decision. |
+| Is this a RAG app? | No: retrieval is a component. The product is mandated agents, a coordinator that detects conflicts, a citation validator, legislative impact analysis, a scored exercise, a live AI-readiness assessment and an audited WhatsApp notification. |
 | Is it medical advice? | No. The scenario is a data breach; the system never advises on care. |
 
 ## After the take
