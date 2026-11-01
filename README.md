@@ -410,6 +410,17 @@ Cloud mode also needs `MODEL_API_KEY`, `VOYAGE_API_KEY` and a `mongodb+srv`
 `MONGODB_URI`; the API creates the Atlas indexes at startup (see below). Local
 and sovereign modes ignore those variables.
 
+If you only have a **Meta key** and want to keep the corpus local, run cloud
+mode with local retrieval instead of provisioning Atlas and Voyage:
+
+```bash
+SANDBOX_MODE=cloud
+MODEL_API_KEY=...
+RETRIEVAL_BACKEND=qdrant   # qdrant + bge-m3, the same corpus as the local run
+```
+
+The Qdrant path keeps the local embeddings, so no new index has to be built.
+
 The switch is recorded in the audit chain as a `provider.switched` event, and
 each chain-of-thought step names the mode and model that produced it.
 
