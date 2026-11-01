@@ -53,11 +53,11 @@
         "data_marketplace"
       ],
       "status": "verified",
-      "rights": "to-confirm",
-      "rightsNote": "Smart Africa publication; no explicit reuse licence found; verify before publishing the payload.",
+      "rights": "quotation-only",
+      "rightsNote": "© Smart Africa 2021 (first edition); no reuse licence found in the PDF or on the publisher site: short attributed quotations only; do not publish the payload.",
       "priority": "high",
       "file": "Smart_Africa_AI_Blueprint_2021.pdf",
-      "sourceUrl": "https://smartafrica.org/"
+      "sourceUrl": "https://smartafrica.org/wp-content/uploads/2023/11/70029-eng_ai-for-africa-blueprint-min.pdf"
     },
     {
       "id": "windhoek-statement-2022",
@@ -71,11 +71,11 @@
         "ai_inclusion"
       ],
       "status": "verified",
-      "rights": "to-confirm",
-      "rightsNote": "Multi-partner statement; rights not stated; verify before publishing the payload.",
+      "rights": "official-text",
+      "rightsNote": "Ministerial statement adopted by consensus at the UNESCO–Southern Africa sub-Regional Forum on AI (Windhoek, 9 September 2022): official intergovernmental text; cite the issuing ministers and the UNESDOC record.",
       "priority": "medium",
       "file": "Windhoek_Statement_AI_Southern_Africa_2022.pdf",
-      "sourceUrl": ""
+      "sourceUrl": "https://unesdoc.unesco.org/ark:/48223/pf0000383197"
     }
   ]
 }
