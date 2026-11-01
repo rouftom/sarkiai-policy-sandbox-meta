@@ -16,7 +16,9 @@ permissions:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # A sleeping instance can take a minute to answer. Five attempts of 60 s
+    # fit inside this budget with room for the runner's own overhead.
+    timeout-minutes: 10
     steps:
       - name: Ping /health
         env:
@@ -26,8 +28,8 @@ jobs:
             echo "SPS_API_URL is not set; skipping."
             exit 0
           fi
-          for i in 1 2 3; do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$SPS_API_URL/health" || true)
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 15 --max-time 60 "$SPS_API_URL/health" || true)
             echo "attempt $i -> $code"
             [ "$code" = "200" ] && exit 0
             sleep 10
