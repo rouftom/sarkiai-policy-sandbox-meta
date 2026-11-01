@@ -22,7 +22,7 @@ services:
     container_name: sps-ollama
     restart: unless-stopped
     ports:
-      - "${OLLAMA_PORT:-11434}:11434"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama-data:/root/.ollama
     # GPU support (uncomment for NVIDIA):
@@ -50,7 +50,7 @@ services:
     volumes:
       - tei-data:/data
     ports:
-      - "${RERANK_PORT:-8080}:80"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${RERANK_PORT:-8080}:80"
     profiles: ["rerank", "full"]
     networks: [sps-net]
 
@@ -60,8 +60,8 @@ services:
     container_name: sps-qdrant
     restart: unless-stopped
     ports:
-      - "${QDRANT_PORT:-6333}:6333"
-      - "${QDRANT_GRPC_PORT:-6334}:6334"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${QDRANT_PORT:-6333}:6333"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant-data:/qdrant/storage
     environment:
@@ -81,7 +81,7 @@ services:
     container_name: sps-mongo
     restart: unless-stopped
     ports:
-      - "${MONGO_PORT:-27017}:27017"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${MONGO_PORT:-27017}:27017"
     volumes:
       - mongo-data:/data/db
     environment:
@@ -107,8 +107,8 @@ services:
     volumes:
       - minio-data:/data
     ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${MINIO_PORT:-9000}:9000"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -176,7 +176,7 @@ services:
       OCR_URL: ${OCR_URL:-http://ocr:8000}
       SERVICE_API_KEY: ${SERVICE_API_KEY:-change-me-service-key}
     ports:
-      - "${INGESTION_PORT:-8001}:8000"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${INGESTION_PORT:-8001}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
       interval: 15s
@@ -199,7 +199,7 @@ services:
       OCR_LANGUAGES: ${OCR_LANGUAGES:-fra+eng}
       SERVICE_API_KEY: ${SERVICE_API_KEY:-change-me-service-key}
     ports:
-      - "${OCR_PORT:-8002}:8000"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${OCR_PORT:-8002}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
       interval: 15s
@@ -226,7 +226,7 @@ services:
     volumes:
       - whisper-data:/models
     ports:
-      - "${TRANSCRIPTION_PORT:-8003}:8000"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${TRANSCRIPTION_PORT:-8003}:8000"
     tmpfs:
       - /tmp:size=1g
     healthcheck:
@@ -250,7 +250,7 @@ services:
       PORT: "3000"
       MCP_AUTH_DISABLED: "true"
     ports:
-      - "${MCP_CHARTS_PORT:-8010}:3000"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${MCP_CHARTS_PORT:-8010}:3000"
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -269,7 +269,7 @@ services:
       PORT: "3000"
       MCP_AUTH_DISABLED: "true"
     ports:
-      - "${MCP_DOCX_PORT:-8011}:3000"
+      - "${SERVICES_BIND_ADDRESS:-127.0.0.1}:${MCP_DOCX_PORT:-8011}:3000"
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
