@@ -91,8 +91,8 @@ clean: ## Stop and remove volumes (destroys local data)
 rebuild: ## Rebuild all images from scratch
 	$(COMPOSE) build --no-cache
 
-seed: ## Ingest the sample Cameroon corpus into the KB
-	./scripts/seed.sh
+seed: ## Ingest the sample Cameroon corpus into the KB (project-authored, CC BY 4.0)
+	./scripts/seed.sh --rights open-licence
 
 hooks: ## Install the git hooks (pre-push branch guard)
 	./scripts/install-git-hooks.sh

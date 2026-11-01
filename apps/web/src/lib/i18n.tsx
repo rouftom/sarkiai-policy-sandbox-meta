@@ -1509,6 +1509,15 @@ const en = {
   'knowledge.vectorise.country': 'Country',
   'knowledge.vectorise.jurisdiction': 'Jurisdiction',
   'knowledge.vectorise.docType': 'Document type',
+  'knowledge.rights.label': 'Reuse rights',
+  'knowledge.rights.official-text': 'Official text',
+  'knowledge.rights.open-licence': 'Open licence',
+  'knowledge.rights.quotation-only': 'Quotation only',
+  'knowledge.rights.to-confirm': 'To confirm',
+  'knowledge.vectorise.rightsHint':
+    'Only official texts and explicitly open-licensed documents can be ingested. Quotation-only and unconfirmed rights are refused.',
+  'knowledge.vectorise.rightsBlocked':
+    'This document’s rights do not allow full-text ingestion. Pick a publishable bucket or keep it out of the knowledge base.',
   'knowledge.vectorise.namespace': 'Namespace',
   'knowledge.vectorise.version': 'Version',
   'knowledge.vectorise.sourceUrl': 'Source URL',
@@ -3093,6 +3102,15 @@ const fr: Record<keyof typeof en, string> = {
   'knowledge.vectorise.country': 'Pays',
   'knowledge.vectorise.jurisdiction': 'Juridiction',
   'knowledge.vectorise.docType': 'Type de document',
+  'knowledge.rights.label': 'Droits de réutilisation',
+  'knowledge.rights.official-text': 'Texte officiel',
+  'knowledge.rights.open-licence': 'Licence ouverte',
+  'knowledge.rights.quotation-only': 'Citation seulement',
+  'knowledge.rights.to-confirm': 'À confirmer',
+  'knowledge.vectorise.rightsHint':
+    'Seuls les textes officiels et les documents sous licence ouverte explicite peuvent être ingérés. Les droits « citation seulement » et non confirmés sont refusés.',
+  'knowledge.vectorise.rightsBlocked':
+    'Les droits de ce document n’autorisent pas l’ingestion du texte intégral. Choisissez une catégorie publiable ou gardez-le hors de la base.',
   'knowledge.vectorise.namespace': 'Namespace',
   'knowledge.vectorise.version': 'Version',
   'knowledge.vectorise.sourceUrl': 'URL source',

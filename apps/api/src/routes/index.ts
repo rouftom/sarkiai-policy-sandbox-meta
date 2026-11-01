@@ -34,6 +34,14 @@ import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
 import { hasLanguage, institutionsForDomain, institutionsForDomains, type ProviderDescriptor } from '@sps/shared'
 import {
+  RIGHTS_BLOCKED_MESSAGE,
+  RightsBlockedError,
+  assertPublishableRights,
+  corpusRightsSchema,
+  isPublishableRights,
+  normalizeCorpusRights,
+} from '@sps/shared'
+import {
   READINESS_DIMENSIONS,
   type DocType,
   type Domain,
@@ -68,6 +76,29 @@ import { registerVoiceRoutes } from '../voice-routes.js'
 const engine = createEngine()
 const ingestion = new IngestionClient({ baseUrl: config.ingestion.baseUrl, apiKey: config.ingestion.apiKey })
 const knowledge: AtlasIngestor = createKnowledgeIngestor()
+
+/**
+ * Refuse a document whose manifest rights do not allow full-text storage.
+ * Returns true when the reply has already been sent. Missing rights normalise
+ * to `to-confirm`, so a caller that forgets the field is refused too.
+ */
+function refuseRestrictedRights(rights: unknown, reply: FastifyReply): boolean {
+  if (isPublishableRights(rights)) return false
+  reply.status(403).send({
+    error: RIGHTS_BLOCKED_MESSAGE,
+    rights: normalizeCorpusRights(rights),
+  })
+  return true
+}
+
+/** Map an ingestion failure to the right HTTP status. */
+function sendIngestError(error: unknown, request: FastifyRequest, reply: FastifyReply) {
+  if (error instanceof RightsBlockedError) {
+    return reply.status(403).send({ error: RIGHTS_BLOCKED_MESSAGE, rights: error.rights })
+  }
+  request.log.error(error)
+  return reply.status(502).send({ error: (error as Error).message })
+}
 
 const whatsapp = new WhatsAppClient({
   version: config.whatsapp.version,
@@ -1046,6 +1077,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         country: z.string().min(2).max(2).or(z.literal('global')),
         jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
         docType: z.string().min(1).default('policy'),
+        rights: corpusRightsSchema.default('to-confirm'),
         namespace: z.string().max(80).optional(),
         version: z.string().max(80).optional(),
         sourceUrl: z.string().url().optional(),
@@ -1054,13 +1086,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (refuseRestrictedRights(body.data.rights, reply)) return reply
     try {
       const result = await knowledge.ingest({ ...body.data, docType: body.data.docType as DocType })
       if (!result.ok) return reply.status(422).send(result)
       return result
     } catch (error) {
-      request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return sendIngestError(error, request, reply)
     }
   })
 
@@ -1082,12 +1114,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         country: z.string().min(2).max(2).or(z.literal('global')),
         jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
         docType: z.string().min(1).default('policy'),
+        rights: corpusRightsSchema.default('to-confirm'),
         namespace: z.string().max(80).optional(),
         version: z.string().max(80).optional(),
         sourceUrl: z.string().url().optional(),
       })
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
     const bytes = Buffer.from(body.data.contentBase64, 'base64')
     let text: string
@@ -1116,6 +1150,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         country: body.data.country,
         jurisdiction: body.data.jurisdiction,
         docType: body.data.docType as DocType,
+        rights: body.data.rights,
         ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
         ...(body.data.version ? { version: body.data.version } : {}),
         ...(body.data.sourceUrl ? { sourceUrl: body.data.sourceUrl } : {}),
@@ -1123,8 +1158,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       if (!result.ok) return reply.status(422).send(result)
       return result
     } catch (error) {
-      request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return sendIngestError(error, request, reply)
     }
   })
 
@@ -1164,6 +1198,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * sovereign modes keep the service (Qdrant + bge-m3).
    */
   async function ingestText(input: Parameters<IngestionClient['ingestText']>[0]) {
+    // Defense in depth: callers already refuse restricted rights, and the
+    // Atlas ingestor checks again before it writes anything.
+    assertPublishableRights(input.rights, input.filename)
     if (engine.retrievalBackend === 'atlas') {
       const result = await knowledge.ingest({
         text: input.text,
@@ -1171,6 +1208,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         country: input.country,
         jurisdiction: input.jurisdiction,
         docType: input.docType,
+        rights: input.rights,
         ...(input.namespace ? { namespace: input.namespace } : {}),
         ...(input.version ? { version: input.version } : {}),
         ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
@@ -1199,12 +1237,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         country: z.string().length(2).or(z.literal('global')),
         jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
         docType: z.string().default('policy'),
+        rights: corpusRightsSchema.default('to-confirm'),
         namespace: z.string().optional(),
         version: z.string().optional(),
         sourceUrl: z.string().url().optional(),
       })
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
     const result = await ingestText({ ...body.data, docType: body.data.docType as DocType })
     return result
@@ -2209,11 +2249,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         country: z.string().length(2).or(z.literal('global')),
         jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
         docType: z.string().default('regulation'),
+        /** Gazette pages are official texts; a caller may still send a stricter bucket. */
+        rights: corpusRightsSchema.default('official-text'),
         namespace: z.string().optional(),
         version: z.string().optional(),
       })
       .safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
     const chunks = toKbChunks(body.data.page, {
       country: body.data.country,
@@ -2235,6 +2278,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         country: body.data.country,
         jurisdiction: body.data.jurisdiction,
         docType: body.data.docType as DocType,
+        rights: body.data.rights,
         ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
         ...(body.data.version ? { version: body.data.version } : {}),
         ...(sourceUrl ? { sourceUrl } : {}),

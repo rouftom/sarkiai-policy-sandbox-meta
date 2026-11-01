@@ -32,7 +32,7 @@ The ingestion service creates the Qdrant collection + payload indexes on
 startup. Then ingest the Cameroon corpus:
 
 ```bash
-./scripts/seed.sh --api https://api.policy-sandbox.example --country cm
+./scripts/seed.sh --api https://api.policy-sandbox.example --country cm --rights open-licence
 ```
 
 ## 4. Fine-tuning (optional, sandbox credits)
