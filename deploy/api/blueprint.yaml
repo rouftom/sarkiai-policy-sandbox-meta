@@ -113,3 +113,17 @@ services:
         sync: false
       - key: TURNSTILE_HOSTNAMES
         sync: false
+
+      # ── request budgets ────────────────────────────────────────────────────
+      # Per-caller rate limiting. The demo runs one instance; a burst of console
+      # polls stays far below the global cap, and the model routes (readiness,
+      # scenarios, chat, ingestion) have their own tighter budget. Raise these
+      # if a legitimate workflow ever hits 429 (Retry-After says for how long).
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_WINDOW_MS
+        value: "60000"
+      - key: RATE_LIMIT_MAX
+        value: "240"
+      - key: RATE_LIMIT_EXPENSIVE_MAX
+        value: "20"

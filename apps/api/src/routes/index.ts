@@ -61,6 +61,7 @@ import { mailConfigured, mailFrom, sendNotificationEmail } from '../mailer.js'
 import { buildReadinessReport } from '../readiness-report.js'
 import { defaultChatModel } from '@sps/agents'
 import { auth } from '../auth.js'
+import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
 
 const engine = createEngine()
@@ -349,6 +350,47 @@ function isPublicRoute(method: string, path: string): boolean {
   return false
 }
 
+/**
+ * Routes that spend model credits or hold a connection for a long job. They get
+ * a tighter budget than the rest of the API, so one console action cannot
+ * monopolise the single instance.
+ */
+const EXPENSIVE_ROUTES = new Set([
+  'POST /v1/agents/ask',
+  'POST /v1/agents/ask/stream',
+  'POST /v1/agents/route',
+  'POST /v1/gazette/analyze',
+  'POST /v1/gazette/ingest',
+  'POST /v1/voice/transcribe',
+  'POST /v1/voice/correct',
+  'POST /v1/kb/ingest',
+  'POST /v1/kb/ingest/file',
+  'POST /v1/kb/ingest/text',
+  'POST /v1/kb/documents/images',
+  'POST /v1/readiness/report',
+  'POST /v1/readiness/stream',
+  'POST /v1/readiness/whatif',
+  'POST /v1/readiness/runs/:id/resume',
+  'POST /v1/readiness/runs/:id/report',
+  'POST /v1/readiness/runs/:id/localize',
+  'POST /v1/scenarios/run',
+  'POST /v1/scenarios/start',
+  'POST /v1/scenarios/:runId/next',
+  'POST /v1/scenarios/runs/:runId/resume',
+])
+
+function isExpensiveRoute(method: string, url: string): boolean {
+  return EXPENSIVE_ROUTES.has(`${method} ${url}`)
+}
+
+/** Counters for the authenticated surface; see `config.rateLimit`. */
+const limiter = new RateLimiter()
+const API_RULE: RateLimitRule = { max: config.rateLimit.max, windowMs: config.rateLimit.windowMs }
+const EXPENSIVE_RULE: RateLimitRule = {
+  max: config.rateLimit.expensiveMax,
+  windowMs: config.rateLimit.windowMs,
+}
+
 /** The Bearer guard ran for this route, so the operator is present. */
 function operatorOf(request: FastifyRequest) {
   if (!request.operator) throw new Error('Operator missing after the auth guard.')
@@ -566,6 +608,25 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
     request.operator = operator
     enterUsageContext({ operator: operator.email, route: request.routeOptions.url ?? path })
+
+    // Caller budgets: one wide cap for the API, a tighter one for the routes
+    // that spend credits. `RATE_LIMIT_ENABLED=false` removes both (see config).
+    if (config.rateLimit.enabled) {
+      const route = request.routeOptions.url ?? path
+      const expensive = isExpensiveRoute(request.method, route)
+      const verdict = limiter.take(
+        expensive ? EXPENSIVE_RULE : API_RULE,
+        `${expensive ? 'expensive' : 'api'}:${operator.email}`,
+      )
+      reply.headers(rateLimitHeaders(verdict))
+      if (!verdict.allowed) {
+        return reply.status(429).send({
+          error: 'rate_limited',
+          message: 'Too many requests. Slow down and try again.',
+          retryAfter: verdict.retryAfter,
+        })
+      }
+    }
   })
 
   // Announce the active provider in the audit chain (no-op when unchanged).

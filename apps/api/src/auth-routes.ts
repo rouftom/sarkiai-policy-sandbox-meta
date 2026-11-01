@@ -12,7 +12,9 @@ import { z, ZodError } from 'zod'
 import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
+import { config } from './config.js'
 import { MailError, sendEmailVerification, sendInvitation, sendPasswordReset } from './mailer.js'
+import { RateLimiter, type RateLimitRule } from './rate-limit.js'
 import { turnstileConfig, verifyTurnstile } from './turnstile.js'
 
 function bearer(request: FastifyRequest): string | undefined {
@@ -62,7 +64,13 @@ const signupInput = z.object({
   password: z.string().min(12).max(200),
 })
 
-function failure(reply: { status: (code: number) => { send: (body: unknown) => unknown } }, error: unknown) {
+function failure(
+  reply: {
+    status: (code: number) => { send: (body: unknown) => unknown }
+    header: (name: string, value: string) => unknown
+  },
+  error: unknown,
+) {
   if (error instanceof ZodError) {
     return reply.status(400).send({ error: 'invalid_request', message: 'Invalid request body.' })
   }
@@ -84,9 +92,31 @@ function failure(reply: { status: (code: number) => { send: (body: unknown) => u
               : error.code === 'already_initialized' || error.code === 'email_taken'
                 ? 409
                 : 400
+    if (error.retryAfter) reply.header('Retry-After', String(error.retryAfter))
     return reply.status(status).send({ error: error.code, message: error.message })
   }
   return reply.status(500).send({ error: 'auth_failed', message: (error as Error).message })
+}
+
+/**
+ * One limiter for every public auth screen: same windows as before, now bounded
+ * and pruned (an attacker rotating addresses no longer grows the process).
+ */
+const attempts = new RateLimiter()
+
+const SETUP_RULE: RateLimitRule = { max: 5, windowMs: 15 * 60_000 }
+const SIGNUP_RULE: RateLimitRule = { max: 6, windowMs: 15 * 60_000 }
+const RESEND_RULE: RateLimitRule = { max: 5, windowMs: 15 * 60_000 }
+const FORGOT_RULE: RateLimitRule = { max: 5, windowMs: 15 * 60_000 }
+/** Sign-in was limited per address only: rotating e-mails skipped every cap. */
+const LOGIN_IP_RULE: RateLimitRule = { max: 20, windowMs: 15 * 60_000 }
+const RESET_RULE: RateLimitRule = { max: 10, windowMs: 15 * 60_000 }
+
+/** Counts one attempt and raises the same 429 the auth surface always returned. */
+function limit(rule: RateLimitRule, key: string, message: string): void {
+  if (!config.rateLimit.enabled) return
+  const verdict = attempts.take(rule, key)
+  if (!verdict.allowed) throw new AuthError('rate_limited', message, verdict.retryAfter)
 }
 
 /** Best-effort audit trail: never block a sign-in because Mongo is down. */
@@ -106,21 +136,8 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   // ── One-time root setup ───────────────────────────────────────────────────
   // No operator exists until someone completes this screen; the account is
   // created with a random password and mailed through Resend.
-  const setupAttempts = new Map<string, { count: number; resetAt: number }>()
-  const SETUP_WINDOW_MS = 15 * 60 * 1000
-  const SETUP_MAX_ATTEMPTS = 5
-
   function throttleSetup(ip: string): void {
-    const now = Date.now()
-    const entry = setupAttempts.get(ip)
-    if (!entry || entry.resetAt < now) {
-      setupAttempts.set(ip, { count: 1, resetAt: now + SETUP_WINDOW_MS })
-      return
-    }
-    entry.count += 1
-    if (entry.count > SETUP_MAX_ATTEMPTS) {
-      throw new AuthError('rate_limited', 'Too many setup attempts, try again later.')
-    }
+    limit(SETUP_RULE, `setup:${ip}`, 'Too many setup attempts, try again later.')
   }
 
   app.get('/v1/auth/setup', async () => ({
@@ -138,21 +155,8 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   // ── Public sign-up (cloud demo only) ──────────────────────────────────────
   // The judge creates an account with their own password, then enrols TOTP:
   // no session is issued before the second factor exists.
-  const signupAttempts = new Map<string, { count: number; resetAt: number }>()
-  const SIGNUP_WINDOW_MS = 15 * 60 * 1000
-  const SIGNUP_MAX_ATTEMPTS = 6
-
   function throttleSignup(ip: string): void {
-    const now = Date.now()
-    const entry = signupAttempts.get(ip)
-    if (!entry || entry.resetAt < now) {
-      signupAttempts.set(ip, { count: 1, resetAt: now + SIGNUP_WINDOW_MS })
-      return
-    }
-    entry.count += 1
-    if (entry.count > SIGNUP_MAX_ATTEMPTS) {
-      throw new AuthError('rate_limited', 'Too many sign-up attempts, try again later.')
-    }
+    limit(SIGNUP_RULE, `signup:${ip}`, 'Too many sign-up attempts, try again later.')
   }
 
   app.post('/v1/auth/signup', async (request, reply) => {
@@ -200,10 +204,6 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     })
   }
 
-  const resendAttempts = new Map<string, { count: number; resetAt: number }>()
-  const RESEND_WINDOW_MS = 15 * 60 * 1000
-  const RESEND_MAX_ATTEMPTS = 5
-
   app.post('/v1/auth/email/verify', async (request, reply) => {
     try {
       const body = z.object({ token: z.string().min(10).max(4096) }).parse(request.body)
@@ -217,13 +217,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/email/resend', async (request, reply) => {
     try {
-      const now = Date.now()
-      const entry = resendAttempts.get(request.ip)
-      if (!entry || entry.resetAt < now) {
-        resendAttempts.set(request.ip, { count: 1, resetAt: now + RESEND_WINDOW_MS })
-      } else if (++entry.count > RESEND_MAX_ATTEMPTS) {
-        throw new AuthError('rate_limited', 'Too many requests, try again later.')
-      }
+      limit(RESEND_RULE, `resend:${request.ip}`, 'Too many requests, try again later.')
       const body = forgotInput.parse(request.body)
       try {
         await sendVerificationTo(body.email.trim().toLowerCase())
@@ -241,21 +235,8 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   // Requesting a link always answers 200, even for an unknown address: the
   // console must not become an account-enumeration oracle. The link is signed
   // and single-use; the route throttles by IP.
-  const forgotAttempts = new Map<string, { count: number; resetAt: number }>()
-  const FORGOT_WINDOW_MS = 15 * 60 * 1000
-  const FORGOT_MAX_ATTEMPTS = 5
-
   function throttleForgot(ip: string): void {
-    const now = Date.now()
-    const entry = forgotAttempts.get(ip)
-    if (!entry || entry.resetAt < now) {
-      forgotAttempts.set(ip, { count: 1, resetAt: now + FORGOT_WINDOW_MS })
-      return
-    }
-    entry.count += 1
-    if (entry.count > FORGOT_MAX_ATTEMPTS) {
-      throw new AuthError('rate_limited', 'Too many reset requests, try again later.')
-    }
+    limit(FORGOT_RULE, `forgot:${ip}`, 'Too many reset requests, try again later.')
   }
 
   app.post('/v1/auth/password/forgot', async (request, reply) => {
@@ -298,6 +279,8 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/password/reset', async (request, reply) => {
     try {
+      // The token is single-use, but nothing stopped an unlimited guessing loop.
+      limit(RESET_RULE, `reset:${request.ip}`, 'Too many reset attempts, try again later.')
       const body = resetInput.parse(request.body)
       const operator = await auth.resetPassword(body.token, body.password)
       await record(operator.email, 'auth.password_reset', undefined, operator.email)
@@ -357,6 +340,9 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   app.post('/v1/auth/login', async (request, reply) => {
     let email = 'unknown'
     try {
+      // Per-IP cap on top of the per-address one in AuthService: rotating
+      // e-mails used to bypass the only existing counter.
+      limit(LOGIN_IP_RULE, `login-ip:${request.ip}`, 'Too many sign-in attempts, try again later.')
       const body = credentials.parse(request.body)
       email = body.email
       const result = await auth.login(body.email, body.password)
