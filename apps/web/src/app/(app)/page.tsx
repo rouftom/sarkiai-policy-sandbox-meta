@@ -19,7 +19,7 @@ import { useAuth } from '@/lib/auth'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { useRefreshOnFocus } from '@/lib/use-refresh-on-focus'
-import { ASSISTANT_FINISHED, MODEL_CHANGED, api, authApi, knowledgeApi, type AuditEventDto, type KbDocumentDto, type KbStatusDto, type ProviderDto } from '@/lib/api'
+import { ASSISTANT_FINISHED, MODEL_CHANGED, api, authApi, knowledgeApi, type AuditEventDto, type KbStatusDto, type ProviderDto } from '@/lib/api'
 import { actionCategory, auditActorLabel, AUDIT_ACTION_KEYS, humaniseAction } from '@/lib/audit-labels'
 
 function relativeTime(value: string, locale: string): string {
@@ -33,24 +33,28 @@ function relativeTime(value: string, locale: string): string {
   return formatter.format(-Math.round(hours / 24), 'day')
 }
 
-/** The API caps the audit feed at 500 records: enough for a full seven-day chart. */
-const AUDIT_PAGE = 500
+/** The recent list shows eight rows; the charts come from the server. */
+const AUDIT_RECENT = 8
+const AUDIT_DAYS = 7
 
-/** The last seven days, oldest first, with the number of audit records on each. */
-function lastSevenDays(events: AuditEventDto[]): Array<{ key: string; day: Date; count: number }> {
+/** Local midnight, `days - 1` days ago, as the server's window start. */
+function auditWindow(days: number): { tz: string; from: string } {
+  const today = new Date()
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1))
+  return { tz: Intl.DateTimeFormat().resolvedOptions().timeZone, from: start.toISOString() }
+}
+
+/** Fill the seven local day slots, oldest first, with the server's exact counts. */
+function fillDays(rows: Array<{ day: string; count: number }>): Array<{ key: string; day: Date; count: number }> {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const days = Array.from({ length: 7 }, (_, index) => {
+  const counts = new Map(rows.map((row) => [row.day, row.count]))
+  return Array.from({ length: AUDIT_DAYS }, (_, index) => {
     const day = new Date(today)
-    day.setDate(today.getDate() - (6 - index))
-    return { key: day.toDateString(), day, count: 0 }
+    day.setDate(today.getDate() - (AUDIT_DAYS - 1 - index))
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+    return { key, day, count: counts.get(key) ?? 0 }
   })
-  for (const event of events) {
-    const at = new Date(event.ts)
-    const slot = days.find((entry) => entry.key === at.toDateString())
-    if (slot) slot.count += 1
-  }
-  return days
 }
 
 /** Loading placeholder for a KPI card: two shimmering lines. */
@@ -93,8 +97,10 @@ export default function OverviewPage() {
   const { operator } = useAuth()
   const { country, domain } = useWorkspace()
   const [status, setStatus] = React.useState<KbStatusDto | null>(null)
-  const [documents, setDocuments] = React.useState<KbDocumentDto[] | null>(null)
   const [events, setEvents] = React.useState<AuditEventDto[]>([])
+  const [auditTotal, setAuditTotal] = React.useState(0)
+  const [auditDays, setAuditDays] = React.useState<Array<{ day: string; count: number }>>([])
+  const [auditActions, setAuditActions] = React.useState<Array<{ action: string; count: number }>>([])
   const [chain, setChain] = React.useState<{ valid: boolean; brokenAt?: string } | null>(null)
   const [auditState, setAuditState] = React.useState<'loading' | 'ready' | 'unavailable'>('loading')
   const [provider, setProvider] = React.useState<ProviderDto | null>(null)
@@ -118,23 +124,30 @@ export default function OverviewPage() {
   const load = React.useCallback(async () => {
     const ticket = ++generation.current
     const current = () => ticket === generation.current
-    const [providerResult, modelsResult, statusResult, documentsResult, auditResult] = await Promise.allSettled([
+    const window = auditWindow(AUDIT_DAYS)
+    const [providerResult, modelsResult, statusResult, auditResult] = await Promise.allSettled([
       api.provider(),
       api.models(),
       knowledgeApi.status(),
-      knowledgeApi.documents({ limit: 200 }),
-      authApi.auditEvents(AUDIT_PAGE),
+      authApi.auditEvents(AUDIT_RECENT, { stats: AUDIT_DAYS, tz: window.tz, from: window.from }),
     ])
     if (!current()) return
     if (providerResult.status === 'fulfilled') setProvider(providerResult.value)
     if (modelsResult.status === 'fulfilled') setModel(modelsResult.value.selected)
     if (statusResult.status === 'fulfilled') setStatus(statusResult.value)
-    setDocuments(documentsResult.status === 'fulfilled' ? documentsResult.value.documents : [])
     if (auditResult.status === 'fulfilled') {
       setEvents(auditResult.value.events)
+      setAuditTotal(auditResult.value.total)
+      setAuditDays(auditResult.value.days ?? [])
+      setAuditActions(auditResult.value.actions ?? [])
       setChain(auditResult.value.chain)
       setAuditState('ready')
     } else {
+      setEvents([])
+      setAuditTotal(0)
+      setAuditDays([])
+      setAuditActions([])
+      setChain(null)
       setAuditState('unavailable')
     }
   }, [])
@@ -173,12 +186,12 @@ export default function OverviewPage() {
   ]
 
   const corpus = status?.totals
-  const figures = (documents ?? []).reduce((sum, document) => sum + (document.images?.length ?? 0), 0)
-  const days = lastSevenDays(events)
+  const figures = corpus?.figures ?? 0
+  const days = fillDays(auditDays)
   const categories = Object.entries(
-    events.reduce<Record<string, number>>((acc, event) => {
-      const key = actionCategory(event.action)
-      acc[key] = (acc[key] ?? 0) + 1
+    auditActions.reduce<Record<string, number>>((acc, row) => {
+      const key = actionCategory(row.action)
+      acc[key] = (acc[key] ?? 0) + row.count
       return acc
     }, {}),
   )
@@ -236,7 +249,7 @@ export default function OverviewPage() {
                   {chain?.valid ? t('overview.chainOk') : t('overview.chainBroken')}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  {t('overview.kpi.records')}: {events.length}
+                  {t('overview.kpi.records')}: {auditTotal}
                 </p>
               </>
             )}
@@ -322,7 +335,7 @@ export default function OverviewPage() {
             <p>{t('overview.synthesis.corpus', { documents: corpus?.documents ?? 0, chunks: corpus?.activeChunks ?? 0, figures })}</p>
             <p>
               {auditState === 'ready'
-                ? t('overview.synthesis.audit', { records: events.length, status: chain?.valid ? t('overview.chainOk') : t('overview.chainBroken') })
+                ? t('overview.synthesis.audit', { records: auditTotal, status: chain?.valid ? t('overview.chainOk') : t('overview.chainBroken') })
                 : t('audit.unavailable')}
             </p>
             <p className="text-muted-foreground">{t('overview.synthesis.last', { date: lastIngest })}</p>

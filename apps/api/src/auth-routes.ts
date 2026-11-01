@@ -445,17 +445,68 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     return { preferences }
   })
 
-  // ── Audit feed (console page) ─────────────────────────────────────────────
+  // ── Audit feed (console page + dashboard) ─────────────────────────────────
+  /**
+   * One endpoint for two readers:
+   *   - the audit page asks for a page (`limit` + `offset`, optional `q`) and
+   *     gets the exact total for its pagination;
+   *   - the dashboard asks for the recent rows and, with `stats=7`, the exact
+   *     total plus the seven-day breakdown used by its charts.
+   * Every query is per operator and served by the `audit_user_ts` index.
+   */
   app.get('/v1/audit/events', async (request, reply) => {
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
-    const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(500).default(50) }).parse(request.query)
+    const query = z
+      .object({
+        limit: z.coerce.number().int().min(1).max(500).default(50),
+        offset: z.coerce.number().int().min(0).max(100_000).default(0),
+        q: z.string().trim().max(120).optional(),
+        stats: z.coerce.number().int().min(1).max(31).optional(),
+        tz: z.string().trim().max(64).optional(),
+        from: z.string().trim().max(40).optional(),
+      })
+      .safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    const { limit, offset, q, stats, tz, from } = query.data
+
+    if (stats !== undefined) {
+      if (!tz || !from) return reply.status(400).send({ error: 'stats_requires_tz_and_from' })
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: tz })
+      } catch {
+        return reply.status(400).send({ error: 'invalid_timezone' })
+      }
+      const fromMs = Date.parse(from)
+      const now = Date.now()
+      if (Number.isNaN(fromMs) || fromMs > now || now - fromMs > (stats + 1) * 86_400_000) {
+        return reply.status(400).send({ error: 'invalid_window' })
+      }
+    }
+
     try {
-      const [events, chain] = await Promise.all([
-        audit.listAudit(limit, operator.email),
-        audit.verifyChain(),
+      const [events, chain, total, rows] = await Promise.all([
+        audit.listAudit(limit, operator.email, offset, q),
+        audit.verifyChainCached(),
+        audit.countAudit(operator.email, q),
+        stats !== undefined && tz && from ? audit.auditWindow(operator.email, from, tz) : Promise.resolve([]),
       ])
-      return { events, chain }
+      if (stats === undefined) return { events, chain, total }
+      const days = new Map<string, number>()
+      const actions = new Map<string, number>()
+      for (const row of rows) {
+        days.set(row.day, (days.get(row.day) ?? 0) + row.count)
+        actions.set(row.action, (actions.get(row.action) ?? 0) + row.count)
+      }
+      return {
+        events,
+        chain,
+        total,
+        days: [...days]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([day, count]) => ({ day, count })),
+        actions: [...actions].sort((a, b) => b[1] - a[1]).map(([action, count]) => ({ action, count })),
+      }
     } catch (error) {
       return reply.status(503).send({ error: 'audit_unavailable', message: (error as Error).message })
     }

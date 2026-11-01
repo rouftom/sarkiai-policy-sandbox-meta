@@ -72,4 +72,56 @@ describe.skipIf(!mongoUri)('AuditService (integration: MongoDB)', () => {
       await audit.close()
     }
   })
+
+  test('counts, pages and windows the feed exactly', async () => {
+    const audit = new AuditService({ mongodbUri: mongoUri!, dbName: `sps_test_read_${Date.now()}` })
+    try {
+      for (let index = 0; index < 7; index += 1) {
+        await audit.logAction({
+          actor: 'agent-a',
+          userId: 'ada@sarkiai.dev',
+          action: index % 2 === 0 ? 'readiness.run' : 'scenario.run',
+          lens: 'hybrid',
+          runId: 'read-run',
+        })
+      }
+      for (let index = 0; index < 3; index += 1) {
+        await audit.logAction({
+          actor: 'agent-b',
+          userId: 'bob@sarkiai.dev',
+          action: 'readiness.run',
+          lens: 'hybrid',
+          runId: 'read-run',
+        })
+      }
+
+      // Exact totals, never capped by the page size.
+      expect(await audit.countAudit('ada@sarkiai.dev')).toBe(7)
+      expect(await audit.countAudit('bob@sarkiai.dev')).toBe(3)
+      expect(await audit.countAudit()).toBe(10)
+
+      // Server-side paging: contiguous pages without overlap.
+      const first = await audit.listAudit(3, 'ada@sarkiai.dev', 0)
+      const second = await audit.listAudit(3, 'ada@sarkiai.dev', 3)
+      expect(first).toHaveLength(3)
+      expect(second).toHaveLength(3)
+      expect(second.filter((record) => first.some((row) => row.id === record.id))).toHaveLength(0)
+
+      // Search is on the stored fields and drives both the page and its total.
+      expect(await audit.countAudit('ada@sarkiai.dev', 'scenario')).toBe(3)
+      const matches = await audit.listAudit(50, 'ada@sarkiai.dev', 0, 'scenario')
+      expect(matches).toHaveLength(3)
+      expect(matches.every((record) => record.action === 'scenario.run')).toBe(true)
+
+      // The seven-day window is an exact per-action breakdown for one operator.
+      const rows = await audit.auditWindow('ada@sarkiai.dev', '1970-01-01T00:00:00.000Z', 'UTC')
+      expect(rows.reduce((sum, row) => sum + row.count, 0)).toBe(7)
+
+      // The cached verdict is the same answer as the full check.
+      expect((await audit.verifyChainCached()).valid).toBe(true)
+      expect((await audit.verifyChain()).valid).toBe(true)
+    } finally {
+      await audit.close()
+    }
+  })
 })

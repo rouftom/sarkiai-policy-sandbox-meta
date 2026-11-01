@@ -82,6 +82,18 @@ export class AuditService {
    * chain, which the verifier then reports as broken.
    */
   private appendQueue: Promise<unknown> = Promise.resolve()
+  /**
+   * The compound index that serves the console's reads: per-operator count,
+   * newest-first page and seven-day window. Created once per process, on the
+   * first read, so a cold start never pays for it twice.
+   */
+  private indexesReady: Promise<void> | null = null
+  /**
+   * The chain verdict is O(all records). Records are append-only and every
+   * append moves the shared `head` document, so the cached verdict is only
+   * reused while that head is unchanged.
+   */
+  private chainCache: { head: string | null; verdict: ChainVerdict } | null = null
 
   constructor(private readonly config: AuditConfig) {
     this.auditCol = config.auditCollection ?? 'audit_logs'
@@ -203,17 +215,103 @@ export class AuditService {
   }
 
   /**
-   * Newest-first slice of the chain, for the console's audit page. Scoped to
-   * one operator: the collection holds every operator's records, and a shared
-   * audit screen must never show another operator's work. The chain itself is
-   * still verified end-to-end (hashes link records across operators).
+   * The index that makes the console's reads index scans instead of collection
+   * scans. A failure is logged once and never blocks the audit feed.
    */
-  async listAudit(limit = 50, userId?: string): Promise<AuditRecord[]> {
+  private async ensureIndexes(): Promise<void> {
+    if (!this.indexesReady) {
+      this.indexesReady = (async () => {
+        try {
+          const { audit } = await this.db()
+          await audit.createIndex({ userId: 1, ts: -1 }, { name: 'audit_user_ts' })
+        } catch (error) {
+          console.warn('[audit] audit_user_ts index unavailable; reads will be slower', error)
+        }
+      })()
+    }
+    return this.indexesReady
+  }
+
+  /** Per-operator scope plus the console's raw-field filter (`q`). */
+  private filterFor(userId?: string, q?: string): Document {
+    const filter: Document = userId ? { userId } : {}
+    const needle = q?.trim()
+    if (needle) {
+      const pattern = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+      filter.$or = [{ actor: pattern }, { action: pattern }, { target: pattern }, { userId: pattern }]
+    }
+    return filter
+  }
+
+  /**
+   * Newest-first slice of the chain, for the console's audit page and the
+   * dashboard's recent list. Scoped to one operator: the collection holds every
+   * operator's records, and a shared audit screen must never show another
+   * operator's work. The chain itself is still verified end-to-end (hashes link
+   * records across operators).
+   */
+  async listAudit(limit = 50, userId?: string, offset = 0, q?: string): Promise<AuditRecord[]> {
+    await this.ensureIndexes()
     const { audit } = await this.db()
     const size = Math.min(Math.max(limit, 1), 500)
-    const filter = userId ? { userId } : {}
-    const docs = await audit.find(filter).sort({ ts: -1 }).limit(size).toArray()
+    const skip = Math.max(offset, 0)
+    const docs = await audit.find(this.filterFor(userId, q)).sort({ ts: -1 }).skip(skip).limit(size).toArray()
     return docs as unknown as AuditRecord[]
+  }
+
+  /** Exact number of records the same filter selects, for pagination and KPIs. */
+  async countAudit(userId?: string, q?: string): Promise<number> {
+    await this.ensureIndexes()
+    const { audit } = await this.db()
+    return audit.countDocuments(this.filterFor(userId, q))
+  }
+
+  /**
+   * Exact seven-day breakdown for one operator: one row per (local day, action).
+   * The route folds these rows into the chart and the category bars; grouping
+   * server-side keeps the 500-event page out of the dashboard.
+   */
+  async auditWindow(
+    userId: string | undefined,
+    from: string,
+    timezone: string,
+  ): Promise<Array<{ day: string; action: string; count: number }>> {
+    await this.ensureIndexes()
+    const { audit } = await this.db()
+    const match: Document = { ts: { $gte: from } }
+    if (userId) match.userId = userId
+    const rows = await audit
+      .aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: {
+              day: { $dateToString: { format: '%Y-%m-%d', date: { $toDate: '$ts' }, timezone } },
+              action: '$action',
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $project: { _id: 0, day: '$_id.day', action: '$_id.action', count: 1 } },
+      ])
+      .toArray()
+    return rows.map((row) => ({ day: String(row.day), action: String(row.action), count: Number(row.count) }))
+  }
+
+  /**
+   * Cached chain verdict. Records are append-only and every append moves the
+   * shared `head` document, so an unchanged head means the cached verdict is
+   * still the answer. A direct edit that does not move the head is detected on
+   * the next append, not before.
+   */
+  async verifyChainCached(): Promise<ChainVerdict> {
+    const { head } = await this.db()
+    const current = await head.findOne({ _id: 'head' as never })
+    const hash = (current?.hash as string | null | undefined) ?? null
+    if (this.chainCache?.head === hash) return this.chainCache.verdict
+    const verdict = await this.verifyChain()
+    this.chainCache = { head: hash, verdict }
+    return verdict
   }
 
   /**
