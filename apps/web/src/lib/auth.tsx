@@ -39,7 +39,10 @@ interface AuthContextValue {
   /** Resolves to `null` when the address still has to be confirmed. */
   signIn: (email: string, password: string) => Promise<ChallengeDto | null>
   /** Public sign-up (cloud demo): creates the account, then waits for the confirmation link. */
-  signUp: (input: { firstName: string; lastName: string; email: string; password: string }) => Promise<VerificationDto>
+  signUp: (
+    input: { firstName: string; lastName: string; email: string; password: string },
+    turnstileToken?: string,
+  ) => Promise<VerificationDto>
   changePassword: (password: string) => Promise<ChallengeDto>
   startEnrollment: () => Promise<EnrollmentDto>
   confirmEnrollment: (code: string) => Promise<void>
@@ -149,8 +152,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   const signUp = React.useCallback(
-    async (input: { firstName: string; lastName: string; email: string; password: string }) => {
-      const result = await authApi.signup(input)
+    async (
+      input: { firstName: string; lastName: string; email: string; password: string },
+      turnstileToken?: string,
+    ) => {
+      const result = await authApi.signup(input, turnstileToken)
       setPending(null)
       setVerificationEmail(input.email)
       setEnrollment(null)

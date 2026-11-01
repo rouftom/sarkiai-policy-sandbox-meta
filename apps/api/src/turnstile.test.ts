@@ -120,6 +120,12 @@ describe('verifyTurnstile', () => {
     expect(await verifyTurnstile('token', 'password_reset')).toBe(true)
   })
 
+  test('accepts a sign-up token for the sign-up action', async () => {
+    configureCloud()
+    reply({ success: true, action: 'signup', hostname: 'console.example' })
+    expect(await verifyTurnstile('token', 'signup')).toBe(true)
+  })
+
   test('rejects a token minted for another action', async () => {
     configureCloud()
     reply({ success: true, action: 'signup', hostname: 'console.example' })

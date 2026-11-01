@@ -1363,8 +1363,12 @@ export const authApi = {
   captcha: () => request<CaptchaConfigDto>('/v1/auth/captcha'),
   setup: (body: { firstName: string; lastName: string; email: string }) =>
     request<SetupResultDto>('/v1/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
-  signup: (body: { firstName: string; lastName: string; email: string; password: string }) =>
-    request<VerificationDto>('/v1/auth/signup', { method: 'POST', body: JSON.stringify(body) }),
+  signup: (body: { firstName: string; lastName: string; email: string; password: string }, turnstileToken?: string) =>
+    request<VerificationDto>('/v1/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      ...(turnstileToken ? { headers: { 'x-turnstile-token': turnstileToken } } : {}),
+    }),
   login: (body: { email: string; password: string }) =>
     request<ChallengeDto>('/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   verifyEmail: (token: string) =>
