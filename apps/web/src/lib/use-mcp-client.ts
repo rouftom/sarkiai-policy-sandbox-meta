@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
 import type { ClientCapabilities } from '@modelcontextprotocol/sdk/types.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { readToken } from './session'
 import {
   type ClientCapabilitiesWithExtensions,
   UI_EXTENSION_CAPABILITIES,
@@ -49,7 +50,11 @@ async function getOrCreateMcpClient(serverName: string = 'xlab_3d_render'): Prom
       const proxyUrl = new URL('/api/mcp/proxy', window.location.origin)
       proxyUrl.searchParams.set('server', serverName)
 
-      const transport = new StreamableHTTPClientTransport(proxyUrl)
+      // The proxy only serves signed-in operators: send the console session.
+      const token = readToken()
+      const transport = new StreamableHTTPClientTransport(proxyUrl, {
+        requestInit: { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      })
 
       await client.connect(transport)
 

@@ -424,6 +424,21 @@ const EXPENSIVE_RULE: RateLimitRule = {
 const gate = new WorkGate({ perOperator: config.concurrency.perOperator, global: config.concurrency.global })
 const gateEnabled = config.concurrency.perOperator > 0 && config.concurrency.global > 0
 
+/**
+ * Actions that change shared state for every operator: the legal corpus the
+ * agents cite, the country registry, the shared address book and outbound
+ * messages. Sign-up can be open on a public deployment, so these stay with the
+ * administrators. Returns false after sending the 403.
+ */
+function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
+  if (request.operator?.role === 'admin') return true
+  void reply.status(403).send({
+    error: 'admin_only',
+    message: 'This action is reserved for administrators on this shared deployment.',
+  })
+  return false
+}
+
 /** The Bearer guard ran for this route, so the operator is present. */
 function operatorOf(request: FastifyRequest) {
   if (!request.operator) throw new Error('Operator missing after the auth guard.')
@@ -822,6 +837,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.post('/v1/kb/documents/active', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const body = z
       .object({ filename: z.string().min(1), active: z.boolean() })
@@ -838,6 +854,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Remove one document from the knowledge base: its passages, its figures and its metadata. */
   app.delete('/v1/kb/documents', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const query = z.object({ filename: z.string().min(1).max(300) }).safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
@@ -875,6 +892,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Document metadata: title, summary, and the fields propagated to its passages. */
   app.patch('/v1/kb/documents', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const body = z
       .object({
@@ -896,6 +914,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Edit one passage (re-embedded when its text changes) or retire / restore it. */
   app.patch('/v1/kb/chunks/:id', { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const { id } = request.params as { id: string }
     const body = z.object({ text: z.string().max(20_000).optional(), active: z.boolean().optional() }).safeParse(request.body)
@@ -912,6 +931,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Attach figures to a document: uploaded bytes, stored once, shown in the document's Media tab and in citations. */
   app.post('/v1/kb/documents/images', { bodyLimit: 40 * 1024 * 1024 }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const body = z
       .object({
@@ -945,6 +965,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Edit a figure's caption, alt text, tags or dimension. */
   app.patch('/v1/kb/images/:id', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const { id } = request.params as { id: string }
     const body = z
@@ -965,6 +986,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.delete('/v1/kb/images/:id', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const { id } = request.params as { id: string }
     const deleted = await knowledge.deleteImage(id)
@@ -974,6 +996,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Generate the reference figures (Meta Image, or a labelled sample) and attach them to existing documents. */
   app.post('/v1/kb/images/reference', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     try {
       return await seedReferenceImages(request.log)
@@ -999,6 +1022,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Create or repair the Atlas vector + BM25 indexes, on demand. */
   app.post('/v1/kb/indexes', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     try {
       const result = await knowledge.ensureIndexes()
@@ -1011,6 +1035,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Full-text ingestion: chunk → embed → upsert → ensure indexes. */
   app.post('/v1/kb/ingest/text', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') {
       return reply.status(409).send({ error: 'Direct ingestion is available in cloud mode (Atlas + Voyage).' })
     }
@@ -1046,6 +1071,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * a pointer to the Gazette screen instead of being stored empty.
    */
   app.post('/v1/kb/ingest/file', { bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     if (engine.retrievalBackend !== 'atlas') {
       return reply.status(409).send({ error: 'Direct ingestion is available in cloud mode (Atlas + Voyage).' })
     }
@@ -1165,6 +1191,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }
 
   app.post('/v1/kb/ingest', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const body = z
       .object({
         text: z.string().min(1),
@@ -2172,6 +2199,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // the ingestion service's structural chunker in charge; every zone heading and
   // the page-level source URL survive in the chunk text.
   app.post('/v1/gazette/ingest', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const body = z
       .object({
         page: z.custom<GazettePage>((value) => {
@@ -2444,6 +2472,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/whatsapp/webhook', async (request, reply) => {
     const signature = request.headers['x-hub-signature-256']
     const raw = request.rawBody ?? Buffer.from(JSON.stringify(request.body ?? {}))
+    // A cloud deployment never accepts an unsigned webhook: without the app
+    // secret, anyone could post forged events. A local run may still test it.
+    if (!config.whatsapp.appSecret && config.deployment.cloud) {
+      return reply.status(503).send({ error: 'webhook_secret_missing' })
+    }
     if (config.whatsapp.appSecret && !whatsapp.verifySignature(raw, typeof signature === 'string' ? signature : undefined)) {
       return reply.status(401).send({ error: 'invalid_signature' })
     }
@@ -2488,6 +2521,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   ])
 
   app.post('/v1/whatsapp/notify', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const parsed = notifySchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
@@ -2693,12 +2727,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   }
 
-  app.get('/v1/notifications/contacts', async () => {
+  app.get('/v1/notifications/contacts', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const contacts = await notificationContacts.list()
     return { contacts: contacts.map(contactDto) }
   })
 
   app.post('/v1/notifications/contacts', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const parsed = contactSchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
     const prepared = prepareContact(parsed.data)
@@ -2734,6 +2770,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.put('/v1/notifications/contacts/:id', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const { id } = z.object({ id: z.string().min(1).max(120) }).parse(request.params)
     const parsed = contactSchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
@@ -2775,6 +2812,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.delete('/v1/notifications/contacts/:id', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const { id } = z.object({ id: z.string().min(1).max(120) }).parse(request.params)
     const removed = await notificationContacts.remove(id)
     if (!removed) return reply.status(404).send({ error: 'not_found' })
@@ -2837,6 +2875,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.post('/v1/countries', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const parsed = countryBodySchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
@@ -2864,6 +2903,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.patch('/v1/countries/:code', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
     const parsed = countryPatchSchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
@@ -2885,6 +2925,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.put('/v1/countries/:code/sectors', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
     const parsed = z.object({ sectors: countrySectorsSchema }).safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
@@ -2906,6 +2947,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.delete('/v1/countries/:code', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
@@ -3142,6 +3184,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.post('/v1/notifications/whatsapp', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const parsed = whatsappSendSchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
     if (!whatsapp.configured) return reply.status(503).send({ error: 'whatsapp_not_configured' })
@@ -3267,6 +3310,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     })
 
   app.post('/v1/notifications/email', async (request, reply) => {
+    if (!requireAdmin(request, reply)) return reply
     const parsed = emailSendSchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
     if (!mailConfigured()) return reply.status(503).send({ error: 'mail_not_configured' })

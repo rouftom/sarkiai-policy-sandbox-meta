@@ -70,6 +70,12 @@ describe('root setup', () => {
     expect(first).toMatch(/\d/)
   })
 
+  test('an unreachable operator store is never treated as empty', async () => {
+    const auth = service({ mongodbUri: 'mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=500&connectTimeoutMS=500' })
+    expect(await auth.isEmpty()).toBe(false)
+    await expect(auth.createRoot({ firstName: 'Eve', lastName: 'Intruder', email: 'eve@example.org' })).rejects.toThrow(AuthError)
+  }, 20_000)
+
   test('a second root setup is refused', async () => {
     const auth = service()
     await invite(auth)
@@ -147,6 +153,18 @@ describe('operator sign-in', () => {
 
     const fourth = await auth.login(EMAIL, CHOSEN)
     await expect(auth.verify(fourth.challenge, backup)).rejects.toThrow(AuthError)
+  })
+
+  test('a TOTP code cannot be used twice', async () => {
+    const auth = service()
+    const { secret } = await onboard(auth)
+    const code = totpCode(secret)
+
+    const first = await auth.login(EMAIL, CHOSEN)
+    await auth.verify(first.challenge, code)
+
+    const second = await auth.login(EMAIL, CHOSEN)
+    await expect(auth.verify(second.challenge, code)).rejects.toThrow(AuthError)
   })
 
   test('rejects a wrong password and throttles repeated failures', async () => {

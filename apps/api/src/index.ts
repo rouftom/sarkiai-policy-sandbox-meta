@@ -9,7 +9,7 @@ import { prepareCloudStores } from './engine.js'
 import { auth } from './auth.js'
 import { config } from './config.js'
 import { resetDemoState } from './demo-reset.js'
-import { maintainAuditChain } from './audit-maintenance.js'
+import { maintainAuditChain, ensureAuditReadIndexes } from './audit-maintenance.js'
 import type { PublicOperator } from '@sps/auth'
 
 declare module 'fastify' {
@@ -148,6 +148,18 @@ async function main(): Promise<void> {
 
   // Before `auth.isEmpty()`: the console must see the store freshly emptied.
   await maybeResetOnBoot(app)
+
+  // After the optional reset, which drops `audit_logs` and its indexes: create
+  // the console's read index once at boot instead of on the first page read.
+  // Best-effort, like the lazy path: a failed index never blocks the API.
+  const auditIndexed = await ensureAuditReadIndexes({
+    uri: config.mongodb.uri,
+    dbName: config.mongodb.dbName,
+  })
+  app.log[auditIndexed ? 'info' : 'warn'](
+    { collection: 'audit_logs', index: 'audit_user_ts' },
+    auditIndexed ? 'audit read index ready' : 'audit read index unavailable; reads will be slower',
+  )
 
   // Cloud vector store only: create kb_chunks then its Atlas indexes. A failure
   // is logged, not fatal (the console still boots and the provider is visible).
