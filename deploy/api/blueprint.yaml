@@ -109,7 +109,7 @@ services:
       # check is off; an unreachable Cloudflare never blocks a reset request.
       - key: NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY
         sync: false
-      - key: CLOUDFLARE_TURNSITE_SITE_SECRET
+      - key: TURNSTILE_SECRET
         sync: false
       - key: TURNSTILE_HOSTNAMES
         sync: false

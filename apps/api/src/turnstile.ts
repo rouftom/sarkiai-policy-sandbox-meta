@@ -38,15 +38,22 @@ export function turnstileSiteKey(): string | null {
 }
 
 /**
+ * The widget secret.
+ *
+ * `TURNSTILE_SECRET` is the canonical name; `CLOUDFLARE_TURNSITE_SITE_SECRET`
+ * is the name this console has always used (and the one already deployed on
+ * the API host), so both are read and the canonical one wins.
+ */
+function turnstileSecret(): string {
+  return read('TURNSTILE_SECRET') || read('CLOUDFLARE_TURNSITE_SITE_SECRET')
+}
+
+/**
  * Whether a form must present a token: cloud or sovereign, with both
  * keys configured. Missing keys mean "off", never "block every request".
  */
 export function turnstileEnabled(): boolean {
-  return (
-    sandboxMode() !== 'local' &&
-    Boolean(read('CLOUDFLARE_TURNSITE_SITE_SECRET')) &&
-    Boolean(turnstileSiteKey())
-  )
+  return sandboxMode() !== 'local' && Boolean(turnstileSecret()) && Boolean(turnstileSiteKey())
 }
 
 export interface TurnstileConfig {
@@ -68,7 +75,7 @@ export async function verifyTurnstile(
   if (!turnstileEnabled()) return true
   if (typeof token !== 'string' || token.length === 0 || token.length > 2048) return false
 
-  const body = new URLSearchParams({ secret: read('CLOUDFLARE_TURNSITE_SITE_SECRET'), response: token })
+  const body = new URLSearchParams({ secret: turnstileSecret(), response: token })
   if (remoteIp) body.set('remoteip', remoteIp)
 
   try {
@@ -88,12 +95,16 @@ export async function verifyTurnstile(
       hostname?: string
     }
     if (result.success !== true) return false
-    if (result.action && result.action !== expectedAction) return false
+    // Cloudflare signs the surface into the token: a sign-up token must not
+    // unlock the reset form, and the other way round.
+    if (result.action !== expectedAction) return false
 
     const allowed = read('TURNSTILE_HOSTNAMES')
       .split(',')
       .map((hostname) => hostname.trim())
       .filter(Boolean)
+    // A configured allowlist pins the console's hostname; left empty it accepts
+    // whatever domain the widget itself allows.
     if (allowed.length > 0 && (!result.hostname || !allowed.includes(result.hostname))) return false
 
     return true

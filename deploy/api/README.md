@@ -27,8 +27,9 @@ Requirements for the host:
    | `MONGODB_URI` | database connection string (user with read and write on the application database) |
    | `WHATSAPP_*` | messaging provider app settings |
    | `APPROVAL_SECRET` | a random value, for example `openssl rand -hex 32` |
-   | `CLOUDFLARE_TURNSITE_SITE_SECRET` | Cloudflare Turnstile widget secret (optional) |
+   | `TURNSTILE_SECRET` | Cloudflare Turnstile widget secret (optional; `CLOUDFLARE_TURNSITE_SITE_SECRET` is still read) |
    | `NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` | the same widget's public site key (optional) |
+   | `TURNSTILE_HOSTNAMES` | console hostnames siteverify accepts, comma-separated (optional, but set it in production) |
 
 4. Bot protection (optional). The sign-up and password-reset forms ask for a
    Cloudflare Turnstile token when `SANDBOX_MODE` is `cloud` or `sovereign` and

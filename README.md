@@ -240,8 +240,9 @@ AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
 AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
 WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
 WEB_PUBLIC_URL_ALIASES=https://your-project.vercel.app  # optional, comma-separated
-CLOUDFLARE_TURNSITE_SITE_SECRET=...          # optional: reset-form human check
+TURNSTILE_SECRET=...                         # optional: human check on the auth forms
 NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY=... # the same widget's public key
+TURNSTILE_HOSTNAMES=your-console.example     # hostnames siteverify accepts
 ```
 
 Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators

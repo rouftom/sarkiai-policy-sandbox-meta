@@ -6,6 +6,7 @@ const KEYS = [
   'MODEL_API_KEY',
   'NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY',
   'CLOUDFLARE_TURNSITE_SITE_SECRET',
+  'TURNSTILE_SECRET',
   'TURNSTILE_HOSTNAMES',
 ] as const
 
@@ -130,6 +131,20 @@ describe('verifyTurnstile', () => {
     configureCloud()
     reply({ success: true, action: 'signup', hostname: 'console.example' })
     expect(await verifyTurnstile('token', 'password_reset')).toBe(false)
+  })
+
+  test('rejects a success answer that carries no action', async () => {
+    configureCloud()
+    reply({ success: true, hostname: 'console.example' })
+    expect(await verifyTurnstile('token', 'signup')).toBe(false)
+  })
+
+  test('accepts the canonical TURNSTILE_SECRET name', async () => {
+    process.env.SANDBOX_MODE = 'cloud'
+    process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY = 'site-key'
+    process.env.TURNSTILE_SECRET = 'canonical-secret'
+    reply({ success: true, action: 'signup', hostname: 'console.example' })
+    expect(await verifyTurnstile('token', 'signup')).toBe(true)
   })
 
   test('rejects an explicit Cloudflare failure', async () => {

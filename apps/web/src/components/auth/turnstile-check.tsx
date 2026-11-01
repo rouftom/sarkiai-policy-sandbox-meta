@@ -70,21 +70,33 @@ export function useTurnstileCheck(): TurnstileCheck {
 
 /** The widget itself, hidden until the API asks for it. */
 export function TurnstileWidget({ check, action }: { check: TurnstileCheck; action: TurnstileAction }) {
-  const { locale } = useI18n()
+  const { t, locale } = useI18n()
+  const [failed, setFailed] = React.useState(false)
   if (!check.required || !check.siteKey) return null
 
+  const fail = () => {
+    check.setToken(null)
+    setFailed(true)
+  }
+
   return (
-    <div className="flex justify-center">
+    <div className="flex flex-col items-center gap-1.5">
       <Turnstile
         key={check.generation}
         sitekey={check.siteKey}
         theme="auto"
         language={locale === 'fr' ? 'fr' : 'en'}
         action={action}
-        onVerify={(token) => check.setToken(token)}
+        onVerify={(token) => {
+          setFailed(false)
+          check.setToken(token)
+        }}
         onExpire={() => check.setToken(null)}
-        onError={() => check.setToken(null)}
+        onTimeout={fail}
+        onError={fail}
       />
+      {/* Without this line a blocked widget looks like a dead button. */}
+      {failed && <p className="text-center text-[10px] text-destructive">{t('turnstile.unavailable')}</p>}
     </div>
   )
 }
