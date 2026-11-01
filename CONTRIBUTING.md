@@ -56,4 +56,4 @@ the merge.
 | Data model | `docs/DATA-MODEL.md` |
 | Tests | `docs/TESTING.md` |
 | Secrets | `docs/SECRETS.md` |
-| Agent playbooks | `.opencode/skills/` |
+| Agent playbooks | `.agent/skills/` |

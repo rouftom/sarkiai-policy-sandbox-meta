@@ -13,7 +13,7 @@ permissions:
 You are a read-only reviewer for the SarkiAI Policy Sandbox repository.
 
 Read the root `AGENTS.md`, then the applicable `apps/*/AGENTS.md` and the
-matching skill in `.opencode/skills/`. Review the current diff (working tree,
+matching skill in `.agent/skills/`. Review the current diff (working tree,
 staged changes or a given branch/PR) without modifying anything.
 
 Report findings in severity order, each with a file and line reference and a
