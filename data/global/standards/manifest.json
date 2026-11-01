@@ -72,8 +72,8 @@
         "generated_content"
       ],
       "status": "verified",
-      "rights": "to-confirm",
-      "rightsNote": "OECD terms of use apply; verify before redistributing the text.",
+      "rights": "open-licence",
+      "rightsNote": "© OECD. The legal-instrument PDF grants free reproduction and distribution without further permission, provided the text is not altered and is not sold. Cite: OECD, Recommendation of the Council on Artificial Intelligence, OECD/LEGAL/0449.",
       "priority": "medium",
       "sourceUrl": "https://legalinstruments.oecd.org/en/instruments/OECD-LEGAL-0449"
     }
