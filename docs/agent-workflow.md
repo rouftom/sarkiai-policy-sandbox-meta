@@ -64,7 +64,7 @@ merge erases the atomic commits we want to show.
 ## Promotion to production
 
 1. `develop` is green: `bun run typecheck`, `bun run test`, `bun run build`,
-   plus the local probes from `.opencode/skills/sps-quality-gates`.
+   plus the local smoke checks in `.agent/skills/sps-quality-gates`.
 2. Open a PR `develop → main`:
 
    ```bash
