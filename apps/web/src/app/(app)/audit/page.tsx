@@ -37,8 +37,11 @@ import { ICON_BUTTON_OUTLINE } from '@/components/icon-button-styles'
 import { useToast } from '@/components/shared/toast'
 import { Skeleton } from '@sps/ui'
 
-/** The API caps a page at 500 records; the table pages through them locally. */
-const FETCH_SIZE = 500
+/** The API pages the feed server-side: one request per visible page. */
+const PAGE_SIZES = [10, 25, 50, 100]
+const DEFAULT_PAGE_SIZE = 10
+/** Typing settles before a query leaves the browser. */
+const SEARCH_DEBOUNCE_MS = 300
 
 function formatTime(value: string, locale: string): string {
   const date = new Date(value)
@@ -57,34 +60,57 @@ export default function AuditPage() {
   const [loading, setLoading] = React.useState(true)
   const [unreachable, setUnreachable] = React.useState(false)
   const [query, setQuery] = React.useState('')
+  const [search, setSearch] = React.useState('')
   const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(10)
+  const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE)
+  const [total, setTotal] = React.useState(0)
   const [selected, setSelected] = React.useState<AuditEventDto | null>(null)
 
+  // The server filters on the raw fields and returns the exact total, so the
+  // table never downloads the whole chain to show one page of it.
   const load = React.useCallback(
     async (notify = false) => {
       setLoading(true)
       setUnreachable(false)
       try {
-        const response = await authApi.auditEvents(FETCH_SIZE)
+        const response = await authApi.auditEvents(pageSize, {
+          offset: (page - 1) * pageSize,
+          q: search || undefined,
+        })
         setEvents(response.events)
         setChain(response.chain)
-        if (notify) toast.success(t('toast.auditRefreshed', { count: response.events.length }))
+        setTotal(response.total)
+        if (notify) toast.success(t('toast.auditRefreshed', { count: response.total }))
       } catch {
         setUnreachable(true)
         setEvents([])
         setChain(null)
+        setTotal(0)
         if (notify) toast.error(t('toast.auditFailed'))
       } finally {
         setLoading(false)
       }
     },
-    [toast, t],
+    [page, pageSize, search, toast, t],
   )
 
   React.useEffect(() => {
     void load()
   }, [load])
+
+  // A new search starts at the first page and only after typing settles.
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(query.trim())
+      setPage(1)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  const onPageSizeChange = React.useCallback((size: number) => {
+    setPageSize(size)
+    setPage(1)
+  }, [])
 
   // The chain grows while the console stays open: refresh it when the operator
   // returns to the tab, or when an assistant turn has just written records.
@@ -95,27 +121,12 @@ export default function AuditPage() {
     return () => window.removeEventListener(ASSISTANT_FINISHED, onFinished)
   }, [load])
 
-  const filtered = React.useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    if (!needle) return events
-    return events.filter((event) =>
-      [
-        event.actor,
-        event.action,
-        event.target ?? '',
-        auditActorLabel(event.actor, t, event.userId),
-        auditActionLabel(event.action, t),
-      ].some((value) => value.toLowerCase().includes(needle)),
-    )
-  }, [events, query, t])
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const current = Math.min(page, totalPages)
 
   React.useEffect(() => {
-    setPage(1)
-  }, [query, pageSize])
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
-  const current = Math.min(page, totalPages)
-  const visible = filtered.slice((current - 1) * pageSize, current * pageSize)
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   return (
     <>
@@ -201,11 +212,11 @@ export default function AuditPage() {
             </div>
           )}
 
-          {!loading && !unreachable && filtered.length === 0 && (
+          {!loading && !unreachable && total === 0 && (
             <p className="px-4 py-8 text-xs text-muted-foreground">{t('audit.empty')}</p>
           )}
 
-          {visible.length > 0 && (
+          {events.length > 0 && (
             <>
               <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
                 <Table className="min-w-[720px] table-actions-overlay">
@@ -220,7 +231,7 @@ export default function AuditPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {visible.map((event) => (
+                    {events.map((event) => (
                       <TableRow
                         key={event.id}
                         tabIndex={0}
@@ -282,10 +293,11 @@ export default function AuditPage() {
               <DataTablePagination
                 currentPage={current}
                 totalPages={totalPages}
-                totalItems={filtered.length}
+                totalItems={total}
                 itemsPerPage={pageSize}
+                pageSizeOptions={PAGE_SIZES}
                 onPageChange={setPage}
-                onItemsPerPageChange={setPageSize}
+                onItemsPerPageChange={onPageSizeChange}
                 labels={{
                   rowsPerPage: t('table.rowsPerPage'),
                   range: (from, to, total) => t('table.range', { from, to, total }),

@@ -103,6 +103,8 @@ export interface CorpusTotals {
   chunks: number
   activeChunks: number
   documents: number
+  /** Figures attached to active documents; figures of retired documents are excluded. */
+  figures: number
   characters: number
   lastIngestedAt: string | null
 }
@@ -662,6 +664,7 @@ export class AtlasIngestor {
       chunks: 0,
       activeChunks: 0,
       documents: 0,
+      figures: 0,
       characters: 0,
       lastIngestedAt: null,
     }
@@ -707,7 +710,15 @@ export class AtlasIngestor {
       const scalar = (facet?.totals as Array<Record<string, unknown>> | undefined)?.[0]
       totals.chunks = Number(scalar?.chunks ?? 0)
       totals.activeChunks = Number(scalar?.activeChunks ?? 0)
-      totals.documents = Array.isArray(scalar?.docs) ? scalar.docs.filter(Boolean).length : 0
+      const activeFilenames = Array.isArray(scalar?.docs)
+        ? (scalar.docs as Array<string | null>).filter((name): name is string => Boolean(name))
+        : []
+      totals.documents = activeFilenames.length
+      // Figures live in their own collection; retired documents keep theirs, so
+      // count only the ones still attached to an active document.
+      if (activeFilenames.length > 0) {
+        totals.figures = await db.collection(IMAGE_COLLECTION).countDocuments({ filename: { $in: activeFilenames } })
+      }
       totals.characters = Number(scalar?.characters ?? 0)
       totals.lastIngestedAt = iso(scalar?.lastIngestedAt)
       byCountry = ((facet?.byCountry as Array<{ _id?: string; chunks?: number }>) ?? []).map((row) => ({

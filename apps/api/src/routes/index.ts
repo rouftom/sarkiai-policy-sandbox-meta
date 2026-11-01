@@ -774,7 +774,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         provider: { mode: engine.provider.mode, reasoning: engine.provider.models.reasoning },
         collection: config.qdrant.collection,
         collectionExists: undefined,
-        totals: { chunks: 0, activeChunks: 0, documents: 0, characters: 0, lastIngestedAt: null },
+        totals: { chunks: 0, activeChunks: 0, documents: 0, figures: 0, characters: 0, lastIngestedAt: null },
         byCountry: [],
         byDocType: [],
         indexes: { supported: false, collectionExists: false, indexes: [], error: 'Atlas is only used in cloud mode.' },
