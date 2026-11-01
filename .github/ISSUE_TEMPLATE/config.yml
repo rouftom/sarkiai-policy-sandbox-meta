@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/rouftom/sarkiai-policy-sandbox-meta/security/advisories/new
+    about: Report a vulnerability privately. Do not open a public issue.
+  - name: Contributing guide
+    url: https://github.com/rouftom/sarkiai-policy-sandbox-meta/blob/develop/CONTRIBUTING.md
+    about: Setup, branch model, checks and conventions before opening a PR.
+  - name: Questions and support
+    url: https://github.com/rouftom/sarkiai-policy-sandbox-meta/blob/develop/SUPPORT.md
+    about: Where to ask for help and how to file an issue.
