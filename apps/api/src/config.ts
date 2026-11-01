@@ -111,13 +111,22 @@ export interface OriginPolicy {
   origins: string[]
   /** Accept every origin (self-hosted default until a canonical origin is set). */
   allowAny: boolean
+  /**
+   * Vercel project whose production and preview hosts are accepted
+   * (`<project>.vercel.app`, `<project>-<suffix>.vercel.app`). Any other
+   * `*.vercel.app` host belongs to someone else and is refused.
+   */
+  vercelProject?: string
+  /** Vercel team slug: when set, a preview host must also end with `-<scope>`. */
+  vercelScope?: string
 }
 
 /**
  * Whether a browser origin may call the API. `undefined` means a same-origin or
- * server-side call, which has no CORS decision to make. Every `*.vercel.app`
- * host is accepted, so previews and an older deployment keep working while the
- * canonical origin lives in `WEB_PUBLIC_URL`.
+ * server-side call, which has no CORS decision to make. The Vercel hosts of
+ * this project (production and previews) are accepted, so previews keep working
+ * while the canonical origin lives in `WEB_PUBLIC_URL`; other projects' hosts
+ * are not.
  */
 export function isOriginAllowed(origin: string | undefined, policy: OriginPolicy): boolean {
   if (!origin) return true
@@ -127,7 +136,13 @@ export function isOriginAllowed(origin: string | undefined, policy: OriginPolicy
   if (policy.origins.includes(candidate) || isLocalOrigin(candidate)) return true
   try {
     const parsed = new URL(candidate)
-    return parsed.protocol === 'https:' && parsed.hostname.endsWith('.vercel.app')
+    const project = policy.vercelProject?.trim().toLowerCase()
+    if (!project || parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.vercel.app')) return false
+    const label = parsed.hostname.slice(0, -'.vercel.app'.length)
+    if (label === project) return true
+    if (!label.startsWith(`${project}-`)) return false
+    const scope = policy.vercelScope?.trim().toLowerCase()
+    return !scope || label.endsWith(`-${scope}`)
   } catch {
     return false
   }
@@ -141,6 +156,8 @@ export function isOriginAllowed(origin: string | undefined, policy: OriginPolicy
  */
 const originPolicy: OriginPolicy = {
   origins: publicOrigins,
+  vercelProject: env('VERCEL_PROJECT_NAME', 'sarkiai-policy-sandbox-meta'),
+  vercelScope: env('VERCEL_TEAM_SLUG'),
   allowAny:
     env('WEB_ALLOW_ANY_ORIGIN').toLowerCase() === 'true' ||
     (!cloudDeployment && !configuredOrigin),
@@ -151,6 +168,11 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
 }
 
 export const config = {
+  /** Deployment profile: `cloud` also covers a host that only received the Meta key. */
+  deployment: {
+    mode: env('SANDBOX_MODE', 'local').toLowerCase(),
+    cloud: cloudDeployment,
+  },
   host: env('HOST', '0.0.0.0'),
   port: Number(env('PORT', '8000')),
   serviceApiKey: env('SERVICE_API_KEY'),
