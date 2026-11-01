@@ -2,6 +2,7 @@
 
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { JointSituationReport } from '@sps/shared'
+import { mongoPoolOptions } from '@sps/shared'
 
 export interface ReportStoreConfig {
   mongodbUri: string
@@ -19,7 +20,7 @@ export class ReportStore {
 
   private async collection(): Promise<Collection<Document>> {
     if (!this.client) {
-      this.client = new MongoClient(this.config.mongodbUri)
+      this.client = new MongoClient(this.config.mongodbUri, mongoPoolOptions())
       await this.client.connect()
     }
     return this.client.db(this.config.dbName).collection(this.collectionName)

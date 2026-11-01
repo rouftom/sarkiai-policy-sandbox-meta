@@ -15,6 +15,7 @@
  */
 
 import { MongoClient } from 'mongodb'
+import { mongoPoolOptions } from '@sps/shared'
 
 export const DEMO_RESET_COLLECTIONS = [
   'operators',
@@ -53,6 +54,7 @@ export async function resetDemoState(options: DemoResetOptions): Promise<DemoRes
   const database = options.dbName ?? 'policy_sandbox'
   const dryRun = options.dryRun ?? false
   const client = new MongoClient(options.uri, {
+    ...mongoPoolOptions(),
     serverSelectionTimeoutMS: options.serverSelectionTimeoutMs ?? 10_000,
   })
 

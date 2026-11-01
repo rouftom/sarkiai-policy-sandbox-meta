@@ -22,6 +22,7 @@ import { KB_INDEX_DEFINITIONS } from './atlas-index-definitions'
 import { AtlasRetriever, type RetrievalExploration } from './atlas'
 import { VoyageClient, type VoyageConfig } from './voyage'
 import type { RetrievalQuery } from '@sps/shared'
+import { mongoPoolOptions } from '@sps/shared'
 
 export interface AtlasIngestorConfig {
   mongodbUri: string
@@ -214,7 +215,7 @@ export class AtlasIngestor {
 
   private async db() {
     if (!this.client) {
-      this.client = new MongoClient(this.config.mongodbUri)
+      this.client = new MongoClient(this.config.mongodbUri, mongoPoolOptions())
       await this.client.connect()
     }
     return this.client.db(this.config.dbName)

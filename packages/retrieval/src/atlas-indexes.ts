@@ -13,6 +13,7 @@
 
 import { readFileSync } from 'node:fs'
 import { MongoClient } from 'mongodb'
+import { mongoPoolOptions } from '@sps/shared'
 
 export type AtlasIndexType = 'vectorSearch' | 'search'
 
@@ -97,7 +98,7 @@ export async function ensureAtlasIndexes(
   options: EnsureAtlasIndexesOptions,
 ): Promise<EnsureAtlasIndexesResult> {
   const log = options.log ?? (() => {})
-  const client = new MongoClient(options.uri)
+  const client = new MongoClient(options.uri, mongoPoolOptions())
 
   try {
     await client.connect()
@@ -188,7 +189,7 @@ export async function inspectAtlasIndexes(options: {
   dbName: string
   collection: string
 }): Promise<AtlasIndexInspection> {
-  const client = new MongoClient(options.uri)
+  const client = new MongoClient(options.uri, mongoPoolOptions())
   try {
     await client.connect()
     const db = client.db(options.dbName)

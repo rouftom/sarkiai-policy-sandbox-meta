@@ -10,6 +10,7 @@
 import { randomBytes } from 'node:crypto'
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { ActionSink } from '@sps/agents'
+import { mongoPoolOptions } from '@sps/shared'
 
 export type ActionKind = 'whatsapp_approval' | 'publish_communication' | 'record_gap' | 'request_tool' | 'delete_record'
 export type ActionRisk = 'low' | 'medium' | 'high'
@@ -61,7 +62,7 @@ export class ActionStore implements ActionSink {
     if (this.collection) return this.collection
     try {
       if (!this.client) {
-        this.client = new MongoClient(this.options.mongodbUri, { serverSelectionTimeoutMS: 4000 })
+        this.client = new MongoClient(this.options.mongodbUri, mongoPoolOptions())
         await this.client.connect()
       }
       this.collection = this.client.db(this.options.dbName ?? 'policy_sandbox').collection('agent_actions')

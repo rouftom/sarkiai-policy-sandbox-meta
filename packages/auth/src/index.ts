@@ -17,6 +17,7 @@
 
 import { createHash, createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto'
 import { MongoClient, type Collection, type Document } from 'mongodb'
+import { mongoPoolOptions } from '@sps/shared'
 
 export type Role = 'operator' | 'admin'
 
@@ -439,7 +440,7 @@ export class AuthService {
     if (!this.config.mongodbUri || this.mongoDown) return null
     try {
       if (!this.client) {
-        this.client = new MongoClient(this.config.mongodbUri, { serverSelectionTimeoutMS: 8000 })
+        this.client = new MongoClient(this.config.mongodbUri, { ...mongoPoolOptions(), serverSelectionTimeoutMS: 8000 })
         await this.client.connect()
         // Reachability check: `connect()` can succeed lazily against Atlas.
         await this.client.db(this.config.dbName ?? 'policy_sandbox').command({ ping: 1 })
@@ -998,6 +999,14 @@ export class AuthService {
     const record = this.memory.get(normalizeEmail(claims.sub))
     if (!record) return { email: claims.sub, name: claims.name, role: claims.role, mfaEnrolled: true, mustChangePassword: false, createdAt: '', preferences: { ...DEFAULT_PREFERENCES } }
     return toPublic(record)
+  }
+
+  /** Releases the client on shutdown: the host stops this process on every deploy. */
+  async close(): Promise<void> {
+    const client = this.client
+    this.client = null
+    this.mongoFailedAt = 0
+    await client?.close().catch(() => undefined)
   }
 
   async me(email: string): Promise<PublicOperator | null> {

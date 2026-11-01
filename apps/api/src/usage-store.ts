@@ -22,6 +22,7 @@ import {
   type UsageStatus,
   type UsageStore,
 } from '@sps/agents'
+import { mongoPoolOptions } from '@sps/shared'
 
 export interface MongoUsageStoreConfig {
   mongodbUri: string
@@ -148,12 +149,20 @@ export class MongoUsageStore implements UsageStore {
 
   constructor(private readonly config: MongoUsageStoreConfig) {}
 
+  /** Releases the client on shutdown: a deploy stops this process. */
+  async close(): Promise<void> {
+    const client = this.client
+    this.client = null
+    this.collection = null
+    await client?.close().catch(() => undefined)
+  }
+
   private async col(): Promise<Collection<Document> | null> {
     if (!this.config.mongodbUri) return null
     if (this.collection) return this.collection
     try {
       if (!this.client) {
-        this.client = new MongoClient(this.config.mongodbUri, { serverSelectionTimeoutMS: 4000 })
+        this.client = new MongoClient(this.config.mongodbUri, mongoPoolOptions())
         await this.client.connect()
       }
       this.collection = this.client.db(this.config.dbName).collection(this.config.collection ?? 'usage_events')

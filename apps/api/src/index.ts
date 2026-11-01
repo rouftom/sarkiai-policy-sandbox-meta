@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
-import { registerRoutes, seedReferenceImages } from './routes/index.js'
+import { registerRoutes, seedReferenceImages, closeStores } from './routes/index.js'
 import { prepareCloudStores } from './engine.js'
 import { auth } from './auth.js'
 import { config } from './config.js'
@@ -139,6 +139,9 @@ function maybeSeedReferenceImages(app: FastifyInstance): void {
     )
 }
 
+/** How long a stopping instance waits for in-flight work before exiting. */
+const SHUTDOWN_TIMEOUT_MS = 20_000
+
 async function main(): Promise<void> {
   const app = await buildServer()
   await maybeMaintainAuditChain(app)
@@ -175,6 +178,36 @@ async function main(): Promise<void> {
     app.log.error(error)
     process.exit(1)
   }
+
+  /**
+   * The host stops the instance with SIGTERM on every deploy. Stop accepting,
+   * let in-flight requests finish, then release the Mongo clients. A stream
+   * that never ends (a closed tab that the proxy still holds) is cut at the
+   * deadline rather than keeping the old instance alive for its full timeout.
+   */
+  let stopping = false
+  const shutdown = async (signal: string): Promise<void> => {
+    if (stopping) return
+    stopping = true
+    app.log.info({ signal }, 'shutting down')
+    const deadline = setTimeout(() => {
+      app.log.warn({ timeoutMs: SHUTDOWN_TIMEOUT_MS }, 'shutdown deadline reached; exiting')
+      process.exit(0)
+    }, SHUTDOWN_TIMEOUT_MS)
+    deadline.unref()
+    try {
+      await app.close()
+      await closeStores()
+      clearTimeout(deadline)
+      process.exit(0)
+    } catch (error) {
+      app.log.error({ message: error instanceof Error ? error.message : 'unknown error' }, 'shutdown failed')
+      process.exit(1)
+    }
+  }
+
+  process.once('SIGTERM', () => void shutdown('SIGTERM'))
+  process.once('SIGINT', () => void shutdown('SIGINT'))
 }
 
 void main()
