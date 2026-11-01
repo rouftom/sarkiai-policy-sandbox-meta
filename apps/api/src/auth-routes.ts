@@ -12,7 +12,7 @@ import { z, ZodError } from 'zod'
 import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
-import { config } from './config.js'
+import { config, localSetupPasswordFallback } from './config.js'
 import { MailError, sendEmailVerification, sendInvitation, sendPasswordReset } from './mailer.js'
 import { RateLimiter, type RateLimitRule } from './rate-limit.js'
 import { turnstileConfig, verifyTurnstile } from './turnstile.js'
@@ -310,6 +310,22 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
           password: created.password,
         })
       } catch (error) {
+        // A local install with no mail transport would otherwise be locked out:
+        // hand the one-time password back in the response instead. The screen
+        // shows it once. A public host keeps the rollback-and-retry behaviour.
+        if (
+          error instanceof MailError &&
+          localSetupPasswordFallback(error.code, config.web.canonicalUrl)
+        ) {
+          await record(created.operator.email, 'auth.root_created', undefined, created.operator.email)
+          return reply.status(201).send({
+            ok: true,
+            email: created.operator.email,
+            storage: created.storage,
+            delivery: 'local',
+            password: created.password,
+          })
+        }
         // No e-mail, no account: the screen stays usable and setup can be retried.
         await auth.remove(created.operator.email)
         throw error
@@ -320,6 +336,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
         ok: true,
         email: created.operator.email,
         storage: created.storage,
+        delivery: 'email',
       })
     } catch (error) {
       return failure(reply, error)

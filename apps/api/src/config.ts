@@ -71,7 +71,7 @@ const publicOrigins = [
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
 const PRIVATE_SUFFIXES = ['.local', '.internal', '.lan', '.home.arpa']
 
-function isLocalOrigin(origin: string): boolean {
+export function isLocalOrigin(origin: string): boolean {
   try {
     const { protocol, hostname } = new URL(origin)
     if (protocol !== 'http:' && protocol !== 'https:') return false
@@ -95,6 +95,15 @@ function isLocalOrigin(origin: string): boolean {
   } catch {
     return false
   }
+}
+
+/**
+ * A local install with no mail transport may return the root one-time password
+ * in the setup response: it is the only way in, and the screen shows it once.
+ * A public host never does — a mail failure there still rolls the account back.
+ */
+export function localSetupPasswordFallback(errorCode: string | undefined, canonicalUrl: string): boolean {
+  return errorCode === 'mail_not_configured' && isLocalOrigin(canonicalUrl)
 }
 
 export interface OriginPolicy {
