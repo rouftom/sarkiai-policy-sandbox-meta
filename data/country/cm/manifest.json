@@ -36,11 +36,11 @@
       ],
       "status": "present",
       "rights": "quotation-only",
-      "rightsNote": "Press article, all rights reserved: short attributed quotations only; do not publish the payload.",
+      "rightsNote": "Investir au Cameroun press article (10 July 2025), © Stratline Limited, all rights reserved: short attributed quotations only; do not publish the payload.",
       "priority": "critical",
       "file": "actualite_strategie_ia_cameroun.pdf",
       "note": "Press article describing the strategy (target of 12,000 jobs by 2040) — the official strategy document is still to be obtained.",
-      "sourceUrl": ""
+      "sourceUrl": "https://www.investiraucameroun.com/gestion-publique/1007-22234-le-cameroun-lance-sa-strategie-d-intelligence-artificielle-pour-generer-12-000-emplois-d-ici-2040"
     },
     {
       "id": "cm-digital-strategy-2020",
@@ -90,13 +90,13 @@
         "ai_inclusion"
       ],
       "status": "present",
-      "rights": "to-confirm",
-      "rightsNote": "Government/development-partner compact: partner terms may apply; verify before publishing the payload.",
+      "rights": "official-text",
+      "rightsNote": "Official MINSANTE compact (July 2023), published by the Ministry of Public Health; no separate partner reuse licence found, third-party contributions excluded from the official-text status.",
       "priority": "medium",
       "file": "compact_national_sante_2023.pdf",
       "needsOcr": true,
       "note": "Part of the text extracts with a non-Unicode font (garbled) — OCR recommended.",
-      "sourceUrl": ""
+      "sourceUrl": "https://www.afro.who.int/sites/default/files/2025-03/Compact%20national%20French-1.pdf"
     },
     {
       "id": "cm-health-system",
@@ -110,10 +110,10 @@
       ],
       "status": "present",
       "rights": "quotation-only",
-      "rightsNote": "Authored article, all rights reserved: short attributed quotations only; do not publish the payload.",
+      "rightsNote": "ADSP n°39 article (June 2002) by Jean Paul Beyeme Ondoua, © HCSP / Presses de l'EHESP, all rights reserved: short attributed quotations only; do not publish the payload.",
       "priority": "medium",
       "file": "systeme_de_sante_camerounais.pdf",
-      "sourceUrl": ""
+      "sourceUrl": "https://www.hcsp.fr/Explore.cgi/Telecharger?NomFichier=ad396165.pdf"
     },
     {
       "id": "cm-snd30-summary",
@@ -196,11 +196,11 @@
         "collaboration"
       ],
       "status": "present",
-      "rights": "to-confirm",
-      "rightsNote": "ART report; reuse terms not stated on the publication: verify before publishing the payload.",
+      "rights": "quotation-only",
+      "rightsNote": "ART annual observatory (2016) with no reuse licence or copyright notice in the PDF: short attributed quotations only; do not publish the payload.",
       "priority": "medium",
       "file": "art_observatoire_marche_telecom_2016.pdf",
-      "sourceUrl": "https://www.art.cm/"
+      "sourceUrl": "https://www.art.cm/sites/default/files/documents/Observatoire%20annuel%202016%20V4_0.pdf"
     },
     {
       "id": "cm-cybersecurity-law-2010",
@@ -248,7 +248,7 @@
       ],
       "status": "present",
       "rights": "quotation-only",
-      "rightsNote": "HAL deposit with no confirmed reuse licence: short attributed quotations only until the licence is checked.",
+      "rightsNote": "HAL deposit (hal-05411779) under the HAL deposit authorisation, which permits display but not reuse: short attributed quotations only; do not publish the payload.",
       "priority": "high",
       "file": "strategie_ia_collectivites_territoriales.pdf",
       "note": "Research paper (DSR approach). The equivalent HAL record was not duplicated.",
@@ -374,12 +374,12 @@
         "ai_inclusion"
       ],
       "status": "present",
-      "rights": "to-confirm",
-      "rightsNote": "World Bank / ID4D report, usually CC BY 3.0 IGO; verify the licence on the report before publishing the payload.",
+      "rights": "open-licence",
+      "rightsNote": "CC BY 3.0 IGO. Cite: World Bank 2023, Identification for Development (ID4D), Diagnostic of ID Systems in Cameroon, Washington, DC: World Bank. Third-party figures and tables are excluded from the licence.",
       "priority": "medium",
       "file": "cameroon_id_cr_ecosystem_diagnostic.txt",
       "note": "Converted from .docx (ingestion only reads PDF/TXT).",
-      "sourceUrl": ""
+      "sourceUrl": "https://documents.banquemondiale.org/fr/publication/documents-reports/documentdetail/099012324023052410"
     },
     {
       "id": "cm-constitution-1996",

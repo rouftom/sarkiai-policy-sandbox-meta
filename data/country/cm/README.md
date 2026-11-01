@@ -82,9 +82,18 @@ are committed. Each entry carries a `rights` field:
   published;
 - `to-confirm` — rights not established: do not publish the payload.
 
-`cm-ai-strategy` (press article), `cm-health-system` (authored article) and
-`cm-ai-adoption-local-authorities` (HAL paper) are `quotation-only`; the health
-compact, the ART observatory and the ID4D diagnostic are `to-confirm`. Do not
-serve them as full text in a public demo. Before publishing any payload, check
-its rights status, never ingest personal data, and keep the issuer and the
-source URL in the manifest. See [`../../../docs/LICENSING.md`](../../../docs/LICENSING.md).
+Rights were checked against the source publications (November 2026):
+
+- `open-licence`: the ID4D diagnostic (World Bank, CC BY 3.0 IGO; the exact
+  attribution string is in its `rightsNote`).
+- `official-text`: the health compact (MINSANTE, July 2023).
+- `quotation-only`: `cm-ai-strategy` (Investir au Cameroun press article),
+  `cm-health-system` (ADSP n°39 article, © HCSP / Presses de l'EHESP),
+  `cm-telecom-observatory-2016` (ART report with no reuse terms) and
+  `cm-ai-adoption-local-authorities` (HAL paper under the HAL deposit
+  authorisation, which does not grant reuse).
+
+No entry in this manifest remains `to-confirm`. Documents without a reuse
+licence still may not be served as full text in a public demo. Before publishing
+any payload, check its rights status, never ingest personal data, and keep the
+issuer and the source URL in the manifest. See [`../../../docs/LICENSING.md`](../../../docs/LICENSING.md).

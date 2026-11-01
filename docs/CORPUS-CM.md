@@ -52,6 +52,7 @@ Each entry carries a `status`:
 cp /path/to/law.pdf data/country/cm/
 
 # 2. ingest (Qdrant + local bge-m3): the chunker keeps TITLE/CHAPTER/ARTICLE
+#    rights come from data/country/cm/manifest.json; restricted files are skipped
 ./scripts/seed.sh --country cm --doc-type law --dir data/country/cm
 
 # 3. external reference corpus

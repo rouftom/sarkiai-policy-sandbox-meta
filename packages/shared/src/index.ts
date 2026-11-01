@@ -1,4 +1,5 @@
 export * from './types'
+export * from './rights'
 export * from './workflows'
 export * from './agents'
 export * from './coordination'

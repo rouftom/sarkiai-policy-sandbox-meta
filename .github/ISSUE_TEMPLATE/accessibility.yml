@@ -1,0 +1,136 @@
+name: Accessibility issue
+description: Report an accessibility barrier in the console, the documentation or a deployed instance.
+title: "[a11y]: <short description of the issue>"
+labels: ["accessibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an accessibility issue. Reports like yours help make the policy sandbox usable by everyone.
+
+        Share as much as you are comfortable with — partial reports are still useful. You never have to disclose a diagnosis or other personal information. See [ACCESSIBILITY.md](/ACCESSIBILITY.md) for the commitment and the severity scale.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A brief description of the barrier you encountered.
+      placeholder: "Example: the focus ring on the country select is invisible in dark mode."
+    validations:
+      required: true
+
+  - type: textarea
+    id: demo
+    attributes:
+      label: Screenshot, recording or demo
+      description: Drag and drop a file or paste a link. Optional.
+    validations:
+      required: false
+
+  - type: input
+    id: location
+    attributes:
+      label: Page or screen
+      description: The URL or the console screen where the issue occurs.
+      placeholder: "https://sps.djotta.com/knowledge — Corpus tab"
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What did you expect to happen?
+      placeholder: "I expected the focus indicator to be visible when I tab to the control."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What actually happened?
+      placeholder: "There was no visible focus indicator and the screen reader did not announce the control."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce the issue?
+      placeholder: |
+        1. Open the Knowledge screen.
+        2. Press Tab until the document type select is focused.
+        3. Observe the focus ring in dark mode.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity (adjusted during triage if needed)
+      description: |
+        - **Critical:** prevents a core task (for example, a form cannot be submitted at all).
+        - **Serious:** significant difficulty, but a workaround exists.
+        - **Moderate:** annoyance or inconsistent experience.
+        - **Minor:** minimal impact on usability.
+      options:
+        - Critical
+        - Serious
+        - Moderate
+        - Minor
+      default: 2
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and version
+      placeholder: "macOS 14.5, Windows 11, iOS 17, Android 14, Ubuntu 22.04"
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "Chrome 124, Firefox 125, Safari 17.4, Edge 124"
+    validations:
+      required: false
+
+  - type: input
+    id: assistive-tech
+    attributes:
+      label: Assistive technology and version
+      description: If you used assistive technology, tell us which one and which version.
+      placeholder: "VoiceOver (macOS 14.5), NVDA 2024.1, JAWS 2024, TalkBack on Android 14"
+    validations:
+      required: false
+
+  - type: input
+    id: wcag
+    attributes:
+      label: Related WCAG criteria (optional)
+      description: If you know which WCAG 2.2 success criterion applies, share it. It is fine not to know.
+      placeholder: "2.4.7 Focus Visible, 1.4.3 Contrast (Minimum)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Related issues, a code sample, or workarounds you tried.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: code-of-conduct
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow the [Code of Conduct](/CODE_OF_CONDUCT.md).
+      options:
+        - label: I agree to follow this project's Code of Conduct.
+          required: true

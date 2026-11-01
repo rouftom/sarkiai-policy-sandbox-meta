@@ -3,7 +3,7 @@
  * the country/jurisdiction taxonomy contract.
  */
 
-import type { DocType, Jurisdiction, ReadinessDimension, Taxonomy } from '@sps/shared'
+import type { CorpusRights, DocType, Jurisdiction, ReadinessDimension, Taxonomy } from '@sps/shared'
 
 export * from './chunk'
 
@@ -16,6 +16,8 @@ export interface IngestFileInput extends Taxonomy {
   /** Absolute path or a Blob/File when running in a browser/runtime with FormData. */
   content: Blob
   filename: string
+  /** Reuse rights from the corpus manifest; the service refuses non-publishable ones. */
+  rights: CorpusRights
   sourceUrl?: string
   organizationId?: string
 }
@@ -23,6 +25,8 @@ export interface IngestFileInput extends Taxonomy {
 export interface IngestTextInput extends Taxonomy {
   text: string
   filename: string
+  /** Reuse rights from the corpus manifest; the service refuses non-publishable ones. */
+  rights: CorpusRights
   sourceUrl?: string
   organizationId?: string
 }
@@ -58,6 +62,7 @@ export class IngestionClient {
         country: input.country,
         jurisdiction: input.jurisdiction,
         docType: input.docType,
+        rights: input.rights,
         pillar: input.pillar,
         namespace: input.namespace,
         version: input.version,
@@ -75,6 +80,7 @@ export class IngestionClient {
     form.append('country', input.country)
     form.append('jurisdiction', input.jurisdiction)
     form.append('docType', input.docType)
+    form.append('rights', input.rights)
     if (input.namespace) form.append('namespace', input.namespace)
     if (input.version) form.append('version', input.version)
     if (input.sourceUrl) form.append('sourceUrl', input.sourceUrl)

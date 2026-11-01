@@ -22,6 +22,7 @@
     "check:gazette": "bun scripts/check-gazette.ts",
     "kb:indexes": "bun scripts/ensure-mongo-indexes.ts",
     "kb:seed": "bun scripts/seed-corpus.ts",
+    "kb:purge": "bun scripts/purge-kb.ts",
     "demo:reset": "bun apps/api/scripts/reset-demo.ts",
     "clean": "turbo run clean && rm -rf node_modules .turbo"
   },

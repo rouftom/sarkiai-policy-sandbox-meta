@@ -18,6 +18,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
+import { isPublishableRights, normalizeCorpusRights, type CorpusRights } from '@sps/shared'
 
 interface ManifestDocument {
   title: string
@@ -26,6 +27,8 @@ interface ManifestDocument {
   docType: string
   jurisdiction: string
   status: string
+  /** Reuse rights; missing values are treated as `to-confirm` and refused. */
+  rights?: CorpusRights
   sourceUrl?: string
   priority?: string
 }
@@ -117,6 +120,7 @@ async function post(body: Record<string, unknown>): Promise<{ status: number; pa
 }
 
 async function ingestDocument(document: ManifestDocument & { file: string }): Promise<void> {
+  const rights = normalizeCorpusRights(document.rights)
   const text = document.file.toLowerCase().endsWith('.pdf')
     ? await extractPdf(document.file)
     : existsSync(join(ROOT, 'data/country', country, document.file))
@@ -137,6 +141,7 @@ async function ingestDocument(document: ManifestDocument & { file: string }): Pr
       country,
       jurisdiction: document.jurisdiction === 'regional' ? 'regional' : 'national',
       docType: document.docType,
+      rights,
       namespace: `${country}-corpus`,
       version: '2026',
       ...(document.sourceUrl ? { sourceUrl: document.sourceUrl } : {}),
@@ -176,6 +181,7 @@ async function ingestSamples(): Promise<void> {
       country: file.startsWith('global') ? 'global' : country,
       jurisdiction: 'national',
       docType: file.startsWith('global') ? 'guidance' : 'policy',
+      rights: 'open-licence',
       namespace: 'samples',
       version: 'v1',
     })
@@ -200,6 +206,12 @@ for (const document of manifest.documents) {
   }
   if (document.status === 'to_confirm' && !has('include-unverified')) {
     console.log(`  ${document.file}: skipped (status=to_confirm · verify the instrument first)`)
+    continue
+  }
+  if (!isPublishableRights(document.rights)) {
+    console.log(
+      `  ${document.file}: skipped (rights=${normalizeCorpusRights(document.rights)} · full text may not be ingested)`,
+    )
     continue
   }
   if (!matches(document.file)) continue

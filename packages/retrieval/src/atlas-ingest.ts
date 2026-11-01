@@ -16,7 +16,9 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { Binary, MongoClient, type Collection, type Document } from 'mongodb'
 import { chunkDocument, type ChunkOptions } from '@sps/kb'
-import type { DocType, DocumentImage, Jurisdiction, ReadinessDimension } from '@sps/shared'
+import { assertPublishableRights, normalizeCorpusRights } from '@sps/shared'
+import type { CorpusRights, DocType, DocumentImage, Jurisdiction, ReadinessDimension } from '@sps/shared'
+
 import { inspectAtlasIndexes, ensureAtlasIndexes, type AtlasIndexInspection } from './atlas-indexes'
 import { KB_INDEX_DEFINITIONS } from './atlas-index-definitions'
 import { AtlasRetriever, type RetrievalExploration } from './atlas'
@@ -60,6 +62,8 @@ export interface IngestInput extends ChunkOptions {
   country: string
   jurisdiction?: Jurisdiction
   docType?: DocType
+  /** Reuse rights from the corpus manifest. Required: absent rights are refused. */
+  rights: CorpusRights
   namespace?: string
   version?: string
   sourceUrl?: string
@@ -85,6 +89,7 @@ export interface IngestResult {
   filename: string
   country: string
   docType: string
+  rights: CorpusRights
   collection: string
   chunks: number
   inserted: number
@@ -117,6 +122,7 @@ export interface KnowledgeDocument {
   characters: number
   country: string
   docType: string
+  rights: CorpusRights
   namespace?: string
   version?: string
   sourceUrl?: string
@@ -375,6 +381,9 @@ export class AtlasIngestor {
     const country = input.country || 'global'
     const docType = input.docType ?? 'policy'
     const jurisdiction = input.jurisdiction ?? 'national'
+    // Fail closed before touching Atlas: the manifest's rights decide whether the
+    // full text may be stored at all (see docs/LICENSING.md).
+    const rights = assertPublishableRights(input.rights, input.filename)
 
     const result: IngestResult = {
       ok: false,
@@ -382,6 +391,7 @@ export class AtlasIngestor {
       filename: input.filename,
       country,
       docType,
+      rights,
       collection: this.collectionName,
       chunks: 0,
       inserted: 0,
@@ -498,6 +508,7 @@ export class AtlasIngestor {
                 country,
                 jurisdiction,
                 docType,
+                rights,
                 ...(input.namespace ? { namespace: input.namespace } : {}),
                 ...(input.version ? { version: input.version } : {}),
                 ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
@@ -526,6 +537,7 @@ export class AtlasIngestor {
               country,
               jurisdiction,
               docType,
+              rights,
               ...(input.namespace ? { namespace: input.namespace } : {}),
               ...(input.version ? { version: input.version } : {}),
             },
@@ -779,6 +791,7 @@ export class AtlasIngestor {
             characters: { $sum: { $strLenCP: { $ifNull: ['$text', ''] } } },
             country: { $first: '$country' },
             docType: { $first: '$docType' },
+            rights: { $first: '$rights' },
             namespace: { $first: '$namespace' },
             version: { $first: '$version' },
             sourceUrl: { $first: '$sourceUrl' },
@@ -804,6 +817,7 @@ export class AtlasIngestor {
         characters: Number(row.characters ?? 0),
         country: String(row.country ?? ''),
         docType: String(row.docType ?? ''),
+        rights: normalizeCorpusRights(row.rights),
         ...(row.namespace ? { namespace: String(row.namespace) } : {}),
         ...(row.version ? { version: String(row.version) } : {}),
         ...(row.sourceUrl ? { sourceUrl: String(row.sourceUrl) } : {}),
@@ -828,6 +842,21 @@ export class AtlasIngestor {
     const images = await (await this.imageCollection()).deleteMany({ filename })
     await (await this.db()).collection(DOCUMENT_COLLECTION).deleteOne({ _id: filename as never })
     return { chunks: chunks.deletedCount, images: images.deletedCount }
+  }
+
+  /**
+   * Remove several documents in one pass. Used by the rights purge utility
+   * (`scripts/purge-kb.ts`) after an operator has reviewed a dry run: the
+   * caller is responsible for confirming the list and for passing `--apply`.
+   */
+  async purgeDocuments(filenames: string[]): Promise<{ documents: number; chunks: number; images: number }> {
+    if (filenames.length === 0) return { documents: 0, chunks: 0, images: 0 }
+    const chunks = await (await this.chunks()).deleteMany({ filename: { $in: filenames } })
+    const images = await (await this.imageCollection()).deleteMany({ filename: { $in: filenames } })
+    const documents = await (await this.db())
+      .collection(DOCUMENT_COLLECTION)
+      .deleteMany({ _id: { $in: filenames as never[] } })
+    return { documents: documents.deletedCount, chunks: chunks.deletedCount, images: images.deletedCount }
   }
 
   /** Document-level metadata the console edits (title, summary) and the chunk fields it propagates. */
