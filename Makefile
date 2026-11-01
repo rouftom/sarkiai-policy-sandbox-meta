@@ -6,7 +6,7 @@ COMPOSE_DEV  := docker compose -f docker-compose.yml -f docker-compose.dev.yml
 
 .DEFAULT_GOAL := help
 .PHONY: help up up-kb up-app up-qdrant up-ollama up-mongo up-minio ingestion ocr transcription api web \
-        dev dev-kb dev-app logs ps down clean rebuild seed models glimmer sandbox-config secrets-edit secrets-encrypt
+        dev dev-kb dev-app logs ps down clean rebuild seed models glimmer sandbox-config secrets-edit secrets-encrypt hooks
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -93,6 +93,9 @@ rebuild: ## Rebuild all images from scratch
 
 seed: ## Ingest the sample Cameroon corpus into the KB
 	./scripts/seed.sh
+
+hooks: ## Install the git hooks (pre-push branch guard)
+	./scripts/install-git-hooks.sh
 
 sandbox-config: ## Validate the locked-down sandbox compose file
 	docker compose -f deploy/sandbox/docker-compose.sandbox.yml config

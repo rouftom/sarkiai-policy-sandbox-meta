@@ -18,10 +18,17 @@ harness). Adapt-and-reuse is fine; keep this repo publishable.
 
 ## Branches & commits
 
-- `main`: stable.
-- `feat/<scope>`: feature work.
+- `main`: production, deployed. `develop`: integration. `meta-hackathon`:
+  submission mirror. All three are protected — **no direct push**.
+- `feat/<scope>`, `fix/<scope>`, `docs/<scope>`, `chore/<scope>`: work
+  branches, cut from `develop`. Every change, documentation included, lands
+  through a pull request into `develop`.
+- Promotion: `develop → main`, then `develop → meta-hackathon`. Merge commits
+  only (no squash), so provenance is preserved.
 - Commits: single line, prefixed `feat()`, `fix()`, `docs()`, `refactor()`,
   `chore()`, with a scope: `feat(kb): add jurisdiction filter`.
+- Full procedure: [`agent-workflow.md`](./agent-workflow.md). Local guard:
+  `make hooks`.
 
 ## UI/UX charter (SarkiAI Compact)
 
