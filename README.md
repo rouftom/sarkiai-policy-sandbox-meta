@@ -250,7 +250,7 @@ locally.
 | Meta Model API (`cloud`) | `MODEL_API_KEY` (+ `VOYAGE_API_KEY` and an Atlas `MONGODB_URI` for cloud retrieval) | `cloud` mode unavailable; `local` and `sovereign` still work |
 | Baseten open weights (`sovereign`) | `BASETEN_API_KEY`, `BASETEN_MODEL` | Muse Spark Open unavailable; choose another model |
 | E-mail (invitation, reset, notifications) | `AUTH_RESEND_KEY`, `AUTH_RESEND_EMAIL_FROM` | a local `/setup` shows the one-time password once; e-mail features answer `mail_not_configured` |
-| Cloudflare Turnstile | `TURNSTILE_SECRET` (+ optional `TURNSTILE_HOSTNAMES`) | the human check is off; forms keep working. `local` never calls Cloudflare |
+| Cloudflare Turnstile | `NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` (public), `TURNSTILE_SECRET`, optional `TURNSTILE_HOSTNAMES` | the human check is off; forms keep working. `local` never calls Cloudflare |
 | WhatsApp channel | `WHATSAPP_*`, `APPROVAL_SECRET` | the channel is not configured; the rest of the console works |
 | Voyage + Atlas retrieval | `VOYAGE_API_KEY`, Atlas `MONGODB_URI` | local mode uses Qdrant + bge-m3 |
 | Budget alert | `RUN_BUDGET_USD` | no alert; spend is displayed but never enforced (alert-only) |
@@ -305,9 +305,10 @@ TURNSTILE_SECRET=...                         # optional: human check on the auth
 TURNSTILE_HOSTNAMES=your-console.example     # optional: hostnames siteverify accepts
 ```
 
-The Turnstile **site key** is public and is served by the API on
-`GET /v1/auth/captcha`; the web app reads it there, so no `NEXT_PUBLIC_*`
-variable is needed.
+The Turnstile **site key** is public. The API reads it server-side from
+`NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` (the historical name) and serves it
+on `GET /v1/auth/captcha`; the browser fetches it there at runtime, so the
+console build carries no Turnstile variable.
 
 Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators
 live in MongoDB when it is reachable; otherwise the service keeps them in memory
