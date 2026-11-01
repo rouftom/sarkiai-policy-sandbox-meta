@@ -36,6 +36,10 @@ async function relay(request: Request, context: { params: Promise<{ path: string
 
   const { path } = await context.params;
   const target = `${META_ORIGIN}/${path.join("/")}`;
+  // Dot segments would let `fetch` normalise the URL out of the allowed prefix.
+  if (path.some((segment) => segment === ".." || segment === "." || segment.includes("%2e") || segment.includes("%2E"))) {
+    return NextResponse.json({ error: { message: "path not allowed" } }, { status: 403 });
+  }
   if (!ALLOWED_PREFIXES.some((prefix) => path.join("/").startsWith(prefix))) {
     return NextResponse.json({ error: { message: "path not allowed" } }, { status: 403 });
   }
