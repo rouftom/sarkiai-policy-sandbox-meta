@@ -157,8 +157,20 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/signup', async (request, reply) => {
     try {
-      throttleSignup(request.ip)
       const body = signupInput.parse(request.body)
+
+      // Same human check as the reset form: no token, no account. Disabled
+      // (local, sovereign, or keys missing) the helper accepts every request.
+      const header = request.headers['x-turnstile-token']
+      const raw = Array.isArray(header) ? header[0] : header
+      if (!(await verifyTurnstile(raw, 'signup', request.ip))) {
+        return reply.status(403).send({
+          error: 'captcha_failed',
+          message: 'Human verification failed.',
+        })
+      }
+
+      throttleSignup(request.ip)
       const result = await auth.signup(body)
       try {
         await sendVerificationTo(result.operator.email)

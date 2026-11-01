@@ -1,5 +1,5 @@
 /**
- * Cloudflare Turnstile for the public password-reset form.
+ * Cloudflare Turnstile for the public sign-up and password-reset forms.
  *
  * The console is publicly reachable, so asking for a reset link goes through a
  * human check. Local and sovereign installs keep the form untouched: no
@@ -13,7 +13,7 @@
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 
 export type SandboxMode = 'local' | 'sovereign' | 'cloud'
-export type TurnstileAction = 'password_reset'
+export type TurnstileAction = 'signup' | 'password_reset'
 
 function read(name: string): string {
   return (process.env[name] ?? '').trim()
@@ -38,7 +38,7 @@ export function turnstileSiteKey(): string | null {
 }
 
 /**
- * Whether the reset form must present a token: cloud or sovereign, with both
+ * Whether a form must present a token: cloud or sovereign, with both
  * keys configured. Missing keys mean "off", never "block every request".
  */
 export function turnstileEnabled(): boolean {

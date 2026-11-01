@@ -269,10 +269,10 @@ credentials as the invitation (`AUTH_RESEND_KEY`), and `WEB_PUBLIC_URL` builds t
 link.
 
 In `cloud` and `sovereign` deployments that configure Cloudflare Turnstile, the
-form also requires the human check before sending the link. The API exposes
-`GET /v1/auth/captcha` so the console knows whether to render the widget and
-with which public site key; with no keys the check is off, and an unreachable
-Cloudflare never blocks a reset request.
+sign-up and password-reset forms also require the human check before sending
+anything. The API exposes `GET /v1/auth/captcha` so the console knows whether to
+render the widget and with which public site key; with no keys the check is off,
+and an unreachable Cloudflare never blocks a request.
 
 ### Public sign-up (cloud demo only)
 
