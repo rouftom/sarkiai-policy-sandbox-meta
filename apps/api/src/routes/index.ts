@@ -60,6 +60,7 @@ import { COUNTRY_SECTORS, CountryStore, type CountryRecord } from '../countries.
 import { mailConfigured, mailFrom, sendNotificationEmail } from '../mailer.js'
 import { buildReadinessReport } from '../readiness-report.js'
 import { defaultChatModel } from '@sps/agents'
+import { WorkGate } from '../concurrency.js'
 import { auth } from '../auth.js'
 import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
@@ -391,10 +392,30 @@ const EXPENSIVE_RULE: RateLimitRule = {
   windowMs: config.rateLimit.windowMs,
 }
 
+/**
+ * In-flight model work: one readiness series alone runs five streams, each of
+ * which fans out over dimensions. Both caps at 0 disables the gate.
+ */
+const gate = new WorkGate({ perOperator: config.concurrency.perOperator, global: config.concurrency.global })
+const gateEnabled = config.concurrency.perOperator > 0 && config.concurrency.global > 0
+
 /** The Bearer guard ran for this route, so the operator is present. */
 function operatorOf(request: FastifyRequest) {
   if (!request.operator) throw new Error('Operator missing after the auth guard.')
   return request.operator
+}
+
+/**
+ * Aborts in-flight work when the caller goes away (tab closed, network drop).
+ * `close` also fires on a normal completion, hence the `writableEnded` guard:
+ * only a response that ended early means the client stopped listening.
+ */
+function abortOnDisconnect(reply: FastifyReply): AbortSignal {
+  const controller = new AbortController()
+  reply.raw.once('close', () => {
+    if (!reply.raw.writableEnded) controller.abort()
+  })
+  return controller.signal
 }
 
 /** The observability window: at most a year, seven days by default. */
@@ -627,6 +648,31 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         })
       }
     }
+  })
+
+  // Model work in flight: refuse a new run instead of letting the instance
+  // slow down for everyone. The lease is released on finish or on disconnect,
+  // whichever comes first (releases are idempotent).
+  app.addHook('preHandler', async (request, reply) => {
+    if (!gateEnabled) return
+    const url = request.url.split('?')[0] ?? request.url
+    if (isPublicRoute(request.method, url)) return
+    const route = request.routeOptions.url ?? url
+    if (!isExpensiveRoute(request.method, route)) return
+    const operator = request.operator
+    if (!operator) return
+
+    const lease = gate.tryEnter(operator.email)
+    if (!lease) {
+      request.log.warn({ route, active: gate.active }, 'model work refused: instance at capacity')
+      return reply.status(429).send({
+        error: 'busy',
+        message: 'Too many model runs in flight. Wait for one to finish and try again.',
+      })
+    }
+
+    reply.raw.once('finish', lease.release)
+    reply.raw.once('close', lease.release)
   })
 
   // Announce the active provider in the audit chain (no-op when unchanged).
@@ -1233,8 +1279,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     })
     raw.flushHeaders?.()
 
-    const send = (payload: unknown) => {
+    /**
+     * Writes one frame. While the socket is behind (slow client, saturated
+     * proxy) intermediate frames are dropped rather than buffered without
+     * bound; terminal frames (`final`) are always attempted so the client gets
+     * the outcome.
+     */
+    const send = (payload: unknown, final = false) => {
       if (raw.writableEnded || raw.destroyed) return
+      if (!final && raw.writableNeedDrain) return
       try {
         raw.write(`data: ${JSON.stringify(payload)}\n\n`)
       } catch {
@@ -1246,6 +1299,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const heartbeat = setInterval(() => {
       if (!raw.writableEnded && !raw.destroyed) raw.write(': ping\n\n')
     }, 15_000)
+
+    // The console closed the tab or lost the network: stop generating instead of
+    // paying for an answer nobody will read. The audit trail is already written.
+    const signal = abortOnDisconnect(reply)
 
     try {
       send({ type: 'open', agentId: institution.id, runId: body.data.runId })
@@ -1263,6 +1320,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           references: stored.references,
           userId: operatorOf(request).email,
           withTools: true,
+          signal,
           actions: actionStore,
           mcp: mcpGateway,
           data: buildDataPort(operatorOf(request).email),
@@ -1276,9 +1334,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           onUi: (ui) => send({ type: 'ui', ui }),
         },
       )
-      send({ type: 'done', assessment })
+      send({ type: 'done', assessment }, true)
     } catch (error) {
-      send({ type: 'error', message: (error as Error).message })
+      send({ type: 'error', message: (error as Error).message }, true)
     } finally {
       clearInterval(heartbeat)
       if (!raw.writableEnded) raw.end()
@@ -1678,6 +1736,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       country: body.data.country,
       domain: body.data.domain as Domain,
       globalCountry: body.data.globalCountry,
+      dimensionConcurrency: config.concurrency.dimensions,
+      signal: abortOnDisconnect(reply),
     })
   })
 
@@ -1709,13 +1769,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       Vary: 'Origin',
     })
     raw.flushHeaders?.()
-    const send = (payload: unknown) => {
+    const send = (payload: unknown, final = false) => {
       if (raw.writableEnded || raw.destroyed) return
+      // Same policy as the agent stream: skip intermediate frames for a client
+      // that cannot keep up, never the terminal one.
+      if (!final && raw.writableNeedDrain) return
       raw.write(`data: ${JSON.stringify(payload)}\n\n`)
     }
     const heartbeat = setInterval(() => {
       if (!raw.writableEnded && !raw.destroyed) raw.write(': ping\n\n')
     }, 15_000)
+
+    // Closing the tab stops the run: the dimensions already scored are kept as
+    // an interrupted run and can be resumed, so nothing is lost.
+    const signal = abortOnDisconnect(reply)
 
     try {
       const report = await engine.readiness.assess(
@@ -1729,6 +1796,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
           ...(input.models ? { models: input.models } : {}),
           ...(input.concurrency ? { concurrency: input.concurrency } : {}),
+          dimensionConcurrency: config.concurrency.dimensions,
+          signal,
           ...(input.concurrency === 'orchestrated'
             ? {
                 ...(input.maxDecisions ? { maxDecisions: input.maxDecisions } : {}),
@@ -1757,7 +1826,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         runId: summary.id,
         userId: operator.email,
       })
-      send({ type: 'saved', run: summary })
+      send({ type: 'saved', run: summary }, true)
     } catch (error) {
       if (error instanceof ReadinessInterrupted) {
         const scores = error.completed
@@ -1773,10 +1842,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         const kept = resume
           ? await readinessRuns.updateRun(resume.id, operator.email, { report: partial, status: 'failed', failure: error.message })
           : await readinessRuns.save({ userId: operator.email, runBy: operator.email, report: partial, status: 'failed', failure: error.message, input })
-        send({ type: 'failed', message: error.message, runId: kept?.id, completed: scores.length, total })
+        send({ type: 'failed', message: error.message, runId: kept?.id, completed: scores.length, total }, true)
       } else {
         request.log.error(error)
-        send({ type: 'failed', message: (error as Error).message })
+        send({ type: 'failed', message: (error as Error).message }, true)
       }
     } finally {
       clearInterval(heartbeat)
@@ -1930,7 +1999,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const run = await readinessRuns.get(id, operator.email)
     if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
     if (hasLanguage(run.report.scores, body.data.lang)) return run
-    const localized = await engine.readiness.localize(run.report, body.data.lang)
+    const localized = await engine.readiness.localize(run.report, body.data.lang, undefined, abortOnDisconnect(reply))
     const updated = await readinessRuns.updateRun(id, operator.email, { report: localized, status: run.status })
     await engine.audit.logAction({
       actor: operator.email,

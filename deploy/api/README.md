@@ -52,6 +52,17 @@ Requirements for the host:
    their own windows (5–6 attempts per 15 minutes per IP, sign-in also capped
    per IP in addition to the per-address lockout).
 
+6. Backpressure. Model work is capped in flight rather than queued:
+   `AI_CONCURRENCY_PER_OPERATOR` (default 8, above the five parallel sector
+   streams of a series) and `AI_CONCURRENCY_GLOBAL` (default 16, one instance).
+   Past a cap the API answers `429` with `error: "busy"` immediately — retry
+   once a run finishes. `READINESS_DIMENSION_CONCURRENCY` (default 4) bounds the
+   dimensions one assessment evaluates at once (13 otherwise, per sector).
+   Closing the console tab aborts the run; a readiness run stopped this way is
+   saved as interrupted with the dimensions already scored, and can be resumed.
+   Live voice allows one socket per operator and 20 per instance, with a 256 KiB
+   frame ceiling.
+
 3. Start the service and wait for the first build to finish.
 
 ## 2. Point the web app at it

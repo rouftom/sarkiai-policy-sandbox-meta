@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { DimensionScore } from '@sps/shared'
-import { applyPropagation, computeComposite, computeGapAnalysis, maturityLabel, propagate } from './index'
+import { applyPropagation, computeComposite, computeGapAnalysis, maturityLabel, propagate, settlePool } from './index'
 
 function score(dimensionId: number, dimension: string, value: number): DimensionScore {
   return {
@@ -69,5 +69,37 @@ describe('causal what-if propagation', () => {
     const dims = [score(13, 'digital_infrastructure', 5)]
     const { projected } = applyPropagation(dims, { digital_infrastructure: 1 })
     expect(projected.find((d) => d.dimensionId === 13)!.score).toBe(5)
+  })
+})
+
+describe('settlePool', () => {
+  test('keeps the input order whatever finishes first', async () => {
+    const results = await settlePool([3, 1, 2], 2, async (ms) => {
+      await new Promise((resolve) => setTimeout(resolve, ms))
+      return ms
+    })
+    expect(results.map((result) => (result.status === 'fulfilled' ? result.value : null))).toEqual([3, 1, 2])
+  })
+
+  test('never runs more than the limit at once', async () => {
+    let inFlight = 0
+    let peak = 0
+    await settlePool(Array.from({ length: 13 }, (_, index) => index), 4, async () => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 2))
+      inFlight -= 1
+    })
+    expect(peak).toBeLessThanOrEqual(4)
+  })
+
+  test('a failure does not cancel the other tasks', async () => {
+    const results = await settlePool([1, 2, 3], 2, async (value) => {
+      if (value === 2) throw new Error('boom')
+      return value
+    })
+    expect(results[0]).toEqual({ status: 'fulfilled', value: 1 })
+    expect(results[1]?.status).toBe('rejected')
+    expect(results[2]).toEqual({ status: 'fulfilled', value: 3 })
   })
 })

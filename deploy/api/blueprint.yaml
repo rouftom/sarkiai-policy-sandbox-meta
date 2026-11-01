@@ -127,3 +127,15 @@ services:
         value: "240"
       - key: RATE_LIMIT_EXPENSIVE_MAX
         value: "20"
+
+      # ── backpressure ───────────────────────────────────────────────────────
+      # In-flight model work. A readiness series runs five streams at once, so
+      # the per-operator default is above that; past the cap the API answers 429
+      # at once instead of queueing. The dimensions cap bounds each stream's
+      # internal fan-out (13 cells per sector otherwise).
+      - key: AI_CONCURRENCY_PER_OPERATOR
+        value: "8"
+      - key: AI_CONCURRENCY_GLOBAL
+        value: "16"
+      - key: READINESS_DIMENSION_CONCURRENCY
+        value: "4"

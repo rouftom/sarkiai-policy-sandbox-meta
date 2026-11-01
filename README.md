@@ -286,6 +286,18 @@ headers. Counters live in the process — one instance, reset on deploy — and
 own windows: 5–6 attempts per 15 minutes per IP, and sign-in is now capped per
 IP as well as per address.
 
+### Backpressure
+
+Model work is bounded rather than queued. `AI_CONCURRENCY_PER_OPERATOR` (default
+8, above the five parallel sector streams of a series) and
+`AI_CONCURRENCY_GLOBAL` (default 16) cap in-flight runs; past a cap the API
+answers `429` with `error: "busy"` immediately, so the instance stays responsive
+for everyone else. `READINESS_DIMENSION_CONCURRENCY` (default 4) bounds the
+dimensions one assessment evaluates at once. When the console disconnects, the
+run is aborted: an interrupted readiness run keeps the dimensions already scored
+and can be resumed. Live voice accepts one socket per operator (20 per
+instance) with a 256 KiB frame ceiling.
+
 ### Public sign-up (cloud demo only)
 
 The public demo at <https://sps.djotta.com>
