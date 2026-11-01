@@ -18,6 +18,7 @@ from rag_ingestion.services.chunker import StructureAwareChunker
 from rag_ingestion.services.embeddings import EmbeddingService, VoyageEmbeddingService
 from rag_ingestion.services.mongo_store import MongoPolicyStore
 from rag_ingestion.services.qdrant_store import QdrantPolicyStore
+from rag_ingestion.rights import is_publishable_rights, normalize_rights, refusal_detail
 
 router = APIRouter()
 
@@ -62,6 +63,7 @@ def _ingest_text(
     country: str,
     jurisdiction: str,
     doc_type: str,
+    rights: Optional[str] = None,
     pillar=None,
     namespace=None,
     version=None,
@@ -70,6 +72,8 @@ def _ingest_text(
     is_active=True,
     used_ocr=False,
 ) -> IngestResultResponse:
+    if not is_publishable_rights(rights):
+        raise HTTPException(status_code=403, detail=refusal_detail(rights, filename))
     if not text or not text.strip():
         raise HTTPException(status_code=422, detail="No extractable text in document.")
 
@@ -91,6 +95,7 @@ def _ingest_text(
         country=country,
         jurisdiction=jurisdiction,
         doc_type=doc_type,
+        rights=normalize_rights(rights),
         filename=filename,
         is_active=is_active,
         namespace=namespace,
@@ -141,6 +146,7 @@ def ingest_text(
         country=payload.country,
         jurisdiction=payload.jurisdiction,
         doc_type=payload.docType,
+        rights=payload.rights,
         pillar=payload.pillar,
         namespace=payload.namespace,
         version=payload.version,
@@ -156,12 +162,15 @@ async def ingest_file(
     country: str = Form(...),
     jurisdiction: str = Form("national"),
     docType: str = Form("policy"),
+    rights: Optional[str] = Form(None),
     namespace: Optional[str] = Form(None),
     version: Optional[str] = Form(None),
     sourceUrl: Optional[str] = Form(None),
     x_api_key: Optional[str] = Header(default=None),
 ) -> IngestResultResponse:
     _authorize(x_api_key)
+    if not is_publishable_rights(rights):
+        raise HTTPException(status_code=403, detail=refusal_detail(rights, file.filename))
 
     suffix = os.path.splitext(file.filename or "")[1].lower()
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -193,6 +202,7 @@ async def ingest_file(
         country=country,
         jurisdiction=jurisdiction,
         doc_type=docType,
+        rights=rights,
         namespace=namespace,
         version=version,
         source_url=sourceUrl,

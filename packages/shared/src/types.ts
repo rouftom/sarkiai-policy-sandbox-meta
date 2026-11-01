@@ -25,6 +25,14 @@ export type DocType =
   | 'guidance'
   | 'report'
 
+/**
+ * Reuse rights of a corpus document. The value comes from the corpus manifest
+ * and decides whether the full text may enter the knowledge base at all:
+ * `official-text` and `open-licence` are publishable, `quotation-only` and
+ * `to-confirm` are not. See `docs/LICENSING.md` for the decision rules.
+ */
+export type CorpusRights = 'official-text' | 'open-licence' | 'quotation-only' | 'to-confirm'
+
 /** A workflow lens is a profile, never a duplicated code path. */
 export type WorkflowLens = 'simulation' | 'readiness' | 'hybrid'
 
@@ -183,6 +191,8 @@ export interface Taxonomy {
   country: string // ISO-3166 alpha-2, or 'global'
   jurisdiction: Jurisdiction
   docType: DocType
+  /** Reuse rights recorded in the corpus manifest; absent means `to-confirm`. */
+  rights?: CorpusRights
   pillar?: ReadinessDimension[]
   namespace?: string
   version?: string

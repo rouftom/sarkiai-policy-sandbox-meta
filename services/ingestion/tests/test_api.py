@@ -37,6 +37,7 @@ def test_ingest_text_uses_embedder_and_store():
                 "filename": "test.pdf",
                 "country": "cm",
                 "docType": "law",
+                "rights": "official-text",
             },
         )
 
@@ -45,3 +46,35 @@ def test_ingest_text_uses_embedder_and_store():
     assert body["success"] is True
     assert body["chunksProcessed"] >= 1
     Store.return_value.upsert_chunks.assert_called_once()
+    assert Store.return_value.upsert_chunks.call_args.kwargs["rights"] == "official-text"
+
+
+def test_ingest_text_refuses_restricted_rights():
+    response = client.post(
+        "/v1/ingest/text",
+        json={
+            "text": "ARTICLE 1\nDispositions generales.",
+            "filename": "press-article.pdf",
+            "country": "cm",
+            "docType": "report",
+            "rights": "quotation-only",
+        },
+    )
+
+    assert response.status_code == 403
+    assert "quotation-only and to-confirm" in response.json()["detail"]
+
+
+def test_ingest_text_fails_closed_without_rights():
+    response = client.post(
+        "/v1/ingest/text",
+        json={
+            "text": "ARTICLE 1\nDispositions generales.",
+            "filename": "unknown.pdf",
+            "country": "cm",
+            "docType": "policy",
+        },
+    )
+
+    assert response.status_code == 403
+    assert "rights=to-confirm" in response.json()["detail"]

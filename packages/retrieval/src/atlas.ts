@@ -14,6 +14,7 @@
 
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { DocType, Jurisdiction, KbChunk, ReadinessDimension, RetrievalQuery } from '@sps/shared'
+import { normalizeCorpusRights } from '@sps/shared'
 import { VoyageClient, type VoyageConfig } from './voyage'
 import type { Retriever } from './types'
 import { mongoPoolOptions } from '@sps/shared'
@@ -133,6 +134,7 @@ function toChunk(doc: Document, score?: number): KbChunk | null {
     country: asString(doc.country) ?? '',
     jurisdiction,
     docType,
+    rights: normalizeCorpusRights(doc.rights),
     pillar: Array.isArray(doc.pillar) ? (doc.pillar as ReadinessDimension[]) : undefined,
     namespace: asString(doc.namespace),
     version: asString(metadata.version) ?? asString(doc.version),
