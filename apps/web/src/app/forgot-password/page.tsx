@@ -6,8 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { ArrowLeft, Loader, MailCheck, Send } from 'lucide-react'
+import Turnstile from 'react-turnstile'
 import { Button, Input, Label } from '@sps/ui'
-import { ApiError, authApi } from '@/lib/api'
+import { ApiError, authApi, type CaptchaConfigDto } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { AuthLayout, ErrorNote, StepIntro } from '@/components/auth/auth-frame'
 
@@ -19,10 +20,39 @@ import { AuthLayout, ErrorNote, StepIntro } from '@/components/auth/auth-frame'
  * registered. The link is signed, single-use and expires after 30 minutes.
  */
 export default function ForgotPasswordPage() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [sent, setSent] = React.useState<string | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [failure, setFailure] = React.useState<string | null>(null)
+  // Human check, decided by the API: cloud deployments require it, local and
+  // sovereign installs (or a deployment without keys) get `required: false`.
+  const [captcha, setCaptcha] = React.useState<CaptchaConfigDto | null>(null)
+  const [turnstileToken, setTurnstileToken] = React.useState<string | null>(null)
+  const [widgetKey, setWidgetKey] = React.useState(0)
+
+  React.useEffect(() => {
+    let active = true
+    authApi
+      .captcha()
+      .then((config) => {
+        if (active) setCaptcha(config)
+      })
+      .catch(() => {
+        // The form must stay usable: no answer means no widget, and the API
+        // decides anyway when the request arrives.
+        if (active) setCaptcha({ required: false, siteKey: null })
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const captchaRequired = Boolean(captcha?.required && captcha.siteKey)
+
+  const resetWidget = React.useCallback(() => {
+    setTurnstileToken(null)
+    setWidgetKey((value) => value + 1)
+  }, [])
 
   const schema = React.useMemo(
     () =>
@@ -38,13 +68,26 @@ export default function ForgotPasswordPage() {
   })
 
   const submit = form.handleSubmit(async (values) => {
+    if (captchaRequired && !turnstileToken) {
+      setFailure(t('reset.captchaRequired'))
+      return
+    }
+
     setBusy(true)
     setFailure(null)
     try {
-      await authApi.forgotPassword(values.email.trim().toLowerCase())
+      await authApi.forgotPassword(
+        values.email.trim().toLowerCase(),
+        captchaRequired ? (turnstileToken ?? undefined) : undefined,
+      )
       setSent(values.email.trim().toLowerCase())
     } catch (cause) {
-      setFailure(resetMessage(cause, t('reset.forgotFailed'), t))
+      if (cause instanceof ApiError && cause.json<{ error?: string }>()?.error === 'captcha_failed') {
+        setFailure(t('reset.captchaFailed'))
+        resetWidget()
+      } else {
+        setFailure(resetMessage(cause, t('reset.forgotFailed'), t))
+      }
     } finally {
       setBusy(false)
     }
@@ -107,7 +150,26 @@ export default function ForgotPasswordPage() {
               {form.formState.errors.email && <FieldNote>{form.formState.errors.email.message}</FieldNote>}
             </div>
             {failure && <ErrorNote>{failure}</ErrorNote>}
-            <Button type="submit" disabled={busy} size="lg" className="mt-1 w-full">
+            {captchaRequired && captcha?.siteKey && (
+              <div className="flex justify-center">
+                <Turnstile
+                  key={widgetKey}
+                  sitekey={captcha.siteKey}
+                  theme="auto"
+                  language={locale === 'fr' ? 'fr' : 'en'}
+                  action="password_reset"
+                  onVerify={(token) => setTurnstileToken(token)}
+                  onExpire={() => setTurnstileToken(null)}
+                  onError={() => setTurnstileToken(null)}
+                />
+              </div>
+            )}
+            <Button
+              type="submit"
+              disabled={busy || captcha === null || (captchaRequired && !turnstileToken)}
+              size="lg"
+              className="mt-1 w-full"
+            >
               {busy ? <Loader className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {busy ? t('reset.sending') : t('reset.send')}
             </Button>

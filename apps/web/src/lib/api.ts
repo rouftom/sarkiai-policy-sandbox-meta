@@ -1320,6 +1320,12 @@ export interface SetupStatusDto {
   signup: boolean
 }
 
+/** Human check for the reset form. `required: false` means "render no widget". */
+export interface CaptchaConfigDto {
+  required: boolean
+  siteKey: string | null
+}
+
 export interface SetupResultDto {
   ok: boolean
   email: string
@@ -1354,6 +1360,7 @@ export interface AuditFeedDto {
 
 export const authApi = {
   setupStatus: () => request<SetupStatusDto>('/v1/auth/setup'),
+  captcha: () => request<CaptchaConfigDto>('/v1/auth/captcha'),
   setup: (body: { firstName: string; lastName: string; email: string }) =>
     request<SetupResultDto>('/v1/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
   signup: (body: { firstName: string; lastName: string; email: string; password: string }) =>
@@ -1370,10 +1377,11 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
-  forgotPassword: (email: string) =>
+  forgotPassword: (email: string, turnstileToken?: string) =>
     request<{ ok: boolean }>('/v1/auth/password/forgot', {
       method: 'POST',
       body: JSON.stringify({ email }),
+      ...(turnstileToken ? { headers: { 'x-turnstile-token': turnstileToken } } : {}),
     }),
   resetPassword: (token: string, password: string) =>
     request<{ ok: boolean }>('/v1/auth/password/reset', {

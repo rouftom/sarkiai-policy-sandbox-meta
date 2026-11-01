@@ -27,6 +27,18 @@ Requirements for the host:
    | `MONGODB_URI` | database connection string (user with read and write on the application database) |
    | `WHATSAPP_*` | messaging provider app settings |
    | `APPROVAL_SECRET` | a random value, for example `openssl rand -hex 32` |
+   | `CLOUDFLARE_TURNSITE_SITE_SECRET` | Cloudflare Turnstile widget secret (optional) |
+   | `NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` | the same widget's public site key (optional) |
+
+4. Bot protection (optional). The password-reset form asks for a Cloudflare
+   Turnstile token when `SANDBOX_MODE` is `cloud` or `sovereign` and both keys
+   are set. `GET /v1/auth/captcha` tells the console whether to render the
+   widget and with which site key, so the web build needs no Turnstile variable.
+   With no keys the check is off; if Cloudflare is unreachable (network, timeout,
+   5xx) the reset request is not blocked, while an explicit refusal still is.
+   List the accepted hostnames in `TURNSTILE_HOSTNAMES` (comma-separated) to pin
+   the widget domain, and allow the console's domain on the widget in the
+   Cloudflare dashboard.
 
 3. Start the service and wait for the first build to finish.
 
