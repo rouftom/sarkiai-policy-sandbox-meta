@@ -8,7 +8,7 @@ import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, cn } 
 import { MODE_STORAGE_KEY } from '@sps/theme'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { AppHeader } from '@/components/layout/app-header'
-import { BrandMark } from '@/components/layout/brand-mark'
+import { BrandIntro } from '@/components/layout/brand-intro'
 import { PolicyAssistant } from '@/components/policy-assistant'
 import { useAuth } from '@/lib/auth'
 import { useTheme } from '@/components/theme-provider'
@@ -71,12 +71,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (loading || !operator) {
     return (
       <div className="grid min-h-dvh place-items-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <BrandMark className="h-10 w-10 animate-pulse" />
-          <p className="text-[10px] font-medium text-muted-foreground">
-            SarkiAI Policy Sandbox
-          </p>
-        </div>
+        <BrandIntro wordmark={t('app.shortName')} />
       </div>
     )
   }
