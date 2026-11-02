@@ -99,8 +99,13 @@ async function extractPdf(file: string): Promise<string> {
   return raw.replace(/\f/g, '\n').replace(/\u00a0/g, ' ')
 }
 
-/** Cut a very long text at line breaks into parts of about `limit` characters. */
-function splitForUpload(text: string, limit = 400_000): string[] {
+/**
+ * Cut a very long text at line breaks into parts of about `limit` characters.
+ * The ingest route accepts 2 M characters per request, so the default keeps a
+ * document in one part (and therefore one filename) up to 1.5 M characters;
+ * splitting is only a guard for genuinely huge compilations.
+ */
+function splitForUpload(text: string, limit = 1_500_000): string[] {
   if (text.length <= limit * 1.25) return [text]
   const parts: string[] = []
   let rest = text
