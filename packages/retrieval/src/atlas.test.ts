@@ -48,37 +48,27 @@ describe('reciprocal rank fusion', () => {
 describe('search index artifact', () => {
   const file = new URL('../../../deploy/mongo/kb.indexes.json', import.meta.url)
 
-  test('declares one vector index and one BM25 index on kb_chunks', () => {
+  test('declares one BM25 index on kb_chunks and no vector index', () => {
     const artifact = loadIndexDefinitions(file)
     expect(artifact.collection).toBe('kb_chunks')
-    expect(artifact.indexes.map((index) => [index.name, index.type])).toEqual([
-      ['sps_vector_index', 'vectorSearch'],
-      ['sps_text_index', 'search'],
-    ])
-    const vector = artifact.indexes[0]!.definition as {
-      fields: Array<{ type: string; path?: string }>
-    }
-    expect(vector.fields[0]).toMatchObject({ type: 'vector', path: 'embedding' })
-    expect(vector.fields.some((field) => field.path === 'country')).toBe(true)
+    expect(artifact.indexes.map((index) => [index.name, index.type])).toEqual([['sps_text_index', 'search']])
   })
 
   test('stable stringify ignores object key order', () => {
-    expect(stableStringify({ b: 1, a: { d: 2, c: 3 } })).toBe(
-      stableStringify({ a: { c: 3, d: 2 }, b: 1 }),
-    )
+    expect(stableStringify({ b: 1, a: { d: 2, c: 3 } })).toBe(stableStringify({ a: { c: 3, d: 2 }, b: 1 }))
   })
 })
 
 describe('backend resolution', () => {
-  test('cloud defaults to Atlas, everything else to Qdrant', () => {
-    expect(resolveRetrievalBackend('cloud', 'auto')).toBe('atlas')
-    expect(resolveRetrievalBackend('sovereign', 'auto')).toBe('qdrant')
-    expect(resolveRetrievalBackend('local', undefined)).toBe('qdrant')
+  test('cloud defaults to Atlas Search, everything else to a MongoDB text index', () => {
+    expect(resolveRetrievalBackend('cloud')).toBe('atlas')
+    expect(resolveRetrievalBackend('sovereign')).toBe('text')
+    expect(resolveRetrievalBackend('local')).toBe('text')
   })
 
-  test('an explicit override wins', () => {
-    expect(resolveRetrievalBackend('cloud', 'qdrant')).toBe('qdrant')
+  test('an explicit override wins, an unknown one is refused', () => {
+    expect(resolveRetrievalBackend('cloud', 'text')).toBe('text')
     expect(resolveRetrievalBackend('local', 'atlas')).toBe('atlas')
-    expect(() => resolveRetrievalBackend('cloud', 'pinecone')).toThrow('Unknown RETRIEVAL_BACKEND')
+    expect(() => resolveRetrievalBackend('local', 'vector')).toThrow()
   })
 })

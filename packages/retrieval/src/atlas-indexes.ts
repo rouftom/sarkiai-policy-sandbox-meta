@@ -92,7 +92,7 @@ async function ensureCollection(
  * Create or update the Atlas Search indexes idempotently.
  *
  * Never throws when Atlas Search is unsupported: it returns `supported: false`
- * so a local/sovereign startup can log it and continue on Qdrant.
+ * so a local/sovereign startup can log it and continue on its MongoDB text index.
  */
 export async function ensureAtlasIndexes(
   options: EnsureAtlasIndexesOptions,
