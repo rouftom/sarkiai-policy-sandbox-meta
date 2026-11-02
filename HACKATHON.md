@@ -2,7 +2,7 @@
 
 **Project:** SarkiAI Policy Sandbox, Meta edition
 **Team:** Djotta (Cameroon), Startup track
-**Building period:** 26 October 2026 (kickoff, 12:00 PM ET) to 4 November 2026
+**Building period:** 26 October 2026 (kickoff, 12:24 PM ET) to 4 November 2026
 
 This file is the honest ledger the rulebook asks for: what already existed, what
 was built during the building period, and which Meta model does what.
@@ -23,9 +23,20 @@ The engine, published here unchanged as the starting point:
 - a **hash-chained audit log** plus persisted chain-of-thought traces;
 - a Next.js console.
 
+### Why the baseline is not a separate dependency
+
+The hackathon work does not sit next to the baseline: it rewrites it. About 80% of the
+agents, coordinator and audit code was rewritten or added during the event, and 517 files
+changed in total. There is no stable interface between the pre-event engine and the event
+code to import it as a dependency. The repository therefore branches from the baseline:
+the first commit, tagged `pre-hackathon-baseline`, holds the pre-event code; every later
+commit is event work, after the kickoff (12:24 PM ET, Oct 26). The compare link under
+*What we built during the hackathon* shows exactly what is new, and the demo video opens
+with one line stating what existed before and what was built this week.
+
 ## Timeline
 
-The hackathon kicked off on **26 October 2026 at 12:00 PM ET (17:00 in Cameroon, UTC+1)**.
+The hackathon kicked off on **26 October 2026 at 12:24 PM ET (17:24 in Cameroon, UTC+1)**.
 The baseline engine was imported as a single commit after the kickoff; every later
 commit is hackathon work. Author times, UTC+1:
 
