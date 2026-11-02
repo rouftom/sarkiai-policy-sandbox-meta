@@ -271,7 +271,7 @@ export class PolicyOrchestrator {
         ? {
             providerOptions: {
               meta: { reasoningEffort: input.effort },
-              'openai-compatible': { reasoningEffort: input.effort },
+              openaiCompatible: { reasoningEffort: input.effort },
             },
           }
         : {}

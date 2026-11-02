@@ -115,7 +115,7 @@ export function createEngine() {
         ...(options?.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
         // Planning, judging and ranking are short structured steps: low effort
         // keeps each one fast and cheap; the token budget stays as a ceiling.
-        providerOptions: { meta: { reasoningEffort: 'low' }, 'openai-compatible': { reasoningEffort: 'low' } },
+        providerOptions: { meta: { reasoningEffort: 'low' }, openaiCompatible: { reasoningEffort: 'low' } },
       })
       return result.text
     },

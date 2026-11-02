@@ -40,7 +40,7 @@ export async function correctTranscript(text: string, options: { model: Language
       system: CORRECTION_SYSTEM,
       prompt: `TRANSCRIPT:\n${original}`,
       maxOutputTokens: 1024,
-      providerOptions: { meta: { reasoningEffort: 'low' }, 'openai-compatible': { reasoningEffort: 'low' } },
+      providerOptions: { meta: { reasoningEffort: 'low' }, openaiCompatible: { reasoningEffort: 'low' } },
     })
     const candidate = stripThinking(result.text || '').trim().replace(/^["“”«»]+|["“”«»]+$/g, '')
     if (!acceptable(original, candidate)) return { text: original, changed: false }
