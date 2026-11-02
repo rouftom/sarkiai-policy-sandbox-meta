@@ -446,7 +446,7 @@ export async function writeAfterAction(input: WriteAfterActionInput): Promise<Af
       prompt,
       temperature: 0.2,
       maxOutputTokens: input.maxOutputTokens ?? 6000,
-      providerOptions: { meta: { reasoningEffort: 'low' }, 'openai-compatible': { reasoningEffort: 'low' } },
+      providerOptions: { meta: { reasoningEffort: 'low' }, openaiCompatible: { reasoningEffort: 'low' } },
     })
     raw = result.text
   }

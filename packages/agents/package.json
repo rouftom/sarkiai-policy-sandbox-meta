@@ -17,7 +17,7 @@
     "@sps/citations": "workspace:*",
     "@sps/audit": "workspace:*",
     "ai": "^6.0.0",
-    "@ai-sdk/openai-compatible": "^1.0.0",
+    "@ai-sdk/openai-compatible": "^2.0.88",
     "zod": "^3.23.8"
   },
   "devDependencies": {

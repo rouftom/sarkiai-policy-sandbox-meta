@@ -8,6 +8,9 @@
     "apps/*",
     "packages/*"
   ],
+  "overrides": {
+    "prismjs": "^1.30.0"
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
