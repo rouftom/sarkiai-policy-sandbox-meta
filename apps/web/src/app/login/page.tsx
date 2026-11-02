@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { ArrowRight, Check, Copy, Download, KeyRound, Loader, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { Button, Input, Label } from '@sps/ui'
-import { BrandMark } from '@/components/layout/brand-mark'
+import { BrandIntro } from '@/components/layout/brand-intro'
 import { AuthLayout, ErrorNote, StepIntro, messageFor } from '@/components/auth/auth-frame'
 import { OtpField, formatBackupCode } from '@/components/auth/otp-field'
 import { PasswordInput } from '@/components/auth/password-input'
@@ -250,7 +250,7 @@ export default function LoginPage() {
   if (loading) {
     return (
       <div className="grid min-h-dvh place-items-center bg-background">
-        <BrandMark className="h-10 w-10 animate-pulse" />
+        <BrandIntro wordmark={t('app.shortName')} />
       </div>
     )
   }
