@@ -84,12 +84,16 @@ are committed. Each entry carries a `rights` field:
 
 Rights were checked against the source publications (November 2026):
 
-- `open-licence`: the ID4D diagnostic (World Bank, CC BY 3.0 IGO; the exact
-  attribution string is in its `rightsNote`).
-- `official-text`: the health compact (MINSANTE, July 2023).
+- `open-licence`: the ID4D diagnostic (World Bank, CC BY 3.0 IGO), the WHO
+  cooperation strategy 2025-2029, the two PRIMASYS case studies and the
+  COVID-19 primary health care case study (CC BY-NC-SA 3.0 IGO), and the
+  Cameroon Health Equity Diagnostic (World Bank, CC BY-NC 3.0 IGO); the exact
+  attribution string is in each `rightsNote`.
+- `official-text`: the health compact (MINSANTE, July 2023), the national
+  quality-of-care strategy 2024-2028 and the health sector strategy 2016-2027
+  (MINSANTE/DOSTS), and the ART telecom observatory (2016).
 - `quotation-only`: `cm-ai-strategy` (Investir au Cameroun press article),
-  `cm-health-system` (ADSP n°39 article, © HCSP / Presses de l'EHESP),
-  `cm-telecom-observatory-2016` (ART report with no reuse terms) and
+  `cm-health-system` (ADSP n°39 article, © HCSP / Presses de l'EHESP) and
   `cm-ai-adoption-local-authorities` (HAL paper under the HAL deposit
   authorisation, which does not grant reuse).
 
