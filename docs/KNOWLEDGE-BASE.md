@@ -29,7 +29,7 @@ created at the first ingestion.
 `POST /v1/kb/ingest/text` and `POST /v1/kb/ingest` run `AtlasIngestor`
 (`packages/retrieval/src/atlas-ingest.ts`) in-process in every mode. Each step
 returns a status, a human detail and a duration, which is what the
-**Vectorise** tab renders as the ingestion journal.
+**Ingest** tab renders as the ingestion journal.
 
 1. **Accept**: trim, size bounds (24 chars … 2,000,000 chars), rights gate,
    taxonomy defaults (`country=global`, `jurisdiction=national`, `docType=policy`).
@@ -125,7 +125,7 @@ See [`LICENSING.md`](LICENSING.md).
 
 `/knowledge` → **Corpus** lists documents, **Retire/Restore** flips `isActive`
 for every chunk of one document (audit keeps the rows; retrieval stops seeing
-them), **Vectorise** runs one document with a journal, **Retrieval** is the
+them), **Ingest** runs one document with a journal, **Retrieval** is the
 playground, and the index card repairs the search index.
 
 Snapshot at the time of writing (cloud mode, Cameroon corpus): 22 documents and
