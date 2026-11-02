@@ -88,8 +88,8 @@ A change is done when:
 ## Skills
 
 `.agent/skills/` contains the project playbooks, in the portable Agent Skills
-format. `opencode.jsonc` points OpenCode at that directory, so the layout stays
-tool-agnostic. Load them by ID:
+format. The project configuration file points the agent client at that
+directory, so the layout stays tool-agnostic. Load them by ID:
 
 `sps-onboarding`, `sps-architecture`, `sps-backend`, `sps-web-console`,
 `sps-data`, `sps-quality-gates`, `sps-provider-modes`, `sps-auth-and-secrets`,
