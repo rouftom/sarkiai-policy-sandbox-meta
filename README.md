@@ -550,6 +550,10 @@ SPS_API_URL=https://sps-api.example bun run kb:seed
 bun run kb:seed -- --only snd30,psnsn --dry-run
 ```
 
+The ingest route is admin-only, so against a deployed API also export
+`SPS_ADMIN_TOKEN` with an admin session token (the bearer returned by
+`/v1/auth/login`); without it every document fails with HTTP 401.
+
 Background and limits: [`docs/KNOWLEDGE-BASE.md`](docs/KNOWLEDGE-BASE.md).
 
 ### WhatsApp channel and approvals (N4)
