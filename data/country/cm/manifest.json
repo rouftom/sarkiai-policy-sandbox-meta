@@ -24,25 +24,6 @@
       "sourceUrl": ""
     },
     {
-      "id": "cm-ai-strategy",
-      "title": "Stratégie nationale d'intelligence artificielle du Cameroun (objet de l'actualité presse)",
-      "authority": "MINPOSTEL",
-      "docType": "report",
-      "jurisdiction": "national",
-      "pillar": [
-        "generated_content",
-        "ai_policies",
-        "ai_inclusion"
-      ],
-      "status": "present",
-      "rights": "quotation-only",
-      "rightsNote": "Investir au Cameroun press article (10 July 2025), © Stratline Limited, all rights reserved: short attributed quotations only; do not publish the payload.",
-      "priority": "critical",
-      "file": "actualite_strategie_ia_cameroun.pdf",
-      "note": "Press article describing the strategy (target of 12,000 jobs by 2040) — the official strategy document is still to be obtained.",
-      "sourceUrl": "https://www.investiraucameroun.com/gestion-publique/1007-22234-le-cameroun-lance-sa-strategie-d-intelligence-artificielle-pour-generer-12-000-emplois-d-ici-2040"
-    },
-    {
       "id": "cm-digital-strategy-2020",
       "title": "Plan stratégique Cameroun Numérique 2020",
       "authority": "MINPOSTEL",
@@ -97,23 +78,6 @@
       "needsOcr": true,
       "note": "Part of the text extracts with a non-Unicode font (garbled) — OCR recommended.",
       "sourceUrl": "https://www.afro.who.int/sites/default/files/2025-03/Compact%20national%20French-1.pdf"
-    },
-    {
-      "id": "cm-health-system",
-      "title": "Le système de santé camerounais",
-      "authority": "Journal / author (Jean Paul Beyeme Ondoua)",
-      "docType": "report",
-      "jurisdiction": "national",
-      "pillar": [
-        "ai_integration",
-        "ai_inclusion"
-      ],
-      "status": "present",
-      "rights": "quotation-only",
-      "rightsNote": "ADSP n°39 article (June 2002) by Jean Paul Beyeme Ondoua, © HCSP / Presses de l'EHESP, all rights reserved: short attributed quotations only; do not publish the payload.",
-      "priority": "medium",
-      "file": "systeme_de_sante_camerounais.pdf",
-      "sourceUrl": "https://www.hcsp.fr/Explore.cgi/Telecharger?NomFichier=ad396165.pdf"
     },
     {
       "id": "cm-snd30-summary",
@@ -234,25 +198,6 @@
       "file": "loi_2013_013_communications_electroniques.pdf",
       "note": "Source reference: Loi_2013-013 (number and year to be confirmed).",
       "sourceUrl": "https://www.minpostel.gov.cm/"
-    },
-    {
-      "id": "cm-ai-adoption-local-authorities",
-      "title": "Stratégie d'adoption de l'IA dans la transformation numérique des Collectivités Territoriales Décentralisées du Cameroun",
-      "authority": "Research (HAL / authors)",
-      "docType": "report",
-      "jurisdiction": "national",
-      "pillar": [
-        "ai_policies",
-        "contextualization",
-        "ai_inclusion"
-      ],
-      "status": "present",
-      "rights": "quotation-only",
-      "rightsNote": "HAL deposit (hal-05411779) under the HAL deposit authorisation, which permits display but not reuse: short attributed quotations only; do not publish the payload.",
-      "priority": "high",
-      "file": "strategie_ia_collectivites_territoriales.pdf",
-      "note": "Research paper (DSR approach). The equivalent HAL record was not duplicated.",
-      "sourceUrl": "https://hal.science/hal-05411779v1"
     },
     {
       "id": "cm-interconnection-decree-2023",
