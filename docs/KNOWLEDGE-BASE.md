@@ -102,6 +102,10 @@ SPS_API_URL=https://sps-api.example bun run kb:seed
 bun run kb:seed -- --only snd30,psnsn
 bun run kb:seed -- --dry-run
 
+# the ingest route is admin-only: against a deployed API, pass a session token
+# (the bearer returned by /v1/auth/login) — otherwise every document is 401/403
+SPS_API_URL=https://sps-api.example SPS_ADMIN_TOKEN=... bun run kb:seed
+
 # after a rights change: report, then delete restricted documents still in Atlas
 MONGODB_URI=... bun run kb:purge
 MONGODB_URI=... bun run kb:purge -- --apply
