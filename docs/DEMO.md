@@ -1,6 +1,6 @@
 # Demo video: shot list
 
-**Watch it:** https://youtu.be/yAD7Qp7JQHQ (2:39, English voice-over and subtitles).
+**Watch it:** https://youtu.be/ExeLfurl-sA (2:39, English voice-over and subtitles).
 
 The video shows **only what was built during the hackathon** (see
 [`HACKATHON.md`](../HACKATHON.md)) and the Meta models doing real work: Muse
