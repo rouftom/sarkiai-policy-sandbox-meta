@@ -27,8 +27,9 @@ export interface TranscribeInput {
   columns: number
   filename: string
   maxOutputTokens?: number
-  /** Cloud only; local engines reject an unknown field. */
+  /** Meta and Baseten only; local engines reject an unknown field. */
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+  /** `providerOptions` namespace of the model (`meta`, `baseten`). */
   providerName?: string
   signal?: AbortSignal
 }
@@ -121,7 +122,7 @@ export async function transcribeRegion(input: TranscribeInput): Promise<Transcri
     model: input.model,
     maxOutputTokens: input.maxOutputTokens ?? 4096,
     ...(input.reasoningEffort && input.providerName
-      ? { providerOptions: { [input.providerName]: { reasoning_effort: input.reasoningEffort } } }
+      ? { providerOptions: { [input.providerName]: { reasoningEffort: input.reasoningEffort } } }
       : {}),
     messages: [
       {

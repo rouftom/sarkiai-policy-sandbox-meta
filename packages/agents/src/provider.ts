@@ -15,7 +15,7 @@
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { LanguageModel } from 'ai'
-import type { ProviderDescriptor, ProviderMode } from '@sps/shared'
+import { providerOptionsName, type ProviderDescriptor, type ProviderMode } from '@sps/shared'
 
 /** Muse Spark open weights on Baseten: the model id the hackathon requires. */
 export const BASETEN_DEFAULT_MODEL = 'meta-models/muse-spark-open-1026'
@@ -242,7 +242,7 @@ export function providerAccess(descriptor: ProviderDescriptor, source: Env = pro
 export function createProviderModel(descriptor: ProviderDescriptor, source: Env = process.env): LanguageModel {
   const headers = relayHeaders(source)
   const provider = createOpenAICompatible({
-    name: descriptor.servedBy.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'provider',
+    name: providerOptionsName(descriptor.servedBy),
     baseURL: descriptor.baseURL,
     apiKey: providerApiKey(descriptor, source),
     ...(Object.keys(headers).length > 0 ? { headers } : {}),

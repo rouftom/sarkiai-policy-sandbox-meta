@@ -10,6 +10,7 @@ import {
   institutionsForDomain,
   institutionsForDomains,
   isLens,
+  providerOptionsName,
 } from './index'
 
 describe('AI-readiness taxonomy', () => {
@@ -106,5 +107,19 @@ describe('mongoPoolOptions', () => {
     } finally {
       process.env = before
     }
+  })
+})
+
+describe('providerOptionsName', () => {
+  test('matches the name the AI SDK provider is created with', () => {
+    expect(providerOptionsName('Meta')).toBe('meta')
+    expect(providerOptionsName('Baseten')).toBe('baseten')
+    expect(providerOptionsName('Modal')).toBe('modal')
+    expect(providerOptionsName('Ollama')).toBe('ollama')
+  })
+
+  test('normalises punctuation and never returns an empty key', () => {
+    expect(providerOptionsName('My Provider!')).toBe('my-provider')
+    expect(providerOptionsName('***')).toBe('provider')
   })
 })

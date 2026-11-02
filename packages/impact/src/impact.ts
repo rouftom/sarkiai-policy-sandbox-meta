@@ -63,6 +63,11 @@ export interface AnalyzeImpactInput {
   maxOutputTokens?: number
   /** How many times a reply without usable JSON is asked again. Defaults to 2. */
   attempts?: number
+  /**
+   * `providerOptions` namespace of the active model (`meta`, `baseten`, …).
+   * Without it the effort is sent under the two historical keys.
+   */
+  providerName?: string
   /** Inject a fake generator in tests. */
   deps?: { interpret?: (prompt: string) => Promise<string> }
 }
@@ -216,13 +221,13 @@ export function parseImpact(raw: string, knownRunIds: string[]): Omit<ImpactAnal
  * the reasoning channel is read as a fallback for models that answer there.
  */
 async function interpretImpact(input: AnalyzeImpactInput, prompt: string): Promise<string> {
+  const effort = { reasoningEffort: 'low' }
   const result = await generateText({
     model: input.model,
     maxOutputTokens: input.maxOutputTokens ?? 8192,
-    providerOptions: {
-      meta: { reasoningEffort: 'low' },
-      openaiCompatible: { reasoningEffort: 'low' },
-    },
+    providerOptions: input.providerName
+      ? { [input.providerName]: effort }
+      : { meta: effort, openaiCompatible: effort },
     messages: [{ role: 'user', content: prompt }],
   })
   return result.text?.trim() || result.reasoningText || ''
