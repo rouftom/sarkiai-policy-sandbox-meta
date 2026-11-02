@@ -1,6 +1,6 @@
 ---
 name: SarkiAI architecture
-description: The invariants behind the SarkiAI engine — one engine with two lenses, the Qdrant/MongoDB/Atlas storage split, the package boundaries, the data flow per lens and the failure-isolation rules. Use before a cross-cutting change, when explaining how the engine works, or when deciding where new logic belongs.
+description: The invariants behind the SarkiAI engine — one engine with two lenses, the MongoDB corpus and operational stores, the package boundaries, the data flow per lens and the failure-isolation rules. Use before a cross-cutting change, when explaining how the engine works, or when deciding where new logic belongs.
 ---
 
 # SarkiAI architecture
@@ -17,21 +17,22 @@ description: The invariants behind the SarkiAI engine — one engine with two le
    is invalid; reject it rather than returning prose.
 4. **Every decision is auditable.** Reasoning is persisted (`cot_traces`) and
    actions are hash-chained (`audit_logs`), not merely streamed.
-5. **Provider-neutral and offline-capable.** Apache-2.0, no proprietary import,
-   `local` and `sovereign` make no outbound call.
+5. **Meta-only and offline-capable.** Apache-2.0, no proprietary import. Every
+   model called at runtime is a Meta model; `local` makes no outbound call.
 
 ## Storage split
 
 | Store | Holds | Used in |
 | --- | --- | --- |
-| Qdrant | `policy_chunks`, dense (`bge-m3`, 1024-d) + sparse BM25 | `local`, `sovereign` |
-| MongoDB Atlas | `kb_chunks` with Vector Search + text index | `cloud` (and `RETRIEVAL_BACKEND=atlas`) |
+| MongoDB (`kb_chunks`) | the corpus, searched lexically: Atlas Search in `cloud`, a text index in `local`/`sovereign` | every mode |
+| MongoDB Atlas | the same corpus with the `sps_text_index` Atlas Search index | `cloud` |
 | MongoDB | `audit_logs`, `cot_traces`, `usage_events`, runs, operators | every mode |
 | MinIO | assistant image attachments, content-addressed (sha256) | every mode |
 
-`KbChunk` is identical in both retrieval backends: switching mode changes where
-the vectors live, not what the engine reads or cites. MongoDB is never in the
-retrieval path in `local`/`sovereign` (no `$vectorSearch` dependency).
+`KbChunk` is identical in both search backends: switching mode changes where the
+BM25 index lives, not what the engine reads or cites. There is **no vector
+store and no embedding**: the Meta model of the mode plans the search, runs the
+sub-agents, judges and ranks (`packages/retrieval/src/agentic.ts`).
 
 ## Runtime topology
 
@@ -39,21 +40,24 @@ retrieval path in `local`/`sovereign` (no `$vectorSearch` dependency).
 browser ─▶ apps/web (Next.js 16) ── REST + SSE ──▶ apps/api (Fastify)
                                                      │
                      engine.ts composes:             │
-                       PolicyOrchestrator             ├─▶ MongoDB (audit, CoT, runs)
-                       ScenarioEngine                 ├─▶ Qdrant  (dense + sparse RRF)
-                       ReadinessEngine                ├─▶ services/ingestion ─▶ services/ocr
-                       AuditService                   └─▶ provider (Ollama | Baseten | Meta API)
+                       AgenticRetriever               ├─▶ MongoDB (corpus + index, audit, CoT, runs)
+                       AtlasIngestor                  ├─▶ MinIO   (image attachments)
+                       PolicyOrchestrator             └─▶ provider (Ollama | Baseten | Meta API)
+                       ScenarioEngine
+                       ReadinessEngine
+                       AuditService
 ```
 
-`cloud` substitutes Meta Model API for Ollama and Atlas/Voyage for
-Qdrant/`bge-m3`; nothing else changes.
+`cloud` substitutes the Meta Model API for Ollama and Atlas Search for the
+MongoDB text index; nothing else changes. Ingestion runs in the API process.
 
 ## Data flow — simulation lens
 
-1. Ingestion writes structure-aware chunks + embeddings to the active backend.
+1. `AtlasIngestor` writes structure-aware chunks to `kb_chunks` and ensures the
+   search index exists.
 2. `ScenarioEngine.release()` yields event batches per tick.
-3. `PolicyOrchestrator.runAgent()` retrieves country provisions, builds the
-   mandate-grounded prompt, generates, enforces citations.
+3. `PolicyOrchestrator.runAgent()` runs the agentic search over country
+   provisions, builds the mandate-grounded prompt, generates, enforces citations.
 4. Each agent emits an independent `AgentAssessment`; the coordinator
    reconciles them into a joint situation report.
 5. `AuditService.traceStep()` records each reasoning step; `logAction()`
@@ -64,17 +68,18 @@ Qdrant/`bge-m3`; nothing else changes.
 `ReadinessEngine.assess()` iterates 13 dimensions (Report 2.0, 6 factors),
 retrieves national provisions **and** the regional/international corpus, and
 asks the model for structured gaps. Output: `ReadinessReport` (JSON + Markdown),
-scored 0–5 per dimension plus a composite.
+scored per dimension plus a composite.
 
 ## Failure isolation
 
-- Ingestion, OCR and transcription are independent containers; the API depends
-  on Qdrant + ingestion health, never on OCR.
-- Sparse leg failure → dense-only retrieval with the same filter.
-- OCR unreachable → text-native PDFs still ingest.
-- Rerank error → the fused RRF order is returned unchanged.
+- Ingestion runs in the API process but is transactional per document: a failed
+  ingest leaves the previous chunk set in place and reports the error.
+- Agentic search degrades: every model step (plan, judge, rank) is bounded and,
+  on failure, falls back to the lexical BM25 order with the same filter.
 - Mongo unreachable → metering buffers in memory; audit features degrade
   explicitly, they do not crash the request path.
+- Vision unreachable → scanned pages are not segmented; text-native documents
+  still ingest.
 
 ## Where logic belongs
 
@@ -82,7 +87,9 @@ scored 0–5 per dimension plus a composite.
 | --- | --- |
 | Provider/model selection | `packages/agents/src/provider.ts` |
 | Prompting, orchestration, structured output | `packages/agents` |
-| Retrieval, RRF, backends | `packages/retrieval` |
+| Retrieval, agentic search, lexical source, ingestion | `packages/retrieval` |
+| Chunking | `packages/kb` |
+| Scanned-page segmentation (SAM 3.1) | `packages/gazette` |
 | Domain types, taxonomy, lenses | `packages/shared` |
 | Scoring, gaps, reports | `packages/readiness`, `packages/report` |
 | Hash chain, CoT | `packages/audit` |

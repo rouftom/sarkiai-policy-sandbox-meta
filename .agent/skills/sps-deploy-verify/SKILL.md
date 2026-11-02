@@ -15,8 +15,11 @@ container (SSE, webhooks, WebSockets); the console is a Next.js build.
   listens on `PORT` (default 8000).
 - Blueprint: `deploy/api/blueprint.yaml`. Guide: `deploy/api/README.md`.
 - Secrets live in the host dashboard, never in the repository:
-  `MODEL_API_KEY`, `VOYAGE_API_KEY`, `MONGODB_URI`, `APPROVAL_SECRET`,
-  `SESSION_SECRET`, `AUTH_RESEND_KEY`, `TURNSTILE_SECRET`.
+  `MODEL_API_KEY`, `MONGODB_URI`, `APPROVAL_SECRET`, `SESSION_SECRET`,
+  `AUTH_RESEND_KEY`, `TURNSTILE_SECRET`.
+- Retrieval needs no key: the corpus is in MongoDB. `RETRIEVAL_BACKEND`
+  (`auto | atlas | text`) follows the mode and `RETRIEVAL_DEPTH`
+  (`lexical | fast | deep`) sets the default search depth.
 - Set `WEB_PUBLIC_URL` to the origin users open; add `WEB_PUBLIC_URL_ALIASES`
   for a second domain or a preview host. A `*.vercel.app` preview is always
   accepted.
@@ -46,18 +49,19 @@ keeps the demo responsive without a paid instance.
 curl -s https://<api-host>/health                     # {"status":"ok", provider:{mode,model}}
 curl -s https://<api-host>/v1/auth/captcha            # {required,siteKey} in cloud
 curl -s https://<api-host>/v1/auth/setup              # {initialized:true, storage, signup}
-curl -s -o /dev/null -w '%{http_code}\n' https://<api-host>/v1/readiness/runs   # 401
-curl -s -o /dev/null -w '%{http_code}\n' https://<web-host>/setup               # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://<api-host>/v1/kb/documents   # 401
+curl -s -o /dev/null -w '%{http_code}\n' https://<web-host>/setup             # 200
 ```
 
 Then open the console: sign in, run one scenario tick and one readiness
-dimension, confirm the run shows in `/audit`, and check that the provider badge
-matches the configured mode.
+dimension, confirm the run shows in `/audit`, open `/knowledge` → **Retrieval**
+and check that a question returns a plan, sub-agents with their rounds and a
+final context, and that the provider badge matches the configured mode.
 
 ## Rollback
 
 - API: redeploy the previous commit from the host (or roll back the service);
-  the container is stateless, Mongo and Qdrant keep their data.
+  the container is stateless, MongoDB and MinIO keep their data.
 - Console: promote the previous build. No data migration is involved.
 - Never "fix" a bad deploy by editing a secret in the repository; rotate it in
   the host dashboard and redeploy.
@@ -66,7 +70,8 @@ matches the configured mode.
 
 1. CI/checks green on the commit being promoted (`main`).
 2. Environment deltas listed (new, changed, removed variable) and set in the
-   dashboard **before** the deploy.
-3. `docker compose config` and `make sandbox-config` still valid.
+   dashboard **before** the deploy. Removed services leave dead variables:
+   delete them rather than leaving them to mislead the next operator.
+3. `docker compose config` still valid.
 4. A rollback path exists (previous deploy id or commit).
 5. After the deploy: the five probes above, plus one authenticated action.

@@ -14,7 +14,7 @@ import {
 } from '@sps/gazette'
 import { evaluateExercise, figureBriefs, writeAfterAction, type ExerciseDefinition } from '@sps/exercise'
 import { analyzeImpact } from '@sps/impact'
-import { IngestionClient } from '@sps/kb'
+import type { IngestionClient } from '@sps/kb'
 import type { AtlasIngestor } from '@sps/retrieval'
 import { ReadinessInterrupted, buildScenario, whatIf, type LeadDecision, type LeadState, type ReadinessReport } from '@sps/readiness'
 import {
@@ -29,7 +29,7 @@ import {
   maskPhone,
   normalizePhone,
 } from '@sps/notifications'
-import { LocalAsrClient, MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
+import { MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
 import { hasLanguage, institutionsForDomain, institutionsForDomains, type ProviderDescriptor } from '@sps/shared'
@@ -74,7 +74,6 @@ import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit
 import { registerVoiceRoutes } from '../voice-routes.js'
 
 const engine = createEngine()
-const ingestion = new IngestionClient({ baseUrl: config.ingestion.baseUrl, apiKey: config.ingestion.apiKey })
 const knowledge: AtlasIngestor = createKnowledgeIngestor()
 
 /**
@@ -811,31 +810,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/provider', async () => engine.provider)
 
   // ── Knowledge base ────────────────────────────────────────────────────────
-  // Live corpus + Atlas index state. This is the source of truth behind the
-  // Knowledge base screen: counts, embeddings, `READY` vs `BUILDING` indexes.
+  // Live corpus + lexical index state. This is the source of truth behind the
+  // Knowledge base screen: counts, documents, `READY` vs `BUILDING` indexes.
   app.get('/v1/kb/status', async (request, reply) => {
-    if (engine.retrievalBackend !== 'atlas') {
-      return {
-        backend: engine.retrievalBackend,
-        provider: { mode: engine.provider.mode, reasoning: engine.provider.models.reasoning },
-        collection: config.qdrant.collection,
-        collectionExists: undefined,
-        totals: { chunks: 0, activeChunks: 0, documents: 0, figures: 0, characters: 0, lastIngestedAt: null },
-        byCountry: [],
-        byDocType: [],
-        indexes: { supported: false, collectionExists: false, indexes: [], error: 'Atlas is only used in cloud mode.' },
-        expectedIndexes: [],
-        embedding: {
-          model: config.embeddings.model,
-          rerankModel: config.rerank.model,
-          dimensions: null,
-          missingVectors: 0,
-          mismatchedVectors: 0,
-          voyageConfigured: false,
-        },
-        recentRuns: [],
-      }
-    }
     try {
       const status = await knowledge.status()
       return {
@@ -850,7 +827,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/v1/kb/documents', async (request, reply) => {
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const query = z
       .object({
         limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -869,7 +845,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/v1/kb/documents/active', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const body = z
       .object({ filename: z.string().min(1), active: z.boolean() })
       .safeParse(request.body)
@@ -886,7 +861,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Remove one document from the knowledge base: its passages, its figures and its metadata. */
   app.delete('/v1/kb/documents', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const query = z.object({ filename: z.string().min(1).max(300) }).safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     try {
@@ -900,7 +874,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Preview of one document: its passages (chunk selected) and figures. */
   app.get('/v1/kb/documents/preview', async (request, reply) => {
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const query = z
       .object({ filename: z.string().min(1).max(300), chunkIndex: z.coerce.number().int().min(0).optional() })
       .safeParse(request.query)
@@ -915,7 +888,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Every passage of one document, retired ones included, for the editor. */
   app.get('/v1/kb/documents/chunks', async (request, reply) => {
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const query = z.object({ filename: z.string().min(1).max(300) }).safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     return { chunks: await knowledge.chunksOf(query.data.filename) }
@@ -924,7 +896,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Document metadata: title, summary, and the fields propagated to its passages. */
   app.patch('/v1/kb/documents', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const body = z
       .object({
         filename: z.string().min(1).max(300),
@@ -946,7 +917,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Edit one passage (re-embedded when its text changes) or retire / restore it. */
   app.patch('/v1/kb/chunks/:id', { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const { id } = request.params as { id: string }
     const body = z.object({ text: z.string().max(20_000).optional(), active: z.boolean().optional() }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -963,7 +933,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Attach figures to a document: uploaded bytes, stored once, shown in the document's Media tab and in citations. */
   app.post('/v1/kb/documents/images', { bodyLimit: 40 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const body = z
       .object({
         filename: z.string().min(1).max(300),
@@ -997,7 +966,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Edit a figure's caption, alt text, tags or dimension. */
   app.patch('/v1/kb/images/:id', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const { id } = request.params as { id: string }
     const body = z
       .object({
@@ -1018,7 +986,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete('/v1/kb/images/:id', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const { id } = request.params as { id: string }
     const deleted = await knowledge.deleteImage(id)
     if (!deleted) return reply.status(404).send({ error: 'Image not found.' })
@@ -1028,7 +995,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Generate the reference figures (Meta Image, or a labelled sample) and attach them to existing documents. */
   app.post('/v1/kb/images/reference', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     try {
       return await seedReferenceImages(request.log)
     } catch (error) {
@@ -1042,7 +1008,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * and the figures are corpus material, not operator data.
    */
   app.get('/v1/kb/images/:id', async (request, reply) => {
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const { id } = request.params as { id: string }
     const image = await knowledge.getImage(id)
     if (!image) return reply.status(404).send({ error: 'Image not found.' })
@@ -1054,7 +1019,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Create or repair the Atlas vector + BM25 indexes, on demand. */
   app.post('/v1/kb/indexes', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     try {
       const result = await knowledge.ensureIndexes()
       return result
@@ -1064,12 +1028,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   })
 
-  /** Full-text ingestion: chunk → embed → upsert → ensure indexes. */
+  /** Full-text ingestion: chunk → upsert → ensure the lexical index. */
   app.post('/v1/kb/ingest/text', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') {
-      return reply.status(409).send({ error: 'Direct ingestion is available in cloud mode (Atlas + Voyage).' })
-    }
     const body = z
       .object({
         text: z.string().min(24).max(2_000_000),
@@ -1104,9 +1065,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/v1/kb/ingest/file', { bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    if (engine.retrievalBackend !== 'atlas') {
-      return reply.status(409).send({ error: 'Direct ingestion is available in cloud mode (Atlas + Voyage).' })
-    }
     const body = z
       .object({
         filename: z.string().min(1).max(200),
@@ -1162,9 +1120,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   })
 
-  /** Retrieval playground: every stage, with scores and provenance. */
+  /** Retrieval playground: plan, sub-agents, rounds and every ranked stage. */
   app.post('/v1/kb/search', async (request, reply) => {
-    if (engine.retrievalBackend !== 'atlas') return reply.status(409).send({ error: 'Atlas knowledge base is not the active backend.' })
     const body = z
       .object({
         text: z.string().min(2).max(2000),
@@ -1173,17 +1130,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         docType: z.string().optional(),
         namespace: z.string().optional(),
         topK: z.number().int().min(1).max(12).default(6),
+        depth: z.enum(['lexical', 'fast', 'deep']).default('deep'),
       })
       .safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     try {
-      const exploration = await knowledge.explore({
+      const exploration = await engine.retriever.explore({
         text: body.data.text,
         country: body.data.country,
         ...(body.data.jurisdiction ? { jurisdiction: body.data.jurisdiction } : {}),
         ...(body.data.docType ? { docType: body.data.docType as DocType } : {}),
         ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
         topK: body.data.topK,
+        depth: body.data.depth,
       })
       return exploration
     } catch (error) {
@@ -1192,16 +1151,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   })
 
-  /**
-   * Cloud mode does not need the optional Python service: go straight through
-   * `AtlasIngestor` so the public demo can vectorise a document. Local and
-   * sovereign modes keep the service (Qdrant + bge-m3).
-   */
+  /** Every mode ingests in-process into the corpus collection (no external service). */
   async function ingestText(input: Parameters<IngestionClient['ingestText']>[0]) {
     // Defense in depth: callers already refuse restricted rights, and the
     // Atlas ingestor checks again before it writes anything.
     assertPublishableRights(input.rights, input.filename)
-    if (engine.retrievalBackend === 'atlas') {
+    {
       const result = await knowledge.ingest({
         text: input.text,
         filename: input.filename,
@@ -1225,7 +1180,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         usedOcr: false,
       }
     }
-    return ingestion.ingestText(input)
   }
 
   app.post('/v1/kb/ingest', async (request, reply) => {
@@ -2360,8 +2314,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // ── N6: voice notes as timed facts ────────────────────────────────────────
-  // Cloud calls Muse Voice Transcribe; sovereign/local call the on-premise
-  // faster-whisper service. Both come back as the same transcript + turns, and
+  // Muse Voice Transcribe returns the transcript and its turns, and
   // `facts` puts each turn on the incident timeline with its offset.
   app.post('/v1/voice/transcribe', { bodyLimit: 44 * 1024 * 1024 }, async (request, reply) => {
     const body = z
@@ -2384,30 +2337,28 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     // Muse Voice Transcribe stays on Meta even when Baseten does the reasoning.
     const meta = metaServices()
-    const cloudVoice = Boolean(meta?.models.transcription)
-    const voiceModel = meta?.models.transcription ?? 'faster-whisper'
+    // Voice runs on Muse Voice Transcribe only: without the Meta Model API there
+    // is no transcription, rather than a non-Meta fallback.
+    if (!meta?.models.transcription) {
+      return reply.status(503).send({ error: 'voice_unavailable', message: 'Voice needs Muse Voice Transcribe (Meta Model API).' })
+    }
+    const voiceModel = meta.models.transcription
     // Voice is billed by the second; no confirmed Muse Voice tariff in this
-    // repo, so a Meta call stays unpriced while on-premise runs cost 0.
+    // repo, so the call stays unpriced.
     const voiceUsage = {
       kind: 'voice' as const,
       unit: 'second' as const,
       model: voiceModel,
-      mode: cloudVoice ? ('cloud' as const) : engine.provider.mode,
-      servedBy: cloudVoice ? 'Meta' : engine.provider.servedBy,
-      costUsd: cloudVoice ? null : 0,
+      mode: 'cloud' as const,
+      servedBy: 'Meta',
+      costUsd: null,
     }
-    const client = cloudVoice
-      ? new MetaAsrClient({
-          baseUrl: meta!.baseURL,
-          apiKey: providerAccess(meta!).apiKey,
-          headers: providerAccess(meta!).headers,
-          model: voiceModel,
-        })
-      : new LocalAsrClient({
-          baseUrl: config.transcription.url,
-          apiKey: config.serviceApiKey,
-          model: 'faster-whisper',
-        })
+    const client = new MetaAsrClient({
+      baseUrl: meta.baseURL,
+      apiKey: providerAccess(meta).apiKey,
+      headers: providerAccess(meta).headers,
+      model: voiceModel,
+    })
 
     const startedAt = Date.now()
     try {

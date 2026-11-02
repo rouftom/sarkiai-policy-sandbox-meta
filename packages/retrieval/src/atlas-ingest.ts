@@ -1,13 +1,12 @@
 /**
- * Direct Atlas ingestion · the vectorisation path the console can actually run.
+ * Direct corpus ingestion, in-process, for every deployment mode:
  *
- * Cloud mode used to depend on an optional Python ingestion service. That made
- * the RAG opaque (and unavailable on the public demo host). This module owns the
- * whole path in-process:
+ *   text → heading-aware chunks → idempotent upsert into `kb_chunks` (content
+ *   hash as `_id`) → lexical index ensured (Atlas Search in the cloud, a MongoDB
+ *   text index elsewhere) → corpus/search status.
  *
- *   text → heading-aware chunks → Voyage `voyage-4` embeddings →
- *   idempotent upsert into `kb_chunks` (content hash as `_id`) →
- *   Atlas indexes ensured → corpus/search status.
+ * No vector is computed: the Meta model of the mode plans, judges and ranks
+ * at search time (see `AgenticRetriever`).
  *
  * Every step is timed and returned, so the Knowledge base screen can show what
  * happened instead of a spinner with no explanation.
@@ -21,19 +20,17 @@ import type { CorpusRights, DocType, DocumentImage, Jurisdiction, ReadinessDimen
 
 import { inspectAtlasIndexes, ensureAtlasIndexes, type AtlasIndexInspection } from './atlas-indexes'
 import { KB_INDEX_DEFINITIONS } from './atlas-index-definitions'
-import { AtlasRetriever, type RetrievalExploration } from './atlas'
-import { VoyageClient, type VoyageConfig } from './voyage'
-import type { RetrievalQuery } from '@sps/shared'
+import type { CorpusSearchMode } from './atlas'
 import { mongoPoolOptions } from '@sps/shared'
 
 export interface AtlasIngestorConfig {
   mongodbUri: string
   dbName: string
   collectionName?: string
-  voyage: VoyageConfig
-  /** Create missing indexes after a write (default true in cloud mode). */
+  /** Atlas Search (cloud) or a MongoDB text index (local, sovereign). */
+  searchMode: CorpusSearchMode
+  /** Create missing indexes after a write (default true). */
   autoIndexes?: boolean
-  vectorIndex?: string
   textIndex?: string
 }
 
@@ -96,8 +93,6 @@ export interface IngestResult {
   unchanged: number
   deactivated: number
   characters: number
-  embeddingModel: string
-  dimensions: number | null
   durationMs: number
   steps: IngestStep[]
   indexes: AtlasIndexInspection
@@ -156,13 +151,9 @@ export interface KnowledgeStatus {
   byDocType: Array<{ value: string; chunks: number }>
   indexes: AtlasIndexInspection
   expectedIndexes: string[]
-  embedding: {
-    model: string
-    rerankModel: string
-    dimensions: number | null
-    missingVectors: number
-    mismatchedVectors: number
-    voyageConfigured: boolean
+  search: {
+    /** `atlas` (Atlas Search) or `text` (MongoDB text index). */
+    mode: CorpusSearchMode
   }
   recentRuns: IngestResult[]
 }
@@ -212,12 +203,10 @@ function iso(value: unknown): string | null {
 
 export class AtlasIngestor {
   private client: MongoClient | null = null
-  private readonly voyage: VoyageClient
   private readonly collectionName: string
   private readonly recentRuns: IngestResult[] = []
 
   constructor(private readonly config: AtlasIngestorConfig) {
-    this.voyage = new VoyageClient(config.voyage)
     this.collectionName = config.collectionName ?? INGEST_DEFAULTS.collectionName
   }
 
@@ -398,8 +387,6 @@ export class AtlasIngestor {
       unchanged: 0,
       deactivated: 0,
       characters: 0,
-      embeddingModel: this.voyage.model,
-      dimensions: null,
       durationMs: 0,
       steps,
       indexes: { supported: true, collectionExists: false, indexes: [] },
@@ -453,44 +440,7 @@ export class AtlasIngestor {
       const fresh = records.filter((record) => !existingIds.has(record.id))
       const unchanged = records.length - fresh.length
 
-      // 3 · embed (only the chunks that are actually new) ──────────────────
-      stepStart = Date.now()
-      const vectors = new Map<string, number[]>()
-      if (fresh.length === 0) {
-        push({
-          id: 'embed',
-          status: 'skipped',
-          label: 'Embedding skipped',
-          detail: `All ${records.length} chunks already exist · content unchanged, no Voyage call.`,
-          count: 0,
-          startedAt: stepStart,
-        })
-      } else {
-        for (let index = 0; index < fresh.length; index += INGEST_DEFAULTS.embedBatch) {
-          const batch = fresh.slice(index, index + INGEST_DEFAULTS.embedBatch)
-          const embeddings = await this.voyage.embed(
-            batch.map((record) => record.chunk.text),
-            'document',
-          )
-          batch.forEach((record, position) => {
-            const vector = embeddings[position]
-            if (!vector) throw new Error(`Voyage returned no vector for chunk ${record.chunk.chunkIndex}.`)
-            vectors.set(record.id, vector)
-          })
-        }
-        const first = vectors.values().next().value as number[] | undefined
-        result.dimensions = first?.length ?? null
-        push({
-          id: 'embed',
-          status: 'ok',
-          label: `Embedded with ${this.voyage.model}`,
-          detail: `${fresh.length} new chunks · ${result.dimensions ?? '?'} dimensions · ${Math.ceil(fresh.length / INGEST_DEFAULTS.embedBatch)} batch(es)`,
-          count: fresh.length,
-          startedAt: stepStart,
-        })
-      }
-
-      // 4 · write (idempotent upsert + stale-version cleanup) ─────────────
+      // 3 · write (idempotent upsert + stale-version cleanup) ─────────────
       stepStart = Date.now()
       const now = new Date()
       if (fresh.length > 0) {
@@ -515,7 +465,6 @@ export class AtlasIngestor {
                 ...(input.pillar && input.pillar.length > 0 ? { pillar: input.pillar } : {}),
                 ...(record.chunk.headingPath ? { headingPath: record.chunk.headingPath } : {}),
                 ...(record.chunk.articleNumber ? { articleNumber: record.chunk.articleNumber } : {}),
-                embedding: vectors.get(record.id),
                 isActive: true,
                 ingestedAt: now,
                 metadata: { version: input.version ?? null, chunkChars: record.chunk.text.length },
@@ -562,8 +511,18 @@ export class AtlasIngestor {
         startedAt: stepStart,
       })
 
-      // 5 · indexes ─────────────────────────────────────────────────────────
+      // 4 · indexes ─────────────────────────────────────────────────────────
       stepStart = Date.now()
+      if (this.config.searchMode === 'text') {
+        await this.ensureTextIndex(collection)
+        push({
+          id: 'indexes',
+          status: 'ok',
+          label: 'Text index ensured',
+          detail: 'MongoDB text index on the passages (lexical search).',
+          startedAt: stepStart,
+        })
+      } else {
       result.indexes = await inspectAtlasIndexes({
         uri: this.config.mongodbUri,
         dbName: this.config.dbName,
@@ -605,8 +564,9 @@ export class AtlasIngestor {
           startedAt: stepStart,
         })
       }
+      }
 
-      // 6 · verify ──────────────────────────────────────────────────────────
+      // 5 · verify ──────────────────────────────────────────────────────────
       stepStart = Date.now()
       const total = await collection.countDocuments({ filename: input.filename, isActive: true })
       push({
@@ -635,13 +595,6 @@ export class AtlasIngestor {
     }
 
     result.durationMs = Date.now() - started
-    if (!result.dimensions) {
-      const sample = await (await this.chunks())
-        .findOne({ embedding: { $exists: true } }, { projection: { embedding: 1 } })
-        .catch(() => null)
-      const vector = Array.isArray(sample?.embedding) ? (sample.embedding as number[]) : null
-      result.dimensions = vector?.length ?? null
-    }
 
     this.recentRuns.unshift(result)
     if (this.recentRuns.length > 8) this.recentRuns.length = 8
@@ -649,6 +602,7 @@ export class AtlasIngestor {
   }
 
   async ensureIndexes(): Promise<{ inspection: AtlasIndexInspection; ensured: Awaited<ReturnType<typeof ensureAtlasIndexes>> }> {
+    if (this.config.searchMode === 'text') await this.ensureTextIndex(await this.chunks())
     const ensured = await ensureAtlasIndexes({
       uri: this.config.mongodbUri,
       dbName: this.config.dbName,
@@ -682,9 +636,6 @@ export class AtlasIngestor {
     }
     let byCountry: Array<{ value: string; chunks: number }> = []
     let byDocType: Array<{ value: string; chunks: number }> = []
-    let dimensions: number | null = null
-    let missingVectors = 0
-    let mismatchedVectors = 0
 
     if (exists) {
       const collection = db.collection(this.collectionName)
@@ -741,17 +692,6 @@ export class AtlasIngestor {
         value: row._id ?? 'unknown',
         chunks: row.chunks ?? 0,
       }))
-
-      const sample = await collection.findOne({ embedding: { $exists: true, $ne: null } }, { projection: { embedding: 1 } })
-      dimensions = Array.isArray(sample?.embedding) ? (sample.embedding as number[]).length : null
-      missingVectors = await collection.countDocuments({ isActive: true, embedding: { $exists: false } })
-      if (dimensions) {
-        mismatchedVectors = await collection.countDocuments({
-          isActive: true,
-          embedding: { $exists: true },
-          $expr: { $ne: [{ $size: '$embedding' }, dimensions] },
-        })
-      }
     }
 
     return {
@@ -762,14 +702,7 @@ export class AtlasIngestor {
       byDocType,
       indexes: inspection,
       expectedIndexes: KB_INDEX_DEFINITIONS.map((index) => index.name),
-      embedding: {
-        model: this.voyage.model,
-        rerankModel: this.voyage.reranker,
-        dimensions,
-        missingVectors,
-        mismatchedVectors,
-        voyageConfigured: Boolean(this.config.voyage.apiKey),
-      },
+      search: { mode: this.config.searchMode },
       recentRuns: this.recentRuns,
     }
   }
@@ -914,7 +847,7 @@ export class AtlasIngestor {
     )
   }
 
-  /** Edit one passage. The vector is recomputed so retrieval matches the new text. */
+  /** Edit one passage. The lexical index follows the new text on its own. */
   async updateChunk(id: string, patch: { text?: string; active?: boolean }): Promise<boolean> {
     const collection = await this.chunks()
     const update: Document = {}
@@ -925,10 +858,7 @@ export class AtlasIngestor {
     if (typeof patch.text === 'string') {
       const text = patch.text.trim()
       if (text.length < 24) throw new Error('A passage must keep at least 24 characters.')
-      const [vector] = await this.voyage.embed([text], 'document')
-      if (!vector) throw new Error('Voyage returned no vector for the edited passage.')
       update.text = text
-      update.embedding = vector
       update.metadata = { chunkChars: text.length, editedAt: new Date() }
     }
     if (Object.keys(update).length === 0) return false
@@ -969,19 +899,16 @@ export class AtlasIngestor {
     }))
   }
 
-  async explore(query: RetrievalQuery): Promise<RetrievalExploration> {
-    const retriever = new AtlasRetriever({
-      mongodbUri: this.config.mongodbUri,
-      dbName: this.config.dbName,
-      collectionName: this.collectionName,
-      ...(this.config.vectorIndex ? { vectorIndex: this.config.vectorIndex } : {}),
-      ...(this.config.textIndex ? { textIndex: this.config.textIndex } : {}),
-      voyage: this.config.voyage,
-    })
-    try {
-      return await retriever.explore(query)
-    } finally {
-      await retriever.close()
-    }
+  /**
+   * MongoDB text index for the local and sovereign modes. No language: the
+   * corpus mixes French and English, so no stemming; matching is case- and
+   * diacritic-insensitive.
+   */
+  private async ensureTextIndex(collection: Collection<KbChunkDocument>): Promise<void> {
+    await collection.createIndex(
+      { text: 'text' },
+      { name: this.config.textIndex ?? 'sps_text_index', default_language: 'none', language_override: 'textLanguage' },
+    )
+    await collection.createIndex({ filename: 1, articleNumber: 1, chunkIndex: 1 }, { name: 'sps_article_lookup' })
   }
 }

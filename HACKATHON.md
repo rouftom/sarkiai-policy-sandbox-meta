@@ -15,7 +15,7 @@ The baseline commit [`bdb8a11`](https://github.com/rouftom/sarkiai-policy-sandbo
 
 The engine, published here unchanged as the starting point:
 
-- national legal-corpus ingestion (structure-aware chunking, embeddings, jurisdiction metadata);
+- national legal-corpus ingestion (structure-aware chunking, jurisdiction metadata);
 - **mandated institutional agents** that must cite the applicable provisions;
 - a **coordinator** that reconciles independent assessments into a joint situation
   report and flags conflicts between mandates;
@@ -41,7 +41,7 @@ commit is hackathon work. Author times, UTC+1:
 | 22:06 | [`bccaf9d`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/bccaf9d83b5e6ac077113dcbf9cf0a501f366051) | N5 Muse Glimmer Modelfile |
 | 22:10 | [`1fd4c95`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/1fd4c9510019e8fe7cabb9ea7a1d01ecdf4ec2ba) | N6 voice notes to timed facts |
 | 22:13 | [`f9a9e30`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/f9a9e30c9a15973cf66dd91e13853688005dc499) | N7 legislative impact |
-| 27 Oct, 01:00 | [`913a99e`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/913a99e) | N4 WhatsApp approvals, N11 cloud retrieval |
+| 27 Oct, 01:00 | [`913a99e`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/913a99e) | N4 WhatsApp approvals, N11 knowledge base |
 | 27 Oct, 01:14 | [`23cfb10`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/23cfb10) | N8 crisis exercise |
 | 28 Oct, 04:52 | [`dd51223`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/dd51223) | N12 live web search, N6 working speech-to-text |
 | 28 Oct, 20:22 | [`2d54c18`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/2d54c18) | N12 live assessment process and history |
@@ -67,24 +67,21 @@ Full diff: [`baseline...main`](https://github.com/rouftom/sarkiai-policy-sandbox
 | N3 | Scanned gazette ingestion: column segmentation, per-zone transcription, SAM artefact overlay, provenance carried into the KB (`@sps/gazette`, `/v1/gazette/*`, console panel) | SAM 3.1 + Muse Spark | done | [`75e4908`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/75e4908ff69a4fc92c1fc302bd26a3380497a2fe) (first commit; later commits in the diff) |
 | N4 | **WhatsApp channel**: joint reports and deadline alerts sent as approved utility templates (`meta_hackathon_*`); an approval request carries a signed, expiring link and the decision is taken in the web app (`/approve/:token`), recorded once in `whatsapp_approvals` and in the audit chain. Direct Meta Cloud API client, no notification gateway. | — | done | [`913a99e`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/913a99e) (first commit; later commits in the diff) |
 | N5 | Sovereign mode: the same engine on open weights, one command to build the local Muse Glimmer (`deploy/ollama/Modelfile.glimmer`, `make glimmer`) | Muse Glimmer 30B (Ollama), Muse Spark Open (hosted) | done | [`bccaf9d`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/bccaf9d83b5e6ac077113dcbf9cf0a501f366051) (first commit; later commits in the diff) |
-| N6 | Voice notes turned into timed, speaker-attributed facts (`@sps/voice`, `/v1/voice/transcribe`); cloud uses Muse Voice Transcribe, sovereign/local use on-premise faster-whisper | Muse Voice Transcribe | done | [`1fd4c95`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/1fd4c9510019e8fe7cabb9ea7a1d01ecdf4ec2ba) (first commit; later commits in the diff) |
+| N6 | Voice notes turned into timed, speaker-attributed facts (`@sps/voice`, `/v1/voice/transcribe`); transcribed by Muse Voice Transcribe | Muse Voice Transcribe | done | [`1fd4c95`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/1fd4c9510019e8fe7cabb9ea7a1d01ecdf4ec2ba) (first commit; later commits in the diff) |
 | N7 | Impact analysis: a new provision re-opens the persisted incidents it changes (`@sps/impact`, `/v1/impact/analyze`, console panel under the gazette ingestion) | Muse Spark | done | [`f9a9e30`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/f9a9e30c9a15973cf66dd91e13853688005dc499) (first commit; later commits in the diff) |
 | N8 | **Table-top crisis exercise**: authored injects released on a clock, an action log kept by the team, and a score computed deterministically (addressed / late / missed, coverage, response time) before Muse Spark writes the after-action narrative. The narrative cannot change the score (`@sps/exercise`, `/v1/exercise/*`, console panel). | Muse Spark / Muse Glimmer | done | [`23cfb10`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/23cfb10) (first commit; later commits in the diff) |
 | N9 | Local-language drafts (Fulfulde, Hausa) | — | **dropped**: the message of commit `23cfb10` announces them, but no code or content for them is in the repository | [`23cfb10`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/23cfb10) (message only) |
 | N10 | Demo UI: incident timeline (who saw what), clickable citations, bilingual EN/FR, provider badge, audit-chain check | — | done | [`4bc2edc`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/4bc2edcb904f9fa0280768e4f77d04b7ed3b5203) (first commit; later commits in the diff) |
-| N11 | **Operable knowledge base** (`/knowledge`): corpus counts and retirement, in-process Atlas ingestion with a six-step journal (chunk → embed → upsert → index → verify), index state and repair, and a retrieval playground that exposes dense/BM25/RRF/rerank scores and provenance | Voyage `voyage-4` + `rerank-2` | done | [`913a99e`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/913a99e) (first commit; later commits in the diff) |
+| N11 | **Operable knowledge base** (`/knowledge`): corpus counts and retirement, in-process ingestion with a step journal (chunk → upsert → index → verify), index state and repair, and a retrieval playground that shows every stage of the search with its provenance | — | done | [`913a99e`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/913a99e) (first commit; later commits in the diff) |
 | N12 | **AI-readiness, Meta edition**: several sectors assessed in one run, each with its own live agent graph; three analysis modes (parallel, sequential, or orchestrated by a lead agent with a bounded number of decisions); live web search per dimension through Meta's `web_search` tool, with the sources kept and labelled and never used as a legal basis; bilingual reports (Markdown, HTML, Word) with score charts, the process diagram and a cover generated by Muse Image when the API returns one; assessments run on Muse Spark Open or Muse Glimmer, with the model recorded for each stage (web search, evaluation, synthesis) | Muse Spark, Muse Spark Open, Muse Glimmer, Muse Image | done | [`2d54c18`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/2d54c18) live process and history, [`22d7761`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/22d7761) settings and report, [`dd51223`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/dd51223) live web search (later commits in the diff) |
+| N13 | **Agentic corpus search**: the Meta model of the mode plans the search, runs parallel sub-agents on the BM25 index (each reads the whole article it finds), judges their passages and loops with refined queries, then ranks the result; three depths (`lexical`, `fast`, `deep`), bounded rounds and timeouts, cache and lexical fallback. Every model the system calls is a Meta model | Muse Spark, Muse Spark Open, Muse Glimmer | done | [`9f79ec7`](https://github.com/rouftom/sarkiai-policy-sandbox-meta/commit/9f79ec765aeccb6069e4a05f248f1052e7b47322) (first commit; later commits in the diff) |
 
-Cloud mode also switches the retrieval backend. Meta publishes neither an
-embedding nor a reranking model, so `voyage-4` and `rerank-2` are the only
-non-Meta models in the pipeline. They rank passages and produce no text; every
-reasoning, vision, segmentation and speech step runs on Meta (see the README,
-*Why Voyage for retrieval*). Chunk embeddings come from **Voyage `voyage-4`** and search runs on **MongoDB Atlas** (`$vectorSearch` +
-`$search` BM25, RRF, `rerank-2`). Local and sovereign modes keep `bge-m3` +
-Qdrant, so no corpus leaves the machine. Atlas index definitions live in
+The corpus is searched by the agentic search (N13) in every mode: Atlas
+Search (BM25) in the cloud, a MongoDB text index in local and sovereign
+installs, and the Meta model of the mode for the plan, the sub-agents, the
+judge loops and the ranking. Atlas index definitions live in
 `packages/retrieval/src/atlas-index-definitions.ts` (the JSON under `deploy/mongo/`
-is the CLI artifact, kept in sync by a test) and are created idempotently at
-startup, in cloud mode only.
+is the CLI artifact, kept in sync by a test).
 
 ## Deployment
 

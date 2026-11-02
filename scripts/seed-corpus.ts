@@ -10,10 +10,9 @@
  * `SPS_ADMIN_TOKEN` with an admin session token (the bearer returned by
  * `/v1/auth/login`); without it every document fails with HTTP 401/403.
  *
- * Cloud mode (`cloud` provider → Atlas + Voyage) chunks and embeds in the API
- * itself, so this script only has to extract the text and POST it to
- * `/v1/kb/ingest/text`. Re-running is idempotent: chunks are keyed by a content
- * hash, unchanged ones are skipped and no Voyage call is made.
+ * The API chunks and indexes the text itself, in every mode, so this script
+ * only has to extract the text and POST it to `/v1/kb/ingest/text`. Re-running
+ * is idempotent: chunks are keyed by a content hash, unchanged ones are skipped.
  *
  * PDFs are extracted with `pdftotext` (poppler). Scanned pages with no text
  * layer are skipped and should go through the Gazette screen instead. The script

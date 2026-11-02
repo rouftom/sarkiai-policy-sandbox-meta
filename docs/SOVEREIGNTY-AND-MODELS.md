@@ -2,17 +2,23 @@
 
 The engine runs on three interchangeable provider modes. They differ in where
 the model calls go, not in what the engine does: the same agents, citation
-validator, gap engine and audit chain sit on top.
+validator, gap engine and audit chain sit on top. **Every model the system calls
+at runtime is a Meta model**, in every mode.
 
-| Mode | Reasoning | Retrieval | Data leaving the institution |
-|------|-----------|-----------|-----------------------------|
-| `cloud` | Meta Model API (Muse Spark 1.1, 1.2 and 1.3, Muse Wonder 1.0 selectable; default the newest Muse Spark), with SAM 3.1 for gazette vision and Muse Voice Transcribe for voice notes | Voyage embeddings + MongoDB Atlas Vector Search | prompts, retrieved passages, answers, audio |
-| `sovereign` | Muse Glimmer 30B on Ollama, open weights | `bge-m3` + Qdrant | nothing |
-| `local` | any Ollama model (Muse Glimmer by default) | `bge-m3` + Qdrant | nothing |
+| Mode | Reasoning and retrieval | Voice | Data leaving the institution |
+|------|-------------------------|-------|-----------------------------|
+| `cloud` | Meta Model API: the newest Muse Spark the key lists (`muse-spark-1.3` today), or `muse-wonder-1.0`; the agentic corpus search runs on that same model. SAM 3.1 handles scanned-gazette vision | Muse Voice Transcribe | prompts, retrieved passages, answers, audio |
+| `sovereign` | **Muse Spark Open** on Baseten, or **Muse Glimmer 30B** on Ollama; the agentic corpus search runs on that same model | Muse Voice Transcribe (Meta Model API) | prompts and passages (Baseten) or nothing (Ollama) |
+| `local` | **Muse Glimmer 30B** on Ollama; the agentic corpus search runs on that same model | Muse Voice Transcribe (Meta Model API) | nothing from reasoning; audio only if dictation is used |
 
 The mode is a single environment variable (`SANDBOX_MODE`), recorded in the audit
 chain as `provider.switched`, and each chain-of-thought step names the mode and
 model that produced it. The console badge always shows which one is answering.
+
+The model is one per mode: there is no separate embedding, reranking or
+transcription model to pick. The corpus is searched lexically (BM25) and the
+reasoning model plans the search, runs the sub-agents and ranks the result — see
+[Agentic corpus search](../README.md#agentic-corpus-search).
 
 ## 1. Why it matters here
 
@@ -28,24 +34,26 @@ model that produced it. The console badge always shows which one is answering.
 
 | Component | Technology | Egress |
 |-----------|------------|--------|
-| Vector store | Qdrant (self-hosted) or Atlas (cloud mode) | none / Atlas-hosted |
+| Corpus store | MongoDB: Atlas Search in `cloud`, a MongoDB text index in `local` and `sovereign` | Atlas-hosted / none |
 | Operational store (audit, CoT) | MongoDB (self-hosted or Atlas) | none / Atlas-hosted |
-| OCR | Tesseract, local | none |
-| Chunking / ingestion | local Python service | none |
-| Embeddings | `bge-m3` locally, Voyage in cloud mode | none / provider |
-| Reasoning | Ollama locally, Meta Model API in cloud mode | none / provider |
-| Transcription | faster-whisper locally, Muse Voice Transcribe in cloud mode | none / provider |
+| Chunking / ingestion | `packages/retrieval/src/atlas-ingest.ts`, inside the API process | none / Atlas-hosted |
+| Search | Agentic lexical search (`packages/retrieval/src/agentic.ts`) on the model of the mode | none / provider |
+| Reasoning | Muse Glimmer or Muse Spark Open locally; Muse Spark in cloud mode | none / provider |
+| Vision (gazette pages) | SAM 3.1 on the Meta Model API | provider |
+| Voice notes | Muse Voice Transcribe on the Meta Model API | provider |
 
-In `local` and `sovereign` modes the boundary is the machine: nothing leaves it.
-In `cloud` mode the boundary is the model and embedding provider, and the console
-says so on every screen through the provider badge.
+In `local` mode the boundary is the machine: reasoning and retrieval never leave
+it, and no key is required. In `sovereign` mode the reasoning model is either
+local (Ollama) or an open-weight Meta model on Baseten. In `cloud` mode the
+boundary is the Meta Model API, and the console says so on every screen through
+the provider badge.
 
 ## 3. Sovereignty spectrum
 
 | Level | Model | Egress | Quality | Cost | Ops |
 |-------|-------|--------|---------|------|-----|
 | 0 | Public global API | Total | ★★★★★ | per token | none |
-| 1 | Regional / EU cloud API | Regional | ★★★★ | paid | low |
+| 1 | Regional cloud API | Regional | ★★★★ | paid | low |
 | 2 | Self-hosted open weights (Ollama, vLLM) | None | ★★★ | infra (GPU/RAM) | medium |
 | 3 | Dedicated on-premise / air-gapped open weights | None | ★★★ | infra | high |
 | 4 | Local fine-tuning of open weights (LoRA/QLoRA) | None | ★★★★ | infra + time | high |
@@ -56,33 +64,28 @@ operator explicitly chooses cloud mode.
 ## 4. Options considered
 
 ### A. Local inference through Ollama
-- LLM: `qwen3.5:9b` (multimodal), `qwen2.5:14b`, `llama3.1:8b`, `gemma3:12b`, `mistral`.
-- Embeddings: `bge-m3` (multilingual, strong in French), `nomic-embed-text`.
+- **Muse Glimmer 30B**, Apache-2.0, multimodal, served by Ollama.
 - Pros: zero egress, free, offline, deployable in a locked-down sandbox.
-  Cons: ~10–32 GB of RAM, latency, quality below frontier models, operations.
+  Cons: ~32 GB of VRAM (or 48 GB+ unified memory), latency, operations.
 
 ### B. Self-hosted serving at scale
-- **vLLM**, **TGI** or **llama.cpp** for multi-user throughput on GPU.
+- **vLLM** or **llama.cpp** for multi-user throughput on GPU, serving the same
+  Muse Glimmer weights.
 - Relevant when the demo serves several delegates at once.
 
-### C. Managed sovereign inference
-- A regional or EU provider (Mistral, OVHcloud AI, Scaleway, an African regional
-  cloud). Quality close to frontier, egress limited to an acceptable
-  jurisdiction — to be validated against the applicable legal framework.
+### C. Managed open-weight inference
+- **Baseten** serves **Muse Spark Open** (`meta-models/muse-spark-open-1026`):
+  open weights, managed infrastructure, same engine and audit trail.
 
 ### D. Hybrid routing by sensitivity
-- A **policy router**: sensitive data → local; open data (global good practice)
-  → cloud when allowed.
+- A **policy router**: sensitive data → local Muse Glimmer; open data (global
+  good practice) → Muse Spark when allowed.
 - Consistent with the engine: sensitivity is already an attribute of the corpus
   (`country`, `docType`).
 
-### E. Open-weight models with permissive licences
-- Qwen, Llama, Mistral, Gemma, Aya, BGE-M3. Embeddings served by Ollama or
-  **TEI** (Text Embeddings Inference).
-
-### F. Fine-tuning without exfiltration
-- **LoRA/QLoRA** on self-hosted open weights (`unsloth`, `peft`). The dataset
-  stays on-premise; only the public base weights and the adapter move.
+### E. Fine-tuning without exfiltration
+- **LoRA/QLoRA** on Muse Glimmer. The dataset stays on-premise; only the public
+  base weights and the adapter move.
 
 ## 5. Decision implemented
 
@@ -90,12 +93,12 @@ Three modes, one engine, one switch:
 
 | Element | Decision |
 |---------|----------|
-| `cloud` | Meta Model API for reasoning, vision and voice; Voyage `voyage-4` + `rerank-2` with Atlas Vector Search. Used by the public demo. |
-| `sovereign` | **Muse Glimmer 30B** on Ollama: same behaviour, nothing leaves the host |
-| `local` | Muse Glimmer by default (or any Ollama model, e.g. `qwen3.5:9b` on small machines) for development and air-gapped demos |
-| Reranking | provider reranker in `cloud`; TEI locally, or plain RRF |
-| Persistence | Mongo for audit and traces; Qdrant in local modes, Atlas chunks in cloud |
-| Fine-tuning | local LoRA/QLoRA, documented in [`LOCAL-FIRST-PLAN.md`](LOCAL-FIRST-PLAN.md) |
+| `cloud` | Meta Model API for reasoning, vision and voice; corpus in MongoDB Atlas with Atlas Search. Used by the public demo. |
+| `sovereign` | **Muse Spark Open** on Baseten, or **Muse Glimmer 30B** on Ollama: same behaviour, reasoning on open weights |
+| `local` | **Muse Glimmer 30B** on Ollama, no key, nothing leaves the host |
+| Search | Agentic lexical search on the model of the mode; `RETRIEVAL_DEPTH` sets `lexical`, `fast` or `deep` |
+| Persistence | MongoDB for the corpus, the audit chain and the traces |
+| Fine-tuning | local LoRA/QLoRA on Muse Glimmer |
 
 | Data sensitivity | Target | Choice |
 |------------------|--------|--------|

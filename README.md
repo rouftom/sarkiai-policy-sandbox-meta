@@ -33,15 +33,13 @@ It runs on **Meta models**, in three interchangeable provider modes:
   `muse-spark-1.3`) and `muse-wonder-1.0`, all listed by the key itself and selectable from the
   assistant's **+ menu**. The default is the newest `muse-spark-<version>` the key lists (`muse-spark-1.3`
   today); contributor builds are never the default. Also `sam-3.1` for scanned-gazette segmentation,
-  `muse-voice-transcribe-1.0` for voice notes. Retrieval runs on **Voyage** embeddings and
-  reranking over **MongoDB Atlas**: Meta publishes neither an embedding nor a reranking model, so
-  `voyage-4` and `rerank-2` are the only non-Meta models in the pipeline. They produce no text and take
-  no decision; every reasoning, vision, segmentation and speech step runs on Meta. See
-  [Why Voyage](#why-voyage-for-retrieval).
-- **sovereign**: **Muse Glimmer** (30B, Apache-2.0) served locally by Ollama: same engine, no data
-  leaving the institution, retrieval stays on `bge-m3` + Qdrant.
-- **local**: any Ollama-served model, **Muse Glimmer by default** (+ `bge-m3` embeddings), for offline
-  development. On a machine without ~32 GB of VRAM, set `OLLAMA_MODEL` to a lighter model (e.g. `qwen3.5:9b`).
+  `muse-voice-transcribe-1.0` for voice notes. The corpus is searched by an
+  [agentic search](#agentic-corpus-search) on the same Meta model.
+- **sovereign**: **Muse Spark Open** on Baseten or **Muse Glimmer** (30B, Apache-2.0) served by Ollama:
+  same engine, the reasoning stays on open weights.
+- **local**: **Muse Glimmer** served by Ollama on the institution's machine: nothing leaves it.
+
+Every model the system calls is a Meta model.
 
 ### Open weights: where they run and what they do
 
@@ -75,7 +73,7 @@ Three paths are enough:
 
 | Path | What you need | What it shows |
 |---|---|---|
-| **A — Run locally, no key** | Docker only. The **default model is Muse Glimmer 30B** (~32 GB VRAM, or 48 GB+ unified memory); on a smaller machine set `OLLAMA_MODEL=qwen3.5:9b` before `make models` (16–32 GB RAM, no GPU required) | The full engine offline: ingestion, retrieval, agents, scenario, readiness, audit chain. |
+| **A — Run locally, no key** | Docker only. The **default model is Muse Glimmer 30B** (~32 GB VRAM, or 48 GB+ unified memory). | The full engine offline: ingestion, retrieval, agents, scenario, readiness, audit chain. |
 | **B — Run on your own keys** | Path A, then `SANDBOX_MODE=cloud` + `MODEL_API_KEY`, or `SANDBOX_MODE=sovereign` + `BASETEN_API_KEY` | The same workflow on Muse Spark (Meta Model API) or Muse Spark Open (Baseten). |
 | **C — Review the recorded run** | Nothing | The demo video (https://youtu.be/yAD7Qp7JQHQ, shot list in [`docs/DEMO.md`](docs/DEMO.md)) and the captures in [`docs/screenshots/`](docs/screenshots/). |
 
@@ -149,10 +147,10 @@ sarkiai-policy-sandbox/
 ├─ packages/          # TypeScript workspace packages (@sps/*)
 │  ├─ shared/         # types, workflow profiles, config, jurisdiction model
 │  ├─ kb/             # ingestion client + knowledge-base domain logic
-│  ├─ retrieval/      # RAG: Qdrant (bge-m3 + BM25, RRF) or Atlas + Voyage (cloud)
+│  ├─ retrieval/      # agentic corpus search: lexical index + Meta model (plan, sub-agents, judge, rank)
 │  ├─ citations/      # article/section source attribution
 │  ├─ gazette/        # scanned gazette: layout, SAM 3.1 artefacts, per-zone transcription
-│  ├─ voice/          # voice notes: Muse Voice Transcribe / faster-whisper → timed facts
+│  ├─ voice/          # voice notes: Muse Voice Transcribe → timed facts
 │  ├─ whatsapp/       # direct Meta Graph API client + signed approval tokens
 │  ├─ impact/         # new policy → which open incidents change, and how
 │  ├─ exercise/       # N8: timed injects, action log, deterministic after-action score
@@ -165,8 +163,6 @@ sarkiai-policy-sandbox/
 │  ├─ theme/          # admin theme packs (meta default, fada, green, ocean, sunset, mono)
 │  └─ storage/        # MinIO/S3 client (content-addressed attachments)
 ├─ services/          # Python microservices
-│  ├─ ingestion/      # structure-aware legal chunking + embeddings + Qdrant store
-│  ├─ ocr/            # scanned gazette OCR (Tesseract)
 │  └─ transcription/  # optional media → timestamped transcript
 ├─ data/              # corpora: country/cm, global/africa + global/standards (payloads git-ignored)
 ├─ deploy/
@@ -185,17 +181,15 @@ sarkiai-policy-sandbox/
 > set one to run the same workflow on the hackathon models. Resend and Cloudflare
 > Turnstile are optional too — see [Optional keys and limits](#optional-keys-and-limits).
 > The badge in the console shows which provider is answering.
-> A first local run pulls Muse Glimmer (30B, see `docs/HARDWARE-REQUIREMENTS.md`) + ~1.2 GB (bge-m3).
-> On a smaller machine, set `OLLAMA_MODEL=qwen3.5:9b` (~6.6 GB) before `make models`.
+> A first local run pulls Muse Glimmer (30B, see `docs/HARDWARE-REQUIREMENTS.md`).
 
 ### Everything at once
 
 ```bash
 cp .env.example .env
 # Default model: Muse Glimmer 30B (needs ~32 GB VRAM).
-# No GPU or a smaller machine? set OLLAMA_MODEL=qwen3.5:9b in .env *before* this step.
 docker compose up --build -d
-make models                # pulls $OLLAMA_MODEL (Muse Glimmer by default) + bge-m3
+make models                # pulls Muse Glimmer
 ```
 
 Then:
@@ -204,7 +198,6 @@ Then:
 - API + OpenAPI → http://localhost:8000/docs
 - Ingestion service → http://localhost:8001/docs
 - OCR service → http://localhost:8002/docs
-- Qdrant dashboard → http://localhost:6333/dashboard
 - Ollama (local models) → http://localhost:11434
 - MinIO console (attachments) → http://localhost:9001
 - MongoDB (audit + CoT) → `mongodb://localhost:27017`
@@ -247,12 +240,11 @@ locally.
 
 | Capability | Variables | Without them |
 |---|---|---|
-| Meta Model API (`cloud`) | `MODEL_API_KEY` (+ `VOYAGE_API_KEY` and an Atlas `MONGODB_URI` for cloud retrieval) | `cloud` mode unavailable; `local` and `sovereign` still work |
+| Meta Model API (`cloud`) | `MODEL_API_KEY` (+ an Atlas `MONGODB_URI` for the cloud corpus) | `cloud` mode unavailable; `local` and `sovereign` still work |
 | Baseten open weights (`sovereign`) | `BASETEN_API_KEY`, `BASETEN_MODEL` | Muse Spark Open unavailable; choose another model |
 | E-mail (invitation, reset, notifications) | `AUTH_RESEND_KEY`, `AUTH_RESEND_EMAIL_FROM` | a local `/setup` shows the one-time password once; e-mail features answer `mail_not_configured` |
 | Cloudflare Turnstile | `NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` (public), `TURNSTILE_SECRET`, optional `TURNSTILE_HOSTNAMES` | the human check is off; forms keep working. `local` never calls Cloudflare |
 | WhatsApp channel | `WHATSAPP_*`, `APPROVAL_SECRET` | the channel is not configured; the rest of the console works |
-| Voyage + Atlas retrieval | `VOYAGE_API_KEY`, Atlas `MONGODB_URI` | local mode uses Qdrant + bge-m3 |
 | Budget alert | `RUN_BUDGET_USD` | no alert; spend is displayed but never enforced (alert-only) |
 | Rate limiting / backpressure | `RATE_LIMIT_*`, `AI_CONCURRENCY_*` | defaults stay on; `RATE_LIMIT_ENABLED=false` lifts both caps |
 
@@ -322,7 +314,7 @@ the signed approval links requires that Bearer token. Inside the console, the
 operator's e-mail is the tenant key: audit records, chain-of-thought traces,
 joint reports, scenario sessions, approvals and preferences are filtered by
 `userId`, so two judges sharing the demo never see each other's runs. The legal
-corpus and its vectors are deliberately shared: it is the same law.
+corpus is deliberately shared: it is the same law.
 
 ### Forgotten password
 
@@ -412,20 +404,9 @@ SANDBOX_MODE=cloud docker compose up -d api web      # Meta Model API
 SANDBOX_MODE=sovereign docker compose up -d api web  # Muse Glimmer on Ollama
 ```
 
-Cloud mode also needs `MODEL_API_KEY`, `VOYAGE_API_KEY` and a `mongodb+srv`
-`MONGODB_URI`; the API creates the Atlas indexes at startup (see below). Local
-and sovereign modes ignore those variables.
-
-If you only have a **Meta key** and want to keep the corpus local, run cloud
-mode with local retrieval instead of provisioning Atlas and Voyage:
-
-```bash
-SANDBOX_MODE=cloud
-MODEL_API_KEY=...
-RETRIEVAL_BACKEND=qdrant   # qdrant + bge-m3, the same corpus as the local run
-```
-
-The Qdrant path keeps the local embeddings, so no new index has to be built.
+Cloud mode also needs `MODEL_API_KEY` and a `mongodb+srv` `MONGODB_URI`; the
+API creates the Atlas Search index at startup (see below). Local and sovereign
+modes keep the corpus in their own MongoDB, with a text index.
 
 The switch is recorded in the audit chain as a `provider.switched` event, and
 each chain-of-thought step names the mode and model that produced it.
@@ -462,55 +443,43 @@ bun run check:provider cloud      # Meta Model API
 bun run check:provider sovereign  # Muse Glimmer on Ollama
 ```
 
-### Cloud retrieval (Voyage + MongoDB Atlas)
+### Agentic corpus search
 
-Local and sovereign modes keep the existing hybrid retrieval: `bge-m3` dense +
-BM25 sparse in Qdrant, fused with RRF. Cloud mode uses the same `KbChunk`
-contract on **MongoDB Atlas**:
+The corpus is small, structured (instrument → article) and rich in exact legal
+terms. It is searched lexically, and the Meta model of the mode does the
+reasoning:
 
-1. ingestion chunks the document (headings, articles, sentence overlap), then
-   embeds **Voyage `voyage-4`** (1024 dims, dotProduct);
-2. `$vectorSearch` and `$search` (BM25, accent-folded analyser) run over
-   `kb_chunks`;
-3. the two lists are fused with RRF, then re-scored with **Voyage `rerank-2`**.
+1. **plan**: the model splits the question into sub-questions, each with short
+   legal queries (French and English terms, likely instruments and articles);
+2. **sub-agents**: one per sub-question, in parallel. Each runs its queries on
+   the BM25 index, fuses the lists with reciprocal rank fusion and reads the
+   whole article its best passages belong to;
+3. **judge loop** (`deep`): each sub-agent asks the model whether its passages
+   answer the sub-question, and loops with refined queries (two rounds at most);
+4. **rank**: one call orders the merged candidates;
+5. **validate**: the citation validator still checks every quote against the corpus.
 
-#### Why Voyage for retrieval
+Three depths bound the cost: `lexical` (no model call), `fast` (plan + rank,
+used by the institutional agents and the AI-readiness assessment) and `deep`
+(sub-agents and judge loops, used by the assistant and the retrieval
+playground). Every model step has a timeout and falls back to the lexical
+order; results are cached per question. In `sovereign` mode the whole search
+runs on Muse Spark Open or Muse Glimmer.
 
-- **No Meta equivalent.** Meta publishes no embedding model and no reranking
-  model, in the Meta Model API or as open weights. Retrieval needs both.
-- **They rank, they do not answer.** `voyage-4` turns text into vectors and
-  `rerank-2` orders candidate passages. Neither generates text, cites the law or
-  takes a decision. What the agents say, the citations they choose, the conflicts
-  the coordinator flags and every score are produced by Meta models.
-- **The law is checked after retrieval, not trusted to it.** The citation
-  validator compares every quote with the corpus: a poorly ranked passage can
-  cost an answer, never fake one.
-- **Why the reranker earns its place.** Legal questions match many near-identical
-  articles (the same obligation repeated across laws and decrees). Dense + BM25
-  fused with RRF finds them; the cross-encoder puts the applicable article first,
-  so the agents read fewer, better passages and spend fewer Muse Spark tokens.
-- **Swappable.** The corpus contract (`KbChunk`) is backend-neutral: `local` and
-  `sovereign` run on `bge-m3` + Qdrant with RRF, and the same engine works without
-  the reranker (it falls back to RRF if Voyage is unavailable). A Meta embedding
-  model would replace Voyage without touching the agents.
-
-`RETRIEVAL_BACKEND=auto` follows the provider mode (cloud → Atlas, otherwise
-Qdrant). The index definitions live in code
+The BM25 index is Atlas Search in the cloud (`sps_text_index`, accent-folded
+analyser) and a MongoDB text index in local and sovereign installs, created at
+the first ingestion. `RETRIEVAL_BACKEND=auto` follows the mode; `RETRIEVAL_DEPTH`
+sets the default depth. The Atlas definitions live in code
 ([`packages/retrieval/src/atlas-index-definitions.ts`](packages/retrieval/src/atlas-index-definitions.ts)),
-because the API image only ships `packages/` and `apps/api/`: a definition file
-under `deploy/` would be missing in the container. They are created **only in
-cloud mode**, at API startup: the collection first, then `sps_vector_index` and
-`sps_text_index`, idempotently. [`deploy/mongo/kb.indexes.json`](deploy/mongo/kb.indexes.json)
-stays as the artifact for the CLI, and a test fails if the two drift. To create
-or repair them by hand (or from the console):
+because the API image only ships `packages/` and `apps/api/`;
+[`deploy/mongo/kb.indexes.json`](deploy/mongo/kb.indexes.json) stays as the
+artifact for the CLI, and a test fails if the two drift. To create or repair
+the index by hand (or from the console):
 
 ```bash
 MONGODB_URI=... MONGODB_DB_NAME=policy_sandbox bun run kb:indexes
 curl -X POST "$SPS_API_URL/v1/kb/indexes" -H 'Content-Type: application/json' -d '{}'
 ```
-
-On the local Mongo used by Compose there is no Atlas Search; the script reports
-`supported: false` and exits 0, and the engine stays on Qdrant.
 
 #### The Knowledge base screen (`/knowledge`)
 
@@ -520,14 +489,13 @@ corpus and every step that produced it:
 - **Corpus**: documents with chunk counts, characters, country, type and last
   ingestion; a document can be retired (chunks kept for audit, removed from
   retrieval) or restored.
-- **Vectorise**: paste text or load `.txt` / `.md` / `.csv`, set country,
-  jurisdiction, type, chunk size and overlap, then watch the six-step journal
-  (accept → chunk → embed → upsert → index → verify) with per-step timings.
+- **Ingest**: paste text or load `.txt` / `.md` / `.csv`, set country,
+  jurisdiction, type, chunk size and overlap, then watch the step journal
+  (accept → chunk → upsert → index → verify) with per-step timings.
   Re-running the same document is a no-op: chunks are keyed by content hash.
-- **Retrieval**: a playground that returns each stage separately (dense hits
-  with `vectorSearchScore`, BM25 hits with their score, the RRF fusion, the
-  reranked list and the final context), plus the Atlas filter, the timings and
-  the model names.
+- **Retrieval**: a playground that shows the agentic search step by step: the
+  plan, each sub-agent and its rounds, the BM25 hits, the RRF fusion, the model
+  ranking and the final context, plus the filter, the timings and the model.
 - **Atlas indexes**: `READY` / `BUILDING` / missing, with a create-or-repair
   button that calls the same idempotent bootstrap as startup.
 
@@ -535,7 +503,7 @@ The API surface behind it:
 
 | Route | Purpose |
 |---|---|
-| `GET /v1/kb/status` | totals, facets, index state, vector health, recent runs |
+| `GET /v1/kb/status` | totals, facets, index state, recent runs |
 | `GET /v1/kb/documents` | per-document aggregates (`includeRetired` optional) |
 | `POST /v1/kb/documents/active` | retire / restore one document |
 | `POST /v1/kb/indexes` | create or repair the Atlas indexes |
@@ -626,8 +594,8 @@ bun run check:gazette path/to/scanned-page.png           # your own scan
 `POST /v1/voice/transcribe` takes a base64 RIFF/WAVE file (mono, 16-bit PCM,
 16 kHz or 24 kHz: convert WhatsApp OGG/Opus first) and returns the transcript,
 timed turns and `facts` (`T+00:12`, speaker label when diarization is on).
-Cloud mode uses **Muse Voice Transcribe**; `sovereign` and `local` call the
-on-premise `faster-whisper` service, so a recording never leaves the network.
+Transcription runs on **Muse Voice Transcribe**; without the Meta Model API the
+voice input is disabled.
 The WAV header is checked before upload: a stereo or 44.1 kHz file is rejected
 with the exact conversion to run, not transcribed badly.
 
@@ -655,26 +623,18 @@ those already-computed facts. The narrative cannot change the score, so a
 well-written report cannot hide a missed inject. The event is recorded in the
 audit trail as `exercise.after_action`.
 
-Optional local reranker (TEI, no cloud):
-
-```bash
-docker compose --profile rerank up -d      # then set RERANK_URL=http://rerank:80 in .env
-```
-
 ### Individual services
 
 ```bash
-docker compose up ollama qdrant ingestion ocr   # knowledge-base plane only
-docker compose up api web                        # application plane only
-docker compose up ollama qdrant ingestion        # just the KB ingest path
+docker compose up ollama mongo   # model and store only
+docker compose up api web        # application plane only
 ```
 
 Or via the Makefile:
 
 ```bash
 make up            # full stack
-make models        # pull local LLM + embeddings
-make up-kb         # ollama + qdrant + ingestion + ocr
+make models        # pull Muse Glimmer
 make up-app        # api + web
 make logs          # follow logs
 make down          # stop
@@ -717,7 +677,7 @@ MODEL_RELAY_KEY=<shared secret, same value as META_RELAY_KEY on the web host>
 `apps/web/src/app/api/meta/[...path]` forwards the call to `api.meta.ai` with
 the team key held in Vercel (`META_RELAY_MODEL_KEY`) and streams the answer
 back. The route refuses any call without the `x-sps-relay-key` header and only
-allows the `/v1` chat, responses, messages, models and embeddings paths. The
+allows the `/v1` chat, responses, messages, models, images and transcription paths. The
 relay is transport only: no prompt, answer or key is logged.
 
 WhatsApp needs three approved utility templates before any business-initiated

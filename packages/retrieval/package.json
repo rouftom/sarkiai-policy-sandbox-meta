@@ -15,7 +15,6 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@qdrant/js-client-rest": "^1.12.0",
     "@sps/shared": "workspace:*",
     "mongodb": "^6.10.0",
     "@sps/kb": "workspace:*"

@@ -8,7 +8,7 @@ const meta: ProviderDescriptor = {
   label: 'Cloud',
   servedBy: 'Meta',
   baseURL: 'https://api.meta.ai/v1',
-  models: { reasoning: 'muse-spark-1.3', vision: 'muse-spark-1.3', embedding: 'voyage-4' },
+  models: { reasoning: 'muse-spark-1.3', vision: 'muse-spark-1.3' },
   residency: 'cloud',
   openWeights: false,
   budgetUsd: 0,

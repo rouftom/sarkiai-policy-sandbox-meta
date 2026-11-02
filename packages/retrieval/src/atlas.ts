@@ -1,117 +1,39 @@
 /**
- * Atlas retrieval backend (cloud mode).
+ * Lexical access to the corpus (MongoDB), shared by every deployment mode.
  *
- * Cloud mode embeds chunks with Voyage (`voyage-4`, 1024 dimensions) and stores
- * them in MongoDB Atlas. Search fuses:
- *   1. `$vectorSearch` (dense, dotProduct)
- *   2. `$search` (BM25 over the same collection)
- *   3. reciprocal rank fusion (RRF)
- *   4. Voyage `rerank-2` on the fused candidates
- *
- * The collection payload is shared with the local Qdrant backend, so a chunk
- * keeps the same jurisdiction taxonomy and structural breadcrumbs in both modes.
+ * Cloud: Atlas Search (`$search`, BM25 over `text`, `headingPath`, `filename`).
+ * Local and sovereign: a MongoDB text index (`$text`), available in any MongoDB.
+ * Both are scoring formulas, not models: the reasoning (planning, judging,
+ * ranking) is done by the Meta model of the mode in `AgenticRetriever`.
  */
 
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { DocType, Jurisdiction, KbChunk, ReadinessDimension, RetrievalQuery } from '@sps/shared'
-import { normalizeCorpusRights } from '@sps/shared'
-import { VoyageClient, type VoyageConfig } from './voyage'
+import { mongoPoolOptions, normalizeCorpusRights } from '@sps/shared'
+import { corpusFilter, fuseRanked, type LexicalSource } from './agentic'
 import type { Retriever } from './types'
-import { mongoPoolOptions } from '@sps/shared'
 
-export interface AtlasRetrieverConfig {
+export { fuseRanked }
+
+/** Where the lexical index lives: Atlas Search, or a plain MongoDB text index. */
+export type CorpusSearchMode = 'atlas' | 'text'
+
+export interface CorpusSourceConfig {
   mongodbUri: string
   dbName: string
   collectionName?: string
-  vectorIndex?: string
+  /** Atlas Search index name (`atlas` mode). */
   textIndex?: string
-  voyage: VoyageConfig
-  /** Candidates pulled from each branch before fusion. */
-  numCandidates?: number
-  vectorWeight?: number
-  textWeight?: number
+  searchMode: CorpusSearchMode
 }
 
 const DEFAULTS = {
   collectionName: 'kb_chunks',
-  vectorIndex: 'sps_vector_index',
   textIndex: 'sps_text_index',
-  numCandidates: 100,
-  vectorWeight: 0.6,
-  textWeight: 0.4,
 }
 
-export interface RankedChunk {
-  id: string
-  chunk: KbChunk
-}
-
-/** One candidate as returned by a retrieval stage, ready for the playground UI. */
-export interface RetrievalStageItem {
-  id: string
-  rank: number
-  score?: number
-  filename: string
-  text: string
-  chunkIndex: number
-  country: string
-  jurisdiction: string
-  docType: string
-  headingPath?: string
-  articleNumber?: string
-  sourceUrl?: string
-}
-
-export interface RetrievalExploration {
-  query: string
-  filter: Record<string, string | boolean>
-  topK: number
-  models: { embedding: string; rerank: string }
-  timings: { embedMs: number; denseMs: number; sparseMs: number; rerankMs: number; totalMs: number }
-  stages: {
-    dense: RetrievalStageItem[]
-    sparse: RetrievalStageItem[]
-    fused: RetrievalStageItem[]
-    reranked: RetrievalStageItem[]
-    final: RetrievalStageItem[]
-  }
-  warnings: string[]
-}
-
-
-/** Exact-match filter understood by both `$vectorSearch` and `$search`. */
-export function atlasFilter(query: RetrievalQuery): Record<string, string | boolean> {
-  const filter: Record<string, string | boolean> = {
-    isActive: true,
-  }
-  if (query.country) filter.country = query.country
-  if (query.jurisdiction) filter.jurisdiction = query.jurisdiction
-  if (query.docType) filter.docType = query.docType
-  if (query.namespace) filter.namespace = query.namespace
-  return filter
-}
-
-/**
- * Reciprocal rank fusion keyed by document id (not JSON.stringify): Atlas
- * returns the same chunk object from both branches, sometimes with different
- * field order.
- */
-export function fuseRanked<T extends { id: string }>(
-  lists: Array<{ items: T[]; weight: number }>,
-  k = 60,
-): Array<T & { score: number }> {
-  const scores = new Map<string, { item: T; score: number }>()
-  for (const { items, weight } of lists) {
-    items.forEach((item, index) => {
-      const current = scores.get(item.id) ?? { item, score: 0 }
-      current.score += weight / (k + index + 1)
-      scores.set(item.id, current)
-    })
-  }
-  return [...scores.values()]
-    .sort((a, b) => b.score - a.score)
-    .map(({ item, score }) => ({ ...item, score }))
-}
+/** Exact-match filter on the corpus taxonomy (kept under its historical name). */
+export const atlasFilter = (query: RetrievalQuery) => corpusFilter(query)
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
@@ -148,83 +70,67 @@ function toChunk(doc: Document, score?: number): KbChunk | null {
   }
 }
 
-export class AtlasRetriever implements Retriever {
-  private client: MongoClient | null = null;
-  private readonly voyage: VoyageClient
+export class CorpusSource implements LexicalSource, Retriever {
+  private client: MongoClient | null = null
   private readonly collectionName: string
-  private readonly indexName: string
   private readonly textIndexName: string
-  private readonly numCandidates: number
-  private readonly vectorWeight: number
-  private readonly textWeight: number
 
-  constructor(private readonly config: AtlasRetrieverConfig) {
-    this.voyage = new VoyageClient(config.voyage)
+  constructor(private readonly config: CorpusSourceConfig) {
     this.collectionName = config.collectionName ?? DEFAULTS.collectionName
-    this.indexName = config.vectorIndex ?? DEFAULTS.vectorIndex
     this.textIndexName = config.textIndex ?? DEFAULTS.textIndex
-    this.numCandidates = config.numCandidates ?? DEFAULTS.numCandidates
-    this.vectorWeight = config.vectorWeight ?? DEFAULTS.vectorWeight
-    this.textWeight = config.textWeight ?? DEFAULTS.textWeight
   }
 
+  /** Plain lexical search: the `lexical` depth, and the fallback of every other one. */
   async search(query: RetrievalQuery): Promise<KbChunk[]> {
-    const topK = query.topK ?? 8
-    const [vector] = await this.voyage.embed([query.text], 'query')
-    if (!vector) throw new Error('Voyage returned no query vector.')
-
-    const filter = atlasFilter(query)
-    const limit = Math.max(topK * 6, 24, this.numCandidates)
-
-    const [dense, sparse] = await Promise.all([
-      this.vectorSearch(vector, limit, filter).catch((error) => {
-        console.warn(`[atlas] vector branch unavailable: ${(error as Error).message}`)
-        return [] as RankedChunk[]
-      }),
-      this.textSearch(query.text, limit, filter).catch((error) => {
-        console.warn(`[atlas] text branch unavailable: ${(error as Error).message}`)
-        return [] as RankedChunk[]
-      }),
-    ])
-
-    if (dense.length === 0 && sparse.length === 0) return []
-
-    const fused = fuseRanked([
-      { items: dense, weight: this.vectorWeight },
-      { items: sparse, weight: this.textWeight },
-    ])
-    const candidates = fused.slice(0, Math.max(topK * 3, 16))
-
-    try {
-      const hits = await this.voyage.rerank(
-        query.text,
-        candidates.map((candidate) => candidate.chunk.text),
-        candidates.length,
-      )
-      if (hits.length > 0) {
-        const reranked = hits
-          .map((hit) => {
-            const candidate = candidates[hit.index]
-            return candidate ? { ...candidate, score: hit.score } : null
-          })
-          .filter((candidate): candidate is RankedChunk & { score: number } => candidate !== null)
-        if (reranked.length > 0) {
-          return this.withImages(reranked.slice(0, topK).map((c) => ({ ...c.chunk, score: c.score })))
-        }
-      }
-    } catch (error) {
-      console.warn(`[atlas] rerank unavailable: ${(error as Error).message}`)
-    }
-
-    return this.withImages(candidates.slice(0, topK).map((c) => ({ ...c.chunk, score: c.score })))
+    const chunks = await this.lexical(query.text, query.topK ?? 6, corpusFilter(query))
+    return this.withImages(chunks)
   }
 
-  /**
-   * Attach the figures of each retrieved document. Images are stored once in
-   * `kb_images`; the chunk payload stays small and the console can decide which
-   * figure to show from the citation context.
-   */
-  private async withImages(chunks: KbChunk[]): Promise<KbChunk[]> {
+  async lexical(text: string, limit: number, filter: Record<string, string | boolean>): Promise<KbChunk[]> {
+    const cleaned = text.replace(/\s+/g, ' ').trim()
+    if (!cleaned) return []
+    const collection = await this.collection()
+    const docs = this.config.searchMode === 'atlas'
+      ? await collection
+          .aggregate([
+            {
+              $search: {
+                index: this.textIndexName,
+                compound: {
+                  must: [{ text: { query: cleaned, path: 'text' } }],
+                  filter: Object.entries(filter).map(([path, value]) => ({ equals: { path, value } })),
+                },
+              },
+            },
+            { $limit: limit },
+            { $addFields: { score: { $meta: 'searchScore' } } },
+          ])
+          .toArray()
+      : await collection
+          .find({ $text: { $search: cleaned }, ...filter }, { projection: { score: { $meta: 'textScore' } } })
+          .sort({ score: { $meta: 'textScore' } })
+          .limit(limit)
+          .toArray()
+    return docs.flatMap((doc) => {
+      const chunk = toChunk(doc, typeof doc.score === 'number' ? doc.score : undefined)
+      return chunk ? [chunk] : []
+    })
+  }
+
+  async article(filename: string, articleNumber: string, limit: number): Promise<KbChunk[]> {
+    const collection = await this.collection()
+    const docs = await collection
+      .find({ filename, articleNumber, isActive: true })
+      .sort({ chunkIndex: 1 })
+      .limit(limit)
+      .toArray()
+    return docs.flatMap((doc) => {
+      const chunk = toChunk(doc)
+      return chunk ? [chunk] : []
+    })
+  }
+
+  async withImages(chunks: KbChunk[]): Promise<KbChunk[]> {
     if (chunks.length === 0) return chunks
     try {
       const collection = await this.imageCollection()
@@ -262,7 +168,7 @@ export class AtlasRetriever implements Retriever {
         return images && images.length > 0 ? { ...chunk, images } : chunk
       })
     } catch (error) {
-      console.warn(`[atlas] image metadata unavailable: ${(error as Error).message}`)
+      console.warn(`[corpus] image metadata unavailable: ${(error as Error).message}`)
       return chunks
     }
   }
@@ -272,168 +178,19 @@ export class AtlasRetriever implements Retriever {
     this.client = null
   }
 
-  /**
-   * Same pipeline as `search`, but every stage is returned with scores so the
-   * console's retrieval playground can *show* the RAG instead of asserting it:
-   * query embedding → dense + BM25 → RRF → Voyage rerank.
-   */
-  async explore(query: RetrievalQuery): Promise<RetrievalExploration> {
-    const started = Date.now()
-    const topK = query.topK ?? 6
-    const filter = atlasFilter(query)
-    const limit = Math.max(topK * 6, 24, this.numCandidates)
-    const warnings: string[] = []
-
-    const embedStart = Date.now()
-    const [vector] = await this.voyage.embed([query.text], 'query')
-    const embedMs = Date.now() - embedStart
-    if (!vector) throw new Error('Voyage returned no query vector.')
-
-    const denseStart = Date.now()
-    const dense = await this.vectorSearch(vector, limit, filter).catch((error) => {
-      warnings.push(`Dense branch: ${(error as Error).message}`)
-      return [] as RankedChunk[]
-    })
-    const denseMs = Date.now() - denseStart
-
-    const sparseStart = Date.now()
-    const sparse = await this.textSearch(query.text, limit, filter).catch((error) => {
-      warnings.push(`BM25 branch: ${(error as Error).message}`)
-      return [] as RankedChunk[]
-    })
-    const sparseMs = Date.now() - sparseStart
-
-    const fused = fuseRanked([
-      { items: dense, weight: this.vectorWeight },
-      { items: sparse, weight: this.textWeight },
-    ])
-    const candidates = fused.slice(0, Math.max(topK * 3, 16))
-
-    const rerankStart = Date.now()
-    let reranked: Array<RankedChunk & { score: number }> = []
-    try {
-      const hits = await this.voyage.rerank(
-        query.text,
-        candidates.map((candidate) => candidate.chunk.text),
-        candidates.length,
-      )
-      reranked = hits
-        .map((hit) => {
-          const candidate = candidates[hit.index]
-          return candidate ? { ...candidate, score: hit.score } : null
-        })
-        .filter((candidate): candidate is RankedChunk & { score: number } => candidate !== null)
-    } catch (error) {
-      warnings.push(`Rerank: ${(error as Error).message}`)
-    }
-    const rerankMs = Date.now() - rerankStart
-
-    const toItem = (entry: { id: string; chunk: KbChunk; score?: number }, rank: number): RetrievalStageItem => ({
-      id: entry.id,
-      rank,
-      ...(entry.score === undefined && entry.chunk.score === undefined ? {} : { score: entry.score ?? entry.chunk.score }),
-      filename: entry.chunk.filename,
-      text: entry.chunk.text.slice(0, 420),
-      chunkIndex: entry.chunk.chunkIndex,
-      country: entry.chunk.country,
-      jurisdiction: entry.chunk.jurisdiction,
-      docType: entry.chunk.docType,
-      ...(entry.chunk.headingPath ? { headingPath: entry.chunk.headingPath } : {}),
-      ...(entry.chunk.articleNumber ? { articleNumber: entry.chunk.articleNumber } : {}),
-      ...(entry.chunk.sourceUrl ? { sourceUrl: entry.chunk.sourceUrl } : {}),
-    })
-
-    const final = reranked.length > 0 ? reranked : candidates
-    return {
-      query: query.text,
-      filter,
-      topK,
-      models: { embedding: this.voyage.model, rerank: this.voyage.reranker },
-      timings: {
-        embedMs,
-        denseMs,
-        sparseMs,
-        rerankMs,
-        totalMs: Date.now() - started,
-      },
-      stages: {
-        dense: dense.map(toItem),
-        sparse: sparse.map(toItem),
-        fused: fused.map(toItem),
-        reranked: reranked.map(toItem),
-        final: final.slice(0, topK).map(toItem),
-      },
-      warnings,
-    }
-  }
-
-  private async collection(): Promise<Collection<Document>> {
+  private async db() {
     if (!this.client) {
       this.client = new MongoClient(this.config.mongodbUri, mongoPoolOptions())
       await this.client.connect()
     }
-    return this.client.db(this.config.dbName).collection(this.collectionName)
+    return this.client.db(this.config.dbName)
+  }
+
+  private async collection(): Promise<Collection<Document>> {
+    return (await this.db()).collection(this.collectionName)
   }
 
   private async imageCollection(): Promise<Collection<Document>> {
-    await this.collection()
-    return this.client!.db(this.config.dbName).collection('kb_images')
-  }
-
-  private async vectorSearch(
-    queryVector: number[],
-    limit: number,
-    filter: Record<string, string | boolean>,
-  ): Promise<RankedChunk[]> {
-    const collection = await this.collection()
-    const docs = await collection
-      .aggregate([
-        {
-          $vectorSearch: {
-            index: this.indexName,
-            path: 'embedding',
-            queryVector,
-            numCandidates: Math.max(limit * 10, this.numCandidates),
-            limit,
-            filter,
-          },
-        },
-        { $addFields: { score: { $meta: 'vectorSearchScore' } } },
-      ])
-      .toArray()
-    return docs.flatMap((doc) => {
-      const score = typeof doc.score === 'number' ? doc.score : undefined
-      const chunk = toChunk(doc, score)
-      return chunk ? [{ id: chunk.id, chunk }] : []
-    })
-  }
-
-  private async textSearch(
-    text: string,
-    limit: number,
-    filter: Record<string, string | boolean>,
-  ): Promise<RankedChunk[]> {
-    const collection = await this.collection()
-    const filters = Object.entries(filter).map(([path, value]) => ({ equals: { path, value } }))
-    const docs = await collection
-      .aggregate([
-        {
-          $search: {
-            index: this.textIndexName,
-            compound: {
-              must: [{ text: { query: text, path: 'text' } }],
-              ...(filters.length > 0 ? { filter: filters } : {}),
-            },
-          },
-        },
-        { $limit: limit },
-        { $addFields: { score: { $meta: 'searchScore' } } },
-      ])
-      .toArray()
-    return docs.flatMap((doc) => {
-      const score = typeof doc.score === 'number' ? doc.score : undefined
-      const chunk = toChunk(doc, score)
-      return chunk ? [{ id: chunk.id, chunk }] : []
-    })
+    return (await this.db()).collection('kb_images')
   }
 }
