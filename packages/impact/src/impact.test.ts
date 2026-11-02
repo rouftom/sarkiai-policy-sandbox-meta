@@ -110,6 +110,36 @@ describe('analyzeImpact', () => {
     expect(analysis.summary).toContain('No open run')
   })
 
+  test('sends the light effort under the active provider namespace', async () => {
+    let seen: unknown = null
+    const model = {
+      specificationVersion: 'v3',
+      provider: 'baseten',
+      modelId: 'meta-models/muse-spark-open-1026',
+      supportedUrls: {},
+      doGenerate: async (options: { providerOptions?: unknown }) => {
+        seen = options.providerOptions
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ summary: 'No change.', findings: [] }) }],
+          finishReason: 'stop',
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          warnings: [],
+        }
+      },
+    } as unknown as LanguageModel
+
+    const analysis = await analyzeImpact({
+      model,
+      modelLabel: 'meta-models/muse-spark-open-1026',
+      provision: { title: 'Decret 2026/341', articleNumber: 'ARTICLE 2', text: '...' },
+      cases: [openCase()],
+      providerName: 'baseten',
+    })
+
+    expect(analysis.summary).toBe('No change.')
+    expect(seen).toEqual({ baseten: { reasoningEffort: 'low' } })
+  })
+
   test('asks again when the first reply carries no JSON', async () => {
     const prompts: string[] = []
     const analysis = await analyzeImpact({
