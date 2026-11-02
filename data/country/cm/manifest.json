@@ -196,8 +196,8 @@
         "collaboration"
       ],
       "status": "present",
-      "rights": "quotation-only",
-      "rightsNote": "ART annual observatory (2016) with no reuse licence or copyright notice in the PDF: short attributed quotations only; do not publish the payload.",
+      "rights": "official-text",
+      "rightsNote": "Annual market observatory published by ART, a public administrative establishment: free public access, reuse with attribution, no modification. The PDF carries no copyright page, no licence notice and no XMP rights field; classified as an official administrative document under docs/LICENSING.md.",
       "priority": "medium",
       "file": "art_observatoire_marche_telecom_2016.pdf",
       "sourceUrl": "https://www.art.cm/sites/default/files/documents/Observatoire%20annuel%202016%20V4_0.pdf"
