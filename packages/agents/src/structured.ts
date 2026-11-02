@@ -156,7 +156,7 @@ export async function generateStructured<S extends ZodType>(request: StructuredR
       // The provider reads its own option name ("meta" on Meta's API); the generic one is kept for compatible hosts.
       providerOptions: {
         meta: { reasoningEffort: request.reasoningEffort ?? 'low' },
-        'openai-compatible': { reasoningEffort: request.reasoningEffort ?? 'low' },
+        openaiCompatible: { reasoningEffort: request.reasoningEffort ?? 'low' },
       },
       ...(request.signal ? { abortSignal: request.signal } : {}),
     })
