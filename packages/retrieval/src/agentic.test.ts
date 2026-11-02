@@ -166,6 +166,42 @@ describe('agentic retrieval', () => {
     expect(exploration.subAgents.every((agent) => agent.rounds.length <= 2)).toBe(true)
   })
 
+  test('every model step gets a budget large enough for the reasoning tokens', async () => {
+    // Muse Spark counts its reasoning against maxOutputTokens: with the small
+    // caps this search used to pass (300 to 600) the answer came back empty and
+    // every step silently fell back to the lexical order.
+    const budgets: Array<number | undefined> = []
+    const retriever = new AgenticRetriever({
+      source: source(),
+      think: async (prompt, options) => {
+        budgets.push(options?.maxOutputTokens)
+        if (prompt.startsWith('You plan')) {
+          return '{"subQuestions":[{"question":"délai","queries":["notification"]}]}'
+        }
+        if (prompt.startsWith('You check')) return '{"sufficient":false,"queries":["santé"]}'
+        return '{"ranking":[{"n":1,"score":0.9}]}'
+      },
+    })
+    await retriever.explore({ ...QUERY, depth: 'deep' })
+    expect(budgets.length).toBeGreaterThan(0)
+    expect(budgets.every((budget) => (budget ?? 0) >= 2_000)).toBe(true)
+  })
+
+  test('the model step budget can be configured', async () => {
+    const budgets: Array<number | undefined> = []
+    const retriever = new AgenticRetriever({
+      source: source(),
+      modelStepTokens: 2_500,
+      think: async (prompt, options) => {
+        budgets.push(options?.maxOutputTokens)
+        if (prompt.startsWith('You plan')) return '{"subQuestions":[]}'
+        return '{"ranking":[]}'
+      },
+    })
+    await retriever.explore({ ...QUERY, depth: 'fast' })
+    expect(budgets.every((budget) => budget === 2_500)).toBe(true)
+  })
+
   test('JSON is found in a fenced or chatty answer', () => {
     expect(extractJson('Sure:\n```json\n{"a":1}\n```')).toEqual({ a: 1 })
     expect(extractJson('{"b":2} done')).toEqual({ b: 2 })
