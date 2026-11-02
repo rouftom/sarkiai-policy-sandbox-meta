@@ -782,13 +782,33 @@ export class AtlasIngestor {
     const rows = await (await this.chunks())
       .aggregate([
         { $match: filter },
+        // Drop the bulky fields before sorting: retired chunkings of the same
+        // file stay next to the current one, and the old passages may predate
+        // the rights field. Sorting them last makes the reported rights, country
+        // and docType come from the active chunking.
+        {
+          $project: {
+            filename: 1,
+            documentId: 1,
+            isActive: 1,
+            country: 1,
+            docType: 1,
+            rights: 1,
+            namespace: 1,
+            version: 1,
+            sourceUrl: 1,
+            ingestedAt: 1,
+            textLength: { $strLenCP: { $ifNull: ['$text', ''] } },
+          },
+        },
+        { $sort: { isActive: -1, _id: 1 } },
         {
           $group: {
             _id: '$filename',
             documentId: { $first: '$documentId' },
             chunks: { $sum: 1 },
             activeChunks: { $sum: { $cond: [{ $ne: ['$isActive', false] }, 1, 0] } },
-            characters: { $sum: { $strLenCP: { $ifNull: ['$text', ''] } } },
+            characters: { $sum: '$textLength' },
             country: { $first: '$country' },
             docType: { $first: '$docType' },
             rights: { $first: '$rights' },

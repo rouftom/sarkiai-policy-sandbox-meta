@@ -24,25 +24,6 @@
       "sourceUrl": ""
     },
     {
-      "id": "cm-ai-strategy",
-      "title": "Stratégie nationale d'intelligence artificielle du Cameroun (objet de l'actualité presse)",
-      "authority": "MINPOSTEL",
-      "docType": "report",
-      "jurisdiction": "national",
-      "pillar": [
-        "generated_content",
-        "ai_policies",
-        "ai_inclusion"
-      ],
-      "status": "present",
-      "rights": "quotation-only",
-      "rightsNote": "Investir au Cameroun press article (10 July 2025), © Stratline Limited, all rights reserved: short attributed quotations only; do not publish the payload.",
-      "priority": "critical",
-      "file": "actualite_strategie_ia_cameroun.pdf",
-      "note": "Press article describing the strategy (target of 12,000 jobs by 2040) — the official strategy document is still to be obtained.",
-      "sourceUrl": "https://www.investiraucameroun.com/gestion-publique/1007-22234-le-cameroun-lance-sa-strategie-d-intelligence-artificielle-pour-generer-12-000-emplois-d-ici-2040"
-    },
-    {
       "id": "cm-digital-strategy-2020",
       "title": "Plan stratégique Cameroun Numérique 2020",
       "authority": "MINPOSTEL",
@@ -97,23 +78,6 @@
       "needsOcr": true,
       "note": "Part of the text extracts with a non-Unicode font (garbled) — OCR recommended.",
       "sourceUrl": "https://www.afro.who.int/sites/default/files/2025-03/Compact%20national%20French-1.pdf"
-    },
-    {
-      "id": "cm-health-system",
-      "title": "Le système de santé camerounais",
-      "authority": "Journal / author (Jean Paul Beyeme Ondoua)",
-      "docType": "report",
-      "jurisdiction": "national",
-      "pillar": [
-        "ai_integration",
-        "ai_inclusion"
-      ],
-      "status": "present",
-      "rights": "quotation-only",
-      "rightsNote": "ADSP n°39 article (June 2002) by Jean Paul Beyeme Ondoua, © HCSP / Presses de l'EHESP, all rights reserved: short attributed quotations only; do not publish the payload.",
-      "priority": "medium",
-      "file": "systeme_de_sante_camerounais.pdf",
-      "sourceUrl": "https://www.hcsp.fr/Explore.cgi/Telecharger?NomFichier=ad396165.pdf"
     },
     {
       "id": "cm-snd30-summary",
@@ -196,8 +160,8 @@
         "collaboration"
       ],
       "status": "present",
-      "rights": "quotation-only",
-      "rightsNote": "ART annual observatory (2016) with no reuse licence or copyright notice in the PDF: short attributed quotations only; do not publish the payload.",
+      "rights": "official-text",
+      "rightsNote": "Annual market observatory published by ART, a public administrative establishment: free public access, reuse with attribution, no modification. The PDF carries no copyright page, no licence notice and no XMP rights field; classified as an official administrative document under docs/LICENSING.md.",
       "priority": "medium",
       "file": "art_observatoire_marche_telecom_2016.pdf",
       "sourceUrl": "https://www.art.cm/sites/default/files/documents/Observatoire%20annuel%202016%20V4_0.pdf"
@@ -234,25 +198,6 @@
       "file": "loi_2013_013_communications_electroniques.pdf",
       "note": "Source reference: Loi_2013-013 (number and year to be confirmed).",
       "sourceUrl": "https://www.minpostel.gov.cm/"
-    },
-    {
-      "id": "cm-ai-adoption-local-authorities",
-      "title": "Stratégie d'adoption de l'IA dans la transformation numérique des Collectivités Territoriales Décentralisées du Cameroun",
-      "authority": "Research (HAL / authors)",
-      "docType": "report",
-      "jurisdiction": "national",
-      "pillar": [
-        "ai_policies",
-        "contextualization",
-        "ai_inclusion"
-      ],
-      "status": "present",
-      "rights": "quotation-only",
-      "rightsNote": "HAL deposit (hal-05411779) under the HAL deposit authorisation, which permits display but not reuse: short attributed quotations only; do not publish the payload.",
-      "priority": "high",
-      "file": "strategie_ia_collectivites_territoriales.pdf",
-      "note": "Research paper (DSR approach). The equivalent HAL record was not duplicated.",
-      "sourceUrl": "https://hal.science/hal-05411779v1"
     },
     {
       "id": "cm-interconnection-decree-2023",
@@ -500,6 +445,142 @@
       "rights": "official-text",
       "priority": "high",
       "sourceUrl": "https://au.int/en/treaties"
+    },
+    {
+      "id": "cm-who-cooperation-strategy-2025-2029",
+      "title": "Stratégie de coopération de l'OMS avec la République du Cameroun 2025-2029",
+      "authority": "World Health Organization (WHO Regional Office for Africa)",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "human_interface",
+        "strategy_alignment"
+      ],
+      "status": "present",
+      "rights": "open-licence",
+      "rightsNote": "CC BY-NC-SA 3.0 IGO, stated on page 2 and on the last page. Cite: Organisation mondiale de la Santé, Stratégie de coopération de l'OMS avec la République du Cameroun 2025-2029, 2026. Non-commercial reuse only; adaptations must stay under the same licence.",
+      "priority": "high",
+      "file": "who_cooperation_strategy_cameroun_2025_2029.pdf",
+      "note": "102 pages, text layer present.",
+      "sourceUrl": "https://www.afro.who.int/sites/default/files/2026-09/Strategie%20de%20cooperation%20de%20l'OMS%20avec%20la%20Republique%20du%20Cameroun%202025-2029%20.pdf"
+    },
+    {
+      "id": "cm-primasys-abridged-2017",
+      "title": "Primary health care systems (PRIMASYS): case study from Cameroon, abridged version",
+      "authority": "World Health Organization",
+      "docType": "report",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "human_interface"
+      ],
+      "status": "present",
+      "rights": "open-licence",
+      "rightsNote": "CC BY-NC-SA 3.0 IGO, stated in the PDF and recorded as dc.rights in the WHO IRIS record (handle 10665/341178). Cite: World Health Organization, 2017.",
+      "priority": "medium",
+      "file": "who_primasys_cameroun_abridged_2017.pdf",
+      "note": "16 pages, text layer present.",
+      "sourceUrl": "https://iris.who.int/handle/10665/341178"
+    },
+    {
+      "id": "cm-primasys-full-2017",
+      "title": "Primary health care systems (PRIMASYS): comprehensive case study from Cameroon",
+      "authority": "World Health Organization",
+      "docType": "report",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "human_interface"
+      ],
+      "status": "present",
+      "rights": "open-licence",
+      "rightsNote": "CC BY-NC-SA 3.0 IGO, stated in the PDF and recorded as dc.rights in the WHO IRIS record (handle 10665/341179). Cite: World Health Organization, 2017.",
+      "priority": "medium",
+      "file": "who_primasys_cameroun_full_2017.pdf",
+      "note": "28 pages, text layer present.",
+      "sourceUrl": "https://iris.who.int/handle/10665/341179"
+    },
+    {
+      "id": "cm-phc-covid19-case-study-2023",
+      "title": "Cameroon: a primary health care case study in the context of the COVID-19 pandemic",
+      "authority": "World Health Organization / Alliance for Health Policy and Systems Research",
+      "docType": "report",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "human_interface"
+      ],
+      "status": "present",
+      "rights": "open-licence",
+      "rightsNote": "CC BY-NC-SA 3.0 IGO, stated in the PDF and recorded as dc.rights in the WHO IRIS record (handle 10665/376146). Cite: World Health Organization, 2023.",
+      "priority": "medium",
+      "file": "who_phc_cameroun_covid19_2023.pdf",
+      "note": "22 pages, text layer present.",
+      "sourceUrl": "https://iris.who.int/handle/10665/376146"
+    },
+    {
+      "id": "cm-health-equity-diagnostic-2025",
+      "title": "Cameroon Health Equity Diagnostic, November 2025 (summary report)",
+      "authority": "World Bank",
+      "docType": "report",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "human_impact"
+      ],
+      "status": "present",
+      "rights": "open-licence",
+      "rightsNote": "CC BY-NC 3.0 IGO, recorded as dc.rights in the World Bank Open Knowledge Repository (handle 10986/44373); the summary report itself carries no licence page. Cite: World Bank, 2025.",
+      "priority": "medium",
+      "file": "worldbank_cameroun_health_equity_diagnostic_2025.pdf",
+      "note": "22 pages, text layer present.",
+      "sourceUrl": "https://openknowledge.worldbank.org/entities/publication/9a19a5f6-6a46-46cc-9e95-91154cd10533"
+    },
+    {
+      "id": "cm-health-quality-strategy-2024-2028",
+      "title": "Plan Stratégique National d'Amélioration de la Qualité des Soins et des Services de Santé au Cameroun 2024-2028",
+      "authority": "Ministry of Public Health (MINSANTE) / DOSTS",
+      "docType": "policy",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "human_interface",
+        "strategy_alignment"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "rightsNote": "Institutional publication of MINSANTE/DOSTS. The PDF has no copyright page, no licence notice and no XMP rights field; classified as an official administrative document under docs/LICENSING.md.",
+      "priority": "high",
+      "file": "minsante_plan_qualite_soins_2024_2028.pdf",
+      "note": "103 pages, text layer present.",
+      "sourceUrl": "https://extranet.who.int/uhcpartnershiplivemonitoring/system/files/doc_attachments/Document%20Strat%C3%A9gique%20Qualit%C3%A9%20des%20Soins%20Cameroun%202024%20-%20.pdf"
+    },
+    {
+      "id": "cm-health-sector-strategy-2016-2027",
+      "title": "Stratégie Sectorielle de Santé 2016-2027",
+      "authority": "Ministry of Public Health (MINSANTE)",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "ai_inclusion",
+        "human_interface",
+        "strategy_alignment"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "rightsNote": "Institutional publication of MINSANTE. The PDF has no copyright page, no licence notice and no XMP rights field; classified as an official administrative document under docs/LICENSING.md.",
+      "priority": "high",
+      "file": "minsante_strategie_sectorielle_sante_2016_2027.pdf",
+      "note": "208 pages, text layer present.",
+      "sourceUrl": "https://www.minsante.cm/site/sites/default/files/SSS_french.pdf"
     }
   ]
 }

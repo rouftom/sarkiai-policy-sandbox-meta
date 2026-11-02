@@ -42,24 +42,6 @@
       "sourceUrl": ""
     },
     {
-      "id": "smart-africa-ai-blueprint-2021",
-      "title": "Smart Africa — AI for Africa Blueprint (2021)",
-      "authority": "Smart Africa",
-      "docType": "strategy",
-      "jurisdiction": "regional",
-      "pillar": [
-        "contextualization",
-        "digital_infrastructure",
-        "data_marketplace"
-      ],
-      "status": "verified",
-      "rights": "quotation-only",
-      "rightsNote": "© Smart Africa 2021 (first edition); no reuse licence found in the PDF or on the publisher site: short attributed quotations only; do not publish the payload.",
-      "priority": "high",
-      "file": "Smart_Africa_AI_Blueprint_2021.pdf",
-      "sourceUrl": "https://smartafrica.org/wp-content/uploads/2023/11/70029-eng_ai-for-africa-blueprint-min.pdf"
-    },
-    {
       "id": "windhoek-statement-2022",
       "title": "Windhoek Statement on AI in Southern Africa (2022)",
       "authority": "SADC / partners",

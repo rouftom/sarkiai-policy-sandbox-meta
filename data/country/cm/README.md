@@ -9,11 +9,9 @@ are **normalised** (ASCII, snake_case) so ingestion stays predictable. Payloads
 | File | Type | OCR? | Content |
 |------|------|------|---------|
 | `loi_2024_protection_donnees_personnelles.pdf` | law | — | Personal data protection law (23 Dec. 2024) — **core** |
-| `actualite_strategie_ia_cameroun.pdf` | report | — | Press article on the national AI strategy |
 | `plan_strategique_cameroun_numerique_2020.pdf` | strategy | — | Cameroon Digital strategic plan |
 | `psnsn_sante_numerique_2026_2030.pdf` | policy | **yes** | National Digital Health Strategic Plan (114 p.) |
 | `compact_national_sante_2023.pdf` | policy | **yes** | National health compact / UHC (partly non-Unicode font) |
-| `systeme_de_sante_camerounais.pdf` | report | — | Description of the Cameroonian health system |
 | `resume_snd30.pdf` | strategy | — | SND30 summary |
 | `snd30_complet_2020_2030.pdf` | strategy | — | Full SND30 |
 | `cemac_protection_droits_utilisateurs.pdf` | regulation | — | CEMAC directive on users' rights (telecoms) |
@@ -21,7 +19,6 @@ are **normalised** (ASCII, snake_case) so ingestion stays predictable. Payloads
 | `art_observatoire_marche_telecom_2016.pdf` | report | — | ART telecom market observatory, 2016 |
 | `loi_2010_012_cybersecurite_cybercriminalite.pdf` | law | — | Cybersecurity / cybercrime law 2010/012 |
 | `loi_2013_013_communications_electroniques.pdf` | law | — | Electronic communications law |
-| `strategie_ia_collectivites_territoriales.pdf` | report | — | Paper on AI adoption by local authorities |
 | `decret_2023_interconnexion.pdf` | regulation | — | Decree on network interconnection and access (2023) |
 | `art_recueil_textes_2018.pdf` | law | — | Compilation of telecom texts (ART, 486 p.) |
 | `compendium_textes_poste_telecom_tic_2023.pdf` | law | **yes** | MINPOSTEL compendium 2023 (456 p.) |
@@ -84,16 +81,19 @@ are committed. Each entry carries a `rights` field:
 
 Rights were checked against the source publications (November 2026):
 
-- `open-licence`: the ID4D diagnostic (World Bank, CC BY 3.0 IGO; the exact
-  attribution string is in its `rightsNote`).
-- `official-text`: the health compact (MINSANTE, July 2023).
-- `quotation-only`: `cm-ai-strategy` (Investir au Cameroun press article),
-  `cm-health-system` (ADSP n°39 article, © HCSP / Presses de l'EHESP),
-  `cm-telecom-observatory-2016` (ART report with no reuse terms) and
-  `cm-ai-adoption-local-authorities` (HAL paper under the HAL deposit
-  authorisation, which does not grant reuse).
+- `open-licence`: the ID4D diagnostic (World Bank, CC BY 3.0 IGO), the WHO
+  cooperation strategy 2025-2029, the two PRIMASYS case studies and the
+  COVID-19 primary health care case study (CC BY-NC-SA 3.0 IGO), and the
+  Cameroon Health Equity Diagnostic (World Bank, CC BY-NC 3.0 IGO); the exact
+  attribution string is in each `rightsNote`.
+- `official-text`: the health compact (MINSANTE, July 2023), the national
+  quality-of-care strategy 2024-2028 and the health sector strategy 2016-2027
+  (MINSANTE/DOSTS), and the ART telecom observatory (2016).
+- `quotation-only`: none. The press article on the AI strategy, the health
+  system article and the local-authorities paper were removed from the corpus:
+  none grants a reuse licence, so neither their payload nor their chunks are
+  kept.
 
-No entry in this manifest remains `to-confirm`. Documents without a reuse
-licence still may not be served as full text in a public demo. Before publishing
-any payload, check its rights status, never ingest personal data, and keep the
-issuer and the source URL in the manifest. See [`../../../docs/LICENSING.md`](../../../docs/LICENSING.md).
+Every entry in this manifest is publishable (`official-text` or `open-licence`).
+Before publishing any payload, check its rights status, never ingest personal
+data, and keep the issuer and the source URL in the manifest. See [`../../../docs/LICENSING.md`](../../../docs/LICENSING.md).
