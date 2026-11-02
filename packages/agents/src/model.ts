@@ -18,7 +18,7 @@ import { meterLanguageModel } from './usage'
 export interface ModelConfig {
   /** Ollama base URL, e.g. http://ollama:11434 (the `/v1` suffix is added). */
   baseURL?: string
-  /** Model tag, e.g. qwen2.5:14b. */
+  /** Model tag, e.g. muse-glimmer. */
   model?: string
   /** Explicit mode; defaults to `SANDBOX_MODE`. */
   mode?: ProviderDescriptor['mode']
@@ -45,7 +45,7 @@ function explicitLocal(config: ModelConfig): ProviderDescriptor {
     label: 'Local',
     servedBy: 'Ollama',
     baseURL,
-    models: { reasoning: model, vision: model, embedding: process.env.EMBEDDING_MODEL ?? 'bge-m3' },
+    models: { reasoning: model, vision: model },
     residency: 'on-premise',
     openWeights: true,
     budgetUsd: 0,

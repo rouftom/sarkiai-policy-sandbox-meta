@@ -1,19 +1,20 @@
 ---
 name: SarkiAI provider modes
-description: How SANDBOX_MODE selects local, sovereign or cloud inference — Muse Glimmer as the local default, the qwen fallback, Baseten/Modal open weights, the Meta Model API and the retrieval backend that follows. Use when changing models, adding a provider, debugging "provider not ready", or documenting keys.
+description: How SANDBOX_MODE selects local, sovereign or cloud inference — Muse Glimmer as the local default, Baseten/Modal open weights, the Meta Model API, and the lexical retrieval backend and depth that follow. Use when changing models, adding a provider, debugging "provider not ready", or documenting keys.
 ---
 
 # SarkiAI provider modes
 
-Mode is **configuration, never a code path**. Every agent, the coordinator and
-the readiness engine receive the same `LanguageModel` handle from
-`packages/agents/src/provider.ts`. A switch is audited as `provider.switched`.
+Mode is **configuration, never a code path**. Every agent, the coordinator, the
+readiness engine and the agentic search receive the same `LanguageModel` handle
+from `packages/agents/src/provider.ts`. A switch is audited as
+`provider.switched`. **Every model called at runtime is a Meta model.**
 
 ## The three modes
 
 | `SANDBOX_MODE` | Serves | Base URL | Key | Residency |
 | --- | --- | --- | --- | --- |
-| `local` (default) | Ollama, `OLLAMA_MODEL` (**Muse Glimmer**) + `bge-m3` | `OLLAMA_BASE_URL` | none | on-premise |
+| `local` (default) | Ollama, `OLLAMA_MODEL` (**Muse Glimmer 30B**) | `OLLAMA_BASE_URL` | none | on-premise |
 | `sovereign` | Modal → Baseten → Ollama, in that order | `MODAL_ENDPOINT_URL` / `BASETEN_BASE_URL` / `OLLAMA_BASE_URL` | `BASETEN_API_KEY` if hosted | cloud or on-premise |
 | `cloud` | Meta Model API (Muse Spark, SAM 3.1, Muse Voice Transcribe) | `META_BASE_URL` | `MODEL_API_KEY` | cloud |
 
@@ -32,22 +33,25 @@ the readiness engine receive the same `LanguageModel` handle from
 
 - `LOCAL_DEFAULT_MODEL = 'muse-glimmer'` in `provider.ts`, mirrored in
   `.env.example`, `docker-compose.yml` and `apps/api/src/config.ts`.
-- `qwen3.5:9b` is an **explicit fallback** for machines with 16–32 GB of RAM,
-  never the default. It must be set before `make models`.
 - `BASETEN_DEFAULT_MODEL = 'meta-models/muse-spark-open-1026'`.
 - `RUN_BUDGET_USD` is **alert-only**; it never blocks a run.
 
 ## Retrieval follows the mode
 
-`RETRIEVAL_BACKEND=auto | qdrant | atlas` (`packages/retrieval/src/types.ts`):
+`RETRIEVAL_BACKEND=auto | atlas | text` (`packages/retrieval/src/types.ts`):
 
-- `auto` → `atlas` in `cloud`, `qdrant` otherwise.
-- `qdrant` → `bge-m3` + Qdrant, works in any mode (useful for a Meta key with a
-  local corpus: `SANDBOX_MODE=cloud` + `RETRIEVAL_BACKEND=qdrant`).
-- `atlas` → Voyage embeddings + Atlas Vector/Search (`VOYAGE_API_KEY`,
-  `MONGODB_URI` with `mongodb+srv`, indexes bootstrapped at startup).
+- `auto` → `atlas` in `cloud`, `text` otherwise.
+- `atlas` → Atlas Search (`sps_text_index`, BM25) over `kb_chunks`; needs
+  `MONGODB_URI` with `mongodb+srv`, and the index is bootstrapped at startup.
+- `text` → the MongoDB text index over `kb_chunks`, created at the first
+  ingestion. Works in any mode.
 
 An unknown value throws at startup — do not silently fall back.
+
+`RETRIEVAL_DEPTH=lexical | fast | deep` sets the default agentic depth:
+`lexical` calls no model, `fast` plans and ranks, `deep` runs parallel
+sub-agents with judge loops. The institutional agents and readiness use `fast`,
+the assistant and the exploration screen use `deep`.
 
 ## Adding or changing a provider
 
@@ -56,8 +60,7 @@ An unknown value throws at startup — do not silently fall back.
 2. Update the console badge/labels and **both** locales.
 3. Add the keys to `.env.example` as placeholders and document them in
    `README.md` / `deploy/api/README.md`.
-4. Keep `local`/`sovereign` free of outbound calls (no telemetry, no hosted
-   fallback).
+4. Keep `local` free of outbound calls (no telemetry, no hosted fallback).
 5. Verify: `bun run check:provider <mode>` then one real generation in the
    console, plus `bun test packages/agents`.
 

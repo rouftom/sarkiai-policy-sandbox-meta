@@ -23,7 +23,6 @@ Requirements for the host:
    | Variable | Source |
    |---|---|
    | `MODEL_API_KEY` | model provider |
-   | `VOYAGE_API_KEY` | embeddings and reranking provider |
    | `MONGODB_URI` | database connection string (user with read and write on the application database) |
    | `WHATSAPP_*` | messaging provider app settings |
    | `APPROVAL_SECRET` | a random value, for example `openssl rand -hex 32` |

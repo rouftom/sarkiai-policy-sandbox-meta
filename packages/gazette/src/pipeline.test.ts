@@ -135,7 +135,7 @@ describe('gazette pipeline · with injected model', () => {
       sourceUrl: 'https://example.gov.cm/jo/2026-special.pdf',
       model: {} as LanguageModel,
       modelLabel: 'muse-spark-1.3',
-      provider: { mode: 'cloud', servedBy: 'Meta', residency: 'cloud', openWeights: false, models: { reasoning: 'muse-spark-1.3', vision: 'muse-spark-1.3', embedding: 'bge-m3' } },
+      provider: { mode: 'cloud', servedBy: 'Meta', residency: 'cloud', openWeights: false, models: { reasoning: 'muse-spark-1.3', vision: 'muse-spark-1.3' } },
       pricing: { inputPerMTok: 1.25, outputPerMTok: 4.25, perSegmentationCall: 0.0025 },
       deps: {
         segment: async (_phrase, label) => {
@@ -207,7 +207,7 @@ describe('gazette pipeline · with injected model', () => {
       filename: 'jo.pdf',
       model: {} as LanguageModel,
       modelLabel: 'muse-spark-1.3',
-      provider: { mode: 'cloud', servedBy: 'Meta', residency: 'cloud', openWeights: false, models: { reasoning: 'muse-spark-1.3', vision: 'muse-spark-1.3', embedding: 'bge-m3' } },
+      provider: { mode: 'cloud', servedBy: 'Meta', residency: 'cloud', openWeights: false, models: { reasoning: 'muse-spark-1.3', vision: 'muse-spark-1.3' } },
       deps: {
         transcribe: async () => {
           throw new Error('provider timeout')

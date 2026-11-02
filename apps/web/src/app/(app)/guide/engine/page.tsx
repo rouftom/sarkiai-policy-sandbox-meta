@@ -145,15 +145,15 @@ export default function GuideEnginePage() {
             {
               a: fr ? 'Cloud' : 'Cloud',
               b: fr
-                ? 'Voyage voyage-4 (1024 dim), Atlas $vectorSearch + $search, fusion RRF, rerank-2.'
-                : 'Voyage voyage-4 (1024 dim), Atlas $vectorSearch + $search, RRF fusion, rerank-2.',
+                ? 'Recherche agentique : le modèle Meta planifie, lance des sous-agents sur l’index BM25 d’Atlas, fusionne (RRF) et classe.'
+                : 'Agentic search: the Meta model plans, runs sub-agents on the Atlas BM25 index, fuses (RRF) and ranks.',
               c: fr ? 'Vers Meta / Atlas' : 'To Meta / Atlas',
             },
             {
               a: fr ? 'Local / souverain' : 'Local / sovereign',
               b: fr
-                ? 'bge-m3 + Qdrant : rien ne quitte l’institution.'
-                : 'bge-m3 + Qdrant: nothing leaves the institution.',
+                ? 'Index texte MongoDB et Muse Glimmer : rien ne quitte l’institution.'
+                : 'MongoDB text index and Muse Glimmer: nothing leaves the institution.',
               c: fr ? 'Aucune' : 'None',
             },
           ]}
@@ -174,8 +174,8 @@ export default function GuideEnginePage() {
             {
               a: 'SANDBOX_MODE',
               b: fr
-                ? 'Fournisseur de raisonnement, d’embedding et de rerank ; visible dans le badge.'
-                : 'Reasoning, embedding and rerank provider; shown in the badge.',
+                ? 'Modèle Meta qui raisonne et classe les passages ; visible dans le badge.'
+                : 'Meta model that reasons and ranks the passages; shown in the badge.',
             },
             {
               a: 'META_SAM_MODEL',

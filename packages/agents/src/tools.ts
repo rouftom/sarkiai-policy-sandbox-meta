@@ -140,7 +140,8 @@ export function createAgentTools(ctx: AgentToolContext): ToolSet {
         topK: z.number().int().min(1).max(12).optional(),
       }),
       execute: async ({ query, topK }) => {
-        const chunks = await ctx.retriever.search({ text: query, country: ctx.country, topK: topK ?? 6 })
+        // The assistant gets the deepest search: parallel sub-agents and judge loops.
+        const chunks = await ctx.retriever.search({ text: query, country: ctx.country, topK: topK ?? 6, depth: 'deep' })
         ctx.onCorpusChunks?.(chunks)
         return { count: chunks.length, provisions: chunks.map(provisionOf) }
       },

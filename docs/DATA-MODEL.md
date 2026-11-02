@@ -1,42 +1,55 @@
 # Data model
 
-Two stores, deliberately separated:
+One store for the corpus and the trail:
 
-- **Qdrant**: the vector knowledge base (retrieval chunks, dense + sparse).
-- **MongoDB**: operational data only (audit log + chain-of-thought traces).
+- **MongoDB**: the knowledge base (`kb_chunks`, searched lexically with Atlas
+  Search in `cloud` or a text index elsewhere) and the operational data (audit
+  log, chain-of-thought traces, usage ledger, sessions).
+- **MinIO**: image attachments referenced by chunks and citations.
 
-Types are canonical in `packages/shared/src/types.ts`.
+There is no vector store and no embedding field. Types are canonical in
+`packages/shared/src/types.ts`.
 
-## Qdrant collection `policy_chunks`
+## Collection `kb_chunks`
 
-Named vectors:
-
-| Vector | Kind | Source | Purpose |
-|--------|------|--------|---------|
-| `dense` | dense, 1024-d, cosine | local `bge-m3` (Ollama) | semantic retrieval |
-| `text` | sparse, IDF modifier | BM25 (`Qdrant/bm25`) | lexical retrieval → hybrid RRF |
-
-Payload (per point):
+One document per chunk, written by `AtlasIngestor`
+(`packages/retrieval/src/atlas-ingest.ts`).
 
 | Field | Type | Purpose |
 |-------|------|---------|
+| `_id` | string | `sha256(document, version, chunkIndex, text)`; makes re-ingestion idempotent |
+| `filename`, `chunkIndex`, `text` | mixed | document grouping + body |
 | `country` | string | ISO-3166 alpha-2 or `global`: **primary filter** |
 | `jurisdiction` | national \| regional \| international | legal level |
 | `docType` | law/strategy/regulation/policy/treaty/standard/guidance/report | source class |
 | `pillar` | string[] | readiness dimensions informed |
 | `namespace` | string? | optional sub-corpus partition |
-| `filename`, `chunkIndex`, `text` | mixed | document grouping + body |
+| `rights` | official-text \| open-licence \| quotation-only \| to-confirm | reuse status, enforced at ingestion |
 | `headingPath` | string? | e.g. `TITRE I > CHAPITRE II > ARTICLE 12` |
 | `articleNumber` | string? | e.g. `12` |
-| `unitType`, `chunkRole`, `parentText` | mixed | structure-aware chunk metadata |
+| `unitType`, `chunkRole` | mixed | structure-aware chunk metadata |
 | `sourceUrl` | string? | provenance |
-| `contentHash` | string | deterministic dedup key (also the point id) |
-| `isActive` | boolean | retrieval gate |
+| `isActive` | boolean | retrieval gate; retirement keeps the row for audit |
 
-Payload indexes (keyword): `country`, `jurisdiction`, `docType`, `namespace`;
-(bool): `isActive`.
+Indexes:
 
-Point ids are `uuid5(content_hash)` → re-ingestion is idempotent.
+- `sps_text_index` (Atlas Search, `cloud`): BM25 over `text` with the
+  `sps_fr_folded` analyser, filter fields `country`, `jurisdiction`, `docType`,
+  `namespace` (typed `token`) and `isActive` (boolean). Definition in
+  `packages/retrieval/src/atlas-index-definitions.ts`.
+- MongoDB text index (`local`, `sovereign`): created at the first ingestion.
+- Plain indexes for the console queries (`filename`, `isActive`).
+
+## `kb_images` and `kb_documents`
+
+`kb_images` holds the figures attached to a document: `_id`, `filename`,
+`documentId`, `caption`, `alt`, `tags`, `dimension`, `articleNumber`,
+`headingPath`, `source`, `mime`, the bytes (`data`) or an `externalUrl`. Chunks
+and citations carry an image `id` and `url`, so the console can render the
+figure next to the quote without loading the bytes during retrieval.
+
+`kb_documents` holds one metadata record per document (title, summary), keyed by
+filename; the console uses it for the corpus list.
 
 ## MongoDB collections (operational)
 
@@ -83,17 +96,20 @@ process and retried on the next write, so metering never breaks a request.
 
 ## Retrieval filter contract
 
-The retriever builds a Qdrant `must` filter from the query taxonomy:
+The retriever and the agentic sub-agents apply the same exact-match filter
+(`corpusFilter` in `packages/retrieval/src/agentic.ts`):
 
 ```
-isActive = true
-country    = <query.country>
+isActive     = true
+country      = <query.country>
 jurisdiction = <optional>
 docType      = <optional>
 namespace    = <optional>
 ```
 
-MongoDB is never in the retrieval path (no `$vectorSearch` dependency).
+In `cloud` mode the filter becomes the `compound.filter` of the Atlas `$search`
+stage; in `local` and `sovereign` it is merged into the MongoDB `$text` query.
+Same contract, same result: a chunk outside the filter is never returned.
 
 ## Type relationships
 

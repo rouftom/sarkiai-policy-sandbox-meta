@@ -915,7 +915,7 @@ function SettingsTab() {
       key: 'retrieval',
       task: t('readiness.settings.task.corpus'),
       agent: t('readiness.settings.agent.corpus'),
-      control: <Select ariaLabel={t('readiness.settings.task.corpus')} value="voyage-4" onValueChange={() => {}} options={[{ value: 'voyage-4', label: 'voyage-4 · embeddings · rerank-2' }]} disabled size="md" className="w-full" />,
+      control: <Select ariaLabel={t('readiness.settings.task.corpus')} value="agentic" onValueChange={() => {}} options={[{ value: 'agentic', label: 'Agentic search · same model as evaluation' }]} disabled size="md" className="w-full" />,
     },
     {
       key: 'webSearch',

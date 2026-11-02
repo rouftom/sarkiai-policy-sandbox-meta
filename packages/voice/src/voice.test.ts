@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { LocalAsrClient, MetaAsrClient } from './asr.js'
+import { MetaAsrClient } from './asr.js'
 import { formatTimestamp, toVoiceFacts } from './facts.js'
 import { isMetaAsrCompatible, probeWav, wavProblems } from './wav.js'
 
@@ -139,27 +139,6 @@ describe('MetaAsrClient', () => {
   })
 })
 
-describe('LocalAsrClient', () => {
-  test('maps Whisper segments to millisecond turns', async () => {
-    let url = ''
-    const client = new LocalAsrClient({
-      baseUrl: 'http://transcription:8000',
-      fetchImpl: (async (input: string | URL | Request) => {
-        url = String(input)
-        return new Response(
-          JSON.stringify({ text: 'Bonjour. Incident.', segments: [{ start: 0, end: 0.4, text: 'Bonjour.' }] }),
-          { status: 200 },
-        )
-      }) as unknown as typeof fetch,
-    })
-    const transcript = await client.transcribe({ audio: makeWav(), languageBias: ['French'] })
-    expect(url).toBe('http://transcription:8000/v1/transcribe?language=fr')
-    expect(transcript.turns[0]?.endMs).toBe(400)
-    expect(transcript.engine).toBe('faster-whisper')
-    expect(transcript.durationMs).toBe(1000)
-  })
-})
-
 describe('timed facts', () => {
   test('formats offsets', () => {
     expect(formatTimestamp(0)).toBe('T+00:00')
@@ -193,8 +172,8 @@ describe('timed facts', () => {
       transcript: 'Une note sans segmentation.',
       durationMs: 4000,
       turns: [],
-      engine: 'faster-whisper',
-      model: 'faster-whisper',
+      engine: 'muse-voice-transcribe',
+      model: 'muse-voice-transcribe-1.0',
     })
     expect(facts).toHaveLength(1)
     expect(facts[0]?.atMs).toBe(0)

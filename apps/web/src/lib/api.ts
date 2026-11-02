@@ -334,7 +334,7 @@ export interface ProviderDto {
   label: string
   servedBy: string
   baseURL: string
-  models: { reasoning: string; vision: string; segmentation?: string; transcription?: string; embedding: string }
+  models: { reasoning: string; vision: string; segmentation?: string; transcription?: string }
   residency: 'cloud' | 'on-premise'
   openWeights: boolean
   budgetUsd: number
@@ -450,7 +450,7 @@ export interface VoiceTranscriptDto {
   durationMs: number
   turns: VoiceTurnDto[]
   facts: VoiceFactDto[]
-  engine: 'muse-voice-transcribe' | 'faster-whisper'
+  engine: 'muse-voice-transcribe'
   model: string
 }
 
@@ -1133,7 +1133,7 @@ export const api = {
     version?: string
   }) => request<GazetteIngestDto>('/v1/gazette/ingest', { method: 'POST', body: JSON.stringify(body) }),
 
-  /** Transcribe a voice note (Muse Voice Transcribe in cloud, faster-whisper otherwise). */
+  /** Transcribe a voice note with Muse Voice Transcribe. */
   transcribeVoice: (body: {
     audioBase64: string
     filename?: string
@@ -1484,15 +1484,13 @@ export interface KbIngestResultDto {
   unchanged: number
   deactivated: number
   characters: number
-  embeddingModel: string
-  dimensions: number | null
   durationMs: number
   steps: KbIngestStepDto[]
   error?: string
 }
 
 export interface KbStatusDto {
-  backend: 'atlas' | 'qdrant'
+  backend: 'atlas' | 'text'
   provider: { mode: string; reasoning?: string }
   collection: string
   collectionExists: boolean
@@ -1508,14 +1506,7 @@ export interface KbStatusDto {
   byDocType: Array<{ value: string; chunks: number }>
   indexes: KbIndexesDto
   expectedIndexes: string[]
-  embedding: {
-    model: string
-    rerankModel: string
-    dimensions: number | null
-    missingVectors: number
-    mismatchedVectors: number
-    voyageConfigured: boolean
-  }
+  search: { mode: 'atlas' | 'text' }
   recentRuns: KbIngestResultDto[]
 }
 
@@ -1590,16 +1581,13 @@ export interface KbExplorationDto {
   query: string
   filter: Record<string, string | boolean>
   topK: number
-  models: { embedding: string; rerank: string }
-  timings: { embedMs: number; denseMs: number; sparseMs: number; rerankMs: number; totalMs: number }
-  stages: {
-    dense: KbStageItemDto[]
-    sparse: KbStageItemDto[]
-    fused: KbStageItemDto[]
-    reranked: KbStageItemDto[]
-    final: KbStageItemDto[]
-  }
-  warnings: string[]
+  depth: 'lexical' | 'fast' | 'deep'
+  model: string
+  plan: Array<{ question: string; queries: string[]; articles: string[] }>
+  subAgents: Array<{ question: string; rounds: Array<{ queries: string[]; hits: number; sufficient?: boolean }> }>
+  stages: { lexical: KbStageItemDto[]; fused: KbStageItemDto[]; reranked: KbStageItemDto[]; final: KbStageItemDto[] }
+  timings: { planMs: number; searchMs: number; judgeMs: number; rerankMs: number; totalMs: number }
+  fallbacks: string[]
 }
 
 export const knowledgeApi = {

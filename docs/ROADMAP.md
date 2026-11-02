@@ -22,7 +22,7 @@ baseline, and the hackathon work is the N1 to N12 list in that file.
 The baseline commit (tag `pre-hackathon-baseline`) imports, as a single commit, the engine we wrote before the hackathon. The items below are what it already contained.
 - `[x]` Monorepo, Docker all-in-one + individual, lens profiles.
 - `[x]` Jurisdiction-aware ingestion (adapted, `country`/`jurisdiction`).
-- `[x]` Hybrid retrieval + RRF + local TEI rerank (optional).
+- `[x]` Agentic corpus search: Meta-model plan, sub-agents, judge loops, ranking (N13).
 - `[x]` Agent registry, orchestrator, mandatory-citation prompt.
 - `[x]` Progressive scenario engine.
 - `[x]` Readiness gap engine (13 dimensions / 6 factors).
@@ -30,11 +30,11 @@ The baseline commit (tag `pre-hackathon-baseline`) imports, as a single commit, 
 - `[x]` Causal what-if propagation across dimensions (`packages/readiness/src/causal.ts`).
 - `[x]` African regional reference corpus — continental and regional instruments only (`data/global/africa/`, `scripts/fetch-corpus.sh`).
 - `[x]` Hash-chained audit + persisted CoT traces.
-- `[x]` **Local-first / sovereign**: Ollama (`qwen3.5:9b`, Muse Glimmer 30B) + local `bge-m3` embeddings; local faster-whisper. Cloud mode is a third, optional provider. See `docs/LOCAL-FIRST-PLAN.md`, `docs/SOVEREIGNTY-AND-MODELS.md`.
+- `[x]` **Local-first / sovereign**: Muse Glimmer 30B on Ollama, Muse Spark Open on Baseten. See `docs/SOVEREIGNTY-AND-MODELS.md`.
 - `[x]` **Admin design system** replicated in `@sps/theme` (packs meta/green/ocean/sunset/mono/fada, `meta` default): assistant uses SarkiAI Compact.
 - `[x]` **MinIO** local object bucket (`sps-attachments`) for assistant image attachments.
 - `[x]` **SOPS + age** secrets workflow (`docs/SECRETS.md`, `scripts/gen-age-key.sh`).
-- `[x]` **Multimodal assistant**: local vision model (`qwen3.5:9b`), image attachments stored in MinIO (content-addressed), untrusted-context guardrails, audit hash. `POST /v1/agents/ask` + `attachments[]`.
+- `[x]` **Multimodal assistant**: the vision of the mode's Meta model, image attachments stored in MinIO (content-addressed), untrusted-context guardrails, audit hash. `POST /v1/agents/ask` + `attachments[]`.
 
 ### Sprint 1: the Cameroon health corpus
 - `[x]` Collect real CM corpus (health law, data-protection law, national AI/digital strategy, cyber strategy) → `data/country/cm/`.
