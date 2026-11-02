@@ -6,6 +6,10 @@
  *   bun run kb:seed -- --only snd30,sample                         # a subset
  *   bun run kb:seed -- --dry-run                                   # extract only
  *
+ * The ingest route is admin-only. Against a deployed API, export
+ * `SPS_ADMIN_TOKEN` with an admin session token (the bearer returned by
+ * `/v1/auth/login`); without it every document fails with HTTP 401/403.
+ *
  * Cloud mode (`cloud` provider → Atlas + Voyage) chunks and embeds in the API
  * itself, so this script only has to extract the text and POST it to
  * `/v1/kb/ingest/text`. Re-running is idempotent: chunks are keyed by a content
@@ -110,10 +114,22 @@ function splitForUpload(text: string, limit = 400_000): string[] {
   return parts
 }
 
+/** The ingest routes are admin-only; pass the operator session token in the environment. */
+const token = process.env.SPS_ADMIN_TOKEN?.trim()
+let authHintShown = false
+
+/** Headers for every ingest call: the bearer token when one is configured. */
+function apiHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+}
+
 async function post(body: Record<string, unknown>): Promise<{ status: number; payload: IngestResponse }> {
   const response = await fetch(`${api}/v1/kb/ingest/text`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: apiHeaders(),
     body: JSON.stringify(body),
   })
   return { status: response.status, payload: (await response.json()) as IngestResponse }
@@ -161,6 +177,10 @@ async function ingestDocument(document: ManifestDocument & { file: string }): Pr
       ? `${payload.chunks ?? 0} chunks (${payload.inserted ?? 0} new, ${payload.unchanged ?? 0} unchanged)`
       : (payload.error ?? 'failed')
     console.log(`  ${filename}: HTTP ${status} · ${detail} · ${Date.now() - started} ms`)
+    if ((status === 401 || status === 403) && !authHintShown) {
+      authHintShown = true
+      console.log('  hint: ingestion is admin-only; export SPS_ADMIN_TOKEN with an admin session before re-running.')
+    }
   }
 }
 
