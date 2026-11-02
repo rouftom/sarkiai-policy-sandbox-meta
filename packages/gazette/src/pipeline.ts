@@ -12,7 +12,7 @@
 
 import { createHash } from 'node:crypto'
 import type { LanguageModel } from 'ai'
-import type { DocType, Jurisdiction, KbChunk, ProviderDescriptor, Taxonomy } from '@sps/shared'
+import { providerOptionsName, type DocType, type Jurisdiction, type KbChunk, type ProviderDescriptor, type Taxonomy } from '@sps/shared'
 import { decodeGray, detectMime, toDataUrl } from './image.js'
 import {
   columnOf,
@@ -345,8 +345,16 @@ export async function analyzeGazettePage(input: AnalyzeGazetteInput): Promise<Ga
         columns: Math.max(1, layout.columns.length),
         filename: input.filename,
         maxOutputTokens: input.maxOutputTokens ?? 4096,
-        ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-        providerName: input.provider.mode === 'cloud' ? 'meta' : undefined,
+        // Transcription reads pixels, it does not solve a problem: a light pass
+        // keeps the visible text inside the token budget. Muse Spark Open on
+        // Baseten reasons by default at xhigh, so leaving the effort unset can
+        // consume the whole allowance. Local engines reject the field.
+        ...(input.provider.servedBy === 'Meta' || input.provider.servedBy === 'Baseten'
+          ? {
+              reasoningEffort: input.reasoningEffort ?? ('low' as const),
+              providerName: providerOptionsName(input.provider.servedBy),
+            }
+          : {}),
         signal: input.signal,
       })
     } catch (error) {

@@ -32,7 +32,7 @@ import {
 import { MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
-import { hasLanguage, institutionsForDomain, institutionsForDomains, type ProviderDescriptor } from '@sps/shared'
+import { hasLanguage, institutionsForDomain, institutionsForDomains, providerOptionsName, type ProviderDescriptor } from '@sps/shared'
 import {
   RIGHTS_BLOCKED_MESSAGE,
   RightsBlockedError,
@@ -2435,6 +2435,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         modelLabel: engine.provider.models.reasoning,
         provision: body.data.provision,
         cases,
+        // Muse Spark Open on Baseten defaults to xhigh reasoning, whose tokens
+        // count against maxOutputTokens. Local engines reject the field, so it
+        // only travels to the providers that document it.
+        ...(engine.provider.servedBy === 'Meta' || engine.provider.servedBy === 'Baseten'
+          ? { providerName: providerOptionsName(engine.provider.servedBy) }
+          : {}),
       })
       try {
         await engine.audit.logAction({
