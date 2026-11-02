@@ -5,7 +5,7 @@
 > built on Meta models: Muse Spark, Muse Spark Open (Baseten), Muse Glimmer, SAM 3.1 and Muse Voice Transcribe.
 > What was built during the hackathon: [HACKATHON.md](HACKATHON.md).
 >
-> ▶ **Demo video (2:30):** https://youtu.be/yAD7Qp7JQHQ  ·  **Try it live:** https://sps.djotta.com
+> ▶ **Demo video (2:39):** https://youtu.be/yAD7Qp7JQHQ  ·  **Try it live:** https://sps.djotta.com
 
 [![CI](https://github.com/rouftom/sarkiai-policy-sandbox-meta/actions/workflows/ci.yml/badge.svg)](https://github.com/rouftom/sarkiai-policy-sandbox-meta/actions/workflows/ci.yml)
 [![Meta Model API](https://img.shields.io/badge/Meta%20Model%20API-Muse%20Spark-0866FF?style=for-the-badge)](https://dev.meta.ai)
