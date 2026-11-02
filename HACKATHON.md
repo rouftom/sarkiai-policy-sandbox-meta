@@ -7,7 +7,7 @@
 This file is the honest ledger the rulebook asks for: what already existed, what
 was built during the building period, and which Meta model does what.
 
-**Demo video (2:39):** https://youtu.be/yAD7Qp7JQHQ  ·  **Try it live:** https://sps.djotta.com
+**Demo video (2:39):** https://youtu.be/ExeLfurl-sA  ·  **Try it live:** https://sps.djotta.com
 
 ## What existed before the hackathon
 
