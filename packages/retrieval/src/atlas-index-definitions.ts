@@ -14,25 +14,6 @@ export const KB_COLLECTION = 'kb_chunks'
 
 export const KB_INDEX_DEFINITIONS: AtlasIndexDefinition[] = [
   {
-    name: 'sps_vector_index',
-    type: 'vectorSearch',
-    definition: {
-      fields: [
-        {
-          type: 'vector',
-          numDimensions: 1024,
-          path: 'embedding',
-          similarity: 'dotProduct',
-        },
-        { type: 'filter', path: 'isActive' },
-        { type: 'filter', path: 'country' },
-        { type: 'filter', path: 'jurisdiction' },
-        { type: 'filter', path: 'docType' },
-        { type: 'filter', path: 'namespace' },
-      ],
-    },
-  },
-  {
     name: 'sps_text_index',
     type: 'search',
     definition: {

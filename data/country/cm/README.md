@@ -33,10 +33,9 @@ URL.
 
 ## OCR
 
-Seven PDFs are **scanned without a text layer** (`needsOcr: true`). Ingestion
-calls the `ocr` service (Tesseract) automatically when the extracted text is too
-short. The large ones (PSNSN 114 p., standards 164 p., penal code 139 p.) take a
-while: use the `full`/`ocr` profile, or pre-OCR them offline.
+Seven PDFs are **scanned without a text layer** (`needsOcr: true`). They go
+through the Scanned gazette screen: SAM 3.1 segments each page and Muse Spark
+transcribes each zone. The seeding script skips them.
 
 > Ingestion only reads **PDF/TXT**. Convert `.docx`/`.pptx` to `.txt` first
 > (e.g. `unzip -p X.docx word/document.xml`, then strip the tags).

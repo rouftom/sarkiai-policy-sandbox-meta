@@ -58,7 +58,6 @@ export const POLICY_KEYWORDS: readonly string[] = [
   'APD',
   'ANSSI',
   'MINPOSTEL',
-  'Qdrant',
   'SarkiAI',
   'protection des données',
   'données de santé',

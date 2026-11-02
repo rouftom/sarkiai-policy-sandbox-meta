@@ -158,9 +158,9 @@ export function GazettePanel({ country }: { country: string }) {
       setIngested({
         title: `${page.filename} · p. ${page.page}`,
         text: regions.map((region) => region.text.trim()).join('\n\n').slice(0, 20_000),
-        ...(regions.find((region) => region.articleNumber)?.articleNumber
-          ? { articleNumber: regions.find((region) => region.articleNumber)!.articleNumber }
-          : {}),
+        // No article number: the page's own article (often « 1er ») is not the
+        // provision it amends, and would hide every open incident from the
+        // analysis. Every open run is a candidate; Muse Spark decides.
       })
       setImpact(null)
       setImpactNote(null)

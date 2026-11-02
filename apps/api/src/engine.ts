@@ -12,17 +12,18 @@ import {
   webSearchFor,
 } from '@sps/agents'
 import {
-  AtlasRetriever,
+  AgenticRetriever,
   AtlasIngestor,
+  CorpusSource,
   KB_COLLECTION,
   KB_INDEX_DEFINITIONS,
-  PolicyRetriever,
   ensureAtlasIndexes,
   resolveRetrievalBackend,
   type Retriever,
   type RetrievalBackend,
-  type VoyageUsage,
 } from '@sps/retrieval'
+import type { LanguageModel } from 'ai'
+import { generateText } from 'ai'
 import { ReadinessEngine } from '@sps/readiness'
 import { AuditService } from '@sps/audit'
 import { ReportStore } from '@sps/report'
@@ -37,25 +38,6 @@ import {
 } from '@sps/shared'
 import { config } from './config.js'
 
-/**
- * Voyage bills embeddings and reranking per token, on its own line: retrieval is
- * a separate capability, never folded into the Meta total. No tariff for
- * `voyage-4` / `rerank-2` is confirmed in this repo, so the cost stays null
- * (unknown), never 0.
- */
-function reportVoyageUsage(usage: VoyageUsage): void {
-  // The API reports one total; it is booked as input tokens so the ledger's
-  // token sums stay meaningful across every capability.
-  recordUsage(
-    { mode: 'cloud', servedBy: 'Voyage', models: { reasoning: usage.model } },
-    { inputTokens: usage.tokens, outputTokens: 0 },
-    {
-      kind: 'retrieval',
-      status: usage.ok ? 'ok' : 'error',
-      latencyMs: usage.latencyMs,
-    },
-  )
-}
 
 /**
  * Everything that talks to the chat model. Rebuilt when the operator picks a
@@ -110,31 +92,33 @@ export function createEngine() {
   const baseten = basetenProvider(process.env)
   const retrievalBackend = resolveRetrievalBackend(provider.mode, config.retrieval.backend)
 
-  const retriever: Retriever =
-    retrievalBackend === 'atlas'
-      ? new AtlasRetriever({
-          mongodbUri: config.mongodb.uri,
-          dbName: config.mongodb.dbName,
-          collectionName: config.retrieval.atlas.collection,
-          vectorIndex: config.retrieval.atlas.vectorIndex,
-          textIndex: config.retrieval.atlas.textIndex,
-          voyage: {
-            apiKey: config.retrieval.voyage.apiKey,
-            baseUrl: config.retrieval.voyage.baseUrl,
-            embeddingModel: config.retrieval.voyage.embeddingModel,
-            rerankModel: config.retrieval.voyage.rerankModel,
-            onUsage: reportVoyageUsage,
-          },
-        })
-      : new PolicyRetriever({
-          qdrantUrl: config.qdrant.url,
-          qdrantApiKey: config.qdrant.apiKey || undefined,
-          collectionName: config.qdrant.collection,
-          embeddingsBaseUrl: config.embeddings.baseUrl,
-          embeddingModel: config.embeddings.model,
-          rerankUrl: config.rerank.url || undefined,
-          rerankModel: config.rerank.model,
-        })
+  // Corpus search: lexical index (Atlas Search in the cloud, a MongoDB text
+  // index elsewhere) driven by the Meta model of the mode, which plans the
+  // queries, runs sub-agents, judges and ranks. No other model is called.
+  const source = new CorpusSource({
+    mongodbUri: config.mongodb.uri,
+    dbName: config.mongodb.dbName,
+    collectionName: config.retrieval.atlas.collection,
+    textIndex: config.retrieval.atlas.textIndex,
+    searchMode: retrievalBackend,
+  })
+  // The engine's live model, read by the retriever at call time (set below).
+  const live: { model: LanguageModel | null; reasoning: string } = { model: null, reasoning: provider.models.reasoning }
+  const retriever: AgenticRetriever = new AgenticRetriever({
+    source,
+    // Read at call time: a model switch (Muse Spark ↔ Muse Spark Open) applies at once.
+    think: async (prompt, options) => {
+      if (!live.model) throw new Error('model not ready')
+      const result = await generateText({
+        model: live.model,
+        prompt,
+        ...(options?.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+      })
+      return result.text
+    },
+    modelLabel: () => live.reasoning,
+    defaultDepth: config.retrieval.depth,
+  })
 
   const audit = new AuditService({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
   const reports = new ReportStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
@@ -167,6 +151,8 @@ export function createEngine() {
     useModel(modelId: string): ProviderDescriptor {
       if (provider.mode !== 'cloud') return engine.provider
       Object.assign(engine, buildModelStack(provider, modelId, retriever, audit, baseten))
+      live.model = engine.model
+      live.reasoning = engine.provider.models.reasoning
       return engine.provider
     },
     /** Chat-capable models this key may use: Meta's list, plus Baseten's when configured. */
@@ -175,6 +161,8 @@ export function createEngine() {
       return baseten ? [...meta, ...(await listBasetenModels(process.env))] : meta
     },
   }
+  live.model = engine.model
+  live.reasoning = engine.provider.models.reasoning
   return engine
 }
 
@@ -228,16 +216,9 @@ export function createKnowledgeIngestor(): AtlasIngestor {
     mongodbUri: config.mongodb.uri,
     dbName: config.mongodb.dbName,
     collectionName: config.retrieval.atlas.collection ?? KB_COLLECTION,
-    vectorIndex: config.retrieval.atlas.vectorIndex,
     textIndex: config.retrieval.atlas.textIndex,
     autoIndexes: config.retrieval.atlas.autoIndexes,
-    voyage: {
-      apiKey: config.retrieval.voyage.apiKey,
-      baseUrl: config.retrieval.voyage.baseUrl,
-      embeddingModel: config.retrieval.voyage.embeddingModel,
-      rerankModel: config.retrieval.voyage.rerankModel,
-      onUsage: reportVoyageUsage,
-    },
+    searchMode: resolveRetrievalBackend(resolveProvider(process.env).mode, config.retrieval.backend),
   })
 }
 

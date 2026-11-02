@@ -9,32 +9,32 @@
 3. **Grounding is a hard post-condition.** A legal answer with zero citations is
    invalid.
 4. **Every decision is auditable.** Reasoning is persisted, not merely streamed.
-5. **Open and provider-neutral.** Apache-2.0. The same engine runs in three
-   modes chosen by `SANDBOX_MODE`: `local` (any Ollama model + `bge-m3` +
-   Qdrant), `sovereign` (Muse Glimmer 30B on Ollama, same local stack) and
-   `cloud` (Meta Model API + Voyage + Atlas). `local` and `sovereign` make no
-   outbound call at all, so the engine runs inside a locked-down sandbox with
-   no data egress; `cloud` is an explicit, operator-chosen exception, visible
-   in the console badge and recorded in the audit chain.
+5. **Open, Meta-only and provider-neutral.** Apache-2.0. The same engine runs in
+   three modes chosen by `SANDBOX_MODE`: `local` (Muse Glimmer 30B on Ollama),
+   `sovereign` (Muse Spark Open on Baseten, or Muse Glimmer on Ollama) and
+   `cloud` (Meta Model API). Every model the engine calls at runtime is a Meta
+   model. `local` makes no outbound model call, so the engine runs inside a
+   locked-down sandbox with no data egress; `cloud` is an explicit,
+   operator-chosen exception, visible in the console badge and recorded in the
+   audit chain.
 
 ## Storage split
 
 | Store | Holds | Why |
 |-------|-------|-----|
-| **Qdrant** | vector knowledge base (dense + sparse) in `local`/`sovereign` | open source, multi-arch, native hybrid RRF, payload filtering |
-| **MongoDB** | audit log + chain-of-thought (self-hosted, or Atlas in `cloud` mode) | operational documents, no vectors: portable anywhere |
-| **MongoDB Atlas** | vector knowledge base (`cloud` mode, Vector Search over `kb_chunks`) | managed hybrid search without running a second datastore |
+| **MongoDB** | corpus (`kb_chunks`), audit log and chain-of-thought | one document store for the corpus and the trail; the search index is an index on the same collection, not a second datastore |
+| **MongoDB Atlas** | same corpus, with **Atlas Search** (BM25) in `cloud` mode | managed lexical search over `kb_chunks` |
 | **MinIO** | assistant image attachments | S3-compatible local bucket, content-addressed (sha256) |
 
-The `KbChunk` contract is identical in both retrieval backends, so switching
-mode changes where vectors live, not what the engine reads or cites.
+The `KbChunk` contract is identical in both search backends: `RETRIEVAL_BACKEND`
+only changes **where the BM25 index lives** (Atlas Search or a MongoDB text
+index), not what the engine reads or cites. There is no vector store: the corpus
+is searched lexically and the Meta model of the mode does the planning, the
+judging and the ranking (see [Agentic corpus search](../README.md#agentic-corpus-search)).
 
 Secrets are versioned with **SOPS + age** (see [`SECRETS.md`](./SECRETS.md)); no
 secret server. The UI follows the admin **SarkiAI Compact** charter via
 `@sps/theme` (theme packs, charte slots).
-
-Splitting them means the retrieval engine is replaceable and the operational
-store never dictates vector-search capabilities.
 
 ## Runtime topology
 
@@ -46,40 +46,37 @@ store never dictates vector-search capabilities.
                          ┌────────────▼─────────────┐
                          │  apps/api (Fastify)      │
                          │  engine.ts composes:     │
+                         │   • AgenticRetriever     │
+                         │   • AtlasIngestor        │
                          │   • PolicyOrchestrator   │
                          │   • ScenarioEngine       │
                          │   • ReadinessEngine      │
                          │   • AuditService         │
                          └───┬───────────┬──────────┘
                              │           │
-             hybrid RAG ─────┘           ├───── audit / CoT ──▶ MongoDB
-        ┌────────────────────┐           └───── ingest clients
-        │ Qdrant             │◀─────────────────────────────────┐
-        │ dense + sparse RRF │                                  │
-        └────────────────────┘                       ┌──────────┴──────────┐
-                                                     │ services/ingestion  │
-                                                     │ (chunk+embed+store) │
-                                                     └──────────┬──────────┘
-                                                                │ OCR fallback
-                                                                ▼
-                                                        ┌──────────────┐
-                                                        │ services/ocr │
-                                                        └──────────────┘
+        agentic search ──────┘           ├───── audit / CoT ──▶ MongoDB
+        ┌────────────────────┐           │
+        │ MongoDB            │◀──────────┘
+        │ kb_chunks + index  │
+        └────────────────────┘
 ```
 
-In `cloud` mode the same diagram holds with two substitutions: model calls go
-to the Meta Model API instead of Ollama, and the vector leg goes to MongoDB
-Atlas (Voyage embeddings) instead of Qdrant/`bge-m3`.
+In `cloud` mode the same diagram holds with two substitutions: model calls go to
+the Meta Model API instead of Ollama, and the lexical index is Atlas Search
+instead of a MongoDB text index. Ingestion runs inside the API process
+(`AtlasIngestor`), so there is no separate ingestion, OCR or transcription
+service.
 
 ## Data flow (simulation lens)
 
-1. **Ingest**: country corpus → `services/ingestion` → structure-aware chunks →
-   `bge-m3` embeddings (Ollama) → Qdrant points (dense + sparse BM25). In
-   `cloud` mode the same chunks are embedded with Voyage `voyage-4` and stored
-   in MongoDB Atlas.
+1. **Ingest**: country corpus → `AtlasIngestor` (`packages/retrieval/src/atlas-ingest.ts`)
+   → structure-aware chunks → `kb_chunks`, with a content hash for idempotence.
+   The MongoDB text index (or the Atlas Search index) is created at the first
+   ingestion.
 2. **Scenario start**: `ScenarioEngine.release()` yields event batches by tick.
-3. **Per agent**: `PolicyOrchestrator.runAgent()` retrieves country provisions
-   from Qdrant, builds the mandate-grounded prompt, generates, enforces citations.
+3. **Per agent**: `PolicyOrchestrator.runAgent()` runs the agentic search over
+   the country provisions, builds the mandate-grounded prompt, generates,
+   enforces citations.
 4. **Coordination**: each agent emits an independent `AgentAssessment`; the
    coordinator reconciles them into a joint situation report.
 5. **Auditability**: `AuditService.traceStep()` records each reasoning step;
@@ -89,14 +86,14 @@ Atlas (Voyage embeddings) instead of Qdrant/`bge-m3`.
 
 `ReadinessEngine.assess()` iterates the 13 readiness dimensions (Report 2.0, 6 factors), retrieves the
 country provisions **and** the external reference corpus (regional and
-international) from the active vector backend, and asks the model to emit
+international) through the agentic search, and asks the model to emit
 structured gaps. Output: a `ReadinessReport` (JSON + Markdown).
 
 ## Why the two lenses share everything
 
 | Shared | Lens-specific |
 |--------|---------------|
-| KB + retrieval (Qdrant or Atlas) | `ScenarioEngine` (simulation only) |
+| Corpus + agentic search | `ScenarioEngine` (simulation only) |
 | Citations | `readinessReport` stage (readiness/hybrid) |
 | Gap analysis (**always on**) | |
 | Agents + mandates | |
@@ -104,9 +101,11 @@ structured gaps. Output: a `ReadinessReport` (JSON + Markdown).
 
 ## Failure isolation
 
-- Ingestion, OCR and transcription are independent containers. `api` depends on
-  `qdrant` + `ingestion` health; the audit store (Mongo) is separate.
-- Hybrid degradation: if Qdrant cannot compute the sparse BM25 leg, retrieval
-  falls back to dense-only with the same filter.
-- OCR is best-effort: if unreachable, text-native PDFs still ingest.
-- Rerank is best-effort: on provider error the fused order is returned unchanged.
+- Ingestion runs in the API process but is transactional per document: a failed
+  ingest leaves the previous chunk set in place and reports the error on the
+  step journal.
+- Agentic degradation: every model step (plan, judge, rank) is bounded by a
+  sub-agent count, a round count and a timeout. On failure the search falls back
+  to the lexical BM25 order, so an agent never waits on a failed call.
+- The audit store (MongoDB) is separate from the API process: an unreachable
+  audit store does not prevent the API from booting.

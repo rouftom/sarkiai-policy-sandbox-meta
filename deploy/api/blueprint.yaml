@@ -40,27 +40,17 @@ services:
       - key: META_VOICE_MODEL
         value: muse-voice-transcribe-1.0
 
-      # ── retrieval (Voyage + Atlas) ─────────────────────────────────────────
+      # ── corpus search (Atlas Search, agentic search on the Meta model) ─────
       - key: RETRIEVAL_BACKEND
         value: atlas
-      - key: VOYAGE_API_KEY
-        sync: false
-      - key: VOYAGE_API_URL
-        value: https://api.voyageai.com/v1
-      - key: VOYAGE_EMBEDDING_MODEL
-        value: voyage-4
-      - key: VOYAGE_RERANK_MODEL
-        value: rerank-2
-      - key: EMBEDDING_DIMENSION
-        value: "1024"
+      - key: RETRIEVAL_DEPTH
+        value: fast
       - key: MONGODB_URI
         sync: false
       - key: MONGODB_DB_NAME
         value: policy_sandbox
       - key: MONGODB_RAG_COLLECTION
         value: kb_chunks
-      - key: MONGODB_VECTOR_INDEX
-        value: sps_vector_index
       - key: MONGODB_TEXT_INDEX
         value: sps_text_index
       - key: MONGODB_AUTO_INDEXES

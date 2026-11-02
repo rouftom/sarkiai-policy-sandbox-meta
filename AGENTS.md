@@ -38,7 +38,7 @@ proprietary AgenticUI harness (see `docs/RULES.md`).
 | Python chunker tests | `cd services/ingestion && PYTHONPATH=src python3 tests/test_chunker.py` |
 
 Run `make help` for the full Docker target list. `make models` pulls
-`OLLAMA_MODEL` (Glimmer by default) and `EMBEDDING_MODEL`.
+`OLLAMA_MODEL` (Muse Glimmer).
 
 ## Lay of the land
 

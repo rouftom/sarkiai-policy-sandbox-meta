@@ -5,9 +5,7 @@
  *              (segmentation), Muse Voice Transcribe (speech).
  *   sovereign  Muse Glimmer (30B, Apache-2.0) served on-premise by Ollama, or a
  *              hosted open-weight provider (Baseten / Modal).
- *   local      any Ollama-served model, Muse Glimmer by default (+ bge-m3
- *              embeddings), for offline development. Set OLLAMA_MODEL to a
- *              lighter model (e.g. qwen3.5:9b) on machines without 32 GB of VRAM.
+ *   local      Muse Glimmer served by Ollama on the institution's machine.
  *
  * The mode is a configuration decision (`SANDBOX_MODE`), never a code path:
  * every agent, the coordinator and the readiness engine receive the same
@@ -74,7 +72,6 @@ export function providerModeFromEnv(source: Env = process.env): ProviderMode {
 export function resolveProvider(source: Env = process.env, modeOverride?: ProviderMode): ProviderDescriptor {
   const mode = modeOverride ?? providerModeFromEnv(source)
   const budgetUsd = Number(env(source, 'RUN_BUDGET_USD', '0')) || 0
-  const embedding = env(source, 'EMBEDDING_MODEL', 'bge-m3')
 
   if (mode === 'cloud') {
     const apiKey = env(source, 'MODEL_API_KEY')
@@ -90,7 +87,6 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
         vision: '',
         segmentation: env(source, 'META_SAM_MODEL', 'sam-3.1'),
         transcription: env(source, 'META_VOICE_MODEL', 'muse-voice-transcribe-1.0'),
-        embedding,
       },
       residency: 'cloud',
       openWeights: false,
@@ -112,7 +108,7 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
         label: PROVIDER_LABELS.sovereign,
         servedBy: 'Modal',
         baseURL: withV1(modalUrl),
-        models: { reasoning: model, vision: model, embedding },
+        models: { reasoning: model, vision: model },
         residency: 'cloud',
         openWeights: true,
         budgetUsd,
@@ -129,7 +125,6 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
         models: {
           reasoning: env(source, 'BASETEN_MODEL', BASETEN_DEFAULT_MODEL),
           vision: env(source, 'BASETEN_MODEL', BASETEN_DEFAULT_MODEL),
-          embedding,
         },
         residency: 'cloud',
         openWeights: true,
@@ -143,7 +138,7 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
       label: PROVIDER_LABELS.sovereign,
       servedBy: 'Ollama',
       baseURL: withV1(env(source, 'OLLAMA_BASE_URL', 'http://localhost:11434')),
-      models: { reasoning: model, vision: model, embedding },
+      models: { reasoning: model, vision: model },
       residency: 'on-premise',
       openWeights: true,
       budgetUsd: 0,
@@ -159,7 +154,6 @@ export function resolveProvider(source: Env = process.env, modeOverride?: Provid
     models: {
       reasoning: env(source, 'OLLAMA_MODEL', LOCAL_DEFAULT_MODEL),
       vision: env(source, 'OLLAMA_MODEL', LOCAL_DEFAULT_MODEL),
-      embedding,
     },
     residency: 'on-premise',
     openWeights: true,
@@ -181,7 +175,7 @@ export function basetenProvider(source: Env = process.env): ProviderDescriptor |
     label: PROVIDER_LABELS.sovereign,
     servedBy: 'Baseten',
     baseURL: withV1(env(source, 'BASETEN_BASE_URL', 'https://inference.baseten.co/v1')),
-    models: { reasoning: model, vision: model, embedding: env(source, 'EMBEDDING_MODEL', 'bge-m3') },
+    models: { reasoning: model, vision: model },
     residency: 'cloud',
     openWeights: true,
     budgetUsd: Number(env(source, 'RUN_BUDGET_USD', '0')) || 0,
@@ -265,7 +259,7 @@ export interface ProviderModelInfo {
  * Non-chat models the Meta list also returns: embeddings, rerankers, segmentation,
  * speech, image generation and moderation. They cannot answer a policy question.
  */
-const NON_CHAT_MODEL = /embed|rerank|\bsam\b|sam-|voice|transcri|whisper|speech|tts|image|moderat|guard|safety/i
+const NON_CHAT_MODEL = /embed|rerank|\bsam\b|sam-|voice|transcri|speech|tts|image|moderat|guard|safety/i
 
 /** Keep only the chat-capable entries of a provider's `GET /models` answer. */
 export function eligibleChatModels(payload: unknown): ProviderModelInfo[] {

@@ -1,7 +1,7 @@
 /**
  * @sps/voice · voice notes as timed, attributable facts.
  *
- * Cloud: Muse Voice Transcribe. On-premise: faster-whisper. The rest of the
+ * Muse Voice Transcribe (Meta Model API). The rest of the
  * engine only sees `VoiceTranscript` and `VoiceFact`.
  */
 

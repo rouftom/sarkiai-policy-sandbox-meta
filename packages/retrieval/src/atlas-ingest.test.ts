@@ -6,7 +6,7 @@ function ingestor() {
   return new AtlasIngestor({
     mongodbUri: 'mongodb://127.0.0.1:1',
     dbName: 'test',
-    voyage: { apiKey: '' },
+    searchMode: 'text',
   })
 }
 
