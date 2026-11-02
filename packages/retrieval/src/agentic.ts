@@ -50,6 +50,13 @@ export interface AgenticRetrieverConfig {
   candidatesPerQuery?: number
   rerankPool?: number
   stepTimeoutMs?: number
+  /**
+   * Output budget for one model step. Muse Spark counts its reasoning tokens
+   * against it: below roughly 2 000 the answer is empty and the step falls back
+   * to the lexical order, so the default leaves room for the reasoning and the
+   * JSON that follows.
+   */
+  modelStepTokens?: number
   cacheTtlMs?: number
   cacheSize?: number
 }
@@ -113,6 +120,7 @@ const DEFAULTS = {
   candidatesPerQuery: 12,
   rerankPool: 20,
   stepTimeoutMs: 25_000,
+  modelStepTokens: 4_000,
   cacheTtlMs: 30 * 60_000,
   cacheSize: 500,
 }
@@ -267,6 +275,7 @@ export class AgenticRetriever implements Retriever {
       candidatesPerQuery: config.candidatesPerQuery ?? DEFAULTS.candidatesPerQuery,
       rerankPool: config.rerankPool ?? DEFAULTS.rerankPool,
       stepTimeoutMs: config.stepTimeoutMs ?? DEFAULTS.stepTimeoutMs,
+      modelStepTokens: config.modelStepTokens ?? DEFAULTS.modelStepTokens,
       cacheTtlMs: config.cacheTtlMs ?? DEFAULTS.cacheTtlMs,
       cacheSize: config.cacheSize ?? DEFAULTS.cacheSize,
     }
@@ -372,7 +381,7 @@ export class AgenticRetriever implements Retriever {
         judgePrompt(sub.question, fuseRanked(lists).slice(0, 8), this.cfg.queriesPerAgent),
         'judge',
         fallbacks,
-        300,
+        this.cfg.modelStepTokens,
       )
       timings.judgeMs += Date.now() - judgeStart
       if (!verdict) break
@@ -389,7 +398,7 @@ export class AgenticRetriever implements Retriever {
     fallbacks: string[],
   ): Promise<Array<KbChunk & { score: number }>> {
     if (pool.length <= 1) return []
-    const answer = await this.think(rerankPrompt(question, pool), 'rerank', fallbacks, 600)
+    const answer = await this.think(rerankPrompt(question, pool), 'rerank', fallbacks, this.cfg.modelStepTokens)
     if (!answer || !Array.isArray(answer.ranking)) return []
     const ranked: Array<KbChunk & { score: number }> = []
     const used = new Set<number>()
@@ -429,7 +438,7 @@ export class AgenticRetriever implements Retriever {
     if (depth !== 'lexical') {
       const planStart = Date.now()
       const maxSub = depth === 'deep' ? this.cfg.maxSubAgents : 1
-      const planned = await this.think(planPrompt(query, maxSub, this.cfg.queriesPerAgent), 'plan', fallbacks, 500)
+      const planned = await this.think(planPrompt(query, maxSub, this.cfg.queriesPerAgent), 'plan', fallbacks, this.cfg.modelStepTokens)
       timings.planMs = Date.now() - planStart
       const rawSubs = Array.isArray(planned?.subQuestions) ? (planned!.subQuestions as unknown[]) : []
       plan = rawSubs
