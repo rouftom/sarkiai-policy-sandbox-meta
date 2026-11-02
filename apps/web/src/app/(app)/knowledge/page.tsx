@@ -166,7 +166,7 @@ export default function KnowledgePage() {
   )
 }
 
-type StageKey = 'final' | 'dense' | 'sparse' | 'fused' | 'reranked'
+type StageKey = 'final' | 'lexical' | 'fused' | 'reranked'
 
 function RetrievalPanel({ hasCorpus }: { hasCorpus: boolean }) {
   const { t, locale } = useI18n()
@@ -210,8 +210,7 @@ function RetrievalPanel({ hasCorpus }: { hasCorpus: boolean }) {
 
   const stages: Array<{ key: StageKey; label: string; items: KbStageItemDto[] }> = [
     { key: 'final', label: t('knowledge.retrieval.final'), items: result?.stages.final ?? [] },
-    { key: 'dense', label: t('knowledge.retrieval.dense'), items: result?.stages.dense ?? [] },
-    { key: 'sparse', label: t('knowledge.retrieval.sparse'), items: result?.stages.sparse ?? [] },
+    { key: 'lexical', label: t('knowledge.retrieval.lexical'), items: result?.stages.lexical ?? [] },
     { key: 'fused', label: t('knowledge.retrieval.fused'), items: result?.stages.fused ?? [] },
     { key: 'reranked', label: t('knowledge.retrieval.reranked'), items: result?.stages.reranked ?? [] },
   ]
@@ -282,12 +281,27 @@ function RetrievalPanel({ hasCorpus }: { hasCorpus: boolean }) {
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            {result.models.embedding} → {result.models.rerank} · {t('knowledge.retrieval.ms', { ms: result.timings.totalMs })} ·
-            embed {result.timings.embedMs} ms · dense {result.timings.denseMs} ms · bm25 {result.timings.sparseMs} ms · rerank {result.timings.rerankMs} ms
+            {result.model} · {result.depth} · {t('knowledge.retrieval.ms', { ms: result.timings.totalMs })} · plan {result.timings.planMs} ms ·
+            search {result.timings.searchMs} ms · judge {result.timings.judgeMs} ms · rerank {result.timings.rerankMs} ms
           </p>
-          {result.warnings.length > 0 && (
+          {result.subAgents.length > 0 && (
+            <div className="space-y-1 rounded-xl border border-border p-2.5 text-[11px]">
+              <p className="font-medium text-foreground">{t('knowledge.retrieval.agents', { count: result.subAgents.length })}</p>
+              {result.subAgents.map((agent, index) => (
+                <div key={index} className="text-muted-foreground">
+                  <span className="text-foreground">{agent.question}</span>
+                  {agent.rounds.map((round, roundIndex) => (
+                    <span key={roundIndex} className="block pl-3">
+                      {t('knowledge.retrieval.round', { n: roundIndex + 1, hits: round.hits })} · {round.queries.join(' · ')}
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          {result.fallbacks.length > 0 && (
             <p className="text-[11px] text-amber-600 dark:text-amber-400">
-              {t('knowledge.retrieval.warnings')}: {result.warnings.join(' · ')}
+              {t('knowledge.retrieval.warnings')}: {result.fallbacks.join(' · ')}
             </p>
           )}
 

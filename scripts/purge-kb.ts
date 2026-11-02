@@ -86,7 +86,7 @@ const knowledge = new AtlasIngestor({
   mongodbUri,
   dbName: process.env.MONGODB_DB_NAME ?? 'policy_sandbox',
   collectionName: process.env.MONGODB_RAG_COLLECTION ?? 'kb_chunks',
-  voyage: { apiKey: process.env.VOYAGE_API_KEY ?? '' },
+  searchMode: process.env.SANDBOX_MODE === 'cloud' ? 'atlas' : 'text',
 })
 
 try {

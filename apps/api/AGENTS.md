@@ -1,7 +1,7 @@
 # `apps/api` — API rules
 
 Bun + Fastify 5 service. It is the only process that talks to the model
-providers, MongoDB, Qdrant and the messaging providers.
+providers, MongoDB and the messaging providers.
 
 ## Structure
 

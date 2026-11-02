@@ -14,10 +14,8 @@ describe('Atlas index definitions', () => {
     expect(stableStringify(artifact.indexes)).toBe(stableStringify(KB_INDEX_DEFINITIONS))
   })
 
-  test('cover both retrieval branches', () => {
-    expect(KB_INDEX_FILE.indexes.map((index) => index.type).sort()).toEqual(['search', 'vectorSearch'])
-    const vector = KB_INDEX_DEFINITIONS.find((index) => index.type === 'vectorSearch')
-    expect(vector?.name).toBe('sps_vector_index')
-    expect(JSON.stringify(vector?.definition)).toContain('1024')
+  test('declare the lexical index only', () => {
+    expect(KB_INDEX_FILE.indexes.map((index) => index.type)).toEqual(['search'])
+    expect(KB_INDEX_DEFINITIONS.some((index) => index.type === 'vectorSearch')).toBe(false)
   })
 })

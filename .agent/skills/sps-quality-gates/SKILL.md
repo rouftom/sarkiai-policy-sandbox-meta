@@ -26,10 +26,9 @@ database or the clock.
 | An API route / store | `bun test apps/api/src` + `bun run typecheck` + a `curl` on the route |
 | Auth, sessions, TOTP, setup | API tests + both local paths (no mail → 201 + password; public host → 503) |
 | Web page, component, translation | `cd apps/web && bun run typecheck` + `bun run build` + both locales/themes |
-| Retrieval, chunking, ingestion | `bun test packages/retrieval` + `bun test services`/pytest + a seeded query |
+| Retrieval, chunking, ingestion | `bun test packages/retrieval packages/kb` + a seeded query on `/knowledge` → Retrieval |
 | Provider selection, model, keys | `bun run check:provider <mode>` + one real generation |
-| Compose, Dockerfile, deploy config | `docker compose config` and `make sandbox-config` |
-| Python service | `cd services/<svc> && python -m compileall src` + `pytest tests/` |
+| Compose, Dockerfile, deploy config | `docker compose config` |
 | Any merge to `main` | everything above + production smoke below |
 
 ## Local smoke
@@ -49,11 +48,8 @@ run appears in `/audit` and that `verifyChain()` reports an intact chain.
 
 ```bash
 MONGO_URL=mongodb://localhost:27017 bun run test:int
-QDRANT_URL=http://localhost:6333 OLLAMA_BASE_URL=http://localhost:11434 bun run test:int
 E2E_BASE_URL=http://localhost:8000 bun run test:e2e
 ```
-
-Python: `cd services/ingestion && PYTHONPATH=src pytest tests/`.
 
 ## Production verification (after a `main` deploy)
 

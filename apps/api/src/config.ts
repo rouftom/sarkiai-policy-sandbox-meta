@@ -177,63 +177,29 @@ export const config = {
   port: Number(env('PORT', '8000')),
   serviceApiKey: env('SERVICE_API_KEY'),
 
-  qdrant: {
-    url: env('QDRANT_URL', 'http://localhost:6333'),
-    apiKey: env('QDRANT_API_KEY'),
-    collection: env('QDRANT_COLLECTION', 'policy_chunks'),
-  },
-
-  // Cloud retrieval: Voyage embeddings + MongoDB Atlas Vector/Search.
-  // `auto` follows the provider mode (cloud => atlas, sovereign/local => qdrant).
+  // Corpus search: a lexical index (Atlas Search in the cloud, a MongoDB text
+  // index in local and sovereign) driven by the Meta model of the mode.
+  // `depth` is the default reasoning budget per search: lexical | fast | deep.
   retrieval: {
     backend: env('RETRIEVAL_BACKEND', 'auto'),
-    voyage: {
-      apiKey: env('VOYAGE_API_KEY'),
-      baseUrl: env('VOYAGE_API_URL', 'https://api.voyageai.com/v1'),
-      embeddingModel: env('VOYAGE_EMBEDDING_MODEL', 'voyage-4'),
-      rerankModel: env('VOYAGE_RERANK_MODEL', 'rerank-2'),
-      dimensions: Number(env('EMBEDDING_DIMENSION', '1024')) || 1024,
-    },
+    depth: (['lexical', 'fast', 'deep'].includes(env('RETRIEVAL_DEPTH', 'fast')) ? env('RETRIEVAL_DEPTH', 'fast') : 'fast') as 'lexical' | 'fast' | 'deep',
     atlas: {
       collection: env('MONGODB_RAG_COLLECTION', 'kb_chunks'),
-      vectorIndex: env('MONGODB_VECTOR_INDEX', 'sps_vector_index'),
       textIndex: env('MONGODB_TEXT_INDEX', 'sps_text_index'),
       autoIndexes: env('MONGODB_AUTO_INDEXES', 'true') !== 'false',
     },
   },
 
-  // Operational store only (audit log + chain-of-thought); no vectors.
+  // Operational store: audit log, chain-of-thought and the corpus passages.
   mongodb: {
     uri: env('MONGODB_URI', 'mongodb://localhost:27017'),
     dbName: env('MONGODB_DB_NAME', 'policy_sandbox'),
-  },
-
-  ingestion: {
-    baseUrl: env('INGESTION_URL', 'http://localhost:8001'),
-    apiKey: env('SERVICE_API_KEY'),
-  },
-
-  // Local faster-whisper service, used when the provider is not `cloud`.
-  transcription: {
-    url: env('TRANSCRIPTION_URL', 'http://localhost:8003'),
   },
 
   // Local LLM (Ollama, OpenAI-compatible). Muse Glimmer (Meta open weights) by default.
   ollama: {
     baseUrl: env('OLLAMA_BASE_URL', 'http://localhost:11434'),
     model: env('OLLAMA_MODEL', 'muse-glimmer'),
-  },
-
-  // Local embeddings (Ollama).
-  embeddings: {
-    baseUrl: env('OLLAMA_BASE_URL', 'http://localhost:11434'),
-    model: env('EMBEDDING_MODEL', 'bge-m3'),
-  },
-
-  // Optional local reranker (TEI). Empty URL => RRF-only.
-  rerank: {
-    url: env('RERANK_URL'),
-    model: env('RERANK_MODEL', 'BAAI/bge-reranker-v2-m3'),
   },
 
   // Object storage (MinIO / S3) for assistant image attachments.

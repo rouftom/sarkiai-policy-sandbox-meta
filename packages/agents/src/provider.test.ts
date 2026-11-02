@@ -128,7 +128,7 @@ describe('provider layer', () => {
   })
 
   test('createModel keeps the explicit-endpoint form', () => {
-    const model = createModel({ baseURL: 'http://localhost:11434', model: 'qwen3.5:9b' })
+    const model = createModel({ baseURL: 'http://localhost:11434', model: 'muse-glimmer' })
     expect(model).toBeDefined()
   })
 

@@ -332,6 +332,13 @@ export interface CoTTrace {
   ts: string
 }
 
+/**
+ * How much reasoning a search may spend: `lexical` (no model call), `fast`
+ * (plan + rerank by the Meta model of the mode), `deep` (parallel sub-agents
+ * with judge loops).
+ */
+export type RetrievalDepth = 'lexical' | 'fast' | 'deep'
+
 export interface RetrievalQuery {
   text: string
   country: string
@@ -339,6 +346,7 @@ export interface RetrievalQuery {
   docType?: DocType
   namespace?: string
   topK?: number
+  depth?: RetrievalDepth
 }
 
 /**
@@ -360,7 +368,6 @@ export interface ProviderModels {
   /** Speech-to-text (WhatsApp voice notes) · cloud mode only. */
   transcription?: string
   /** Embeddings · always on-premise, whatever the mode. */
-  embedding: string
 }
 
 /** Public, secret-free description of the active provider. */

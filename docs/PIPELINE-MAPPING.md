@@ -6,7 +6,8 @@ orchestrator, with a locked-down sandbox as the validation environment. Every
 stage emits its own audit events.
 
 This document maps every stage to a concrete file so evaluators can verify the
-architecture instead of taking it on faith.
+architecture instead of taking it on faith. Every model named here is a Meta
+model.
 
 ## Stage vocabulary
 
@@ -14,28 +15,28 @@ We use these exact stage names throughout the codebase and the docs.
 
 | Stage | Meaning | Our component | File |
 |-------|---------|---------------|------|
-| `source` | data sources | country/global corpora, media | `data/**`, `services/transcription` |
-| `collector` | Collector | ingest API + client | `services/ingestion/.../routes.py`, `packages/kb` |
-| `preprocessor` | Preprocessor | structure-aware chunking + OCR + embeddings | `services/ingestion/.../chunker.py`, `.../embeddings.py`, `services/ocr` |
-| `model` | Model | hybrid retrieval + LLM agents | `packages/retrieval`, `packages/agents/src/model.ts` |
+| `source` | data sources | country/global corpora, gazette scans | `data/**`, `packages/gazette` |
+| `collector` | Collector | ingest API + client | `apps/api/src/routes/index.ts`, `packages/retrieval/src/atlas-ingest.ts`, `packages/kb` |
+| `preprocessor` | Preprocessor | structure-aware chunking + scanned-page segmentation | `packages/kb/src/chunk.ts`, `packages/gazette` |
+| `model` | Model | agentic lexical retrieval + Meta model agents | `packages/retrieval/src/agentic.ts`, `packages/agents/src/model.ts` |
 | `policy` | Policy | citation-mandatory prompts, gap engine, workflow profiles | `packages/agents/src/prompt.ts`, `packages/readiness`, `packages/shared/src/workflows.ts` |
 | `distributor` | Distributor | API surface + web console + report/dossier | `apps/api`, `apps/web`, `packages/report` |
 | `sink` | consumers/actors | institutional agents + joint situation report | `packages/agents/src/coordinator.ts` |
 | `orchestrator` | orchestration | engine composition per lens | `apps/api/src/engine.ts` |
-| `sandbox` | validation env | locked-down deployment + fine-tuning | `deploy/sandbox/` |
+| `sandbox` | validation env | locked-down deployment | `docker-compose.yml`, `deploy/ollama` |
 
 ## At a glance
 
 | pipeline stage | Repo module | Key files |
 |--------------|-------------|-----------|
-| Data sources | `data/`, `services/transcription` | `data/country/**`, `data/global/**`, `services/transcription/app/main.py` |
-| Data collection | `services/ingestion`, `packages/kb` | `services/ingestion/src/rag_ingestion/api/routes.py`, `packages/kb/src/index.ts` |
-| Data processing | `services/ingestion`, `services/ocr` | `services/ingestion/src/rag_ingestion/services/chunker.py`, `.../embeddings.py`, `.../qdrant_store.py`, `services/ocr/app/ocr.py` |
-| ML model | `packages/retrieval`, `packages/agents/src/model.ts` | `packages/retrieval/src/index.ts`, `packages/agents/src/model.ts` |
+| Data sources | `data/`, `packages/gazette` | `data/country/**`, `data/global/**`, `packages/gazette/src/index.ts` |
+| Data collection | `packages/retrieval`, `packages/kb` | `packages/retrieval/src/atlas-ingest.ts`, `packages/kb/src/index.ts` |
+| Data processing | `packages/kb`, `packages/gazette` | `packages/kb/src/chunk.ts`, `packages/gazette/src/pipeline.ts` |
+| ML model | `packages/retrieval`, `packages/agents/src/model.ts` | `packages/retrieval/src/agentic.ts`, `packages/agents/src/model.ts` |
 | ML application | `packages/agents`, `packages/scenarios`, `packages/readiness`, `packages/citations` | see below |
 | Management & orchestration | `packages/shared/src/workflows.ts`, `apps/api/src/engine.ts` | workflow profiles, engine composition |
 | Security | `packages/audit` | `packages/audit/src/index.ts` |
-| ML sandbox | `deploy/sandbox/` | `deploy/sandbox/docker-compose.sandbox.yml` |
+| ML sandbox | `docker-compose.yml`, `deploy/ollama/` | Ollama + MongoDB + MinIO topology |
 | Data model / taxonomy | `packages/shared/src/types.ts` | `Taxonomy`, `KbChunk`, `Gap`, `AuditRecord`, `CoTTrace` |
 
 ## 1. Data sources
@@ -46,34 +47,34 @@ We use these exact stage names throughout the codebase and the docs.
 | African regional reference corpus | `data/global/africa/` |
 | Global best-practice corpus | `data/global/standards/` |
 | Illustrative seed documents | `data/samples/*.txt` |
-| Media-derived sources (briefings, hearings) | `services/transcription/app/main.py` |
+| Scanned gazettes | uploaded pages, segmented by `packages/gazette` |
 
 ## 2. Data collection
 
 | Concern | File | Notes |
 |---------|------|-------|
-| HTTP ingest API (text + file) | `services/ingestion/src/rag_ingestion/api/routes.py` | `POST /v1/ingest/text`, `POST /v1/ingest/file` |
-| Request schemas + jurisdiction taxonomy | `services/ingestion/src/rag_ingestion/api/schemas.py` | `IngestTaxonomy` |
-| Typed client used by the API app | `packages/kb/src/index.ts` | `IngestionClient` |
-| Corpus seed utility | `scripts/seed.sh` | bulk ingest |
+| HTTP ingest API (text + file) | `apps/api/src/routes/index.ts` | `POST /v1/kb/ingest`, `POST /v1/kb/ingest/text` |
+| Chunking + storage + search index | `packages/retrieval/src/atlas-ingest.ts` | `AtlasIngestor` |
+| Typed chunk contract | `packages/kb/src/index.ts` | re-exports `chunkDocument` |
+| Corpus seed utility | `scripts/seed-corpus.ts` (`bun run kb:seed`) | bulk ingest through the API |
+| Directory seed utility | `scripts/seed.sh` (`make seed`) | local docker stack |
 
 ## 3. Data processing
 
 | Concern | File | Notes |
 |---------|------|-------|
-| Structure-aware chunking (FR/EN legal headings) | `services/ingestion/src/rag_ingestion/services/chunker.py` | `StructureAwareChunker` → `headingPath`, `articleNumber` |
-| Embeddings (local bge-m3, 1024-d, Ollama) | `services/ingestion/src/rag_ingestion/services/embeddings.py` | `EmbeddingService` |
-| Vector persistence in Qdrant (dense + sparse) + payload indexes + dedup | `services/ingestion/src/rag_ingestion/services/qdrant_store.py` | collection payload filters include `country` |
-| OCR fallback for scanned gazettes | `services/ocr/app/ocr.py` | Tesseract `fra+eng` |
-| Runtime config (ports, models, thresholds) | `services/ingestion/src/rag_ingestion/config.py` | pydantic-settings |
+| Structure-aware chunking (FR/EN legal headings) | `packages/kb/src/chunk.ts` | `chunkDocument` → `headingPath`, `articleNumber` |
+| Scanned-page segmentation (layout, SAM 3.1, transcription) | `packages/gazette/src/pipeline.ts`, `sam.ts`, `transcribe.ts` | Meta model + SAM 3.1 |
+| Runtime config (ports, models, thresholds) | `apps/api/src/config.ts` | typed env access |
 
 ## 4. ML model
 
 | Concern | File | Notes |
 |---------|------|-------|
-| Hybrid retrieval: query embedding → Qdrant dense + sparse BM25 → RRF → rerank | `packages/retrieval/src/index.ts` | `PolicyRetriever`, `rrf()` |
-| LLM provider (local Ollama, Muse Glimmer by default) | `packages/agents/src/model.ts` | `createModel()` |
-| Model fine-tuning (sandbox credits, out-of-band) | `deploy/sandbox/README.md` §4 | point at tuned endpoint via env |
+| Agentic corpus search: BM25 + sub-agents + judge + rank | `packages/retrieval/src/agentic.ts` | `AgenticRetriever` |
+| Lexical source: Atlas Search (cloud) / MongoDB text index | `packages/retrieval/src/atlas.ts` | `CorpusSource`, `fuseRanked` |
+| LLM provider (Muse Spark, Muse Spark Open, Muse Glimmer) | `packages/agents/src/model.ts`, `packages/agents/src/provider.ts` | `createModel`, `buildModelStack` |
+| Model fine-tuning (out-of-band) | `deploy/ollama/Modelfile.glimmer` | tuned `sps-glimmer` tag |
 
 ## 5. ML application
 
@@ -93,8 +94,8 @@ We use these exact stage names throughout the codebase and the docs.
 | Concern | File | Notes |
 |---------|------|-------|
 | Declarative lens profiles (simulation / readiness / hybrid) | `packages/shared/src/workflows.ts` | `WORKFLOW_PROFILES`, `getWorkflowProfile` |
-| Composition of packages per lens | `apps/api/src/engine.ts` | `createEngine`, `createScenario` |
-| HTTP surface | `apps/api/src/routes/index.ts` | `/v1/agents/ask`, `/v1/scenarios/:id/release`, `/v1/scenarios/run`, `/v1/readiness/report`, `/v1/audit/*`, `/v1/audit/dossier/:runId` |
+| Composition of packages per lens | `apps/api/src/engine.ts` | `createEngine`, `createScenario`, `createKnowledgeIngestor` |
+| HTTP surface | `apps/api/src/routes/index.ts` | `/v1/agents/ask`, `/v1/scenarios/:id/release`, `/v1/scenarios/run`, `/v1/readiness/report`, `/v1/kb/*`, `/v1/audit/*` |
 | UI lens selector + readiness console | `apps/web/src/app/page.tsx`, `apps/web/src/components/lens-selector.tsx` | both lenses visible |
 
 ## 7. Security
@@ -103,17 +104,17 @@ We use these exact stage names throughout the codebase and the docs.
 |---------|------|-------|
 | Hash-chained, tamper-evident audit log | `packages/audit/src/index.ts` | `logAction`, `verifyChain` |
 | Persisted chain-of-thought traces | `packages/audit/src/index.ts` | `traceStep`, `getTrace` |
-| Service-to-service auth | `services/*/app/main.py`, `services/ingestion/.../routes.py` | `X-API-Key` / `SERVICE_API_KEY` |
-| SSRF-safe transcription (stateless, RAM-only) | `services/transcription/app/main.py` | size cap, no disk |
+| Session auth + admin guard on ingestion | `packages/auth`, `apps/api/src/turnstile.ts` | bearer session, Turnstile |
 | Secret hygiene | `.gitignore`, `.env.example` | real env never committed |
 
-## 8. ML sandbox
+## 8. Deployment
 
 | Concern | File | Notes |
 |---------|------|-------|
-| Sandbox deployment topology | `deploy/sandbox/docker-compose.sandbox.yml` | Qdrant KB + external Mongo (ops), registry images |
-| Sandbox variables | `deploy/sandbox/.env.sandbox.example` | `MONGODB_URI`, keys, registry |
-| Fine-tuning path | `deploy/sandbox/README.md` | uses Lab cloud credits |
+| Local topology | `docker-compose.yml` | Ollama + MongoDB + MinIO, api + web |
+| Development hot reload | `docker-compose.dev.yml` | bind mounts |
+| Ollama model tag (Muse Glimmer) | `deploy/ollama/Modelfile.glimmer` | sampling + 32K context |
+| Render deployment | `deploy/api/blueprint.yaml` | Meta Model API + Atlas |
 
 ## 9. AI Readiness Framework 2.0 (6 factors / 13 dimensions)
 
@@ -138,13 +139,3 @@ The readiness engine iterates all 13 dimensions
 `ScenarioEvent.releaseChunk` groups events into ticks, `ScenarioEngine.release()`
 yields one batch at a time, and `visibleTo` encodes **information asymmetry** so
 each institutional agent receives a different, incomplete picture.
-
-## 11. Hackathon §6: audit & chain-of-thought
-
-`packages/audit/src/index.ts` stores two artifacts:
-1. `audit_logs`: hash-chained records (`prevHash` → `hash`) for `verifyChain()`.
-2. `cot_traces`: one document per reasoning step, queryable by `runId`.
-`apps/api/src/routes/index.ts` exposes `GET /v1/audit/chain` and
-`GET /v1/audit/trace/:runId` for reviewer inspection, and
-`GET /v1/audit/dossier/:runId?format=json|markdown` bundles the whole run
-(audit chain + CoT + joint reports + citations) via `packages/report`.
