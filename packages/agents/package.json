@@ -5,7 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
@@ -18,7 +20,7 @@
     "@sps/audit": "workspace:*",
     "ai": "^6.0.0",
     "@ai-sdk/openai-compatible": "^2.0.88",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "typescript": "^5.6.0"
