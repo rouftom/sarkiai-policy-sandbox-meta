@@ -1,6 +1,6 @@
 # Demo video: shot list
 
-**Watch it:** https://youtu.be/yAD7Qp7JQHQ (2:30, English voice-over and subtitles).
+**Watch it:** https://youtu.be/yAD7Qp7JQHQ (2:39, English voice-over and subtitles).
 
 The video shows **only what was built during the hackathon** (see
 [`HACKATHON.md`](../HACKATHON.md)) and the Meta models doing real work: Muse
@@ -23,14 +23,14 @@ by the application is altered.
 
 | Time | Sequence | What is on screen | Hackathon work | Meta models |
 |---|---|---|---|---|
-| 0:00 | Title | Project name and one-line pitch | | |
-| 0:10 | 1 · A crisis cell, on Muse Spark | Crisis scenario: live process graph of the mandated agents, a cited source opened, the joint report with conflicting mandates | N1, N2, N10 | Muse Spark |
-| 0:36 | 2 · A new decree, on paper | Gazette tab: sample page segmented into columns and zones, SAM 3.1 artefacts (stamp 0.855, table 0.816) shown in a zoom, per-zone transcription, page added to the corpus, impact analysis on the open incidents | N3, N7 | SAM 3.1, Muse Spark |
-| 0:59 | 3 · Same engine, open weights | Model menu: Muse Spark Open (Baseten) selected; audit trail records the change; a question dictated in French; answer with citations, an unfound quote reported as a gap | N5, N6, N2 | Muse Spark Open, Muse Voice Transcribe |
-| 1:21 | 4 · AI readiness, live | New assessment: web search on Muse Spark, evaluation and synthesis on Muse Spark Open; two sectors assessed with live agent graphs; sector comparison | N12 | Muse Spark, Muse Spark Open, `web_search` |
-| 1:44 | 5 · Rehearse the next crisis | Timed injects, actions logged by the team, rule-based score, after-action report | N8 | Muse Spark |
-| 2:03 | 6 · The focal point is notified | Split screen: approval request sent from the console, WhatsApp message received on the phone; audit trail with integrity verified | N4 | WhatsApp Cloud API |
-| 2:19 | End card | Meta models used, live demo, repository | | |
+| 0:00 | The problem | Project name and one-line pitch | | |
+| 0:10 | A crisis cell, on Muse Spark | Crisis scenario: live process graph of the mandated agents, a cited source opened, the joint report with conflicting mandates | N1, N2, N10 | Muse Spark |
+| 0:36 | A new decree, on paper (SAM 3.1, agentic search) | Gazette tab: sample page segmented into columns and zones, SAM 3.1 artefacts (stamp 0.855, table 0.816) shown in a zoom, per-zone transcription, page added to the corpus, impact analysis on the open incidents | N3, N7 | SAM 3.1, Muse Spark |
+| 1:08 | Same engine, open weights (Muse Spark Open) | Model menu: Muse Spark Open (Baseten) selected; audit trail records the change; a question dictated in French; answer with citations, an unfound quote reported as a gap | N5, N6, N2 | Muse Spark Open, Muse Voice Transcribe |
+| 1:30 | AI readiness, live | New assessment: web search on Muse Spark, evaluation and synthesis on Muse Spark Open; two sectors assessed with live agent graphs; sector comparison | N12 | Muse Spark, Muse Spark Open, `web_search` |
+| 1:53 | Rehearse the next crisis | Timed injects, actions logged by the team, rule-based score, after-action report | N8 | Muse Spark |
+| 2:12 | The focal point is notified (WhatsApp) | Split screen: approval request sent from the console, WhatsApp message received on the phone; audit trail with integrity verified | N4 | WhatsApp Cloud API |
+| 2:28 | Try it live | Meta models used, live demo, repository | | |
 
 Two honest notes on the cut:
 

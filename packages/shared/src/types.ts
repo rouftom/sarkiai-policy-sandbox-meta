@@ -370,6 +370,16 @@ export interface ProviderModels {
   /** Embeddings · always on-premise, whatever the mode. */
 }
 
+/**
+ * Namespace the AI SDK uses for a provider's options. The provider instance is
+ * created with a name derived from `servedBy`, so `providerOptions` must be
+ * keyed the same way (`meta`, `baseten`, `ollama`, `modal`) rather than with a
+ * generic `openaiCompatible` key.
+ */
+export function providerOptionsName(servedBy: string): string {
+  return servedBy.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'provider'
+}
+
 /** Public, secret-free description of the active provider. */
 export interface ProviderDescriptor {
   mode: ProviderMode
