@@ -61,6 +61,8 @@ export interface AnalyzeImpactInput {
   provision: Provision
   cases: OpenCase[]
   maxOutputTokens?: number
+  /** How many times a reply without usable JSON is asked again. Defaults to 2. */
+  attempts?: number
   /** Inject a fake generator in tests. */
   deps?: { interpret?: (prompt: string) => Promise<string> }
 }
@@ -206,6 +208,26 @@ export function parseImpact(raw: string, knownRunIds: string[]): Omit<ImpactAnal
   }
 }
 
+/**
+ * One model call. Reasoning tokens count against `maxOutputTokens`: on a deep
+ * pass the whole budget can go to the reasoning channel and leave `text` empty,
+ * which parseImpact would report as "did not return JSON". Ranking is a short
+ * structured step, so a light pass keeps the visible answer inside the budget;
+ * the reasoning channel is read as a fallback for models that answer there.
+ */
+async function interpretImpact(input: AnalyzeImpactInput, prompt: string): Promise<string> {
+  const result = await generateText({
+    model: input.model,
+    maxOutputTokens: input.maxOutputTokens ?? 8192,
+    providerOptions: {
+      meta: { reasoningEffort: 'low' },
+      openaiCompatible: { reasoningEffort: 'low' },
+    },
+    messages: [{ role: 'user', content: prompt }],
+  })
+  return result.text?.trim() || result.reasoningText || ''
+}
+
 export async function analyzeImpact(input: AnalyzeImpactInput): Promise<ImpactAnalysis> {
   const candidates = matchAffected(input.cases, input.provision)
   const base = {
@@ -225,16 +247,23 @@ export async function analyzeImpact(input: AnalyzeImpactInput): Promise<ImpactAn
   }
 
   const prompt = buildImpactPrompt(input.provision, candidates)
-  const raw = input.deps?.interpret
-    ? await input.deps.interpret(prompt)
-    : (
-        await generateText({
-          model: input.model,
-          maxOutputTokens: input.maxOutputTokens ?? 4096,
-          messages: [{ role: 'user', content: prompt }],
-        })
-      ).text
+  const parse = (raw: string) => parseImpact(raw, candidates.map((openCase) => openCase.runId))
+  const interpret: (userPrompt: string) => Promise<string> =
+    input.deps?.interpret ?? ((userPrompt) => interpretImpact(input, userPrompt))
 
-  const parsed = parseImpact(raw, candidates.map((openCase) => openCase.runId))
-  return { ...base, ...parsed }
+  let reason = 'the impact analysis did not return JSON.'
+  for (let attempt = 1; attempt <= (input.attempts ?? 2); attempt += 1) {
+    const raw = await interpret(
+      attempt === 1
+        ? prompt
+        : `${prompt}\n\nYour previous reply was rejected (${reason}). Reply again with ONLY the JSON object, no prose and no code fence.`,
+    )
+    try {
+      return { ...base, ...parse(raw) }
+    } catch (error) {
+      reason = (error as Error).message
+    }
+  }
+
+  throw new Error(reason)
 }

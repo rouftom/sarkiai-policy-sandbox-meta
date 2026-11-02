@@ -110,6 +110,44 @@ describe('analyzeImpact', () => {
     expect(analysis.summary).toContain('No open run')
   })
 
+  test('asks again when the first reply carries no JSON', async () => {
+    const prompts: string[] = []
+    const analysis = await analyzeImpact({
+      model: {} as LanguageModel,
+      modelLabel: 'muse-spark-1.3',
+      provision: { title: 'Decret 2026/341', articleNumber: 'ARTICLE 2', text: 'Délai de 48 heures.' },
+      cases: [openCase()],
+      deps: {
+        interpret: async (prompt) => {
+          prompts.push(prompt)
+          if (prompts.length === 1) return ''
+          return JSON.stringify({
+            summary: 'Deadline tightened.',
+            findings: [{ runId: 'run-1', severity: 'high', reason: '48h', action: 'Re-run notification.' }],
+          })
+        },
+      },
+    })
+    expect(prompts).toHaveLength(2)
+    expect(prompts[1]).toContain('previous reply was rejected')
+    expect(analysis.findings[0]?.runId).toBe('run-1')
+  })
+
+  test('reports the last reason when every attempt carries no JSON', async () => {
+    let calls = 0
+    await expect(
+      analyzeImpact({
+        model: {} as LanguageModel,
+        modelLabel: 'muse-spark-1.3',
+        provision: { title: 'Decret 2026/341', articleNumber: 'ARTICLE 2', text: '...' },
+        cases: [openCase()],
+        attempts: 2,
+        deps: { interpret: async () => (calls += 1, 'no json here') },
+      }),
+    ).rejects.toThrow(/did not return JSON/)
+    expect(calls).toBe(2)
+  })
+
   test('returns ranked findings for the candidates', async () => {
     const analysis = await analyzeImpact({
       model: {} as LanguageModel,
