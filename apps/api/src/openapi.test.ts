@@ -75,6 +75,12 @@ describe('OpenAPI document', () => {
       $ref: '#/components/schemas/ApiError',
     })
     expect(components.responses.TooManyRequests.headers['Retry-After']).toBeDefined()
+    expect(components.responses.Conflict.content['application/json'].example).toMatchObject({
+      error: 'run_complete',
+    })
+    expect(
+      components.responses.Forbidden.content['application/json'].examples.rights.value,
+    ).toMatchObject({ error: 'rights_blocked' })
   })
 
   test('marks public routes as unauthenticated and the rest as bearer', () => {

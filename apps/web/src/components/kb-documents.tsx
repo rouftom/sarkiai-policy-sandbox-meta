@@ -99,9 +99,9 @@ export function KbDocuments({
           steps: result.steps,
         }
       } catch (caught) {
-        const body = caught instanceof ApiError ? caught.json<KbIngestResultDto & { error?: string }>() : null
+        const body = caught instanceof ApiError ? caught.json<KbIngestResultDto & { error?: string; message?: string }>() : null
         throw new UploadFailure(
-          body?.error ?? (caught instanceof Error ? caught.message : String(caught)),
+          body?.message ?? body?.error ?? (caught instanceof Error ? caught.message : String(caught)),
           body?.steps ?? [],
         )
       }
