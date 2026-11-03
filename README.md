@@ -690,7 +690,8 @@ lists their exact bodies, ids and review status.
 - Agent rules and playbooks: [`AGENTS.md`](AGENTS.md), [`.agent/skills/`](.agent/skills/).
 - Code conventions: [`docs/RULES.md`](docs/RULES.md).
 - Data model: [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md).
-- Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+- Roadmap (what comes next): [`ROADMAP.md`](ROADMAP.md).
+- Sprints (what was built): [`docs/SPRINTS.md`](docs/SPRINTS.md).
 
 ## License
 
