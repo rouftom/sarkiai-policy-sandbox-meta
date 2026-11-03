@@ -26,7 +26,7 @@ type PathItem = Record<string, unknown>
 
 const INFO = {
   title: 'SarkiAI Policy Sandbox API',
-  version: '0.1.0',
+  version: '0.2.0',
   summary: 'Institutional policy sandbox for Cameroon: grounded agents, audited decisions.',
   description: [
     '# Overview',
@@ -66,26 +66,22 @@ const INFO = {
     '',
     '## Errors',
     '',
-    'Failures use one of two envelopes, and the distinction matters when you parse them.',
-    '',
-    'Validation, on the routes that validate a body or a query with Zod:',
-    '',
-    '```json',
-    '{ "error": { "formErrors": [], "fieldErrors": { "country": ["Too small: expected string to have >=2 characters"] } } }',
-    '```',
-    '',
-    'Everything else — authentication, authorisation, missing record, conflict, rate',
-    'limit, upstream failure:',
+    'Every failure, validation included, uses the same envelope. `error` is a stable',
+    'machine-readable code; a validation adds the offending fields beside it.',
     '',
     '```json',
+    '{ "error": "validation_failed", "message": "The request does not match the expected schema.", "fields": { "country": ["Too small: expected string to have >=2 characters"] } }',
     '{ "error": "not_found" }',
     '{ "error": "rate_limited", "message": "Too many requests", "retryAfter": 42 }',
     '```',
     '',
-    '`error` is stable and machine-readable. `message`, when present, is for humans and',
-    'may change. A `Retry-After` header accompanies `429`. Upstream failures answer `502`',
-    'with the provider message, and an unconfigured feature answers `503` naming the',
-    'missing setting rather than silently succeeding.',
+    '`error` is stable for a given cause, so branch on it rather than on the text; a',
+    'handful of legacy handlers still return a readable sentence instead of a code.',
+    '`message`, when present, is for humans and may change. `fields` and `formErrors`',
+    'appear only on a `validation_failed` answer. A `Retry-After` header accompanies',
+    '`429`. Upstream failures answer `502` with the provider message, and an',
+    'unconfigured feature answers `503` naming the missing setting rather than',
+    'silently succeeding.',
     '',
     '## Status codes used by this API',
     '',
@@ -166,43 +162,32 @@ const TAG_GROUPS = [
   { name: 'Audit', tags: ['audit'] },
 ]
 
-/** The two envelopes, published once so every error response can point at them. */
+/** One failure envelope, published once so every error response can point at it. */
 const ERROR_COMPONENTS: Record<string, JsonSchema> = {
   ApiError: {
     type: 'object',
     description:
-      'Failure envelope for everything that is not a Zod validation failure. `message`, `retryAfter` and `rights` appear only where the route sends them.',
+      'Failure envelope for every route. `message`, `retryAfter`, `rights` and the validation fields appear only where the route sends them.',
     required: ['error'],
     properties: {
       error: {
         type: 'string',
         description:
-          'Stable machine-readable code: `unauthorized`, `admin_only`, `not_found`, `rate_limited`, `busy`, `mail_not_configured`, `storage_unavailable`, `auth_failed`, `action_failed`, `run_not_found`, …',
+          'Stable machine-readable code: `validation_failed`, `unauthorized`, `admin_only`, `not_found`, `rate_limited`, `busy`, `mail_not_configured`, `storage_unavailable`, `auth_failed`, `action_failed`, `run_not_found`, …',
       },
       message: { type: 'string', description: 'Human-readable detail; may change between releases.' },
+      fields: {
+        type: 'object',
+        description: 'Field name to the messages it failed, present on `validation_failed` only.',
+        additionalProperties: { type: 'array', items: { type: 'string' } },
+      },
+      formErrors: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Errors that belong to no single field, present on `validation_failed` only.',
+      },
       retryAfter: { type: 'integer', description: 'Seconds to wait, also sent as the `Retry-After` header.' },
       rights: { type: 'string', description: 'Rights bucket of a refused document.' },
-    },
-  },
-  FieldErrors: {
-    type: 'object',
-    description: 'Field name to the messages that field failed.',
-    additionalProperties: { type: 'array', items: { type: 'string' } },
-  },
-  ValidationError: {
-    type: 'object',
-    description:
-      'Zod `flatten()` output, sent with `400` by the routes that validate a body or a query. Use this envelope to highlight fields; use `ApiError` for the other failures.',
-    required: ['error'],
-    properties: {
-      error: {
-        type: 'object',
-        required: ['formErrors', 'fieldErrors'],
-        properties: {
-          formErrors: { type: 'array', items: { type: 'string' }, description: 'Errors that belong to no field.' },
-          fieldErrors: { $ref: '#/components/schemas/FieldErrors' },
-        },
-      },
     },
   },
 }
@@ -210,20 +195,15 @@ const ERROR_COMPONENTS: Record<string, JsonSchema> = {
 /** Shared response bodies, referenced by the generic failures. */
 const ERROR_RESPONSES: Record<string, JsonSchema> = {
   BadRequest: {
-    description: 'The body, query or path does not match its schema.',
-    content: {
-      'application/json': {
-        schema: { $ref: '#/components/schemas/ValidationError' },
-        example: { error: { formErrors: [], fieldErrors: { country: ['Too small: expected string to have >=2 characters'] } } },
-      },
-    },
-  },
-  BadRequestApi: {
-    description: 'The body does not match its schema. The auth surface answers with the short envelope.',
+    description: 'The body, query or path does not match its schema. `fields` names the offending entries.',
     content: {
       'application/json': {
         schema: { $ref: '#/components/schemas/ApiError' },
-        example: { error: 'invalid_request', message: 'Invalid request body.' },
+        example: {
+          error: 'validation_failed',
+          message: 'The request does not match the expected schema.',
+          fields: { country: ['Too small: expected string to have >=2 characters'] },
+        },
       },
     },
   },
@@ -432,14 +412,11 @@ function successResponse(doc: OperationDoc | undefined): JsonSchema {
   return response
 }
 
-type ErrorMeta = { status: number; description: string; envelope?: 'validation' | 'api' }
+type ErrorMeta = { status: number; description: string }
 
 function errorResponse(operationError: ErrorMeta): JsonSchema {
-  const component =
-    operationError.envelope === 'api' && operationError.status === 400
-      ? 'BadRequestApi'
-      : (RESPONSE_COMPONENT[operationError.status] ?? 'ApiError')
-  const shared = ERROR_RESPONSES[component] ?? ERROR_RESPONSES[RESPONSE_COMPONENT[operationError.status] ?? '']
+  const component = RESPONSE_COMPONENT[operationError.status] ?? 'ApiError'
+  const shared = ERROR_RESPONSES[component]
   const body = shared?.content as Record<string, JsonSchema> | undefined
   const json = body?.['application/json']
   return {
@@ -462,8 +439,6 @@ function responses(doc: OperationDoc | undefined, protectedRoute: boolean): Reco
   }
 
   // The router's global rate limiter applies to every operation.
-  // The one exception is 400 on the auth routes: they answer with a short
-  // `{ error, message }` payload instead of the Zod field detail.
   const declaredErrors = new Map<number, ErrorMeta>()
   for (const failure of doc?.errors ?? []) declaredErrors.set(failure.status, failure)
   if (protectedRoute && !declaredErrors.has(401)) {

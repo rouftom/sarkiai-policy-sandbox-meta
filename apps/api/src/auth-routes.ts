@@ -7,11 +7,12 @@
  * and signed for seven days; the client drops the token on sign-out.
  */
 
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { ZodError } from 'zod'
 import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
+import { validationFailure } from './http-errors.js'
 import { resolveAuditWindow } from './audit-window.js'
 import { config, localSetupPasswordFallback } from './config.js'
 import { MailError, sendEmailVerification, sendInvitation, sendPasswordReset } from './mailer.js'
@@ -42,14 +43,11 @@ export function currentOperator(request: FastifyRequest): PublicOperator | null 
 }
 
 function failure(
-  reply: {
-    status: (code: number) => { send: (body: unknown) => unknown }
-    header: (name: string, value: string) => unknown
-  },
+  reply: FastifyReply,
   error: unknown,
 ) {
   if (error instanceof ZodError) {
-    return reply.status(400).send({ error: 'invalid_request', message: 'Invalid request body.' })
+    return validationFailure(reply, error)
   }
   if (error instanceof MailError) {
     return reply
@@ -405,7 +403,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
     const patch = preferencesPatch.safeParse(request.body)
-    if (!patch.success) return reply.status(400).send({ error: 'invalid_request', message: 'Invalid request body.' })
+    if (!patch.success) return validationFailure(reply, patch.error)
     const preferences = await auth.updatePreferences(operator.email, patch.data)
     await record(operator.email, 'preferences.updated', undefined, operator.email)
     return { preferences }
@@ -424,7 +422,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
     const query = auditQuery.safeParse(request.query)
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     const { limit, offset, q, stats, tz, from } = query.data
 
     // `stats` alone is not enough: the dashboard must say which days it wants.

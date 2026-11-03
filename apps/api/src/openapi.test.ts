@@ -44,7 +44,8 @@ describe('OpenAPI document', () => {
       expect(description).toContain(heading)
     }
     expect(description).toContain('{ "error": "not_found" }')
-    expect(description).toContain('fieldErrors')
+    expect(description).toContain('validation_failed')
+    expect(description).toContain('"fields"')
   })
 
   test('publishes the contact, the licence and both servers', () => {
@@ -59,18 +60,17 @@ describe('OpenAPI document', () => {
     expect(document.security).toEqual([{ bearerAuth: [] }])
   })
 
-  test('documents both error envelopes as shared components', () => {
+  test('publishes one error envelope, shared by every route', () => {
     const components = document.components as Operation
     expect(components.securitySchemes.bearerAuth).toMatchObject({ type: 'http', scheme: 'bearer' })
     expect(components.schemas.ApiError.required).toEqual(['error'])
-    expect(components.schemas.ValidationError.properties.error.required).toEqual(['formErrors', 'fieldErrors'])
+    expect(components.schemas.ApiError.properties.fields).toBeDefined()
+    expect(components.schemas.ApiError.properties.formErrors).toBeDefined()
+    expect(components.schemas.ValidationError).toBeUndefined()
     expect(components.responses.BadRequest.content['application/json'].schema).toEqual({
-      $ref: '#/components/schemas/ValidationError',
-    })
-    expect(components.responses.BadRequestApi.schema).toBeUndefined()
-    expect(components.responses.BadRequestApi.content['application/json'].schema).toEqual({
       $ref: '#/components/schemas/ApiError',
     })
+    expect(components.responses.BadRequestApi).toBeUndefined()
     expect(components.responses.Unauthorized.content['application/json'].schema).toEqual({
       $ref: '#/components/schemas/ApiError',
     })
@@ -115,14 +115,14 @@ describe('OpenAPI document', () => {
     expect(String(paths['/v1/agents/ask']?.post?.description)).toContain('Every claim is grounded in the corpus')
   })
 
-  test('documents the two 400 envelopes where each one is sent', () => {
+  test('uses the same 400 envelope on validation and auth routes', () => {
     const auth = fullPaths['/v1/auth/login']?.post as Operation
     expect(auth.responses['400'].content['application/json'].schema).toEqual({
       $ref: '#/components/schemas/ApiError',
     })
     const other = fullPaths['/v1/countries']?.post as Operation
     expect(other.responses['400'].content['application/json'].schema).toEqual({
-      $ref: '#/components/schemas/ValidationError',
+      $ref: '#/components/schemas/ApiError',
     })
   })
 
