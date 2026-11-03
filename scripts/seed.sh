@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # Seed the knowledge base from a corpus directory.
 #
+#   export SPS_ADMIN_TOKEN=...                          # bearer from /v1/auth/login
 #   ./scripts/seed.sh                                   # local docker stack
-#   ./scripts/seed.sh --api http://localhost:8001 --country cm
+#   ./scripts/seed.sh --api http://localhost:8000 --country cm
 #   ./scripts/seed.sh --api https://api.example --country cm --dir data/samples --rights open-licence
+#
+# Ingestion runs in-process in the API and the route is admin-only, so every
+# run needs an admin session token in `SPS_ADMIN_TOKEN` (the bearer returned by
+# `/v1/auth/login`). It is read from the environment, never from the command
+# line, so the token does not show up in the process list or shell history.
+# Set `SPS_API_URL` to point at another host without retyping `--api`.
 #
 # Rights are mandatory. When the directory holds a `manifest.json`, each file
 # takes the `rights` recorded for it there; otherwise pass `--rights` for the
@@ -12,13 +19,13 @@
 # the knowledge base. See docs/LICENSING.md.
 set -euo pipefail
 
-API="http://localhost:8001"
+API="${SPS_API_URL:-http://localhost:8000}"
 COUNTRY="cm"
 JURISDICTION="national"
 DOC_TYPE="policy"
 DIR="data/samples"
 RIGHTS=""
-API_KEY="${SERVICE_API_KEY:-change-me-service-key}"
+TOKEN="${SPS_ADMIN_TOKEN:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,10 +35,15 @@ while [[ $# -gt 0 ]]; do
     --doc-type) DOC_TYPE="$2"; shift 2 ;;
     --dir) DIR="$2"; shift 2 ;;
     --rights) RIGHTS="$2"; shift 2 ;;
-    --key) API_KEY="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
+
+if [[ -z "$TOKEN" ]]; then
+  echo "No admin session token: export SPS_ADMIN_TOKEN (the bearer returned by /v1/auth/login)." >&2
+  echo "Ingestion is admin-only; without it every request fails with HTTP 401/403." >&2
+  exit 1
+fi
 
 if [[ ! -d "$DIR" ]]; then
   echo "Corpus directory '$DIR' not found." >&2
@@ -90,14 +102,28 @@ for file in "$DIR"/*; do
     skipped=$((skipped + 1))
     continue
   fi
-  echo "→ ingesting $(basename "$file") (country=$COUNTRY, type=$DOC_TYPE, rights=$rights)"
-  curl -fsS -X POST "$API/v1/ingest/file" \
-    -H "X-API-Key: $API_KEY" \
-    -F "file=@$file" \
-    -F "country=$COUNTRY" \
-    -F "jurisdiction=$JURISDICTION" \
-    -F "docType=$DOC_TYPE" \
-    -F "rights=$rights"
+  echo "→ ingesting $file as ${DOC_TYPE} (country=$COUNTRY, rights=$rights)"
+  payload="$(
+    python3 - "$file" "$COUNTRY" "$JURISDICTION" "$DOC_TYPE" "$rights" <<'PY'
+import base64, json, os, sys
+
+path, country, jurisdiction, doc_type, rights = sys.argv[1:6]
+with open(path, "rb") as handle:
+    encoded = base64.b64encode(handle.read()).decode("ascii")
+print(json.dumps({
+    "filename": os.path.basename(path),
+    "contentBase64": encoded,
+    "country": country,
+    "jurisdiction": jurisdiction,
+    "docType": doc_type,
+    "rights": rights,
+}))
+PY
+  )"
+  printf '%s' "$payload" | curl -fsS -X POST "$API/v1/kb/ingest/file" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    --data-binary @-
   echo
   count=$((count + 1))
 done
