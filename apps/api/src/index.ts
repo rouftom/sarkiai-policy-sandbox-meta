@@ -71,10 +71,15 @@ export async function buildServer() {
     origin: (origin, callback) => callback(null, config.web.isAllowedOrigin(origin)),
   })
   const openapi = new OpenApiCatalog()
-  app.addHook('onRoute', (route) => openapi.record(route.method, route.url))
+  app.addHook('onRoute', (route) => {
+    // Scalar owns `/docs`, its redirect and its bundled JavaScript: they are
+    // rendering machinery, not API operations.
+    if (route.url === '/docs' || route.url.startsWith('/docs/')) return
+    openapi.record(route.method, route.url)
+  })
 
   await registerRoutes(app)
-  registerOpenApiRoutes(app, openapi)
+  await registerOpenApiRoutes(app, openapi)
   return app
 }
 
