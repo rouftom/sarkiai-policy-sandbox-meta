@@ -73,7 +73,7 @@ rebuild: ## Rebuild all images from scratch
 	$(COMPOSE) build --no-cache
 
 seed: ## Ingest the sample Cameroon corpus into the KB (project-authored, CC BY 4.0)
-	./scripts/seed.sh --rights open-licence
+	bun run kb:seed -- --samples-only
 
 hooks: ## Install the git hooks (pre-push branch guard)
 	./scripts/install-git-hooks.sh

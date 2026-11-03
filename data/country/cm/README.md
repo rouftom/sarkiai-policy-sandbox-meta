@@ -42,21 +42,25 @@ transcribes each zone. The seeding script skips them.
 
 ## Ingest
 
-```bash
-./scripts/seed.sh --country cm --doc-type law      --dir data/country/cm
-./scripts/seed.sh --country cm --doc-type strategy --dir data/country/cm
-./scripts/seed.sh --country cm --doc-type policy   --dir data/country/cm
-./scripts/seed.sh --country cm --doc-type guidance --dir data/country/cm
-./scripts/seed.sh --country cm --doc-type report   --dir data/country/cm
-```
-
-Or one document at a time through the API, when the `docType` must be exact:
+The API route is admin-only, so export `SPS_ADMIN_TOKEN` first (the bearer
+returned by `/v1/auth/login`); the script refuses to run without it.
 
 ```bash
-curl -X POST "$INGESTION/v1/ingest/file" -H "X-API-Key: $SERVICE_API_KEY" \
-  -F file=@data/country/cm/loi_2024_protection_donnees_personnelles.pdf \
-  -F country=cm -F jurisdiction=national -F docType=law
+bun run kb:seed -- --dir data/country/cm
 ```
+
+The manifest carries each file's `docType`, so one run seeds the whole corpus.
+For a single document, add `--only` (a case-insensitive fragment of the file
+name):
+
+```bash
+bun run kb:seed -- --dir data/country/cm --only loi_2024
+```
+
+Or one document at a time through the API (`POST /v1/kb/ingest/file`, admin
+bearer token, JSON body with `filename`, `contentBase64`, `country`,
+`jurisdiction`, `docType` and `rights`), or from **Knowledge → Ingest** in the
+console, when the `docType` must be exact.
 
 ## Sourcing and rights
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env bun
 /**
- * Seed the knowledge base from the national corpus manifest.
+ * Seed the knowledge base from a corpus directory.
  *
- *   SPS_API_URL=https://sps-api.example bun run kb:seed            # all documents
+ *   SPS_API_URL=https://sps-api.example bun run kb:seed            # national corpus + samples
+ *   bun run kb:seed -- --dir data/global/standards                 # any corpus with a manifest
+ *   bun run kb:seed -- --dir data/samples --rights open-licence    # ad-hoc directory
+ *   bun run kb:seed -- --samples-only                              # data/samples only
  *   bun run kb:seed -- --only snd30,sample                         # a subset
  *   bun run kb:seed -- --dry-run                                   # extract only
  *
@@ -19,7 +22,7 @@
  * never prints document content.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { isPublishableRights, normalizeCorpusRights, type CorpusRights } from '@sps/shared'
 
@@ -38,6 +41,7 @@ interface ManifestDocument {
 
 interface Manifest {
   country: string
+  namespace?: string
   documents: ManifestDocument[]
 }
 
@@ -62,17 +66,69 @@ const has = (name: string) => args.includes(`--${name}`)
 const api = (flag('api') ?? process.env.SPS_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
 const country = flag('country') ?? 'cm'
 const dryRun = has('dry-run')
+const samplesOnly = has('samples-only')
+const dir = flag('dir')
+const rightsFallback = flag('rights')
 const only = flag('only')
   ?.split(',')
   .map((entry) => entry.trim())
   .filter(Boolean)
 
-const manifestPath = join(ROOT, 'data/country', country, 'manifest.json')
-if (!existsSync(manifestPath)) {
-  console.error(`No manifest at ${manifestPath}; nothing to seed.`)
+if (rightsFallback && !['official-text', 'open-licence', 'quotation-only', 'to-confirm'].includes(rightsFallback)) {
+  console.error(`Unknown --rights '${rightsFallback}' (official-text | open-licence | quotation-only | to-confirm).`)
   process.exit(1)
 }
-const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
+
+const corpusDir = dir ? resolve(ROOT, dir) : join(ROOT, 'data/country', country)
+if (!samplesOnly && !existsSync(corpusDir)) {
+  console.error(`Corpus directory ${corpusDir} not found.`)
+  process.exit(1)
+}
+
+/**
+ * A directory without a manifest can still be seeded, but only with an explicit
+ * `--rights` for the whole directory: rights never default to publishable.
+ */
+function adHocManifest(path: string): Manifest {
+  const docType = flag('doc-type') ?? 'policy'
+  const jurisdiction = flag('jurisdiction') ?? 'national'
+  const documents = readdirSync(path)
+    .filter((file) => /\.(pdf|txt)$/i.test(file))
+    .sort()
+    .map((file) => ({
+      title: file,
+      file,
+      docType,
+      jurisdiction,
+      status: 'present',
+      rights: rightsFallback as CorpusRights,
+    }))
+  return { country: flag('country') ?? country, documents }
+}
+
+const manifestPath = join(corpusDir, 'manifest.json')
+let manifest: Manifest
+if (samplesOnly) {
+  manifest = { country, documents: [] }
+} else if (existsSync(manifestPath)) {
+  manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
+} else if (rightsFallback) {
+  manifest = adHocManifest(corpusDir)
+} else {
+  console.error(`No manifest at ${manifestPath} and no --rights: refusing to ingest without a rights status.`)
+  console.error('Pass --rights official-text|open-licence for project-authored or licensed material.')
+  process.exit(1)
+}
+
+const corpusCountry = manifest.country || country
+
+const JURISDICTIONS = ['national', 'regional', 'international'] as const
+type Jurisdiction = (typeof JURISDICTIONS)[number]
+
+/** Manifests carry free-form text; only the three API values are accepted. */
+function jurisdictionOf(value: string): Jurisdiction {
+  return (JURISDICTIONS as readonly string[]).includes(value) ? (value as Jurisdiction) : 'national'
+}
 
 /** `loi_2024_....pdf` → `loi_2024_....txt`, so chunks keep a readable filename. */
 function kbFilename(file: string): string {
@@ -86,7 +142,7 @@ function matches(file: string): boolean {
 }
 
 async function extractPdf(file: string): Promise<string> {
-  const path = join(ROOT, 'data/country', country, file)
+  const path = join(corpusDir, file)
   if (!existsSync(path)) return ''
   const proc = Bun.spawn(['pdftotext', '-q', '-layout', path, '-'], {
     stdout: 'pipe',
@@ -139,12 +195,14 @@ async function post(body: Record<string, unknown>): Promise<{ status: number; pa
   return { status: response.status, payload: (await response.json()) as IngestResponse }
 }
 
-async function ingestDocument(document: ManifestDocument & { file: string }): Promise<void> {
-  const rights = normalizeCorpusRights(document.rights)
+async function ingestDocument(document: ManifestDocument): Promise<void> {
+  if (!document.file) return
+  const rights = normalizeCorpusRights(document.rights ?? rightsFallback)
+  const filePath = join(corpusDir, document.file)
   const text = document.file.toLowerCase().endsWith('.pdf')
     ? await extractPdf(document.file)
-    : existsSync(join(ROOT, 'data/country', country, document.file))
-      ? readFileSync(join(ROOT, 'data/country', country, document.file), 'utf8')
+    : existsSync(filePath)
+      ? readFileSync(filePath, 'utf8')
       : ''
   const characters = text.trim().length
   if (characters < 200) {
@@ -158,11 +216,11 @@ async function ingestDocument(document: ManifestDocument & { file: string }): Pr
     const body = {
       text: part,
       filename,
-      country,
-      jurisdiction: document.jurisdiction === 'regional' ? 'regional' : 'national',
+      country: corpusCountry,
+      jurisdiction: jurisdictionOf(document.jurisdiction),
       docType: document.docType,
       rights,
-      namespace: `${country}-corpus`,
+      namespace: manifest.namespace ?? `${corpusCountry}-corpus`,
       version: '2026',
       ...(document.sourceUrl ? { sourceUrl: document.sourceUrl } : {}),
       // Long compilations use larger chunks: the per-document chunk ceiling and the
@@ -213,7 +271,7 @@ async function ingestSamples(): Promise<void> {
   }
 }
 
-console.log(`Seeding ${country.toUpperCase()} corpus → ${api}${dryRun ? ' (dry run)' : ''}`)
+console.log(`Seeding ${corpusCountry.toUpperCase()} corpus → ${api}${dryRun ? ' (dry run)' : ''}`)
 
 if (!dryRun) {
   const health = await fetch(`${api}/health`).catch(() => null)
@@ -223,25 +281,26 @@ if (!dryRun) {
   }
 }
 
-for (const document of manifest.documents) {
-  if (!document.file) {
-    console.log(`  (no local file): skipped · ${document.title}`)
-    continue
+if (!samplesOnly) {
+  for (const document of manifest.documents) {
+    if (!document.file) {
+      console.log(`  (no local file): skipped · ${document.title}`)
+      continue
+    }
+    if (document.status === 'to_confirm' && !has('include-unverified')) {
+      console.log(`  ${document.file}: skipped (status=to_confirm · verify the instrument first)`)
+      continue
+    }
+    const rights = normalizeCorpusRights(document.rights ?? rightsFallback)
+    if (!isPublishableRights(rights)) {
+      console.log(`  ${document.file}: skipped (rights=${rights} · full text may not be ingested)`)
+      continue
+    }
+    if (!matches(document.file)) continue
+    await ingestDocument(document)
   }
-  if (document.status === 'to_confirm' && !has('include-unverified')) {
-    console.log(`  ${document.file}: skipped (status=to_confirm · verify the instrument first)`)
-    continue
-  }
-  if (!isPublishableRights(document.rights)) {
-    console.log(
-      `  ${document.file}: skipped (rights=${normalizeCorpusRights(document.rights)} · full text may not be ingested)`,
-    )
-    continue
-  }
-  if (!matches(document.file)) continue
-  await ingestDocument({ ...document, file: document.file })
 }
 
-if (!only) await ingestSamples()
+if (samplesOnly || (!only && !dir)) await ingestSamples()
 
 console.log('Done. Open /knowledge to inspect the corpus, indexes and retrieval stages.')

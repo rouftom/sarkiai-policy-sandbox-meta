@@ -119,8 +119,8 @@ MONGODB_URI=... MONGODB_DB_NAME=policy_sandbox bun run kb:indexes
 The rights gate is enforced at every ingestion path: `official-text` and
 `open-licence` documents may be chunked and stored, `quotation-only` and
 `to-confirm` ones are refused with a 403, and a missing `rights` field fails
-closed to `to-confirm`. `scripts/seed.sh` reads the directory's `manifest.json`
-(or requires `--rights`) and skips any document whose rights are not publishable.
+closed to `to-confirm`. `bun run kb:seed` reads the corpus `manifest.json` (or
+requires `--rights`) and skips any document whose rights are not publishable.
 See [`LICENSING.md`](LICENSING.md).
 
 `/knowledge` → **Corpus** lists documents, **Retire/Restore** flips `isActive`
@@ -135,8 +135,9 @@ order of magnitude: the live numbers are on `/knowledge`.
 
 ## 6. What this is not
 
-- No OCR and no PDF parsing in the API: text comes from the client, from
-  `pdftotext`, or from the Gazette vision pipeline.
+- No external OCR service: PDF text layers are extracted in-process with
+  `unpdf`, and scanned pages (official gazettes) go through the Gazette screen
+  (SAM 3.1 segmentation + transcription) before the same ingestion path.
 - No embeddings, no vector index and no reranker model: the corpus is searched
   lexically, and the Meta model of the mode does the ranking. Re-ingesting is
   therefore never needed after a model switch.
