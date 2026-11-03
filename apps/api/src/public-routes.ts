@@ -10,7 +10,9 @@
 export function isPublicRoute(method: string, path: string): boolean {
   if (method === 'OPTIONS') return true
   if (path === '/health') return true
-  if (path === '/openapi.json' || path === '/docs') return true
+  // The reference page and the JavaScript bundle it serves are public too:
+  // the guard is registered after the Scalar plugin, so it sees those assets.
+  if (path === '/openapi.json' || path === '/docs' || path.startsWith('/docs/')) return true
   if (path === '/v1/voice/realtime') return true
   if (path === '/v1/whatsapp/webhook') return true
   if (path.startsWith('/v1/whatsapp/approvals/')) return true
