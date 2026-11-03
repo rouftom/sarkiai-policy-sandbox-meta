@@ -1,5 +1,5 @@
 name: Bug report
-description: Report incorrect behaviour in the console, the API, the ingestion service or the docs.
+description: Report incorrect behaviour in the console, the API, an MCP sidecar or the docs.
 title: "[bug]: <short description>"
 labels: ["bug"]
 body:
@@ -41,7 +41,7 @@ body:
       options:
         - Web console (apps/web)
         - API (apps/api)
-        - Ingestion service (services/ingestion)
+        - MCP sidecar (services/mcp-charts, services/mcp-docx)
         - Knowledge base / retrieval
         - Readiness, scenarios or exercises
         - Deployment / configuration

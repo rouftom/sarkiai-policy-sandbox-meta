@@ -135,8 +135,9 @@ order of magnitude: the live numbers are on `/knowledge`.
 
 ## 6. What this is not
 
-- No OCR and no PDF parsing in the API: text comes from the client, from
-  `pdftotext`, or from the Gazette vision pipeline.
+- No external OCR service: PDF text layers are extracted in-process with
+  `unpdf`, and scanned pages (official gazettes) go through the Gazette screen
+  (SAM 3.1 segmentation + transcription) before the same ingestion path.
 - No embeddings, no vector index and no reranker model: the corpus is searched
   lexically, and the Meta model of the mode does the ranking. Re-ingesting is
   therefore never needed after a model switch.

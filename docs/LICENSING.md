@@ -68,8 +68,8 @@ counsel.
 ### What the repository actually does
 
 - **The rights field is enforced, not decorative.** Every ingestion path
-  (`POST /v1/kb/ingest/text`, `/v1/kb/ingest/file`, `/v1/kb/ingest`, the Python
-  service and the console uploader) refuses `quotation-only` and `to-confirm`
+  (`POST /v1/kb/ingest/text`, `/v1/kb/ingest/file`, `/v1/kb/ingest`, the console
+  uploader and `scripts/seed.sh`) refuses `quotation-only` and `to-confirm`
   payloads with HTTP 403. A missing `rights` value fails closed to `to-confirm`.
   `scripts/seed-corpus.ts` skips non-publishable manifest entries and
   `scripts/seed.sh` reads the directory's `manifest.json` (or requires

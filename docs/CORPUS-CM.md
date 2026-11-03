@@ -52,7 +52,8 @@ Each entry carries a `status`:
 cp /path/to/law.pdf data/country/cm/
 
 # 2. ingest (MongoDB text index): the chunker keeps TITLE/CHAPTER/ARTICLE
-#    rights come from data/country/cm/manifest.json; restricted files are skipped
+#    rights come from data/country/cm/manifest.json; restricted files are skipped.
+#    The route is admin-only: export SPS_ADMIN_TOKEN (the bearer from /v1/auth/login).
 ./scripts/seed.sh --country cm --doc-type law --dir data/country/cm
 
 # 3. external reference corpus
@@ -60,8 +61,9 @@ cp /path/to/law.pdf data/country/cm/
 ./scripts/seed.sh --country global --jurisdiction regional --doc-type strategy --dir data/global/africa
 ```
 
-The ingestion service switches to OCR (`services/ocr`) on its own for scanned
-PDFs (official gazettes).
+Scanned pages have no text layer: they go through the Gazette screen
+(`packages/gazette`), which segments the page with SAM 3.1, transcribes each
+zone, then calls the same in-process ingestion path.
 
 The regional folder holds continental and regional instruments only. National
 strategies of other countries are deliberately not part of the reference corpus:
