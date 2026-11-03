@@ -72,6 +72,18 @@ export default function CountriesPage() {
   const [editing, setEditing] = React.useState<CountryDto | null>(null)
   const [deleting, setDeleting] = React.useState<CountryDto | null>(null)
   const [deleteProblem, setDeleteProblem] = React.useState<string | null>(null)
+  const [pendingCode, setPendingCode] = React.useState<string | null>(null)
+  const [isPending, startTransition] = React.useTransition()
+
+  /**
+   * Row navigation. The transition keeps the row's flag replaced by a spinner
+   * until the detail route is committed, so the click gets an immediate answer
+   * on the row that was actually clicked.
+   */
+  const openCountry = (code: string) => {
+    setPendingCode(code)
+    startTransition(() => router.push(`/countries/${code}`))
+  }
 
   const load = React.useCallback(async () => {
     try {
@@ -326,81 +338,91 @@ export default function CountriesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((country) => (
-                  <TableRow
-                    key={country.code}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/countries/${country.code}`)}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-2 font-medium text-foreground">
-                        <CountryFlag code={country.code} />
-                        <span className="min-w-0">
-                          <span className="block truncate text-[12px]">{nameOf(country)}</span>
-                          <span className="block font-mono text-[9px] uppercase text-muted-foreground">{country.code}</span>
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-[11px] text-muted-foreground">
-                      {country.region || '—'}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-[11px] text-muted-foreground">
-                      {country.authority || '—'}
-                    </TableCell>
-                    <TableCell className="text-[11px] font-mono">
-                      {t('countries.sectorCount', { count: country.sectors.length, total: TOTAL_SECTORS })}
-                    </TableCell>
-                    <TableCell>
-                      <Badge tone={country.status === 'active' ? 'brand' : 'neutral'} className="text-[9px]">
-                        {country.status === 'active' ? t('countries.status.active') : t('countries.status.planned')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell text-[10px] text-muted-foreground">
-                      {new Date(country.updatedAt).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB', {
-                        dateStyle: 'medium',
-                      })}
-                    </TableCell>
-                    <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
-                      <RowActionMenu
-                        overlay
-                        inline={
-                          <div className="flex items-center justify-end gap-1">
-                            <RowActionButton
-                              label={t('countries.editTitle')}
-                              onClick={() => openEdit(country)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </RowActionButton>
-                            <RowActionButton
-                              label={t('country.delete')}
-                              tone="danger"
-                              onClick={() => {
-                                setDeleteProblem(null)
-                                setDeleting(country)
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </RowActionButton>
-                          </div>
-                        }
-                      >
-                        <TableActionItem icon={Pencil} onClick={() => openEdit(country)}>
-                          {t('countries.editTitle')}
-                        </TableActionItem>
-                        <TableActionItem
-                          icon={Trash2}
-                          variant="danger"
-                          onClick={() => {
-                            setDeleteProblem(null)
-                            setDeleting(country)
-                          }}
+                {rows.map((country) => {
+                  const pending = pendingCode === country.code && isPending
+                  return (
+                    <TableRow
+                      key={country.code}
+                      className="cursor-pointer"
+                      aria-busy={pending || undefined}
+                      onClick={() => openCountry(country.code)}
+                    >
+                      <TableCell>
+                        <div className="flex items-center gap-2 font-medium text-foreground">
+                          {pending ? (
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center">
+                              <Loader className="h-4 w-4 animate-spin text-brand-primary" aria-hidden="true" />
+                            </span>
+                          ) : (
+                            <CountryFlag code={country.code} />
+                          )}
+                          <span className="min-w-0">
+                            <span className="block truncate text-[12px]">{nameOf(country)}</span>
+                            <span className="block font-mono text-[9px] uppercase text-muted-foreground">{country.code}</span>
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-[11px] text-muted-foreground">
+                        {country.region || '—'}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-[11px] text-muted-foreground">
+                        {country.authority || '—'}
+                      </TableCell>
+                      <TableCell className="text-[11px] font-mono">
+                        {t('countries.sectorCount', { count: country.sectors.length, total: TOTAL_SECTORS })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge tone={country.status === 'active' ? 'brand' : 'neutral'} className="text-[9px]">
+                          {country.status === 'active' ? t('countries.status.active') : t('countries.status.planned')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-[10px] text-muted-foreground">
+                        {new Date(country.updatedAt).toLocaleDateString(locale === 'fr' ? 'fr-FR' : 'en-GB', {
+                          dateStyle: 'medium',
+                        })}
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                        <RowActionMenu
+                          overlay
+                          inline={
+                            <div className="flex items-center justify-end gap-1">
+                              <RowActionButton
+                                label={t('countries.editTitle')}
+                                onClick={() => openEdit(country)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </RowActionButton>
+                              <RowActionButton
+                                label={t('country.delete')}
+                                tone="danger"
+                                onClick={() => {
+                                  setDeleteProblem(null)
+                                  setDeleting(country)
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </RowActionButton>
+                            </div>
+                          }
                         >
-                          {t('country.delete')}
-                        </TableActionItem>
-                      </RowActionMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          <TableActionItem icon={Pencil} onClick={() => openEdit(country)}>
+                            {t('countries.editTitle')}
+                          </TableActionItem>
+                          <TableActionItem
+                            icon={Trash2}
+                            variant="danger"
+                            onClick={() => {
+                              setDeleteProblem(null)
+                              setDeleting(country)
+                            }}
+                          >
+                            {t('country.delete')}
+                          </TableActionItem>
+                        </RowActionMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
             <DataTablePagination

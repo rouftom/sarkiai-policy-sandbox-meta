@@ -6,7 +6,6 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   ArrowUpRight,
-  BarChart3,
   Check,
   Database,
   FileText,
@@ -58,9 +57,9 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { useToast } from '@/components/shared/toast'
 import { RowActionButton } from '@/components/ui/row-action-button'
 
-type Tab = 'overview' | 'sectors' | 'syntheses' | 'insights'
+type Tab = 'overview' | 'sectors' | 'syntheses'
 
-const TABS: Tab[] = ['overview', 'sectors', 'syntheses', 'insights']
+const TABS: Tab[] = ['overview', 'sectors', 'syntheses']
 /** Seed copy that older API deployments still return; never shown in the console. */
 const LEGACY_SEED_NOTE = 'Reference corpus and demo jurisdiction.'
 
@@ -169,7 +168,6 @@ export default function CountryPage() {
     { id: 'overview', label: t('country.tab.overview'), icon: Globe2 },
     { id: 'sectors', label: t('country.tab.sectors'), icon: Network },
     { id: 'syntheses', label: t('country.tab.syntheses'), icon: FileText },
-    { id: 'insights', label: t('country.tab.insights'), icon: BarChart3 },
   ]
 
   const selectTab = (value: string) => {
@@ -411,6 +409,90 @@ export default function CountryPage() {
             </Card>
           </div>
 
+          {noData && (
+            <Card>
+              <CardContent className="py-3 text-[10px] text-muted-foreground">{t('country.insights.empty')}</CardContent>
+            </Card>
+          )}
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <ChartFrame
+              title={t('country.insights.readinessBySector')}
+              hint={t('country.insights.hint')}
+              empty={sectorData.length === 0}
+              emptyLabel={t('country.insights.empty')}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="name" tick={AXIS} stroke="var(--muted-foreground)" interval={0} />
+                  <YAxis allowDecimals={false} tick={AXIS} stroke="var(--muted-foreground)" />
+                  <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="runs" name={t('country.insights.runs')} fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartFrame>
+
+            <ChartFrame
+              title={t('country.insights.scoreBySector')}
+              empty={sectorData.length === 0}
+              emptyLabel={t('country.insights.empty')}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="name" tick={AXIS} stroke="var(--muted-foreground)" interval={0} />
+                  <YAxis domain={[0, 5]} tick={AXIS} stroke="var(--muted-foreground)" />
+                  <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="score" name={t('country.insights.average')} fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartFrame>
+
+            <ChartFrame
+              title={t('country.insights.trend')}
+              empty={trendData.length === 0}
+              emptyLabel={t('country.insights.empty')}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="name" tick={AXIS} stroke="var(--muted-foreground)" interval={2} />
+                  <YAxis yAxisId="runs" allowDecimals={false} tick={AXIS} stroke="var(--muted-foreground)" />
+                  <YAxis yAxisId="score" orientation="right" domain={[0, 5]} tick={AXIS} stroke="var(--muted-foreground)" width={28} />
+                  <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar yAxisId="runs" dataKey="runs" name={t('country.insights.runs')} fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
+                  <Line
+                    yAxisId="score"
+                    type="monotone"
+                    dataKey="score"
+                    name={t('country.insights.score')}
+                    stroke="var(--chart-3)"
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartFrame>
+
+            <ChartFrame
+              title={t('country.insights.scenariosBySector')}
+              empty={sectorData.length === 0}
+              emptyLabel={t('country.insights.empty')}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="name" tick={AXIS} stroke="var(--muted-foreground)" interval={0} />
+                  <YAxis allowDecimals={false} tick={AXIS} stroke="var(--muted-foreground)" />
+                  <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
+                  <Bar dataKey="scenarios" name={t('country.insights.scenarios')} fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartFrame>
+          </div>
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-[12px]">{t('country.overview.shortcuts')}</CardTitle>
@@ -564,93 +646,6 @@ export default function CountryPage() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* ── Insights ─────────────────────────────────────────────────────── */}
-        <TabsContent value="insights" className="space-y-3">
-          {noData && (
-            <Card>
-              <CardContent className="py-3 text-[10px] text-muted-foreground">{t('country.insights.empty')}</CardContent>
-            </Card>
-          )}
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <ChartFrame
-              title={t('country.insights.readinessBySector')}
-              hint={t('country.insights.hint')}
-              empty={sectorData.length === 0}
-              emptyLabel={t('country.insights.empty')}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="name" tick={AXIS} stroke="var(--muted-foreground)" interval={0} />
-                  <YAxis allowDecimals={false} tick={AXIS} stroke="var(--muted-foreground)" />
-                  <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
-                  <Bar dataKey="runs" name={t('country.insights.runs')} fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartFrame>
-
-            <ChartFrame
-              title={t('country.insights.scoreBySector')}
-              empty={sectorData.length === 0}
-              emptyLabel={t('country.insights.empty')}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="name" tick={AXIS} stroke="var(--muted-foreground)" interval={0} />
-                  <YAxis domain={[0, 5]} tick={AXIS} stroke="var(--muted-foreground)" />
-                  <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
-                  <Bar dataKey="score" name={t('country.insights.average')} fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartFrame>
-
-            <ChartFrame
-              title={t('country.insights.trend')}
-              empty={trendData.length === 0}
-              emptyLabel={t('country.insights.empty')}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="name" tick={AXIS} stroke="var(--muted-foreground)" interval={2} />
-                  <YAxis yAxisId="runs" allowDecimals={false} tick={AXIS} stroke="var(--muted-foreground)" />
-                  <YAxis yAxisId="score" orientation="right" domain={[0, 5]} tick={AXIS} stroke="var(--muted-foreground)" width={28} />
-                  <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
-                  <Bar yAxisId="runs" dataKey="runs" name={t('country.insights.runs')} fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
-                  <Line
-                    yAxisId="score"
-                    type="monotone"
-                    dataKey="score"
-                    name={t('country.insights.score')}
-                    stroke="var(--chart-3)"
-                    strokeWidth={2}
-                    dot={false}
-                    connectNulls
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </ChartFrame>
-
-            <ChartFrame
-              title={t('country.insights.scenariosBySector')}
-              empty={sectorData.length === 0}
-              emptyLabel={t('country.insights.empty')}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="name" tick={AXIS} stroke="var(--muted-foreground)" interval={0} />
-                  <YAxis allowDecimals={false} tick={AXIS} stroke="var(--muted-foreground)" />
-                  <RechartsTooltip contentStyle={TOOLTIP_STYLE} />
-                  <Bar dataKey="scenarios" name={t('country.insights.scenarios')} fill="var(--chart-4)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartFrame>
-          </div>
         </TabsContent>
       </Tabs>
 
