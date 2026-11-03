@@ -18,8 +18,8 @@ import {
   Preview,
   Section,
   Text,
-} from '@react-email/components'
-import { render } from '@react-email/render'
+  render,
+} from 'react-email'
 
 const BRAND = 'SarkiAI Policy Sandbox'
 const FOOTER = 'Made with ♥️ by Djotta'
