@@ -7,14 +7,15 @@ harness). Adapt-and-reuse is fine; keep this repo publishable.
 ## Environment
 
 - **Bun** is the package manager (`bun install`, `bun run <script>`).
-- **Node ≥ 20**. Python ≥ 3.11 for the services.
+- **Node ≥ 20**. Everything runs on Bun/TypeScript, MCP sidecars included, so
+  no Python toolchain is required.
 - Never commit real env files or secrets. `.env.example` / `*.example` only.
 
 ## Naming
 
 - Files and directories: `kebab-case`.
 - TypeScript packages: `@sps/<name>`, entry `src/index.ts`, ESM (`"type": "module"`).
-- Python packages: `snake_case` modules.
+- TypeScript modules: `kebab-case` files, `camelCase` functions, `PascalCase` types.
 
 ## Branches & commits
 
@@ -49,7 +50,8 @@ Reuse the same charter as the main SarkiAI apps:
 
 - TypeScript: `bun run typecheck`.
 - Compose: `docker compose config` (and the sandbox file via `make sandbox-config`).
-- Python services: `python -m compileall services/<svc>/src` (or `app`).
+- MCP sidecars (outside the root workspace): `bun run build` in
+  `services/mcp-charts` and `services/mcp-docx` when they change.
 
 ## Boundaries
 

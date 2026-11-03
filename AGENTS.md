@@ -35,7 +35,6 @@ proprietary AgenticUI harness (see `docs/RULES.md`).
 | Build | `bun run build` |
 | Install the git guard | `make hooks` |
 | Stack status / logs | `make ps` / `make logs` |
-| Python chunker tests | `cd services/ingestion && PYTHONPATH=src python3 tests/test_chunker.py` |
 
 Run `make help` for the full Docker target list. `make models` pulls
 `OLLAMA_MODEL` (Muse Glimmer).
@@ -47,7 +46,7 @@ Run `make help` for the full Docker target list. `make models` pulls
 | `apps/api` | Bun + Fastify API: agents, scenarios, approvals, auth, metering, SSE |
 | `apps/web` | Next.js 16 workspace UI (policy lenses, runs, ops console) |
 | `packages/*` | Shared domain logic: retrieval, models, storage, auth, types |
-| `services/*` | Ingestion, OCR, transcription and the chart/DOCX MCP sidecars |
+| `services/*` | First-party MCP sidecars: charts (`mcp-charts`) and Word documents (`mcp-docx`) |
 | `scripts/` | Operational scripts (migrations, seeds, checks) |
 | `docs/` | Architecture, data model, roadmap, compliance notes |
 
@@ -66,7 +65,7 @@ and `.env.example`. Every source file carries a header comment stating its role.
   `.env.cloud` or any key value. `.env.example` holds placeholders only.
 - **Sovereignty**: no proprietary dependency, no hosted-only service in the
   critical path. Local mode must stay fully offline-capable.
-- **Compatibility**: the Python sidecars expose the contracts the TS packages
+- **Compatibility**: the MCP sidecars expose the tool contracts the agents
   expect; change both sides together and document the change in `docs/`.
 - **Commits**: Conventional Commits, atomic, imperative, scope required
   (`feat(api): ...`).

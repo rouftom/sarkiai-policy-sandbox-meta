@@ -1,10 +1,10 @@
 /**
  * Deterministic document chunker for direct knowledge-base ingestion.
  *
- * The cloud demo cannot depend on the optional Python ingestion service, so the
- * API owns the same contract it did before: a document becomes heading-aware,
- * overlapping chunks that keep enough provenance (`headingPath`, article number)
- * for the citation validator to quote them back.
+ * Ingestion runs in-process in the API in every mode, so this chunker is the
+ * single implementation: a document becomes heading-aware, overlapping chunks
+ * that keep enough provenance (`headingPath`, article number) for the citation
+ * validator to quote them back.
  *
  * No NLP, no model call: headings, paragraphs and sentence boundaries are enough
  * to make retrieval useful, and the result is fully reproducible for tests.

@@ -129,10 +129,10 @@ Gap analysis is a **shared service** consumed by every lens, so no evaluation cr
 ```
  data sources ──▶ collection ──▶ processing ──▶ retrieval & model ──▶ application ──▶ governance
       │               │              │                 │                   │              │
- data/country     services/      services/         packages/kb        packages/agents   packages/audit
- data/global      ingestion      ingestion+ocr     packages/retrieval packages/scenarios (audit + CoT)
-                 (fetch/load)   (chunk+embed)                        packages/readiness
-                                                                      packages/citations
+ data/country     scripts/       packages/gazette   packages/kb         packages/agents   packages/audit
+ data/global      (fetch/load)   apps/api           packages/retrieval  packages/scenarios (audit + CoT)
+                                 (chunk + index)                        packages/readiness
+                                                                        packages/citations
 ```
 
 See [`docs/PIPELINE-MAPPING.md`](docs/PIPELINE-MAPPING.md) for the file-by-file mapping.
@@ -146,7 +146,7 @@ sarkiai-policy-sandbox/
 │  └─ web/            # Next.js: lens selector, simulation console, readiness report
 ├─ packages/          # TypeScript workspace packages (@sps/*)
 │  ├─ shared/         # types, workflow profiles, config, jurisdiction model
-│  ├─ kb/             # ingestion client + knowledge-base domain logic
+│  ├─ kb/             # chunking, in-process corpus ingestion + knowledge-base domain logic
 │  ├─ retrieval/      # agentic corpus search: lexical index + Meta model (plan, sub-agents, judge, rank)
 │  ├─ citations/      # article/section source attribution
 │  ├─ gazette/        # scanned gazette: layout, SAM 3.1 artefacts, per-zone transcription
@@ -162,8 +162,9 @@ sarkiai-policy-sandbox/
 │  ├─ ui/             # shared components (SarkiAI Compact charter)
 │  ├─ theme/          # admin theme packs (meta default, fada, green, ocean, sunset, mono)
 │  └─ storage/        # MinIO/S3 client (content-addressed attachments)
-├─ services/          # Python microservices
-│  └─ transcription/  # optional media → timestamped transcript
+├─ services/          # standalone MCP sidecars (Bun/TypeScript)
+│  ├─ mcp-charts/     # data-visualisation MCP app (Recharts, PNG/SVG export)
+│  └─ mcp-docx/       # Word document generation MCP server
 ├─ data/              # corpora: country/cm, global/africa + global/standards (payloads git-ignored)
 ├─ deploy/
 │  ├─ sandbox/        # locked-down sandbox deployment
@@ -196,8 +197,7 @@ Then:
 
 - Web console (bilingual EN/FR, English by default) → http://localhost:3000
 - API + OpenAPI → http://localhost:8000/docs
-- Ingestion service → http://localhost:8001/docs
-- OCR service → http://localhost:8002/docs
+- MCP sidecars → http://localhost:8010 (charts) and http://localhost:8011 (Word)
 - Ollama (local models) → http://localhost:11434
 - MinIO console (attachments) → http://localhost:9001
 - MongoDB (audit + CoT) → `mongodb://localhost:27017`

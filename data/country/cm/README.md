@@ -42,6 +42,9 @@ transcribes each zone. The seeding script skips them.
 
 ## Ingest
 
+The API route is admin-only, so export `SPS_ADMIN_TOKEN` first (the bearer
+returned by `/v1/auth/login`); the script refuses to run without it.
+
 ```bash
 ./scripts/seed.sh --country cm --doc-type law      --dir data/country/cm
 ./scripts/seed.sh --country cm --doc-type strategy --dir data/country/cm
@@ -50,13 +53,10 @@ transcribes each zone. The seeding script skips them.
 ./scripts/seed.sh --country cm --doc-type report   --dir data/country/cm
 ```
 
-Or one document at a time through the API, when the `docType` must be exact:
-
-```bash
-curl -X POST "$INGESTION/v1/ingest/file" -H "X-API-Key: $SERVICE_API_KEY" \
-  -F file=@data/country/cm/loi_2024_protection_donnees_personnelles.pdf \
-  -F country=cm -F jurisdiction=national -F docType=law
-```
+Or one document at a time through the API (`POST /v1/kb/ingest/file`, admin
+bearer token, JSON body with `filename`, `contentBase64`, `country`,
+`jurisdiction`, `docType` and `rights`), or from **Knowledge → Ingest** in the
+console, when the `docType` must be exact.
 
 ## Sourcing and rights
 

@@ -2146,8 +2146,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // Push a transcribed page into the knowledge base. One document per page keeps
-  // the ingestion service's structural chunker in charge; every zone heading and
-  // the page-level source URL survive in the chunk text.
+  // the structural chunker in charge; every zone heading and the page-level
+  // source URL survive in the chunk text.
   app.post('/v1/gazette/ingest', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const body = z
@@ -2202,7 +2202,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       }
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: `Ingestion service unavailable: ${(error as Error).message}` })
+      return reply.status(502).send({ error: `Gazette ingestion failed: ${(error as Error).message}` })
     }
   })
 

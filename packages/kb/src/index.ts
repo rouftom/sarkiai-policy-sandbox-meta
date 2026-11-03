@@ -1,6 +1,6 @@
 /**
- * Knowledge-base domain logic: talks to the Python ingestion service and owns
- * the country/jurisdiction taxonomy contract.
+ * Knowledge-base domain logic: owns the country/jurisdiction taxonomy contract
+ * and the typed ingestion request/response shapes the API reuses.
  */
 
 import type { CorpusRights, DocType, Jurisdiction, ReadinessDimension, Taxonomy } from '@sps/shared'

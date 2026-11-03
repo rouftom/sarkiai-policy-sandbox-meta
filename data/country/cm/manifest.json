@@ -2,7 +2,7 @@
   "country": "cm",
   "jurisdiction": "national",
   "generated": "2026-10-30",
-  "note": "Cameroon corpus. status='present' = file copied locally (payloads are not versioned, see .gitignore); status='to_confirm' = instrument still to source or verify before ingestion. needsOcr=true => scanned PDF without a text layer, so ingestion calls the OCR service (services/ocr). Any factual error propagates into the agents' answers.",
+  "note": "Cameroon corpus. status='present' = file copied locally (payloads are not versioned, see .gitignore); status='to_confirm' = instrument still to source or verify before ingestion. needsOcr=true => scanned PDF without a text layer, so the page must go through the Gazette screen (SAM 3.1 segmentation + transcription) before ingestion. Any factual error propagates into the agents' answers.",
   "rightsNote": "Per-document rights status. official-text = official legislative/administrative/judicial text, generally outside copyright under Cameroonian law; open-licence = explicit reuse licence (see the entry); quotation-only = third-party work, short attributed quotations only, payload not redistributed; to-confirm = rights not established, do not publish the payload. Third-party payloads are git-ignored; only manifests (and the project's own samples) are versioned. See docs/LICENSING.md.",
   "documents": [
     {

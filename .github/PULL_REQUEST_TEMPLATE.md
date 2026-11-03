@@ -11,7 +11,7 @@ Closes #
 - [ ] `bun run typecheck`
 - [ ] `bun run test`
 - [ ] `bun run build` (when `apps/web` or a published package changed)
-- [ ] Python ingestion tests (`pytest services/ingestion`) when that service changed
+- [ ] `bun run build` inside a touched MCP sidecar (`services/mcp-charts`, `services/mcp-docx`)
 
 ## Repository rules
 
