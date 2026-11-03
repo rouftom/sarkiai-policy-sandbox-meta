@@ -26,7 +26,7 @@ Include as much of the following as you can:
 
 - the type of issue (for example authentication bypass, injection, SSRF,
   exposed secret, broken access control);
-- the affected component (web console, API, ingestion service, deployment);
+- the affected component (web console, API, MCP sidecars, deployment);
 - the affected version, commit, branch or URL;
 - any special configuration required to reproduce it;
 - step-by-step reproduction instructions;
@@ -53,7 +53,7 @@ the maintainers.
 In scope:
 
 - the `apps/web` console and `apps/api` HTTP surface;
-- the `services/ingestion` service;
+- the MCP sidecars under `services/` (`mcp-charts`, `mcp-docx`);
 - the packages under `packages/`;
 - deployment configuration committed to this repository.
 
@@ -64,6 +64,40 @@ Out of scope:
 - findings that require a compromised operator account;
 - social engineering, physical access and denial-of-service by volume;
 - missing hardening headers with no demonstrated impact.
+
+## Security controls
+
+- **Shared state is administrator-only.** Writes to the legal corpus, the country
+  registry, the shared address book and outbound WhatsApp or e-mail messages
+  require the `admin` role. Every other operator can read and run analyses.
+- **Setup and secrets fail closed.** When the configured database is unreachable,
+  the setup endpoint does not treat the instance as empty, so a second root
+  operator cannot be created during an outage. A cloud deployment on a public
+  origin refuses to start without a private session secret.
+- **Inbound webhooks are signed.** A cloud deployment rejects WhatsApp webhooks
+  when the app secret is not configured, and verifies `x-hub-signature-256`
+  otherwise.
+- **The browser is hardened.** Model output is sanitized before rendering, a
+  Content-Security-Policy restricts `img-src` and `frame-src`, and CORS accepts
+  only this project's origins.
+- **Credentials.** Passwords are hashed with scrypt; tokens and codes are compared
+  in constant time; TOTP codes are single-use; password-reset and approval links
+  are signed single-use tokens; authentication and costly routes are rate-limited.
+- **Server-side keys stay server-side.** The MCP gateway is only reached from
+  authenticated agent runs, and the Meta egress relay requires a shared secret,
+  rejects dot segments and only forwards an allowlist of upstream paths.
+- **Continuous integration.** Every push and pull request installs from the frozen
+  lockfile, runs `bun run typecheck` and `bun test packages apps`; a red check
+  blocks the merge. `bun audit` is available for an ad-hoc advisory check.
+
+## Known limitations
+
+- Sessions are signed tokens valid for seven days: revoking an account or
+  changing a role does not invalidate a token already issued (M1).
+- The model preference is saved per operator, but the shared engine applies one
+  model at a time, so the last selection drives every operator's runs until
+  per-operator routing lands (M2).
+- The containers run as root (M7).
 
 ## Safe harbour
 

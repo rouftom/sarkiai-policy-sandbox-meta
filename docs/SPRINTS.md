@@ -1,4 +1,6 @@
-# Roadmap
+# Sprints
+
+What was built, sprint by sprint. What comes next is in [`ROADMAP.md`](../ROADMAP.md).
 
 ## Hackathon timeline
 
@@ -13,7 +15,7 @@
 
 ## Sprints
 
-This roadmap tracks the product. The boundary between the baseline and the
+This file tracks the product as built. The boundary between the baseline and the
 hackathon work is set by [`HACKATHON.md`](../HACKATHON.md): Sprint 0 is the
 baseline, and the hackathon work is the N1 to N12 list in that file.
 
