@@ -1,7 +1,8 @@
 name: ci
 
-# Typecheck and unit tests on every push and pull request.
-# The e2e suite (tests/e2e) needs the running services and stays out of CI.
+# Typecheck and unit tests, then a dependency audit of each lockfile, on every
+# push and pull request. The e2e suite (tests/e2e) needs the running services
+# and stays out of CI.
 
 on:
   push:
@@ -34,3 +35,32 @@ jobs:
 
       - name: Unit tests
         run: bun test packages apps
+
+  # Each lockfile is audited on its own: the sidecars sit outside the root
+  # workspace. A high or critical advisory fails the check; moderate and low
+  # advisories are reported in the log and do not block.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [".", services/mcp-charts, services/mcp-docx]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        working-directory: ${{ matrix.dir }}
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Report moderate and low advisories
+        working-directory: ${{ matrix.dir }}
+        run: bun audit --audit-level=low || true
+
+      - name: Block on high and critical advisories
+        working-directory: ${{ matrix.dir }}
+        run: bun audit --audit-level=high
