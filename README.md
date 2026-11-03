@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://youtu.be/sQcTU5R30UU" title="Watch the demo (2:39)">
+    <img src="docs/screenshots/demo-cover.jpg" alt="Watch the SarkiAI Policy Sandbox demo (2:39)" width="720">
+  </a>
+</p>
+
 # SarkiAI Policy Sandbox
 
 > Policy-grounded, multi-agent AI engine for the Meta Global AI Developer Hackathon (Startup track).
