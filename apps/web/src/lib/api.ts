@@ -15,13 +15,27 @@ export const MODEL_CHANGED = 'sps:model-changed'
  */
 export const ASSISTANT_FINISHED = 'sps:assistant-finished'
 
+/** JSON error bodies carry a human `message`; keep the status prefix some screens read. */
+function readableBody(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown; message?: unknown }
+    if (parsed && typeof parsed === 'object') {
+      if (typeof parsed.message === 'string' && parsed.message.length > 0) return parsed.message
+      if (typeof parsed.error === 'string' && parsed.error.length > 0) return parsed.error
+    }
+  } catch {
+    /* not JSON: the body is already readable */
+  }
+  return body
+}
+
 /** HTTP failure with the status and the raw body kept apart, so panels can react. */
 export class ApiError extends Error {
   readonly status: number
   readonly body: string
 
   constructor(status: number, body: string) {
-    super(`${status} ${body}`)
+    super(`${status} ${readableBody(body)}`)
     this.name = 'ApiError'
     this.status = status
     this.body = body
