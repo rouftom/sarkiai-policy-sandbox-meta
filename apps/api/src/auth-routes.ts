@@ -404,8 +404,9 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   app.put('/v1/preferences', async (request, reply) => {
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
-    const patch = preferencesPatch.parse(request.body)
-    const preferences = await auth.updatePreferences(operator.email, patch)
+    const patch = preferencesPatch.safeParse(request.body)
+    if (!patch.success) return reply.status(400).send({ error: 'invalid_request', message: 'Invalid request body.' })
+    const preferences = await auth.updatePreferences(operator.email, patch.data)
     await record(operator.email, 'preferences.updated', undefined, operator.email)
     return { preferences }
   })
