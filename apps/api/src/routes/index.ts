@@ -10,7 +10,6 @@ import {
   META_GAZETTE_PRICING,
   SamClient,
   toKbChunks,
-  type GazettePage,
 } from '@sps/gazette'
 import { evaluateExercise, figureBriefs, writeAfterAction, type ExerciseDefinition } from '@sps/exercise'
 import { analyzeImpact } from '@sps/impact'
@@ -37,7 +36,6 @@ import {
   RIGHTS_BLOCKED_MESSAGE,
   RightsBlockedError,
   assertPublishableRights,
-  corpusRightsSchema,
   isPublishableRights,
   normalizeCorpusRights,
 } from '@sps/shared'
@@ -74,17 +72,53 @@ import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit
 import { registerVoiceRoutes } from '../voice-routes.js'
 import { isPublicRoute } from '../public-routes.js'
 import {
+  actionDecisionInput,
   agentRoutingRequest,
   approvalDecisionInput,
   approvalTokenParams,
   askBody,
+  auditDossierQuery,
+  chatSessionInput,
   countryBodySchema,
   countryCodeParams,
   countryPatchSchema,
   countrySectorsInput,
   emailMessageInput,
+  exerciseBodyInput,
+  exerciseReportsQuery,
+  exerciseSampleQuery,
+  gazetteAnalyzeInput,
+  gazetteIngestInput,
+  impactAnalyzeInput,
+  kbDocumentImagesInput,
+  kbDocumentListQuery,
+  kbDocumentPatch,
+  kbDocumentPreviewQuery,
+  kbDocumentQuery,
+  kbDocumentActiveInput,
+  kbChunkPatch,
+  kbImagePatch,
+  kbIngestAliasBody,
+  kbIngestFileBody,
+  kbIngestTextBody,
   modelSelectionInput,
+  notificationContactInput,
+  notifyInput,
+  observabilityEventsQuery,
+  readinessAssessInput,
+  readinessLocalizeInput,
+  readinessReportInput,
+  readinessRunsQuery,
+  readinessStreamInput,
+  readinessWhatIfInput,
+  scenarioExportQuery,
+  scenarioReleaseQuery,
+  scenarioRunInput,
+  scenarioRunParams,
   searchInput,
+  summarySuggestionInput,
+  usageQuery,
+  voiceCorrectBody,
   whatsappMessageInput,
 } from '../openapi/schemas.js'
 
@@ -488,20 +522,6 @@ const USAGE_FORECAST_HORIZON = 7
 /** Run spend is checked over a month: a run older than that is not news. */
 const USAGE_BUDGET_DAYS = 30
 const USAGE_MAX_DAYS = 366
-const USAGE_KINDS = ['chat', 'retrieval', 'image', 'voice', 'sam'] as const
-
-const usageQuery = z.object({
-  from: z.string().datetime({ offset: true }).optional(),
-  to: z.string().datetime({ offset: true }).optional(),
-  /** Admin only: read another operator's scope. An operator may only repeat their own. */
-  operator: z.string().email().max(200).optional(),
-  status: z.enum(['ok', 'error']).optional(),
-  kind: z.enum(USAGE_KINDS).optional(),
-  model: z.string().min(1).max(200).optional(),
-  route: z.string().min(1).max(300).optional(),
-  agentId: z.string().min(1).max(120).optional(),
-  limit: z.coerce.number().int().min(1).max(500).optional(),
-})
 
 /** Resolves `from`/`to`; null when the range is invalid or wider than a year. */
 function usageRange(
@@ -818,13 +838,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/v1/kb/documents', async (request, reply) => {
-    const query = z
-      .object({
-        limit: z.coerce.number().int().min(1).max(200).default(50),
-        q: z.string().max(120).optional(),
-        includeRetired: z.coerce.boolean().default(false),
-      })
-      .safeParse(request.query)
+    const query = kbDocumentListQuery.safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     try {
       return { documents: await knowledge.listDocuments(query.data) }
@@ -836,9 +850,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/v1/kb/documents/active', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const body = z
-      .object({ filename: z.string().min(1), active: z.boolean() })
-      .safeParse(request.body)
+    const body = kbDocumentActiveInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     try {
       const modified = await knowledge.setDocumentActive(body.data.filename, body.data.active)
@@ -852,7 +864,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Remove one document from the knowledge base: its passages, its figures and its metadata. */
   app.delete('/v1/kb/documents', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const query = z.object({ filename: z.string().min(1).max(300) }).safeParse(request.query)
+    const query = kbDocumentQuery.safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     try {
       const deleted = await knowledge.deleteDocument(query.data.filename)
@@ -865,9 +877,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Preview of one document: its passages (chunk selected) and figures. */
   app.get('/v1/kb/documents/preview', async (request, reply) => {
-    const query = z
-      .object({ filename: z.string().min(1).max(300), chunkIndex: z.coerce.number().int().min(0).optional() })
-      .safeParse(request.query)
+    const query = kbDocumentPreviewQuery.safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     try {
       return await knowledge.preview(query.data.filename, query.data.chunkIndex)
@@ -879,7 +889,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Every passage of one document, retired ones included, for the editor. */
   app.get('/v1/kb/documents/chunks', async (request, reply) => {
-    const query = z.object({ filename: z.string().min(1).max(300) }).safeParse(request.query)
+    const query = kbDocumentQuery.safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     return { chunks: await knowledge.chunksOf(query.data.filename) }
   })
@@ -887,18 +897,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Document metadata: title, summary, and the fields propagated to its passages. */
   app.patch('/v1/kb/documents', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const body = z
-      .object({
-        filename: z.string().min(1).max(300),
-        title: z.string().max(200).optional(),
-        summary: z.string().max(2000).optional(),
-        country: z.string().min(2).max(10).optional(),
-        docType: z.string().min(1).max(40).optional(),
-        namespace: z.string().max(80).optional(),
-        version: z.string().max(80).optional(),
-        sourceUrl: z.string().url().max(500).optional().or(z.literal('')),
-      })
-      .safeParse(request.body)
+    const body = kbDocumentPatch.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const { filename, ...patch } = body.data
     const modified = await knowledge.updateDocument(filename, { ...patch, docType: patch.docType as DocType | undefined })
@@ -909,7 +908,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.patch('/v1/kb/chunks/:id', { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const { id } = request.params as { id: string }
-    const body = z.object({ text: z.string().max(20_000).optional(), active: z.boolean().optional() }).safeParse(request.body)
+    const body = kbChunkPatch.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     try {
       const updated = await knowledge.updateChunk(id, body.data)
@@ -924,24 +923,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Attach figures to a document: uploaded bytes, stored once, shown in the document's Media tab and in citations. */
   app.post('/v1/kb/documents/images', { bodyLimit: 40 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const body = z
-      .object({
-        filename: z.string().min(1).max(300),
-        images: z
-          .array(
-            z.object({
-              caption: z.string().min(1).max(300),
-              alt: z.string().max(300).optional(),
-              tags: z.array(z.string().max(40)).max(12).optional(),
-              dimension: z.string().max(60).optional(),
-              mime: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']),
-              dataBase64: z.string().min(4).max(30_000_000),
-            }),
-          )
-          .min(1)
-          .max(12),
-      })
-      .safeParse(request.body)
+    const body = kbDocumentImagesInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const images = await knowledge.attachImages(
       body.data.filename,
@@ -958,14 +940,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.patch('/v1/kb/images/:id', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const { id } = request.params as { id: string }
-    const body = z
-      .object({
-        caption: z.string().min(1).max(300).optional(),
-        alt: z.string().max(300).optional(),
-        tags: z.array(z.string().max(40)).max(12).optional(),
-        dimension: z.string().max(60).nullable().optional(),
-      })
-      .safeParse(request.body)
+    const body = kbImagePatch.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const updated = await knowledge.updateImage(id, {
       ...body.data,
@@ -1022,21 +997,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Full-text ingestion: chunk → upsert → ensure the lexical index. */
   app.post('/v1/kb/ingest/text', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const body = z
-      .object({
-        text: z.string().min(24).max(2_000_000),
-        filename: z.string().min(1).max(200),
-        country: z.string().min(2).max(2).or(z.literal('global')),
-        jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
-        docType: z.string().min(1).default('policy'),
-        rights: corpusRightsSchema.default('to-confirm'),
-        namespace: z.string().max(80).optional(),
-        version: z.string().max(80).optional(),
-        sourceUrl: z.string().url().optional(),
-        maxChars: z.number().int().min(300).max(6000).optional(),
-        overlapChars: z.number().int().min(0).max(1000).optional(),
-      })
-      .safeParse(request.body)
+    const body = kbIngestTextBody.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     if (refuseRestrictedRights(body.data.rights, reply)) return reply
     try {
@@ -1056,19 +1017,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/v1/kb/ingest/file', { bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const body = z
-      .object({
-        filename: z.string().min(1).max(200),
-        contentBase64: z.string().min(4).max(34_000_000),
-        country: z.string().min(2).max(2).or(z.literal('global')),
-        jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
-        docType: z.string().min(1).default('policy'),
-        rights: corpusRightsSchema.default('to-confirm'),
-        namespace: z.string().max(80).optional(),
-        version: z.string().max(80).optional(),
-        sourceUrl: z.string().url().optional(),
-      })
-      .safeParse(request.body)
+    const body = kbIngestFileBody.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
@@ -1165,19 +1114,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/v1/kb/ingest', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const body = z
-      .object({
-        text: z.string().min(1),
-        filename: z.string().min(1),
-        country: z.string().length(2).or(z.literal('global')),
-        jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
-        docType: z.string().default('policy'),
-        rights: corpusRightsSchema.default('to-confirm'),
-        namespace: z.string().optional(),
-        version: z.string().optional(),
-        sourceUrl: z.string().url().optional(),
-      })
-      .safeParse(request.body)
+    const body = kbIngestAliasBody.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
@@ -1357,7 +1294,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * Falls back to the original text, so a dictation is never lost.
    */
   app.post('/v1/voice/correct', async (request, reply) => {
-    const body = z.object({ text: z.string().min(1).max(4000) }).safeParse(request.body)
+    const body = voiceCorrectBody.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     return correctTranscript(body.data.text, { model: engine.model })
   })
@@ -1510,8 +1447,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // SSE stream of all ticks (fixed delay) · for passive viewers.
   app.get('/v1/scenarios/:id/release', async (request, reply) => {
-    const query = z.object({ country: z.string().default('cm') }).parse(request.query)
-    const scenario = createScenario(scenarioFor('health', query.country), 'simulation')
+    const query = scenarioReleaseQuery.safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    const scenario = createScenario(scenarioFor('health', query.data.country), 'simulation')
     reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
     for await (const batch of scenario.release({ chunkDelayMs: 800 })) {
       reply.raw.write(`data: ${JSON.stringify(batch)}\n\n`)
@@ -1522,14 +1460,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Start a facilitator session (returns the agenda, not the content).
   app.post('/v1/scenarios/start', async (request, reply) => {
-    const body = z
-      .object({
-        id: z.string().default('health-data-breach'),
-        country: z.string().length(2).default('cm'),
-        domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']).default('health'),
-        lang: z.enum(['fr', 'en']).default('en'),
-      })
-      .safeParse(request.body ?? {})
+    const body = scenarioRunInput.safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang)
@@ -1552,7 +1483,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Release the next tick (the `onBeforeRelease` facilitator gate).
   app.post('/v1/scenarios/:runId/next', async (request, reply) => {
-    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const { runId } = scenarioRunParams.parse(request.params)
     const userId = operatorOf(request).email
     let session = scenarioSessions.get(runId)
     if (!session || session.userId !== userId) {
@@ -1590,7 +1521,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** One saved run: its status, what was released, the joint reports and the scenario's events. */
   app.get('/v1/scenarios/runs/:runId', async (request, reply) => {
-    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const { runId } = scenarioRunParams.parse(request.params)
     const record = await scenarioRuns.get(runId, operatorOf(request).email)
     if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
     const scenario = scenarioFor(record.domain as Domain, record.country, record.lang)
@@ -1607,7 +1538,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * it is append-only.
    */
   app.delete('/v1/scenarios/runs/:runId', async (request, reply) => {
-    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const { runId } = scenarioRunParams.parse(request.params)
     const userId = operatorOf(request).email
     const deleted = await scenarioRuns.delete(runId, userId)
     if (!deleted) return reply.status(404).send({ error: 'Scenario run not found.' })
@@ -1621,10 +1552,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * readiness report.
    */
   app.get('/v1/scenarios/runs/:runId/export', async (request, reply) => {
-    const { runId } = z.object({ runId: z.string() }).parse(request.params)
-    const query = z
-      .object({ format: z.enum(['json', 'markdown', 'html', 'docx']).default('json') })
-      .safeParse(request.query)
+    const { runId } = scenarioRunParams.parse(request.params)
+    const query = scenarioExportQuery.safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     const operator = operatorOf(request)
     const record = await scenarioRuns.get(runId, operator.email)
@@ -1647,7 +1576,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * session is rebuilt from the saved progress, the released ticks are not replayed.
    */
   app.post('/v1/scenarios/runs/:runId/resume', async (request, reply) => {
-    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const { runId } = scenarioRunParams.parse(request.params)
     const userId = operatorOf(request).email
     const record = await scenarioRuns.get(runId, userId)
     if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
@@ -1669,7 +1598,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Current state of a session.
   app.get('/v1/scenarios/:runId', async (request, reply) => {
-    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const { runId } = scenarioRunParams.parse(request.params)
     const userId = operatorOf(request).email
     let session = scenarioSessions.get(runId)
     if (!session || session.userId !== userId) {
@@ -1691,14 +1620,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Auto-run: start + release every tick + dossier.
   app.post('/v1/scenarios/run', async (request, reply) => {
-    const body = z
-      .object({
-        id: z.string().default('health-data-breach'),
-        country: z.string().length(2).default('cm'),
-        domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']).default('health'),
-        lang: z.enum(['fr', 'en']).default('en'),
-      })
-      .safeParse(request.body ?? {})
+    const body = scenarioRunInput.safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang)
@@ -1725,13 +1647,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Readiness assessment ──────────────────────────────────────────────────
   app.post('/v1/readiness/report', async (request, reply) => {
-    const body = z
-      .object({
-        country: z.string().length(2),
-        domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
-        globalCountry: z.string().default('global'),
-      })
-      .safeParse(request.body)
+    const body = readinessAssessInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     return engine.readiness.assess({
@@ -1861,28 +1777,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * the operator's history and announced with its id.
    */
   app.post('/v1/readiness/stream', async (request, reply) => {
-    const body = z
-      .object({
-        country: z.string().length(2),
-        domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
-        globalCountry: z.string().default('global'),
-        dimensions: z.array(z.string().max(60)).min(1).max(13).optional(),
-        perDimensionK: z.number().int().min(2).max(10).optional(),
-        useWeb: z.boolean().optional(),
-        reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
-        models: z
-          .object({
-            webSearch: z.string().min(1).max(80).optional(),
-            evaluate: z.string().min(1).max(80).optional(),
-            synthesis: z.string().min(1).max(80).optional(),
-          })
-          .optional(),
-        concurrency: z.enum(['parallel', 'sequential', 'orchestrated']).optional(),
-        maxDecisions: z.number().int().min(1).max(50).optional(),
-        language: z.enum(['fr', 'en']).optional(),
-        batchId: z.string().min(8).max(80).optional(),
-      })
-      .safeParse(request.body)
+    const body = readinessStreamInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const known = new Set(READINESS_DIMENSIONS.map((dimension) => dimension.shortName))
     const dimensions = body.data.dimensions?.filter((id) => known.has(id as ReadinessDimension))
@@ -1922,15 +1817,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Past assessments of this operator, newest first: one page, filtered on the server. */
   app.get('/v1/readiness/runs', async (request, reply) => {
-    const query = z
-      .object({
-        page: z.coerce.number().int().min(1).default(1),
-        limit: z.coerce.number().int().min(1).max(100).default(10),
-        q: z.string().max(100).optional(),
-        domain: z.string().max(300).optional(),
-        status: z.string().max(60).optional(),
-      })
-      .safeParse(request.query ?? {})
+    const query = readinessRunsQuery.safeParse(request.query ?? {})
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     const sectors = new Set<string>(['health', 'education', 'telecom', 'public_services', 'agriculture'])
     const domains = (query.data.domain ?? '').split(',').filter((value) => sectors.has(value))
@@ -1995,7 +1882,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/v1/readiness/runs/:id/localize', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = z.object({ lang: z.enum(['fr', 'en']) }).safeParse(request.body)
+    const body = readinessLocalizeInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
@@ -2017,9 +1904,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** A report of a saved assessment, in the console's language, with the charts, diagram and cover it could produce. */
   app.post('/v1/readiness/runs/:id/report', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = z
-      .object({ format: z.enum(['markdown', 'html', 'docx']), lang: z.enum(['fr', 'en']).optional() })
-      .safeParse(request.body)
+    const body = readinessReportInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
@@ -2046,15 +1931,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Readiness what-if (causal propagation across dimensions) ──────────────
   app.post('/v1/readiness/whatif', async (request, reply) => {
-    const body = z
-      .object({
-        country: z.string().length(2),
-        domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
-        changes: z.record(z.string(), z.number()),
-        /** Optional baseline; if omitted, a full assessment is run first. */
-        scores: z.array(z.any()).optional(),
-      })
-      .safeParse(request.body)
+    const body = readinessWhatIfInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     const baseline =
@@ -2075,17 +1952,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // table) are located by SAM 3.1. The response carries page/column/bbox
   // provenance for every line, so the console can show what was read where.
   app.post('/v1/gazette/analyze', { bodyLimit: 20 * 1024 * 1024 }, async (request, reply) => {
-    const body = z
-      .object({
-        filename: z.string().min(1).max(200),
-        imageBase64: z.string().min(1),
-        mime: z.enum(['image/png', 'image/jpeg']).optional(),
-        page: z.number().int().min(1).max(10_000).default(1),
-        sourceUrl: z.string().url().optional(),
-        maxZones: z.number().int().min(1).max(48).default(24),
-        concurrency: z.number().int().min(1).max(8).default(4),
-      })
-      .safeParse(request.body ?? {})
+    const body = gazetteAnalyzeInput.safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     const bytes = Buffer.from(body.data.imageBase64.replace(/^data:[^,]+,/, ''), 'base64')
@@ -2150,21 +2017,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // source URL survive in the chunk text.
   app.post('/v1/gazette/ingest', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const body = z
-      .object({
-        page: z.custom<GazettePage>((value) => {
-          const candidate = value as Partial<GazettePage> | null
-          return Boolean(candidate && typeof candidate.documentId === 'string' && Array.isArray(candidate.regions))
-        }, 'Expected a page returned by /v1/gazette/analyze.'),
-        country: z.string().length(2).or(z.literal('global')),
-        jurisdiction: z.enum(['national', 'regional', 'international']).default('national'),
-        docType: z.string().default('regulation'),
-        /** Gazette pages are official texts; a caller may still send a stricter bucket. */
-        rights: corpusRightsSchema.default('official-text'),
-        namespace: z.string().optional(),
-        version: z.string().optional(),
-      })
-      .safeParse(request.body ?? {})
+    const body = gazetteIngestInput.safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
@@ -2215,7 +2068,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/v1/actions/:id/decision', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = z.object({ decision: z.enum(['approve', 'reject']) }).safeParse(request.body ?? {})
+    const body = actionDecisionInput.safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const operator = operatorOf(request).email
     try {
@@ -2251,12 +2104,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.put('/v1/chat/sessions/:id', { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = z
-      .object({
-        title: z.string().min(1).max(200),
-        turns: z.array(z.record(z.string(), z.unknown())).max(200),
-      })
-      .safeParse(request.body ?? {})
+    const body = chatSessionInput.safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return reply.status(400).send({ error: 'invalid_id' })
     return chatSessions.save({ id, userId: operatorOf(request).email, ...body.data })
@@ -2350,19 +2198,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // persisted. Candidate runs are selected deterministically (same article and
   // instrument) and the model only ranks and explains them.
   app.post('/v1/impact/analyze', async (request, reply) => {
-    const body = z
-      .object({
-        provision: z.object({
-          title: z.string().min(1).max(300),
-          text: z.string().min(1).max(20_000),
-          articleNumber: z.string().max(80).optional(),
-          docType: z.string().max(40).optional(),
-          sourceUrl: z.string().url().optional(),
-          effectiveDate: z.string().max(40).optional(),
-        }),
-        runIds: z.array(z.string().min(1)).min(1).max(20),
-      })
-      .safeParse(request.body ?? {})
+    const body = impactAnalyzeInput.safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     const operator = operatorOf(request)
@@ -2450,36 +2286,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { received: true }
   })
 
-  const notifySchema = z.discriminatedUnion('kind', [
-    z.object({
-      kind: z.literal('joint_report'),
-      to: z.string().min(8).max(20).optional(),
-      runId: z.string().min(1).max(120),
-      tick: z.number().int().min(0),
-      summary: z.string().min(1).max(900),
-      dryRun: z.boolean().default(false),
-    }),
-    z.object({
-      kind: z.literal('deadline_alert'),
-      to: z.string().min(8).max(20).optional(),
-      title: z.string().min(1).max(200),
-      deadline: z.string().min(1).max(120),
-      actionUrl: z.string().url().optional(),
-      dryRun: z.boolean().default(false),
-    }),
-    z.object({
-      kind: z.literal('approval_request'),
-      to: z.string().min(8).max(20).optional(),
-      runId: z.string().min(1).max(120),
-      summary: z.string().min(1).max(600),
-      expiresInMinutes: z.number().int().min(5).max(10_080).default(1_440),
-      dryRun: z.boolean().default(false),
-    }),
-  ])
-
   app.post('/v1/whatsapp/notify', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const parsed = notifySchema.safeParse(request.body ?? {})
+    const parsed = notifyInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
     const body = parsed.data
@@ -2616,15 +2425,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // goes to contacts whose consent is on for that channel. Every successful send
   // is written to the audit chain, with the address masked: the journal proves
   // who was notified, not what their number is.
-  const contactSchema = z.object({
-    name: z.string().trim().min(1).max(120),
-    email: z.string().trim().email().max(200).optional(),
-    phone: z.string().trim().min(4).max(40).optional(),
-    phoneCountry: z.string().trim().length(2).optional(),
-    channels: z
-      .object({ email: z.boolean(), whatsapp: z.boolean() })
-      .optional(),
-  })
 
   const maskEmail = (value: string): string => {
     const [local = '', domain = ''] = value.split('@')
@@ -2639,7 +2439,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   /** Validates one contact payload once, for both create and update. */
-  const prepareContact = (input: z.infer<typeof contactSchema>) => {
+  const prepareContact = (input: z.infer<typeof notificationContactInput>) => {
     if (!input.email && !input.phone) {
       return { ok: false as const, status: 400, body: { error: 'at_least_one_channel' } }
     }
@@ -2687,7 +2487,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/v1/notifications/contacts', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const parsed = contactSchema.safeParse(request.body ?? {})
+    const parsed = notificationContactInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
     const prepared = prepareContact(parsed.data)
     if (!prepared.ok) return reply.status(prepared.status).send(prepared.body)
@@ -2724,7 +2524,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.put('/v1/notifications/contacts/:id', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const { id } = z.object({ id: z.string().min(1).max(120) }).parse(request.params)
-    const parsed = contactSchema.safeParse(request.body ?? {})
+    const parsed = notificationContactInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
     const existing = await notificationContacts.get(id)
@@ -2819,7 +2619,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/v1/countries/:code', async (request, reply) => {
-    const { code } = countryCodeParams.parse(request.params)
+    const params = countryCodeParams.safeParse(request.params)
+    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    const { code } = params.data
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
     return { country: countryDto(country) }
@@ -2827,7 +2629,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch('/v1/countries/:code', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const { code } = countryCodeParams.parse(request.params)
+    const params = countryCodeParams.safeParse(request.params)
+    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    const { code } = params.data
     const parsed = countryPatchSchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
@@ -2849,7 +2653,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.put('/v1/countries/:code/sectors', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const { code } = countryCodeParams.parse(request.params)
+    const params = countryCodeParams.safeParse(request.params)
+    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    const { code } = params.data
     const parsed = countrySectorsInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
@@ -2871,7 +2677,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete('/v1/countries/:code', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const { code } = countryCodeParams.parse(request.params)
+    const params = countryCodeParams.safeParse(request.params)
+    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    const { code } = params.data
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
 
@@ -2908,7 +2716,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Country dashboard: what the runs and the corpus say, sector by sector. */
   app.get('/v1/countries/:code/insights', async (request, reply) => {
-    const { code } = countryCodeParams.parse(request.params)
+    const params = countryCodeParams.safeParse(request.params)
+    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    const { code } = params.data
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
 
@@ -3012,13 +2822,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * only rephrases facts already stored on the run; the operator edits before sending.
    */
   app.post('/v1/notifications/summary-suggestion', async (request, reply) => {
-    const parsed = z
-      .object({
-        runId: z.string().trim().min(1).max(120),
-        kind: z.enum(['joint_report', 'approval_request']).default('joint_report'),
-        locale: z.enum(['en', 'fr']).default('en'),
-      })
-      .safeParse(request.body ?? {})
+    const parsed = summarySuggestionInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
     const run = await scenarioRuns.get(parsed.data.runId, operatorOf(request).email)
@@ -3266,54 +3070,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Injects are released at fixed minutes; the after-action report is computed
   // from the action log first, then narrated by the model. The model never
   // decides whether an inject was addressed.
-  app.get('/v1/exercise/sample', async (request) => {
-    const query = z.object({ country: z.string().min(2).max(2).default('cm') }).parse(request.query ?? {})
-    return healthBreachExercise(query.country)
-  })
-
-  const exerciseInjectSchema = z.object({
-    id: z.string().min(1).max(80),
-    atMinute: z.number().int().min(0).max(1_440),
-    title: z.string().min(1).max(200),
-    detail: z.string().min(1).max(4_000),
-    visibleTo: z.array(z.string().min(1).max(80)).min(1).max(20),
-    expectedAction: z.string().min(1).max(500),
-    responseWindowMinutes: z.number().int().min(1).max(240).optional(),
-    severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
-  })
-
-  const exerciseSchema = z.object({
-    id: z.string().min(1).max(120),
-    title: z.string().min(1).max(200),
-    country: z.string().min(2).max(2),
-    domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
-    scenarioRunId: z.string().min(1).max(120).optional(),
-    durationMinutes: z.number().int().min(5).max(480),
-    injects: z.array(exerciseInjectSchema).min(1).max(40),
-    references: z
-      .array(z.object({ title: z.string().min(1).max(300), authority: z.string().max(200).optional(), documentId: z.string().max(120).optional() }))
-      .max(20)
-      .optional(),
-  })
-
-  const exerciseLogSchema = z.object({
-    id: z.string().min(1).max(80).optional(),
-    atMinute: z.number().int().min(0).max(1_440),
-    actor: z.string().min(1).max(120),
-    kind: z.enum(['action', 'decision', 'escalation', 'note']),
-    text: z.string().min(1).max(2_000),
-    injectId: z.string().min(1).max(80).optional(),
-  })
-
-  const exerciseBodySchema = z.object({
-    definition: exerciseSchema,
-    actions: z.array(exerciseLogSchema).max(500).default([]),
-    evaluatedAtMinute: z.number().int().min(0).max(1_440),
-    lang: z.enum(['fr', 'en']).default('en'),
+  app.get('/v1/exercise/sample', async (request, reply) => {
+    const query = exerciseSampleQuery.safeParse(request.query ?? {})
+    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    return healthBreachExercise(query.data.country)
   })
 
   app.post('/v1/exercise/evaluate', async (request, reply) => {
-    const parsed = exerciseBodySchema.safeParse(request.body ?? {})
+    const parsed = exerciseBodyInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
     return evaluateExercise(
       parsed.data.definition as ExerciseDefinition,
@@ -3323,9 +3087,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   /** Token ledger, the operator's own events, newest first (phase 1 of the observability menu). */
-  app.get('/v1/observability/events', async (request) => {
-    const limit = z.coerce.number().int().min(1).max(500).default(50).parse((request.query as { limit?: unknown })?.limit ?? 50)
-    return { events: await usageLedger.recent(operatorOf(request).email, limit) }
+  app.get('/v1/observability/events', async (request, reply) => {
+    const events = observabilityEventsQuery.safeParse(request.query)
+    if (!events.success) return reply.status(400).send({ error: events.error.flatten() })
+    return { events: await usageLedger.recent(operatorOf(request).email, events.data.limit) }
   })
 
   /** Totals, daily series and every breakdown the observability console shows. */
@@ -3418,7 +3183,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/v1/exercise/reports', async (request, reply) => {
-    const query = z.object({ exerciseId: z.string().min(1).max(120) }).safeParse(request.query ?? {})
+    const query = exerciseReportsQuery.safeParse(request.query ?? {})
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     return { reports: await exerciseReports.list(operatorOf(request).email, query.data.exerciseId) }
   })
@@ -3431,7 +3196,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.post('/v1/exercise/after-action', async (request, reply) => {
-    const parsed = exerciseBodySchema.safeParse(request.body ?? {})
+    const parsed = exerciseBodyInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
     const definition = parsed.data.definition as ExerciseDefinition
@@ -3483,15 +3248,16 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Audit ─────────────────────────────────────────────────────────────────
   app.get('/v1/audit/chain', async () => engine.audit.verifyChain())
   app.get('/v1/audit/trace/:runId', async (request) => {
-    const { runId } = z.object({ runId: z.string() }).parse(request.params)
+    const { runId } = scenarioRunParams.parse(request.params)
     const operator = operatorOf(request)
     return { runId, trace: await engine.audit.getTrace(runId, operator.email) }
   })
 
   // ── Run dossier (audit + CoT + reports + citations) ───────────────────────
   app.get('/v1/audit/dossier/:runId', async (request, reply) => {
-    const { runId } = z.object({ runId: z.string() }).parse(request.params)
-    const format = z.object({ format: z.enum(['json', 'markdown']).default('json') }).parse(request.query)
+    const { runId } = scenarioRunParams.parse(request.params)
+    const format = auditDossierQuery.safeParse(request.query)
+    if (!format.success) return reply.status(400).send({ error: format.error.flatten() })
 
     const operator = operatorOf(request)
     const dossier = buildRunDossier({
@@ -3502,7 +3268,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       integrity: await engine.audit.verifyChain(),
     })
 
-    if (format.format === 'markdown') {
+    if (format.data.format === 'markdown') {
       return reply.type('text/markdown').send(renderDossierMarkdown(dossier))
     }
     return dossier
