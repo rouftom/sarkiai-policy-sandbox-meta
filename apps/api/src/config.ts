@@ -175,7 +175,6 @@ export const config = {
   },
   host: env('HOST', '0.0.0.0'),
   port: Number(env('PORT', '8000')),
-  serviceApiKey: env('SERVICE_API_KEY'),
 
   // Corpus search: a lexical index (Atlas Search in the cloud, a MongoDB text
   // index in local and sovereign) driven by the Meta model of the mode.
