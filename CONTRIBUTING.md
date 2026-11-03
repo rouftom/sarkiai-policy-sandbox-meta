@@ -27,6 +27,18 @@ install without an e-mail key, the one-time password is shown once on the page.
 Full procedure, including the hotfix path and the bootstrap bypass:
 [`docs/agent-workflow.md`](docs/agent-workflow.md).
 
+## Invariants
+
+Every change keeps these, whatever the feature:
+
+- **Every model the system calls is a Meta model** (Muse Spark, Muse Spark Open,
+  Muse Glimmer, SAM 3.1, Muse Voice Transcribe, Muse Image). Do not add another
+  provider, in any mode, and do not name another model in the documentation.
+- **Every agent claim cites the corpus**: changes to agents keep the citation
+  validator as the last filter.
+- **Every side effect goes through a human**: an agent proposes, an operator
+  decides, and the decision lands in the audit chain.
+
 ## Checks
 
 ```bash
@@ -36,7 +48,8 @@ bun run build              # when apps/web or a published package changes
 ```
 
 Add the commands you ran and their result to the PR body. A red check blocks
-the merge.
+the merge. CI runs `bun run typecheck` and `bun test packages apps` on every
+push and pull request; it does not deploy.
 
 ## Conventions
 
@@ -48,6 +61,9 @@ the merge.
   placeholders only.
 
 ## Where to look
+
+The planned work is in [`ROADMAP.md`](ROADMAP.md): pick a milestone and open an
+issue to discuss the approach before a large change.
 
 | Need | File |
 | --- | --- |
