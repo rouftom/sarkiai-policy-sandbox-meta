@@ -8,7 +8,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { z, ZodError } from 'zod'
+import { ZodError } from 'zod'
 import type { AuditService } from '@sps/audit'
 import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
@@ -17,6 +17,19 @@ import { config, localSetupPasswordFallback } from './config.js'
 import { MailError, sendEmailVerification, sendInvitation, sendPasswordReset } from './mailer.js'
 import { RateLimiter, type RateLimitRule } from './rate-limit.js'
 import { turnstileConfig, verifyTurnstile } from './turnstile.js'
+import {
+  auditQuery,
+  codeStep,
+  credentials,
+  emailVerifyInput,
+  forgotInput,
+  mfaChallengeInput,
+  passwordChange,
+  preferencesPatch,
+  resetInput,
+  setupInput,
+  signupInput,
+} from './openapi/schemas.js'
 
 function bearer(request: FastifyRequest): string | undefined {
   const header = request.headers.authorization
@@ -27,43 +40,6 @@ function bearer(request: FastifyRequest): string | undefined {
 export function currentOperator(request: FastifyRequest): PublicOperator | null {
   return auth.verifySession(bearer(request))
 }
-
-const credentials = z.object({
-  email: z.string().email().max(200),
-  password: z.string().min(1).max(200),
-})
-
-const codeStep = z.object({
-  challenge: z.string().min(10).max(4096),
-  code: z.string().min(4).max(32),
-})
-
-const setupInput = z.object({
-  firstName: z.string().trim().min(2).max(60),
-  lastName: z.string().trim().min(2).max(60),
-  email: z.string().email().max(200),
-})
-
-const passwordChange = z.object({
-  challenge: z.string().min(10).max(4096),
-  password: z.string().min(12).max(200),
-})
-
-const forgotInput = z.object({
-  email: z.string().email().max(200),
-})
-
-const resetInput = z.object({
-  token: z.string().min(10).max(4096),
-  password: z.string().min(12).max(200),
-})
-
-const signupInput = z.object({
-  firstName: z.string().trim().min(2).max(60),
-  lastName: z.string().trim().min(2).max(60),
-  email: z.string().email().max(200),
-  password: z.string().min(12).max(200),
-})
 
 function failure(
   reply: {
@@ -207,7 +183,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/email/verify', async (request, reply) => {
     try {
-      const body = z.object({ token: z.string().min(10).max(4096) }).parse(request.body)
+      const body = emailVerifyInput.parse(request.body)
       const result = await auth.verifyEmail(body.token)
       await record(result.email, 'auth.email_verified', undefined, result.email)
       return { ok: true, email: result.email }
@@ -374,7 +350,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/mfa/enroll', async (request, reply) => {
     try {
-      const { challenge } = z.object({ challenge: z.string().min(10).max(4096) }).parse(request.body)
+      const { challenge } = mfaChallengeInput.parse(request.body)
       return await auth.startEnrollment(challenge)
     } catch (error) {
       return failure(reply, error)
@@ -428,19 +404,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   app.put('/v1/preferences', async (request, reply) => {
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
-    const patch = z
-      .object({
-        theme: z.enum(['light', 'dark', 'system']).optional(),
-        pack: z.string().max(40).optional(),
-        locale: z.enum(['en', 'fr']).optional(),
-        density: z.enum(['comfortable', 'compact']).optional(),
-        radius: z.enum(['rounded', 'square']).optional(),
-        notifications: z
-          .object({ whatsapp: z.boolean(), email: z.boolean(), digest: z.boolean() })
-          .partial()
-          .optional(),
-      })
-      .parse(request.body)
+    const patch = preferencesPatch.parse(request.body)
     const preferences = await auth.updatePreferences(operator.email, patch)
     await record(operator.email, 'preferences.updated', undefined, operator.email)
     return { preferences }
@@ -458,16 +422,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   app.get('/v1/audit/events', async (request, reply) => {
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
-    const query = z
-      .object({
-        limit: z.coerce.number().int().min(1).max(500).default(50),
-        offset: z.coerce.number().int().min(0).max(100_000).default(0),
-        q: z.string().trim().max(120).optional(),
-        stats: z.coerce.number().int().min(1).max(31).optional(),
-        tz: z.string().trim().max(64).optional(),
-        from: z.string().trim().max(40).optional(),
-      })
-      .safeParse(request.query)
+    const query = auditQuery.safeParse(request.query)
     if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
     const { limit, offset, q, stats, tz, from } = query.data
 
