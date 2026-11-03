@@ -72,6 +72,21 @@ import { WorkGate } from '../concurrency.js'
 import { auth } from '../auth.js'
 import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
+import { isPublicRoute } from '../public-routes.js'
+import {
+  agentRoutingRequest,
+  approvalDecisionInput,
+  approvalTokenParams,
+  askBody,
+  countryBodySchema,
+  countryCodeParams,
+  countryPatchSchema,
+  countrySectorsInput,
+  emailMessageInput,
+  modelSelectionInput,
+  searchInput,
+  whatsappMessageInput,
+} from '../openapi/schemas.js'
 
 const engine = createEngine()
 const knowledge: AtlasIngestor = createKnowledgeIngestor()
@@ -294,8 +309,6 @@ export async function closeStores(): Promise<void> {
   ])
 }
 
-const lensSchema = z.enum(['simulation', 'readiness', 'hybrid'])
-
 /** In-memory facilitator session for tick-by-tick scenario release. */
 interface ScenarioSession {
   runId: string
@@ -380,31 +393,9 @@ export async function selectBootModel(app: FastifyInstance): Promise<void> {
 }
 
 /**
- * Routes that must stay reachable without a console session: health, the whole
- * sign-in/sign-up/reset handshake, the Meta webhook and the signed approval
- * links. Everything else requires `Authorization: Bearer <session>`.
+ * Routes that must stay reachable without a console session live in
+ * `../public-routes.ts`, shared with the OpenAPI document.
  */
-function isPublicRoute(method: string, path: string): boolean {
-  if (method === 'OPTIONS') return true
-  if (path === '/health') return true
-  if (path === '/v1/voice/realtime') return true
-  if (path === '/v1/whatsapp/webhook') return true
-  if (path.startsWith('/v1/whatsapp/approvals/')) return true
-  if (path.startsWith('/v1/kb/images/') && method === 'GET') return true
-  if (path === '/v1/auth/setup') return true
-  if (path === '/v1/auth/captcha') return true
-  if (path === '/v1/auth/signup') return true
-  if (path === '/v1/auth/login') return true
-  if (path === '/v1/auth/password') return true
-  if (path === '/v1/auth/password/forgot') return true
-  if (path === '/v1/auth/password/reset') return true
-  if (path === '/v1/auth/email/verify') return true
-  if (path === '/v1/auth/email/resend') return true
-  if (path === '/v1/auth/mfa/enroll') return true
-  if (path === '/v1/auth/mfa/confirm') return true
-  if (path === '/v1/auth/mfa/verify') return true
-  return false
-}
 
 /**
  * Routes that spend model credits or hold a connection for a long job. They get
@@ -769,7 +760,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.put('/v1/models/selection', async (request, reply) => {
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthenticated' })
-    const body = z.object({ model: z.string().min(1).max(120) }).safeParse(request.body)
+    const body = modelSelectionInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     if (engine.catalogMode !== 'cloud') {
       return reply.status(409).send({ error: 'Model selection applies to the Meta Model API mode only.' })
@@ -1122,17 +1113,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Retrieval playground: plan, sub-agents, rounds and every ranked stage. */
   app.post('/v1/kb/search', async (request, reply) => {
-    const body = z
-      .object({
-        text: z.string().min(2).max(2000),
-        country: z.string().min(2).max(2).or(z.literal('global')).or(z.literal('')).default(''),
-        jurisdiction: z.enum(['national', 'regional', 'international']).optional(),
-        docType: z.string().optional(),
-        namespace: z.string().optional(),
-        topK: z.number().int().min(1).max(12).default(6),
-        depth: z.enum(['lexical', 'fast', 'deep']).default('deep'),
-      })
-      .safeParse(request.body)
+    const body = searchInput.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     try {
       const exploration = await engine.retriever.explore({
@@ -1205,24 +1186,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // ── Single mandated agent (text, optionally multimodal) ───────────────────
-  const askBody = z.object({
-    institutionId: z.string(),
-    question: z.string().min(1),
-    country: z.string().length(2),
-    domain: z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture']),
-    lens: lensSchema.default('hybrid'),
-    /** The language of the answer: the console's. */
-    language: z.enum(['fr', 'en']).default('en'),
-    runId: z.string().optional(),
-    /** Reasoning effort chosen in the console; absent lets the provider decide. */
-    effort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
-    // Untrusted user files (context only, never citable): images, or documents read as reference text.
-    attachments: z
-      .array(z.object({ mime: z.string(), dataBase64: z.string(), name: z.string().max(200).optional() }))
-      .max(3)
-      .optional(),
-  })
-
   /** Persist attachments (content-addressed, best-effort: works without MinIO). */
   /** Documents the operator may attach as reference text (PDF is read, the others are plain text). */
   const DOCUMENT_MIMES = new Set(['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json'])
@@ -1405,14 +1368,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * then answers through the normal stream. Falls back to the first institution.
    */
   app.post('/v1/agents/route', async (request, reply) => {
-    const body = z
-      .object({
-        question: z.string().min(3).max(2000),
-        domains: z.array(z.enum(['health', 'education', 'telecom', 'public_services', 'agriculture'])).min(1).max(5),
-        /** Chosen institutions: the router picks among them only. Empty or absent: every institution of the sectors. */
-        institutionIds: z.array(z.string().max(80)).max(10).optional(),
-      })
-      .safeParse(request.body)
+    const body = agentRoutingRequest.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
     const chosen = new Set(body.data.institutionIds ?? [])
     const institutions = institutionsForDomains(body.data.domains as Domain[]).filter((institution) => chosen.size === 0 || chosen.has(institution.id))
@@ -2586,7 +2542,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/v1/whatsapp/approvals/:token', async (request, reply) => {
-    const { token } = z.object({ token: z.string().min(1).max(4096) }).parse(request.params)
+    const { token } = approvalTokenParams.parse(request.params)
     const verdict = verifyApprovalToken(token, config.whatsapp.approvalSecret)
     if (!verdict.ok) {
       return reply.status(verdict.reason === 'expired' ? 410 : 400).send({ error: verdict.reason })
@@ -2611,13 +2567,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.post('/v1/whatsapp/approvals/:token', async (request, reply) => {
-    const { token } = z.object({ token: z.string().min(1).max(4096) }).parse(request.params)
-    const body = z
-      .object({
-        decision: z.enum(['approved', 'rejected']),
-        note: z.string().max(1000).optional(),
-      })
-      .safeParse(request.body ?? {})
+    const { token } = approvalTokenParams.parse(request.params)
+    const body = approvalDecisionInput.safeParse(request.body ?? {})
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
 
     const verdict = verifyApprovalToken(token, config.whatsapp.approvalSecret)
@@ -2833,35 +2784,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // One row per jurisdiction, with the sectors enabled for it. Shared across
   // operators, seedable from the corpus, and guarded so the console cannot end
   // up with no active country or delete a country its runs still reference.
-  const countryCodeSchema = z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z]{2}$/)
-
-  const countrySectorsSchema = z
-    .enum(COUNTRY_SECTORS as unknown as [Domain, ...Domain[]])
-    .array()
-    .min(1)
-    .max(COUNTRY_SECTORS.length)
-
-  const countryBodySchema = z.object({
-    code: countryCodeSchema,
-    name: z.string().trim().min(2).max(80),
-    nameFr: z.string().trim().min(2).max(80).optional(),
-    jurisdiction: z.enum(['national', 'regional', 'international']).optional(),
-    region: z.string().trim().max(80).optional(),
-    authority: z.string().trim().max(120).optional(),
-    currency: z.string().trim().max(8).optional(),
-    languages: z.array(z.string().trim().min(2).max(8)).max(6).optional(),
-    timezone: z.string().trim().max(60).optional(),
-    status: z.enum(['active', 'planned']).optional(),
-    notes: z.string().trim().max(600).optional(),
-    sectors: countrySectorsSchema.optional(),
-  })
-
-  const countryPatchSchema = countryBodySchema.omit({ code: true }).partial()
-
   const countryDto = (country: CountryRecord) => ({ ...country, notes: country.notes ?? null })
 
   /** Mean of the non-null composites, one decimal; null when nothing is scored. */
@@ -2897,7 +2819,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/v1/countries/:code', async (request, reply) => {
-    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const { code } = countryCodeParams.parse(request.params)
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
     return { country: countryDto(country) }
@@ -2905,7 +2827,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch('/v1/countries/:code', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const { code } = countryCodeParams.parse(request.params)
     const parsed = countryPatchSchema.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
@@ -2927,8 +2849,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.put('/v1/countries/:code/sectors', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
-    const parsed = z.object({ sectors: countrySectorsSchema }).safeParse(request.body ?? {})
+    const { code } = countryCodeParams.parse(request.params)
+    const parsed = countrySectorsInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
 
     const country = await countries.setSectors(code, parsed.data.sectors)
@@ -2949,7 +2871,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete('/v1/countries/:code', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const { code } = countryCodeParams.parse(request.params)
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
 
@@ -2986,7 +2908,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** Country dashboard: what the runs and the corpus say, sector by sector. */
   app.get('/v1/countries/:code/insights', async (request, reply) => {
-    const { code } = z.object({ code: countryCodeSchema }).parse(request.params)
+    const { code } = countryCodeParams.parse(request.params)
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
 
@@ -3172,21 +3094,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   })
 
-  const whatsappSendSchema = z.object({
-    contactIds: z.array(z.string().min(1)).min(1).max(50),
-    kind: z.enum(['test', 'joint_report', 'deadline_alert', 'approval_request']),
-    runId: z.string().min(1).max(120).optional(),
-    tick: z.number().int().min(0).optional(),
-    summary: z.string().min(1).max(900).optional(),
-    title: z.string().min(1).max(200).optional(),
-    deadline: z.string().min(1).max(120).optional(),
-    actionUrl: z.string().url().optional(),
-    expiresInMinutes: z.number().int().min(5).max(10_080).optional(),
-  })
-
   app.post('/v1/notifications/whatsapp', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const parsed = whatsappSendSchema.safeParse(request.body ?? {})
+    const parsed = whatsappMessageInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
     if (!whatsapp.configured) return reply.status(503).send({ error: 'whatsapp_not_configured' })
 
@@ -3294,25 +3204,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   })
 
-  const emailSendSchema = z
-    .object({
-      contactIds: z.array(z.string().min(1)).min(1).max(50),
-      subject: z.string().trim().min(1).max(160),
-      heading: z.string().trim().min(1).max(160).optional(),
-      intro: z.string().trim().max(300).optional(),
-      message: z.string().trim().min(1).max(5_000),
-      ctaLabel: z.string().trim().min(1).max(60).optional(),
-      ctaUrl: z.string().url().max(2_000).optional(),
-      locale: z.enum(['fr', 'en']).optional(),
-    })
-    .refine((value) => Boolean(value.ctaLabel) === Boolean(value.ctaUrl), {
-      message: 'cta_incomplete',
-      path: ['ctaUrl'],
-    })
-
   app.post('/v1/notifications/email', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const parsed = emailSendSchema.safeParse(request.body ?? {})
+    const parsed = emailMessageInput.safeParse(request.body ?? {})
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
     if (!mailConfigured()) return reply.status(503).send({ error: 'mail_not_configured' })
 
