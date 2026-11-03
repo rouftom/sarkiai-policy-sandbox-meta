@@ -11,7 +11,6 @@ name: sarkiai-policy-sandbox
 
 x-common-env: &common-env
   NODE_ENV: ${NODE_ENV:-development}
-  SERVICE_API_KEY: ${SERVICE_API_KEY:-change-me-service-key}
 
 services:
   # ── Local model server (Muse Glimmer) ───────────────────────────────────

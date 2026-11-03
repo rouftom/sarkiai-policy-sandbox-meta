@@ -46,11 +46,15 @@ The API route is admin-only, so export `SPS_ADMIN_TOKEN` first (the bearer
 returned by `/v1/auth/login`); the script refuses to run without it.
 
 ```bash
-./scripts/seed.sh --country cm --doc-type law      --dir data/country/cm
-./scripts/seed.sh --country cm --doc-type strategy --dir data/country/cm
-./scripts/seed.sh --country cm --doc-type policy   --dir data/country/cm
-./scripts/seed.sh --country cm --doc-type guidance --dir data/country/cm
-./scripts/seed.sh --country cm --doc-type report   --dir data/country/cm
+bun run kb:seed -- --dir data/country/cm
+```
+
+The manifest carries each file's `docType`, so one run seeds the whole corpus.
+For a single document, add `--only` (a case-insensitive fragment of the file
+name):
+
+```bash
+bun run kb:seed -- --dir data/country/cm --only loi_2024
 ```
 
 Or one document at a time through the API (`POST /v1/kb/ingest/file`, admin

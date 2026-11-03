@@ -69,11 +69,10 @@ counsel.
 
 - **The rights field is enforced, not decorative.** Every ingestion path
   (`POST /v1/kb/ingest/text`, `/v1/kb/ingest/file`, `/v1/kb/ingest`, the console
-  uploader and `scripts/seed.sh`) refuses `quotation-only` and `to-confirm`
+  uploader and `bun run kb:seed`) refuses `quotation-only` and `to-confirm`
   payloads with HTTP 403. A missing `rights` value fails closed to `to-confirm`.
-  `scripts/seed-corpus.ts` skips non-publishable manifest entries and
-  `scripts/seed.sh` reads the directory's `manifest.json` (or requires
-  `--rights`) before ingesting anything.
+  `scripts/seed-corpus.ts` skips non-publishable manifest entries and reads the
+  corpus `manifest.json` (or requires `--rights`) before ingesting anything.
 - **Existing chunks can be purged.** `bun run kb:purge` reports the restricted
   documents still present in Atlas; `--apply` deletes them. The command is a dry
   run by default.
