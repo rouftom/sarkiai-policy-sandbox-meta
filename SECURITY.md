@@ -88,7 +88,22 @@ Out of scope:
   rejects dot segments and only forwards an allowlist of upstream paths.
 - **Continuous integration.** Every push and pull request installs from the frozen
   lockfile, runs `bun run typecheck` and `bun test packages apps`; a red check
-  blocks the merge. `bun audit` is available for an ad-hoc advisory check.
+  blocks the merge.
+- **Dependency advisories.** The `audit` job runs `bun audit` on each of the three
+  lockfiles: the root workspace, `services/mcp-charts` and `services/mcp-docx`
+  (the sidecars sit outside the root workspace). A high or critical advisory
+  fails the check. Moderate and low advisories are printed in the log and do not
+  block. The job audits lockfiles only, not the built container images.
+
+## Accepted dependency risk
+
+Each entry is dated and reviewed when the related work lands. An advisory is
+only ignored with an explicit `--ignore=<GHSA>` in the workflow and an entry here.
+
+| Date | Finding | Severity | Reason and exit |
+| --- | --- | --- | --- |
+| 2026-11-03 | `deepmerge` 4.3.1, GHSA-gcqx-w48m-w2h4 (prototype poisoning) | low | Reached only through the deprecated `@react-email/components` (`@react-email/render@2.0.6` → `html-to-text@9.0.5`). No upstream fix exists. Removed with the React Email migration below. |
+| 2026-11-03 | 21 deprecation notices on `@react-email/*` and `recharts@2.15.4` | deprecated, not a vulnerability | `@react-email/components` and its sub-packages are deprecated at their latest versions. The maintained successor is `react-email` (which bundles the components and re-exports `@react-email/render`, itself maintained). Migrating adds about 60 packages to the API tree, including the React Email CLI toolchain (esbuild, socket.io), so it is a separate decision. `recharts` v3 is an API migration. |
 
 ## Known limitations
 
