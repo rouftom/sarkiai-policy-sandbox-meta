@@ -94,6 +94,11 @@ Out of scope:
   (the sidecars sit outside the root workspace). A high or critical advisory
   fails the check. Moderate and low advisories are printed in the log and do not
   block. The job audits lockfiles only, not the built container images.
+- **Dependency overrides.** A patched version is requested from the parent first.
+  A root `overrides` entry is only used when no release of the parent declares
+  the fixed range, and it is recorded with that reason: `katex` (the only
+  consumer, `rehype-katex`, still pins `^0.16`) and `glob` (pulled by the React
+  Email CLI toolchain, which pins `^13.0.6`).
 
 ## Accepted dependency risk
 
@@ -102,8 +107,12 @@ only ignored with an explicit `--ignore=<GHSA>` in the workflow and an entry her
 
 | Date | Finding | Severity | Reason and exit |
 | --- | --- | --- | --- |
-| 2026-11-03 | `deepmerge` 4.3.1, GHSA-gcqx-w48m-w2h4 (prototype poisoning) | low | Reached only through the deprecated `@react-email/components` (`@react-email/render@2.0.6` → `html-to-text@9.0.5`). No upstream fix exists. Removed with the React Email migration below. |
-| 2026-11-03 | 21 deprecation notices on `@react-email/*` and `recharts@2.15.4` | deprecated, not a vulnerability | `@react-email/components` and its sub-packages are deprecated at their latest versions. The maintained successor is `react-email` (which bundles the components and re-exports `@react-email/render`, itself maintained). Migrating adds about 60 packages to the API tree, including the React Email CLI toolchain (esbuild, socket.io), so it is a separate decision. `recharts` v3 is an API migration. |
+| 2026-11-03 | `recharts` 2.15.4 deprecation notice | deprecated, not a vulnerability | Surfaced by `apps/web` and `services/mcp-charts`. `recharts` v3 is an API migration, not a version bump; deferred as its own change. No advisory, no fix to apply today. |
+
+The `@react-email/*` deprecations and the low `deepmerge` advisory are gone: the
+operator e-mail moved to the maintained `react-email` package, and the CLI
+toolchain it pulls in is kept on a patched `glob` through a root `overrides`
+entry.
 
 ## Known limitations
 
