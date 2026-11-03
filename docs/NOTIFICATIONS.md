@@ -134,6 +134,16 @@ simply not wired to Meta. Consequences, accepted:
 `deploy/whatsapp/templates.md` keeps the exact procedure for dedicating a Meta
 app to this product if statuses ever become necessary.
 
+## Transactional e-mails
+
+The invitation (temporary password), the sign-up address confirmation and the
+password reset are rendered by React Email templates in
+`packages/notifications/src/transactional.tsx` and sent from
+`apps/api/src/mailer.ts`. The invitation follows the Plaid identity-card layout;
+the two links follow the Barebone frames. All three are bilingual FR/EN and
+ship an HTML part plus a plain-text part. The brand mark is served from
+`apps/web/public/brand/sarkiai-mark.png` through `WEB_PUBLIC_URL`.
+
 ## Configuration
 
 | Variable | Where | Used for |
