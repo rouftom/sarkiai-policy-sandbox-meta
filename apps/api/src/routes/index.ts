@@ -134,7 +134,8 @@ const knowledge: AtlasIngestor = createKnowledgeIngestor()
 function refuseRestrictedRights(rights: unknown, reply: FastifyReply): boolean {
   if (isPublishableRights(rights)) return false
   reply.status(403).send({
-    error: RIGHTS_BLOCKED_MESSAGE,
+    error: 'rights_blocked',
+    message: RIGHTS_BLOCKED_MESSAGE,
     rights: normalizeCorpusRights(rights),
   })
   return true
@@ -143,10 +144,12 @@ function refuseRestrictedRights(rights: unknown, reply: FastifyReply): boolean {
 /** Map an ingestion failure to the right HTTP status. */
 function sendIngestError(error: unknown, request: FastifyRequest, reply: FastifyReply) {
   if (error instanceof RightsBlockedError) {
-    return reply.status(403).send({ error: RIGHTS_BLOCKED_MESSAGE, rights: error.rights })
+    return reply.status(403).send({ error: 'rights_blocked', message: RIGHTS_BLOCKED_MESSAGE, rights: error.rights })
   }
   request.log.error(error)
-  return reply.status(502).send({ error: (error as Error).message })
+  return reply
+    .status(502)
+    .send({ error: 'upstream_unavailable', message: (error as Error).message })
 }
 
 const whatsapp = new WhatsAppClient({
@@ -774,7 +777,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       }
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -784,7 +787,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = modelSelectionInput.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
     if (engine.catalogMode !== 'cloud') {
-      return reply.status(409).send({ error: 'Model selection applies to the Meta Model API mode only.' })
+      return reply.status(409).send({ error: 'meta_mode_required', message: 'Model selection applies to the Meta Model API mode only.' })
     }
 
     let models: Awaited<ReturnType<typeof engine.listModels>>
@@ -792,7 +795,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       models = await engine.listModels()
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
     if (!models.some((m) => m.id === body.data.model)) {
       return reply.status(400).send({ error: 'model_not_eligible', message: 'This model is not in the Meta list for this key.' })
@@ -834,7 +837,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       }
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: `Knowledge base unavailable: ${(error as Error).message}` })
+      return reply.status(502).send({ error: 'knowledge_base_unavailable', message: `Knowledge base unavailable: ${(error as Error).message}` })
     }
   })
 
@@ -845,7 +848,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return { documents: await knowledge.listDocuments(query.data) }
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -858,7 +861,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return { filename: body.data.filename, active: body.data.active, modified }
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -872,7 +875,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return { filename: query.data.filename, ...deleted }
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -884,7 +887,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return await knowledge.preview(query.data.filename, query.data.chunkIndex)
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -913,11 +916,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return validationFailure(reply, body.error)
     try {
       const updated = await knowledge.updateChunk(id, body.data)
-      if (!updated) return reply.status(404).send({ error: 'Passage not found.' })
+      if (!updated) return reply.status(404).send({ error: 'not_found', message: 'Passage not found.' })
       return { id, updated }
     } catch (error) {
       request.log.error(error)
-      return reply.status(422).send({ error: (error as Error).message })
+      return reply.status(422).send({ error: 'passage_update_failed', message: (error as Error).message })
     }
   })
 
@@ -947,7 +950,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ...body.data,
       dimension: body.data.dimension as ReadinessDimension | null | undefined,
     })
-    if (!updated) return reply.status(404).send({ error: 'Image not found or nothing to change.' })
+    if (!updated) return reply.status(404).send({ error: 'not_found', message: 'Image not found or nothing to change.' })
     return { id, updated }
   })
 
@@ -955,7 +958,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!requireAdmin(request, reply)) return reply
     const { id } = request.params as { id: string }
     const deleted = await knowledge.deleteImage(id)
-    if (!deleted) return reply.status(404).send({ error: 'Image not found.' })
+    if (!deleted) return reply.status(404).send({ error: 'not_found', message: 'Image not found.' })
     return { id, deleted }
   })
 
@@ -966,7 +969,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return await seedReferenceImages(request.log)
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -977,7 +980,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/kb/images/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     const image = await knowledge.getImage(id)
-    if (!image) return reply.status(404).send({ error: 'Image not found.' })
+    if (!image) return reply.status(404).send({ error: 'not_found', message: 'Image not found.' })
     if (image.externalUrl) return reply.redirect(image.externalUrl)
     reply.header('Cache-Control', 'public, max-age=86400')
     return reply.type(image.mime).send(image.data)
@@ -991,7 +994,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return result
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -1033,12 +1036,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         text = bytes.toString('utf8')
       }
     } catch (error) {
-      return reply.status(422).send({ error: `Could not read the file: ${(error as Error).message}` })
+      return reply.status(422).send({ error: 'invalid_file', message: `Could not read the file: ${(error as Error).message}` })
     }
 
     if (text.trim().length < 200) {
       return reply.status(422).send({
-        error: 'No text layer found. A scanned document goes through the Scanned gazette screen (OCR and zone segmentation).',
+        error: 'empty_extraction',
+        message: 'No text layer found. A scanned document goes through the Scanned gazette screen (OCR and zone segmentation).',
       })
     }
 
@@ -1078,7 +1082,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return exploration
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -1138,11 +1142,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       const isImage = attachment.mime.startsWith('image/')
       const isDocument = DOCUMENT_MIMES.has(attachment.mime)
       if (!isImage && !isDocument) {
-        return { ok: false as const, status: 415, message: `Unsupported attachment type: ${attachment.mime}` }
+        return { ok: false as const, status: 415, code: 'unsupported_media_type', message: `Unsupported attachment type: ${attachment.mime}` }
       }
       const data = Buffer.from(attachment.dataBase64, 'base64')
       if (data.byteLength > 10 * 1024 * 1024) {
-        return { ok: false as const, status: 413, message: 'Attachment too large (max 10 MB).' }
+        return { ok: false as const, status: 413, code: 'attachment_too_large', message: 'Attachment too large (max 10 MB).' }
       }
       if (isDocument) {
         try {
@@ -1154,7 +1158,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
               : data.toString('utf8')
           references.push({ name: attachment.name ?? 'document', text: text.slice(0, REFERENCE_CHARS) })
         } catch {
-          return { ok: false as const, status: 422, message: `Could not read the document ${attachment.name ?? ''}.`.trim() }
+          return { ok: false as const, status: 422, code: 'invalid_document', message: `Could not read the document ${attachment.name ?? ''}.`.trim() }
         }
       }
       try {
@@ -1172,10 +1176,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return validationFailure(reply, body.error)
 
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
-    if (!institution) return reply.status(404).send({ error: `Unknown institution "${body.data.institutionId}"` })
+    if (!institution) return reply.status(404).send({ error: 'not_found', message: `Unknown institution "${body.data.institutionId}"` })
 
     const stored = await storeAttachments(body.data.attachments)
-    if (!stored.ok) return reply.status(stored.status).send({ error: stored.message })
+    if (!stored.ok) return reply.status(stored.status).send({ error: stored.code, message: stored.message })
 
     return engine.orchestrator.runAgent({
       institution,
@@ -1205,10 +1209,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return validationFailure(reply, body.error)
 
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
-    if (!institution) return reply.status(404).send({ error: `Unknown institution "${body.data.institutionId}"` })
+    if (!institution) return reply.status(404).send({ error: 'not_found', message: `Unknown institution "${body.data.institutionId}"` })
 
     const stored = await storeAttachments(body.data.attachments)
-    if (!stored.ok) return reply.status(stored.status).send({ error: stored.message })
+    if (!stored.ok) return reply.status(stored.status).send({ error: stored.code, message: stored.message })
 
     reply.hijack()
     const raw = reply.raw
@@ -1310,7 +1314,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return validationFailure(reply, body.error)
     const chosen = new Set(body.data.institutionIds ?? [])
     const institutions = institutionsForDomains(body.data.domains as Domain[]).filter((institution) => chosen.size === 0 || chosen.has(institution.id))
-    if (institutions.length === 0) return reply.status(404).send({ error: 'No institution for these sectors.' })
+    if (institutions.length === 0) return reply.status(404).send({ error: 'not_found', message: 'No institution for these sectors.' })
     const known = new Set(institutions.map((institution) => institution.id))
     const fallback = { primary: institutions[0]!.id, others: [] as string[], reason: '' }
     try {
@@ -1491,8 +1495,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     let session = scenarioSessions.get(runId)
     if (!session || session.userId !== userId) {
       const record = await scenarioRuns.get(runId, userId)
-      if (!record) return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
-      if (record.status === 'complete') return reply.status(409).send({ error: 'This run is already complete.' })
+      if (!record) return reply.status(404).send({ error: 'run_not_found', message: `Unknown scenario session "${runId}"` })
+      if (record.status === 'complete') return reply.status(409).send({ error: 'run_complete', message: 'This run is already complete.' })
       session = sessionFromRecord(record)
       scenarioSessions.set(session.runId, session)
       if (record.status === 'failed') await scenarioRuns.update(record.id, userId, { status: 'running' })
@@ -1528,7 +1532,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!params.success) return validationFailure(reply, params.error)
     const { runId } = params.data
     const record = await scenarioRuns.get(runId, operatorOf(request).email)
-    if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
+    if (!record) return reply.status(404).send({ error: 'run_not_found', message: 'Scenario run not found.' })
     const scenario = scenarioFor(record.domain as Domain, record.country, record.lang)
     return {
       ...record,
@@ -1548,7 +1552,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const { runId } = params.data
     const userId = operatorOf(request).email
     const deleted = await scenarioRuns.delete(runId, userId)
-    if (!deleted) return reply.status(404).send({ error: 'Scenario run not found.' })
+    if (!deleted) return reply.status(404).send({ error: 'run_not_found', message: 'Scenario run not found.' })
     scenarioSessions.delete(runId)
     return { deleted: true, id: runId }
   })
@@ -1566,7 +1570,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!query.success) return validationFailure(reply, query.error)
     const operator = operatorOf(request)
     const record = await scenarioRuns.get(runId, operator.email)
-    if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
+    if (!record) return reply.status(404).send({ error: 'run_not_found', message: 'Scenario run not found.' })
     try {
       return await buildScenarioExport({
         run: record,
@@ -1576,7 +1580,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -1590,8 +1594,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const { runId } = params.data
     const userId = operatorOf(request).email
     const record = await scenarioRuns.get(runId, userId)
-    if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
-    if (record.status === 'complete') return reply.status(409).send({ error: 'This run is already complete.' })
+    if (!record) return reply.status(404).send({ error: 'run_not_found', message: 'Scenario run not found.' })
+    if (record.status === 'complete') return reply.status(409).send({ error: 'run_complete', message: 'This run is already complete.' })
 
     const session = sessionFromRecord(record)
     scenarioSessions.set(session.runId, session)
@@ -1616,7 +1620,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     let session = scenarioSessions.get(runId)
     if (!session || session.userId !== userId) {
       const record = await scenarioRuns.get(runId, userId)
-      if (!record) return reply.status(404).send({ error: `Unknown scenario session "${runId}"` })
+      if (!record) return reply.status(404).send({ error: 'run_not_found', message: `Unknown scenario session "${runId}"` })
       session = sessionFromRecord(record)
       scenarioSessions.set(runId, session)
     }
@@ -1823,8 +1827,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string }
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
-    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
-    if (run.status !== 'failed' || !run.input) return reply.status(409).send({ error: 'Only an interrupted assessment can be resumed.' })
+    if (!run) return reply.status(404).send({ error: 'not_found', message: 'Assessment not found.' })
+    if (run.status !== 'failed' || !run.input) return reply.status(409).send({ error: 'run_not_resumable', message: 'Only an interrupted assessment can be resumed.' })
     await streamAssessment(request, reply, run.input, run)
   })
 
@@ -1859,7 +1863,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string }
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
-    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    if (!run) return reply.status(404).send({ error: 'not_found', message: 'Assessment not found.' })
     await engine.audit.logAction({
       actor: operator.email,
       action: 'readiness.opened',
@@ -1876,7 +1880,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string }
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
-    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    if (!run) return reply.status(404).send({ error: 'not_found', message: 'Assessment not found.' })
     await readinessRuns.delete(id, operator.email)
     await engine.audit.logAction({
       actor: operator.email,
@@ -1899,7 +1903,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return validationFailure(reply, body.error)
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
-    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    if (!run) return reply.status(404).send({ error: 'not_found', message: 'Assessment not found.' })
     if (hasLanguage(run.report.scores, body.data.lang)) return run
     const localized = await engine.readiness.localize(run.report, body.data.lang, undefined, abortOnDisconnect(reply))
     const updated = await readinessRuns.updateRun(id, operator.email, { report: localized, status: run.status })
@@ -1921,7 +1925,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return validationFailure(reply, body.error)
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
-    if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
+    if (!run) return reply.status(404).send({ error: 'not_found', message: 'Assessment not found.' })
     // The cover is drawn by Muse Image on the Meta Model API, whatever chat model is active.
     const meta = metaServices()
     const access = meta ? providerAccess(meta) : null
@@ -1969,9 +1973,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return validationFailure(reply, body.error)
 
     const bytes = Buffer.from(body.data.imageBase64.replace(/^data:[^,]+,/, ''), 'base64')
-    if (bytes.byteLength === 0) return reply.status(400).send({ error: 'Empty image.' })
+    if (bytes.byteLength === 0) return reply.status(400).send({ error: 'empty_image', message: 'Empty image.' })
     if (bytes.byteLength > GAZETTE_MAX_BYTES) {
-      return reply.status(413).send({ error: 'Page too large (max 12 MB per page).' })
+      return reply.status(413).send({ error: 'page_too_large', message: 'Page too large (max 12 MB per page).' })
     }
 
     const sam = gazetteSam()
@@ -2021,7 +2025,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return page
     } catch (error) {
       request.log.error(error)
-      return reply.status(422).send({ error: (error as Error).message })
+      return reply.status(422).send({ error: 'analysis_failed', message: (error as Error).message })
     }
   })
 
@@ -2042,7 +2046,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       ...(body.data.version ? { version: body.data.version } : {}),
     })
     if (chunks.length === 0) {
-      return reply.status(422).send({ error: 'No readable text on this page; nothing to ingest.' })
+      return reply.status(422).send({ error: 'empty_extraction', message: 'No readable text on this page; nothing to ingest.' })
     }
 
     const text = chunks.map((chunk) => `## ${chunk.headingPath}\n\n${chunk.text}`).join('\n\n')
@@ -2068,7 +2072,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       }
     } catch (error) {
       request.log.error(error)
-      return reply.status(500).send({ error: `Gazette ingestion failed: ${(error as Error).message}` })
+      return reply.status(500).send({ error: 'ingestion_failed', message: `Gazette ingestion failed: ${(error as Error).message}` })
     }
   })
 
@@ -2147,9 +2151,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) return validationFailure(reply, body.error)
 
     const audio = Buffer.from(body.data.audioBase64.replace(/^data:[^,]+,/, ''), 'base64')
-    if (audio.byteLength === 0) return reply.status(400).send({ error: 'Empty audio.' })
+    if (audio.byteLength === 0) return reply.status(400).send({ error: 'empty_audio', message: 'Empty audio.' })
     if (audio.byteLength > 32 * 1024 * 1024) {
-      return reply.status(413).send({ error: 'Audio too large (max 32 MB per recording).' })
+      return reply.status(413).send({ error: 'audio_too_large', message: 'Audio too large (max 32 MB per recording).' })
     }
 
     // Muse Voice Transcribe stays on Meta even when Baseten does the reasoning.
@@ -2202,7 +2206,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
       const relayed = !!meta && Object.keys(providerAccess(meta).headers).length > 0
       request.log.error({ relayed, message: (error as Error).message }, 'voice transcription failed')
-      return reply.status(422).send({ error: (error as Error).message, relayed })
+      return reply.status(422).send({ error: 'transcription_failed', message: (error as Error).message, relayed })
     }
   })
 
@@ -2231,7 +2235,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       })
     }
     if (cases.length === 0) {
-      return reply.status(404).send({ error: 'No persisted reports for those run ids.' })
+      return reply.status(404).send({ error: 'report_not_found', message: 'No persisted reports for those run ids.' })
     }
 
     try {
@@ -2261,7 +2265,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return analysis
     } catch (error) {
       request.log.error(error)
-      return reply.status(422).send({ error: (error as Error).message })
+      return reply.status(422).send({ error: 'impact_analysis_failed', message: (error as Error).message })
     }
   })
 
@@ -2306,7 +2310,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const body = parsed.data
     const to = body.to ?? config.whatsapp.recipient
-    if (!to) return reply.status(400).send({ error: 'No recipient: set WHATSAPP_RECIPIENT_WAID or pass `to`.' })
+    if (!to) return reply.status(400).send({ error: 'missing_recipient', message: 'No recipient: set WHATSAPP_RECIPIENT_WAID or pass `to`.' })
 
     let template: string
     let bodyParams: string[]
@@ -2321,7 +2325,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       bodyParams = [body.title, body.deadline, body.actionUrl ?? 'Open the console']
     } else {
       if (!config.whatsapp.approvalSecret) {
-        return reply.status(503).send({ error: 'APPROVAL_SECRET is not configured; cannot sign an approval link.' })
+        return reply.status(503).send({ error: 'approval_secret_missing', message: 'APPROVAL_SECRET is not configured; cannot sign an approval link.' })
       }
       const { token, claims } = createApprovalToken({
         runId: body.runId,
@@ -2359,7 +2363,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return { sent: true, messageId: sent.messageId, template, ...(link ? { approvalUrl: link } : {}) }
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 
@@ -2994,7 +2998,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           return { ok: false as const, error: (error as Error).message }
         }
       })()
-      if (!message.ok) return reply.status(400).send({ error: message.error })
+      if (!message.ok) return reply.status(400).send({ error: 'template_failed', message: message.error })
       templateName = message.plan.name
       try {
         const result = await whatsapp.sendTemplate({
@@ -3262,7 +3266,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return { ...withImages, reportId: saved.id, version: saved.version, savedAt: saved.createdAt }
     } catch (error) {
       request.log.error(error)
-      return reply.status(502).send({ error: (error as Error).message })
+      return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
     }
   })
 

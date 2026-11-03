@@ -26,7 +26,7 @@ type PathItem = Record<string, unknown>
 
 const INFO = {
   title: 'SarkiAI Policy Sandbox API',
-  version: '0.2.0',
+  version: '0.3.0',
   summary: 'Institutional policy sandbox for Cameroon: grounded agents, audited decisions.',
   description: [
     '# Overview',
@@ -75,8 +75,7 @@ const INFO = {
     '{ "error": "rate_limited", "message": "Too many requests", "retryAfter": 42 }',
     '```',
     '',
-    '`error` is stable for a given cause, so branch on it rather than on the text; a',
-    'handful of legacy handlers still return a readable sentence instead of a code.',
+    '`error` is stable for a given cause, so branch on it rather than on the text.',
     '`message`, when present, is for humans and may change. `fields` and `formErrors`',
     'appear only on a `validation_failed` answer. A `Retry-After` header accompanies',
     '`429`. Upstream failures answer `502` with the provider message, and an',
@@ -173,7 +172,7 @@ const ERROR_COMPONENTS: Record<string, JsonSchema> = {
       error: {
         type: 'string',
         description:
-          'Stable machine-readable code: `validation_failed`, `unauthorized`, `admin_only`, `not_found`, `rate_limited`, `busy`, `mail_not_configured`, `storage_unavailable`, `auth_failed`, `action_failed`, `run_not_found`, …',
+          'Stable machine-readable code: `validation_failed`, `unauthorized`, `admin_only`, `not_found`, `run_not_found`, `run_complete`, `rate_limited`, `busy`, `rights_blocked`, `upstream_unavailable`, `mail_not_configured`, `storage_unavailable`, `auth_failed`, `action_failed`, …',
       },
       message: { type: 'string', description: 'Human-readable detail; may change between releases.' },
       fields: {
@@ -226,7 +225,7 @@ const ERROR_RESPONSES: Record<string, JsonSchema> = {
         schema: { $ref: '#/components/schemas/ApiError' },
         examples: {
           admin: { value: { error: 'admin_only', message: 'Requires an administrator.' } },
-          rights: { value: { error: 'Rights of this document forbid full-text storage.', rights: 'quotation-only' } },
+          rights: { value: { error: 'rights_blocked', message: 'Rights of this document forbid full-text storage.', rights: 'quotation-only' } },
         },
       },
     },
@@ -245,7 +244,7 @@ const ERROR_RESPONSES: Record<string, JsonSchema> = {
     content: {
       'application/json': {
         schema: { $ref: '#/components/schemas/ApiError' },
-        example: { error: 'This run is already complete.' },
+        example: { error: 'run_complete', message: 'This run is already complete.' },
       },
     },
   },
