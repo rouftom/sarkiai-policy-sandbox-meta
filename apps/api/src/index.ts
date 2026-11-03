@@ -5,6 +5,7 @@ import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import { registerRoutes, seedReferenceImages, closeStores } from './routes/index.js'
+import { OpenApiCatalog, registerOpenApiRoutes } from './openapi.js'
 import { prepareCloudStores } from './engine.js'
 import { auth } from './auth.js'
 import { config } from './config.js'
@@ -69,7 +70,11 @@ export async function buildServer() {
   await app.register(cors, {
     origin: (origin, callback) => callback(null, config.web.isAllowedOrigin(origin)),
   })
+  const openapi = new OpenApiCatalog()
+  app.addHook('onRoute', (route) => openapi.record(route.method, route.url))
+
   await registerRoutes(app)
+  registerOpenApiRoutes(app, openapi)
   return app
 }
 
