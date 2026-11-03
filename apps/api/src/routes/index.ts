@@ -58,6 +58,7 @@ import { buildScenarioExport } from '../scenario-report.js'
 import { healthBreachExercise } from '../exercises.js'
 import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
+import { validationFailure } from '../http-errors.js'
 import { McpGateway } from '../mcp.js'
 import { ChatSessionStore } from '../chat-sessions.js'
 import { ReadinessRunStore, type ReadinessRun, type ReadinessRunInput, type ReadinessRunSummary } from '../readiness-runs.js'
@@ -781,7 +782,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthenticated' })
     const body = modelSelectionInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     if (engine.catalogMode !== 'cloud') {
       return reply.status(409).send({ error: 'Model selection applies to the Meta Model API mode only.' })
     }
@@ -839,7 +840,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/v1/kb/documents', async (request, reply) => {
     const query = kbDocumentListQuery.safeParse(request.query)
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     try {
       return { documents: await knowledge.listDocuments(query.data) }
     } catch (error) {
@@ -851,7 +852,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/kb/documents/active', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const body = kbDocumentActiveInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     try {
       const modified = await knowledge.setDocumentActive(body.data.filename, body.data.active)
       return { filename: body.data.filename, active: body.data.active, modified }
@@ -865,7 +866,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.delete('/v1/kb/documents', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const query = kbDocumentQuery.safeParse(request.query)
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     try {
       const deleted = await knowledge.deleteDocument(query.data.filename)
       return { filename: query.data.filename, ...deleted }
@@ -878,7 +879,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Preview of one document: its passages (chunk selected) and figures. */
   app.get('/v1/kb/documents/preview', async (request, reply) => {
     const query = kbDocumentPreviewQuery.safeParse(request.query)
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     try {
       return await knowledge.preview(query.data.filename, query.data.chunkIndex)
     } catch (error) {
@@ -890,7 +891,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Every passage of one document, retired ones included, for the editor. */
   app.get('/v1/kb/documents/chunks', async (request, reply) => {
     const query = kbDocumentQuery.safeParse(request.query)
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     return { chunks: await knowledge.chunksOf(query.data.filename) }
   })
 
@@ -898,7 +899,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.patch('/v1/kb/documents', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const body = kbDocumentPatch.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     const { filename, ...patch } = body.data
     const modified = await knowledge.updateDocument(filename, { ...patch, docType: patch.docType as DocType | undefined })
     return { filename, modified }
@@ -909,7 +910,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!requireAdmin(request, reply)) return reply
     const { id } = request.params as { id: string }
     const body = kbChunkPatch.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     try {
       const updated = await knowledge.updateChunk(id, body.data)
       if (!updated) return reply.status(404).send({ error: 'Passage not found.' })
@@ -924,7 +925,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/kb/documents/images', { bodyLimit: 40 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const body = kbDocumentImagesInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     const images = await knowledge.attachImages(
       body.data.filename,
       body.data.images.map((image) => ({
@@ -941,7 +942,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!requireAdmin(request, reply)) return reply
     const { id } = request.params as { id: string }
     const body = kbImagePatch.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     const updated = await knowledge.updateImage(id, {
       ...body.data,
       dimension: body.data.dimension as ReadinessDimension | null | undefined,
@@ -998,7 +999,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/kb/ingest/text', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const body = kbIngestTextBody.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     if (refuseRestrictedRights(body.data.rights, reply)) return reply
     try {
       const result = await knowledge.ingest({ ...body.data, docType: body.data.docType as DocType })
@@ -1018,7 +1019,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/kb/ingest/file', { bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const body = kbIngestFileBody.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
     const bytes = Buffer.from(body.data.contentBase64, 'base64')
@@ -1063,7 +1064,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Retrieval playground: plan, sub-agents, rounds and every ranked stage. */
   app.post('/v1/kb/search', async (request, reply) => {
     const body = searchInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     try {
       const exploration = await engine.retriever.explore({
         text: body.data.text,
@@ -1115,7 +1116,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/kb/ingest', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const body = kbIngestAliasBody.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
     const result = await ingestText({ ...body.data, docType: body.data.docType as DocType })
@@ -1168,7 +1169,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/v1/agents/ask', async (request, reply) => {
     const body = askBody.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: `Unknown institution "${body.data.institutionId}"` })
@@ -1201,7 +1202,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/v1/agents/ask/stream', async (request, reply) => {
     const body = askBody.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: `Unknown institution "${body.data.institutionId}"` })
@@ -1295,7 +1296,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/v1/voice/correct', async (request, reply) => {
     const body = voiceCorrectBody.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     return correctTranscript(body.data.text, { model: engine.model })
   })
 
@@ -1306,7 +1307,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/v1/agents/route', async (request, reply) => {
     const body = agentRoutingRequest.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     const chosen = new Set(body.data.institutionIds ?? [])
     const institutions = institutionsForDomains(body.data.domains as Domain[]).filter((institution) => chosen.size === 0 || chosen.has(institution.id))
     if (institutions.length === 0) return reply.status(404).send({ error: 'No institution for these sectors.' })
@@ -1448,7 +1449,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // SSE stream of all ticks (fixed delay) · for passive viewers.
   app.get('/v1/scenarios/:id/release', async (request, reply) => {
     const query = scenarioReleaseQuery.safeParse(request.query)
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     const scenario = createScenario(scenarioFor('health', query.data.country), 'simulation')
     reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
     for await (const batch of scenario.release({ chunkDelayMs: 800 })) {
@@ -1461,7 +1462,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Start a facilitator session (returns the agenda, not the content).
   app.post('/v1/scenarios/start', async (request, reply) => {
     const body = scenarioRunInput.safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang)
     scenarioSessions.set(session.runId, session)
@@ -1483,7 +1484,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Release the next tick (the `onBeforeRelease` facilitator gate).
   app.post('/v1/scenarios/:runId/next', async (request, reply) => {
-    const { runId } = scenarioRunParams.parse(request.params)
+    const params = scenarioRunParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { runId } = params.data
     const userId = operatorOf(request).email
     let session = scenarioSessions.get(runId)
     if (!session || session.userId !== userId) {
@@ -1521,7 +1524,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   /** One saved run: its status, what was released, the joint reports and the scenario's events. */
   app.get('/v1/scenarios/runs/:runId', async (request, reply) => {
-    const { runId } = scenarioRunParams.parse(request.params)
+    const params = scenarioRunParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { runId } = params.data
     const record = await scenarioRuns.get(runId, operatorOf(request).email)
     if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
     const scenario = scenarioFor(record.domain as Domain, record.country, record.lang)
@@ -1538,7 +1543,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * it is append-only.
    */
   app.delete('/v1/scenarios/runs/:runId', async (request, reply) => {
-    const { runId } = scenarioRunParams.parse(request.params)
+    const params = scenarioRunParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { runId } = params.data
     const userId = operatorOf(request).email
     const deleted = await scenarioRuns.delete(runId, userId)
     if (!deleted) return reply.status(404).send({ error: 'Scenario run not found.' })
@@ -1552,9 +1559,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * readiness report.
    */
   app.get('/v1/scenarios/runs/:runId/export', async (request, reply) => {
-    const { runId } = scenarioRunParams.parse(request.params)
+    const params = scenarioRunParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { runId } = params.data
     const query = scenarioExportQuery.safeParse(request.query)
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     const operator = operatorOf(request)
     const record = await scenarioRuns.get(runId, operator.email)
     if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
@@ -1576,7 +1585,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * session is rebuilt from the saved progress, the released ticks are not replayed.
    */
   app.post('/v1/scenarios/runs/:runId/resume', async (request, reply) => {
-    const { runId } = scenarioRunParams.parse(request.params)
+    const params = scenarioRunParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { runId } = params.data
     const userId = operatorOf(request).email
     const record = await scenarioRuns.get(runId, userId)
     if (!record) return reply.status(404).send({ error: 'Scenario run not found.' })
@@ -1598,7 +1609,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // Current state of a session.
   app.get('/v1/scenarios/:runId', async (request, reply) => {
-    const { runId } = scenarioRunParams.parse(request.params)
+    const params = scenarioRunParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { runId } = params.data
     const userId = operatorOf(request).email
     let session = scenarioSessions.get(runId)
     if (!session || session.userId !== userId) {
@@ -1621,7 +1634,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Auto-run: start + release every tick + dossier.
   app.post('/v1/scenarios/run', async (request, reply) => {
     const body = scenarioRunInput.safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang)
     scenarioSessions.set(session.runId, session)
@@ -1648,7 +1661,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Readiness assessment ──────────────────────────────────────────────────
   app.post('/v1/readiness/report', async (request, reply) => {
     const body = readinessAssessInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     return engine.readiness.assess({
       country: body.data.country,
@@ -1778,7 +1791,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/v1/readiness/stream', async (request, reply) => {
     const body = readinessStreamInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     const known = new Set(READINESS_DIMENSIONS.map((dimension) => dimension.shortName))
     const dimensions = body.data.dimensions?.filter((id) => known.has(id as ReadinessDimension))
     await streamAssessment(request, reply, {
@@ -1818,7 +1831,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Past assessments of this operator, newest first: one page, filtered on the server. */
   app.get('/v1/readiness/runs', async (request, reply) => {
     const query = readinessRunsQuery.safeParse(request.query ?? {})
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     const sectors = new Set<string>(['health', 'education', 'telecom', 'public_services', 'agriculture'])
     const domains = (query.data.domain ?? '').split(',').filter((value) => sectors.has(value))
     const statuses = (query.data.status ?? '')
@@ -1883,7 +1896,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/readiness/runs/:id/localize', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = readinessLocalizeInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
     if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
@@ -1905,7 +1918,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/readiness/runs/:id/report', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = readinessReportInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     const operator = operatorOf(request)
     const run = await readinessRuns.get(id, operator.email)
     if (!run) return reply.status(404).send({ error: 'Assessment not found.' })
@@ -1932,7 +1945,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Readiness what-if (causal propagation across dimensions) ──────────────
   app.post('/v1/readiness/whatif', async (request, reply) => {
     const body = readinessWhatIfInput.safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const baseline =
       (body.data.scores as Parameters<typeof whatIf>[0]['scores'] | undefined) ??
@@ -1953,7 +1966,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // provenance for every line, so the console can show what was read where.
   app.post('/v1/gazette/analyze', { bodyLimit: 20 * 1024 * 1024 }, async (request, reply) => {
     const body = gazetteAnalyzeInput.safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const bytes = Buffer.from(body.data.imageBase64.replace(/^data:[^,]+,/, ''), 'base64')
     if (bytes.byteLength === 0) return reply.status(400).send({ error: 'Empty image.' })
@@ -2018,7 +2031,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/gazette/ingest', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const body = gazetteIngestInput.safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     if (refuseRestrictedRights(body.data.rights, reply)) return reply
 
     const chunks = toKbChunks(body.data.page, {
@@ -2069,7 +2082,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/actions/:id/decision', async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = actionDecisionInput.safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     const operator = operatorOf(request).email
     try {
       const record = await actionStore.decide(id, operator, body.data.decision)
@@ -2105,7 +2118,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.put('/v1/chat/sessions/:id', { bodyLimit: 2 * 1024 * 1024 }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const body = chatSessionInput.safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
     if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return reply.status(400).send({ error: 'invalid_id' })
     return chatSessions.save({ id, userId: operatorOf(request).email, ...body.data })
   })
@@ -2131,7 +2144,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         sessionId: z.string().min(1).max(80).optional(),
       })
       .safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const audio = Buffer.from(body.data.audioBase64.replace(/^data:[^,]+,/, ''), 'base64')
     if (audio.byteLength === 0) return reply.status(400).send({ error: 'Empty audio.' })
@@ -2199,7 +2212,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // instrument) and the model only ranks and explains them.
   app.post('/v1/impact/analyze', async (request, reply) => {
     const body = impactAnalyzeInput.safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const operator = operatorOf(request)
     const cases = []
@@ -2289,7 +2302,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/whatsapp/notify', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const parsed = notifyInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
 
     const body = parsed.data
     const to = body.to ?? config.whatsapp.recipient
@@ -2351,7 +2364,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/v1/whatsapp/approvals/:token', async (request, reply) => {
-    const { token } = approvalTokenParams.parse(request.params)
+    const params = approvalTokenParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { token } = params.data
     const verdict = verifyApprovalToken(token, config.whatsapp.approvalSecret)
     if (!verdict.ok) {
       return reply.status(verdict.reason === 'expired' ? 410 : 400).send({ error: verdict.reason })
@@ -2376,9 +2391,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.post('/v1/whatsapp/approvals/:token', async (request, reply) => {
-    const { token } = approvalTokenParams.parse(request.params)
+    const params = approvalTokenParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { token } = params.data
     const body = approvalDecisionInput.safeParse(request.body ?? {})
-    if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
+    if (!body.success) return validationFailure(reply, body.error)
 
     const verdict = verifyApprovalToken(token, config.whatsapp.approvalSecret)
     if (!verdict.ok) {
@@ -2488,7 +2505,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/notifications/contacts', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const parsed = notificationContactInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
     const prepared = prepareContact(parsed.data)
     if (!prepared.ok) return reply.status(prepared.status).send(prepared.body)
 
@@ -2523,9 +2540,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.put('/v1/notifications/contacts/:id', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const { id } = z.object({ id: z.string().min(1).max(120) }).parse(request.params)
+    const params = z.object({ id: z.string().min(1).max(120) }).safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { id } = params.data
     const parsed = notificationContactInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
 
     const existing = await notificationContacts.get(id)
     if (!existing) return reply.status(404).send({ error: 'not_found' })
@@ -2565,7 +2584,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete('/v1/notifications/contacts/:id', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
-    const { id } = z.object({ id: z.string().min(1).max(120) }).parse(request.params)
+    const params = z.object({ id: z.string().min(1).max(120) }).safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { id } = params.data
     const removed = await notificationContacts.remove(id)
     if (!removed) return reply.status(404).send({ error: 'not_found' })
     await engine.audit
@@ -2600,7 +2621,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/countries', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const parsed = countryBodySchema.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
 
     const country = await countries.add({ ...parsed.data, createdBy: operatorOf(request).email })
     if (!country) return reply.status(409).send({ error: 'duplicate_code' })
@@ -2620,7 +2641,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/v1/countries/:code', async (request, reply) => {
     const params = countryCodeParams.safeParse(request.params)
-    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    if (!params.success) return validationFailure(reply, params.error)
     const { code } = params.data
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
@@ -2630,10 +2651,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.patch('/v1/countries/:code', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const params = countryCodeParams.safeParse(request.params)
-    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    if (!params.success) return validationFailure(reply, params.error)
     const { code } = params.data
     const parsed = countryPatchSchema.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
 
     const country = await countries.update(code, parsed.data)
     if (!country) return reply.status(404).send({ error: 'not_found' })
@@ -2654,10 +2675,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.put('/v1/countries/:code/sectors', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const params = countryCodeParams.safeParse(request.params)
-    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    if (!params.success) return validationFailure(reply, params.error)
     const { code } = params.data
     const parsed = countrySectorsInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
 
     const country = await countries.setSectors(code, parsed.data.sectors)
     if (!country) return reply.status(404).send({ error: 'not_found' })
@@ -2678,7 +2699,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.delete('/v1/countries/:code', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const params = countryCodeParams.safeParse(request.params)
-    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    if (!params.success) return validationFailure(reply, params.error)
     const { code } = params.data
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
@@ -2717,7 +2738,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Country dashboard: what the runs and the corpus say, sector by sector. */
   app.get('/v1/countries/:code/insights', async (request, reply) => {
     const params = countryCodeParams.safeParse(request.params)
-    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    if (!params.success) return validationFailure(reply, params.error)
     const { code } = params.data
     const country = await countries.get(code)
     if (!country) return reply.status(404).send({ error: 'not_found' })
@@ -2823,7 +2844,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/v1/notifications/summary-suggestion', async (request, reply) => {
     const parsed = summarySuggestionInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
 
     const run = await scenarioRuns.get(parsed.data.runId, operatorOf(request).email)
     if (!run) return reply.status(404).send({ error: 'run_not_found' })
@@ -2901,7 +2922,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/notifications/whatsapp', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const parsed = whatsappMessageInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
     if (!whatsapp.configured) return reply.status(503).send({ error: 'whatsapp_not_configured' })
 
     const body = parsed.data
@@ -3011,7 +3032,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/notifications/email', async (request, reply) => {
     if (!requireAdmin(request, reply)) return reply
     const parsed = emailMessageInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
     if (!mailConfigured()) return reply.status(503).send({ error: 'mail_not_configured' })
 
     const body = parsed.data
@@ -3072,13 +3093,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // decides whether an inject was addressed.
   app.get('/v1/exercise/sample', async (request, reply) => {
     const query = exerciseSampleQuery.safeParse(request.query ?? {})
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     return healthBreachExercise(query.data.country)
   })
 
   app.post('/v1/exercise/evaluate', async (request, reply) => {
     const parsed = exerciseBodyInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
     return evaluateExercise(
       parsed.data.definition as ExerciseDefinition,
       parsed.data.actions,
@@ -3089,14 +3110,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Token ledger, the operator's own events, newest first (phase 1 of the observability menu). */
   app.get('/v1/observability/events', async (request, reply) => {
     const events = observabilityEventsQuery.safeParse(request.query)
-    if (!events.success) return reply.status(400).send({ error: events.error.flatten() })
+    if (!events.success) return validationFailure(reply, events.error)
     return { events: await usageLedger.recent(operatorOf(request).email, events.data.limit) }
   })
 
   /** Totals, daily series and every breakdown the observability console shows. */
   app.get('/v1/observability/summary', async (request, reply) => {
     const parsed = usageQuery.safeParse(request.query ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
     const range = usageRange(parsed.data)
     if (!range) return reply.status(400).send({ error: 'invalid_range' })
     const scope = usageScope(request, parsed.data.operator)
@@ -3112,7 +3133,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** Newest calls, same scope and filters, capped for the requests table. */
   app.get('/v1/observability/requests', async (request, reply) => {
     const parsed = usageQuery.safeParse(request.query ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
     const range = usageRange(parsed.data)
     if (!range) return reply.status(400).send({ error: 'invalid_range' })
     const scope = usageScope(request, parsed.data.operator)
@@ -3131,7 +3152,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get('/v1/observability/forecast', async (request, reply) => {
     const parsed = usageQuery.safeParse(request.query ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
     const range = usageRange(parsed.data, USAGE_FORECAST_DAYS)
     if (!range) return reply.status(400).send({ error: 'invalid_range' })
     const scope = usageScope(request, parsed.data.operator)
@@ -3146,7 +3167,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get('/v1/observability/budget', async (request, reply) => {
     const parsed = usageQuery.safeParse(request.query ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
     const range = usageRange(parsed.data, USAGE_BUDGET_DAYS)
     if (!range) return reply.status(400).send({ error: 'invalid_range' })
     const scope = usageScope(request, parsed.data.operator)
@@ -3162,7 +3183,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   /** One run's spend, for the budget badge on its own page. */
   app.get('/v1/observability/runs/:runId', async (request, reply) => {
     const params = z.object({ runId: z.string().min(1).max(200) }).safeParse(request.params ?? {})
-    if (!params.success) return reply.status(400).send({ error: params.error.flatten() })
+    if (!params.success) return validationFailure(reply, params.error)
     const scope = usageScope(request)
     if (!scope) return forbiddenScope(reply)
     const summary = await usageLedger.summary({
@@ -3184,7 +3205,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/v1/exercise/reports', async (request, reply) => {
     const query = exerciseReportsQuery.safeParse(request.query ?? {})
-    if (!query.success) return reply.status(400).send({ error: query.error.flatten() })
+    if (!query.success) return validationFailure(reply, query.error)
     return { reports: await exerciseReports.list(operatorOf(request).email, query.data.exerciseId) }
   })
 
@@ -3197,7 +3218,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/v1/exercise/after-action', async (request, reply) => {
     const parsed = exerciseBodyInput.safeParse(request.body ?? {})
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) return validationFailure(reply, parsed.error)
 
     const definition = parsed.data.definition as ExerciseDefinition
     const lang = parsed.data.lang
@@ -3247,17 +3268,21 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Audit ─────────────────────────────────────────────────────────────────
   app.get('/v1/audit/chain', async () => engine.audit.verifyChain())
-  app.get('/v1/audit/trace/:runId', async (request) => {
-    const { runId } = scenarioRunParams.parse(request.params)
+  app.get('/v1/audit/trace/:runId', async (request, reply) => {
+    const params = scenarioRunParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { runId } = params.data
     const operator = operatorOf(request)
     return { runId, trace: await engine.audit.getTrace(runId, operator.email) }
   })
 
   // ── Run dossier (audit + CoT + reports + citations) ───────────────────────
   app.get('/v1/audit/dossier/:runId', async (request, reply) => {
-    const { runId } = scenarioRunParams.parse(request.params)
+    const params = scenarioRunParams.safeParse(request.params)
+    if (!params.success) return validationFailure(reply, params.error)
+    const { runId } = params.data
     const format = auditDossierQuery.safeParse(request.query)
-    if (!format.success) return reply.status(400).send({ error: format.error.flatten() })
+    if (!format.success) return validationFailure(reply, format.error)
 
     const operator = operatorOf(request)
     const dossier = buildRunDossier({

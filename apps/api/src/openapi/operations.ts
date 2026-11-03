@@ -83,11 +83,6 @@ import {
 export interface OperationError {
   status: number
   description: string
-  /**
-   * Which failure envelope the handler sends for this status. Zod `flatten()`
-   * is the default; the auth routes answer `{ error, message }` instead.
-   */
-  envelope?: 'validation' | 'api'
 }
 
 export interface OperationDoc {
@@ -114,21 +109,13 @@ export interface OperationDoc {
 /** Shorthand so the tables below stay readable. */
 const error = (status: number, description: string): OperationError => ({ status, description })
 
-/** A failure sent with the `{ error, message }` envelope rather than Zod `flatten()`. */
-const apiError = (status: number, description: string): OperationError => ({
-  status,
-  description,
-  envelope: 'api',
-})
-
 /** Documentation-only path parameter: Fastify validates the shape of the route, not the value. */
 const pathParam = (name: string, description: string): ZodType =>
   z.object({ [name]: z.string().min(1).describe(description) })
 
-const BAD_REQUEST = error(400, 'The body or query does not match its schema. Answered with the Zod field errors.')
-const BAD_REQUEST_API = apiError(
+const BAD_REQUEST = error(
   400,
-  'The body does not match its schema. Answered with `{ "error": "invalid_request", "message": "Invalid request body." }`.',
+  'The body, query or path does not match its schema. Answered with `error: "validation_failed"` and the offending `fields`.',
 )
 const NOT_FOUND = error(404, 'The record does not exist, or does not belong to the signed-in operator.')
 const CONFLICT = error(409, 'The request conflicts with the current state of the record.')
@@ -210,7 +197,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     tags: ['auth'],
     body: setupInput,
     status: 201,
-    errors: [BAD_REQUEST_API, CONFLICT],
+    errors: [BAD_REQUEST, CONFLICT],
     example: { firstName: 'Amina', lastName: 'Njoya', email: 'amina.njoya@example.cm' },
   },
   'GET /v1/auth/captcha': {
@@ -225,7 +212,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     tags: ['auth'],
     body: signupInput,
     status: 201,
-    errors: [BAD_REQUEST_API, error(403, 'Sign-up is disabled on this deployment.')],
+    errors: [BAD_REQUEST, error(403, 'Sign-up is disabled on this deployment.')],
     example: {
       firstName: 'Paul',
       lastName: 'Mbarga',
@@ -239,7 +226,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
       'Returns `{ token, operator }`, or a `challenge` when e-mail verification, a password change or TOTP enrolment is still required. The same endpoint continues the handshake: post the challenge and the next factor back to it.',
     tags: ['auth'],
     body: credentials,
-    errors: [BAD_REQUEST_API],
+    errors: [BAD_REQUEST],
     example: { email: 'amina.njoya@example.cm', password: 'correct-horse-battery' },
   },
   'POST /v1/auth/password': {
@@ -247,7 +234,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     description: 'Completes the `password_change` branch of the sign-in handshake.',
     tags: ['auth'],
     body: passwordChange,
-    errors: [BAD_REQUEST_API],
+    errors: [BAD_REQUEST],
     example: { challenge: 'chg_9f2c6b1e', password: 'a-longer-new-password' },
   },
   'POST /v1/auth/password/forgot': {
@@ -256,7 +243,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
       'Always answers the same way, whether or not the address exists: the endpoint must not become an account oracle.',
     tags: ['auth'],
     body: forgotInput,
-    errors: [BAD_REQUEST_API, error(403, 'Password mail is disabled on this deployment.')],
+    errors: [BAD_REQUEST, error(403, 'Password mail is disabled on this deployment.')],
     example: { email: 'amina.njoya@example.cm' },
   },
   'POST /v1/auth/password/reset': {
@@ -264,7 +251,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     description: 'Consumes the signed token from the reset e-mail and invalidates the previous password.',
     tags: ['auth'],
     body: resetInput,
-    errors: [BAD_REQUEST_API],
+    errors: [BAD_REQUEST],
     example: { token: 'reset_7d1a4c93', password: 'a-longer-new-password' },
   },
   'POST /v1/auth/email/verify': {
@@ -272,7 +259,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     description: 'Consumes the signed token from the confirmation e-mail and marks the address verified.',
     tags: ['auth'],
     body: emailVerifyInput,
-    errors: [BAD_REQUEST_API],
+    errors: [BAD_REQUEST],
     example: { token: 'verify_41b0c9e2' },
   },
   'POST /v1/auth/email/resend': {
@@ -280,7 +267,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     description: 'Issues a fresh confirmation link for an address that is still unverified. Answers the same way whether or not the address exists.',
     tags: ['auth'],
     body: forgotInput,
-    errors: [BAD_REQUEST_API],
+    errors: [BAD_REQUEST],
     example: { email: 'paul.mbarga@example.cm' },
   },
   'POST /v1/auth/mfa/enroll': {
@@ -288,7 +275,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     description: 'Returns the shared secret and the `otpauth://` URI to render as a QR code.',
     tags: ['auth'],
     body: mfaChallengeInput,
-    errors: [BAD_REQUEST_API],
+    errors: [BAD_REQUEST],
     example: { challenge: 'mfa_2c81d4a7' },
   },
   'POST /v1/auth/mfa/confirm': {
@@ -296,7 +283,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     description: 'Checks the first six-digit code against the enrolled secret, then returns the session token.',
     tags: ['auth'],
     body: codeStep,
-    errors: [BAD_REQUEST_API],
+    errors: [BAD_REQUEST],
     example: { challenge: 'mfa_2c81d4a7', code: '123456' },
   },
   'POST /v1/auth/mfa/verify': {
@@ -304,7 +291,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     description: 'Completes the `mfa` branch of the sign-in handshake with a TOTP code and returns the session token.',
     tags: ['auth'],
     body: codeStep,
-    errors: [BAD_REQUEST_API],
+    errors: [BAD_REQUEST],
     example: { challenge: 'mfa_2c81d4a7', code: '123456' },
   },
   'GET /v1/auth/me': {
@@ -330,7 +317,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     description: 'A partial update: an omitted field keeps its stored value.',
     tags: ['auth'],
     body: preferencesPatch,
-    errors: [BAD_REQUEST_API, error(401, 'The session is missing, expired or revoked.')],
+    errors: [BAD_REQUEST, error(401, 'The session is missing, expired or revoked.')],
     example: { locale: 'fr', density: 'compact' },
   },
   'GET /v1/audit/events': {
