@@ -39,4 +39,4 @@ done
 shopt -u nullglob
 
 echo "Fetched $copied file(s) into data/global/africa/."
-echo "Ingest with: ./scripts/seed.sh --country global --jurisdiction regional --doc-type strategy --dir data/global/africa"
+echo "Ingest with: bun run kb:seed -- --dir data/global/africa"

@@ -56,8 +56,7 @@ We use these exact stage names throughout the codebase and the docs.
 | HTTP ingest API (text + file) | `apps/api/src/routes/index.ts` | `POST /v1/kb/ingest`, `POST /v1/kb/ingest/text` |
 | Chunking + storage + search index | `packages/retrieval/src/atlas-ingest.ts` | `AtlasIngestor` |
 | Typed chunk contract | `packages/kb/src/index.ts` | re-exports `chunkDocument` |
-| Corpus seed utility | `scripts/seed-corpus.ts` (`bun run kb:seed`) | bulk ingest through the API |
-| Directory seed utility | `scripts/seed.sh` (`make seed`) | local docker stack |
+| Corpus seed utility | `scripts/seed-corpus.ts` (`bun run kb:seed`, `make seed`) | bulk ingest through the API; any `--dir` with a manifest |
 
 ## 3. Data processing
 

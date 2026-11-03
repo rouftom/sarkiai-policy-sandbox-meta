@@ -54,11 +54,11 @@ cp /path/to/law.pdf data/country/cm/
 # 2. ingest (MongoDB text index): the chunker keeps TITLE/CHAPTER/ARTICLE
 #    rights come from data/country/cm/manifest.json; restricted files are skipped.
 #    The route is admin-only: export SPS_ADMIN_TOKEN (the bearer from /v1/auth/login).
-./scripts/seed.sh --country cm --doc-type law --dir data/country/cm
+bun run kb:seed -- --dir data/country/cm
 
 # 3. external reference corpus
-./scripts/seed.sh --country global --jurisdiction international --doc-type guidance --dir data/global/standards
-./scripts/seed.sh --country global --jurisdiction regional --doc-type strategy --dir data/global/africa
+bun run kb:seed -- --dir data/global/standards
+bun run kb:seed -- --dir data/global/africa
 ```
 
 Scanned pages have no text layer: they go through the Gazette screen
