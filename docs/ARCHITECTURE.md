@@ -39,11 +39,11 @@ follows names the reference (`attachmentRefs`) and the API reads the bytes back
 from the store for the vision model, so a saved turn and its session payload
 carry the reference only. The composer shows a spinner until the upload returns
 and blocks sending while one is in flight or has failed. The attach action opens
-a media picker with two entries: **Library** lists the images this conversation
-already stores (newest first, deduplicated) and re-attaches a reference without a
-second transfer, while **Device** imports local files and shows each upload's
-progress; there is no global library, so an operator never sees another
-conversation's images.
+a media picker with two entries: **Library** lists the images the operator has
+saved across their conversations (newest first, deduplicated, read from their
+own sessions only) and re-attaches a reference without a second transfer, while
+**Device** imports local files and shows each upload's progress; there is no
+shared library, so an operator never sees another conversation's images.
 
 The `KbChunk` contract is identical in both search backends: `RETRIEVAL_BACKEND`
 only changes **where the BM25 index lives** (Atlas Search or a MongoDB text

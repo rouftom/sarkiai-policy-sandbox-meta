@@ -143,6 +143,52 @@ export class ChatSessionStore {
     return rest
   }
 
+  /**
+   * The image references this operator saved across conversations, newest
+   * first and deduplicated by id. The media picker offers them as a library:
+   * re-attaching one reuses the stored reference with no new upload. Only the
+   * caller's own sessions are read.
+   */
+  async attachments(userId: string, limit = 100): Promise<Array<Record<string, unknown>>> {
+    const seen = new Set<string>()
+    const images: Array<Record<string, unknown>> = []
+    const collect = (turns: Array<Record<string, unknown>>) => {
+      for (const turn of sanitizeTurns(turns)) {
+        for (const entry of (turn.attachments as Array<Record<string, unknown>> | undefined) ?? []) {
+          const id = typeof entry.id === 'string' ? entry.id : ''
+          if (!id || seen.has(id)) continue
+          seen.add(id)
+          images.push(entry)
+        }
+      }
+    }
+
+    const col = await this.col()
+    if (col) {
+      const docs = await col
+        .find({ userId }, { projection: { turns: 1 } })
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .toArray()
+        .catch(() => null)
+      if (docs) {
+        for (const doc of docs) {
+          collect(Array.isArray(doc.turns) ? (doc.turns as Array<Record<string, unknown>>) : [])
+        }
+        return images
+      }
+    }
+
+    // Without Mongo, the in-memory sessions are the only library.
+    for (const session of [...this.memory.values()]
+      .filter((entry) => entry.userId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit)) {
+      collect(session.turns)
+    }
+    return images
+  }
+
   /** Creates or replaces a session. The owner cannot be changed by a later save. */
   async save(input: { id: string; userId: string; title: string; turns: Array<Record<string, unknown>> }): Promise<ChatSessionSummary> {
     const existing = await this.get(input.id, input.userId)

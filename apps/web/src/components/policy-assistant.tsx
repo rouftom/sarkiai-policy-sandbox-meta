@@ -33,6 +33,7 @@ import { ConversationShimmer } from '@/components/ai/display/conversation-shimme
 import {
   deleteChatSession,
   getChatSession,
+  listChatAttachments,
   listChatSessions,
   saveChatSession,
   type ChatSessionSummary,
@@ -118,6 +119,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [attachError, setAttachError] = React.useState<string | null>(null)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [mediaOpen, setMediaOpen] = React.useState(false)
+  /** Images saved across the operator's conversations, for the media picker. */
+  const [library, setLibrary] = React.useState<AttachmentRefDto[]>([])
+  const [libraryLoading, setLibraryLoading] = React.useState(true)
   /** Blob previews in flight: revoked when the image leaves the composer or the panel closes. */
   const previewUrls = React.useRef<Set<string>>(new Set())
   const [actionStatus, setActionStatus] = React.useState<Record<string, ActionStatus>>({})
@@ -210,6 +214,33 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns])
+
+  // The media picker's library: every image saved in the operator's
+  // conversations. Read once in the background so opening the picker is
+  // instant; a failure keeps the conversation-only gallery rather than
+  // blocking the composer, and the next open retries.
+  const [libraryLoaded, setLibraryLoaded] = React.useState(false)
+  const loadLibrary = React.useCallback(async () => {
+    setLibraryLoading(true)
+    try {
+      setLibrary(await listChatAttachments())
+      setLibraryLoaded(true)
+    } catch {
+      /* the conversation's own images still show */
+    } finally {
+      setLibraryLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    void loadLibrary()
+  }, [loadLibrary])
+
+  /** Opening the picker retries a library read that failed at mount. */
+  const openMediaPicker = () => {
+    setMediaOpen(true)
+    if (!libraryLoaded && !libraryLoading) void loadLibrary()
+  }
 
   const chooseModel = async (id: string) => {
     const previous = model
@@ -311,8 +342,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
 
   /** The conversation's stored images, plus what the composer holds right now. */
   const gallery = React.useMemo(
-    () => galleryRefs(turns, attachments.flatMap((entry) => (entry.ref ? [entry.ref] : []))),
-    [turns, attachments],
+    () => galleryRefs(turns, [...attachments.flatMap((entry) => (entry.ref ? [entry.ref] : [])), ...library]),
+    [turns, attachments, library],
   )
 
   React.useEffect(
@@ -866,7 +897,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => setMediaOpen(true)}>
+        <DropdownMenuItem onSelect={openMediaPicker}>
           <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
           {t('assistant.attach')}
         </DropdownMenuItem>
@@ -1111,6 +1142,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         onFiles={addFiles}
         onPick={attachFromGallery}
         error={attachError}
+        loading={libraryLoading && gallery.length === 0}
       />
     </div>
   )

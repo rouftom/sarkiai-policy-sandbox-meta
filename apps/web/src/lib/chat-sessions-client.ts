@@ -1,6 +1,6 @@
 /** Client for the operator's saved assistant conversations. */
 
-import { API_URL, ApiError } from './api'
+import { API_URL, ApiError, type AttachmentRefDto } from './api'
 import { readToken } from './session'
 
 export interface ChatSessionSummary {
@@ -37,6 +37,18 @@ export async function getChatSession(id: string): Promise<ChatSessionDetail> {
   const response = await fetch(`${API_URL}/v1/chat/sessions/${encodeURIComponent(id)}`, { headers: authHeaders(false) })
   await failOnError(response)
   return (await response.json()) as ChatSessionDetail
+}
+
+/**
+ * The operator's image library: every image saved across their conversations,
+ * newest first and deduplicated. The assistant media picker re-attaches these
+ * references without a new upload.
+ */
+export async function listChatAttachments(): Promise<AttachmentRefDto[]> {
+  const response = await fetch(`${API_URL}/v1/chat/attachments`, { headers: authHeaders(false) })
+  await failOnError(response)
+  const body = (await response.json()) as { attachments?: AttachmentRefDto[] }
+  return body.attachments ?? []
 }
 
 export async function saveChatSession(
