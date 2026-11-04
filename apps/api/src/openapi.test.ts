@@ -14,6 +14,7 @@ const ROUTES = [
   { method: 'GET', path: '/v1/auth/me' },
   { method: 'GET', path: '/v1/audit/dossier/:runId' },
   { method: 'GET', path: '/v1/kb/images/:id' },
+  { method: 'GET', path: '/v1/attachments/limits' },
 ]
 
 type Operation = Record<string, any>
@@ -90,6 +91,7 @@ describe('OpenAPI document', () => {
     expect(paths['/v1/kb/images/{id}']?.get?.security).toEqual([])
     expect(paths['/v1/auth/me']?.get?.security).toEqual([{ bearerAuth: [] }])
     expect(paths['/v1/agents/ask']?.post?.security).toEqual([{ bearerAuth: [] }])
+    expect(paths['/v1/attachments/limits']?.get?.security).toEqual([{ bearerAuth: [] }])
   })
 
   test('generates request bodies from the zod schemas', () => {
@@ -101,7 +103,14 @@ describe('OpenAPI document', () => {
     expect(schema.required).toContain('question')
     expect(schema.required).toContain('institutionId')
     expect(Object.keys(schema.properties)).toContain('attachments')
+    expect(schema.properties.attachments.items.properties.mime.description).toContain('MIME')
+    // The caps are configuration: the route enforces them, not a hard-coded max.
+    expect(schema.properties.attachments.max).toBeUndefined()
     expect(schema.properties.question.description).toContain('operator question')
+  })
+
+  test('documents the image caps the composer reads', () => {
+    expect(paths['/v1/attachments/limits']?.get?.summary).toBe('Image limits for the assistant')
   })
 
   test('documents path and query parameters with their constraints', () => {

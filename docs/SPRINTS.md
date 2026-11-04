@@ -79,10 +79,10 @@ The baseline commit (tag `pre-hackathon-baseline`) imports, as a single commit, 
 |---|---------|-----------|-----|
 | N1 | Multi-provider layer (`cloud` / `sovereign` / `local`), provider badge, `provider.switched` audit event | Muse Spark | 27 Oct |
 | N2 | Citation validator: a quote absent from the corpus is rejected and the agent retries | Muse Spark | 28 Oct |
-| N10 | Demo UI: incident timeline, clickable citations, provider badge, audit-chain check | — | 28 Oct |
+| N10 | Demo UI: incident timeline, clickable citations, provider badge, audit-chain check | n/a | 28 Oct |
 | N3 | Scanned gazette ingestion: column segmentation, `sam-3.1` zones, per-zone transcription, clickable provenance | SAM 3.1 + Muse Spark vision | 29 Oct |
 | N5 | Sovereign mode on open weights | Muse Glimmer (Ollama) | 30 Oct |
-| N4 | WhatsApp channel: joint reports, deadline alerts, human approval buttons | — | 31 Oct |
+| N4 | WhatsApp channel: joint reports, deadline alerts, human approval buttons | n/a | 31 Oct |
 | N6 | WhatsApp voice notes → timestamped facts | Muse Voice Transcribe | 1 Nov |
 | N7 | Impact analysis: new legislation re-evaluates open incidents | Muse Spark | 1 Nov |
 | N8 | Crisis exercise mode with timed injects and after-action report | Muse Spark / open weights | 2 Nov |

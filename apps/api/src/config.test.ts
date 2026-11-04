@@ -129,3 +129,20 @@ describe('local setup password fallback', () => {
     expect(localSetupPasswordFallback(undefined, 'http://localhost:3000')).toBe(false)
   })
 })
+
+/**
+ * Assistant images: the deployment caps them. Unset, the defaults are the ones
+ * the console assumes, so a bare install already refuses what the API refuses.
+ */
+describe('assistant image caps', () => {
+  test('are positive whatever the deployment configures', () => {
+    expect(Number.isInteger(config.attachments.maxImages)).toBe(true)
+    expect(config.attachments.maxImages).toBeGreaterThan(0)
+    expect(config.attachments.maxBytes).toBeGreaterThan(0)
+  })
+
+  test('default to four images of two megabytes when unset', () => {
+    if (!process.env.ASSISTANT_MAX_IMAGES) expect(config.attachments.maxImages).toBe(4)
+    if (!process.env.ASSISTANT_MAX_IMAGE_BYTES) expect(config.attachments.maxBytes).toBe(2 * 1024 * 1024)
+  })
+})

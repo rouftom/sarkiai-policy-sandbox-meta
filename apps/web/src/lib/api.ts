@@ -1011,6 +1011,9 @@ export const api = {
   /** Active inference provider (secret-free). */
   provider: () => request<ProviderDto>('/v1/provider'),
 
+  /** Image caps for assistant messages: count, bytes per image, MIME types. */
+  attachmentLimits: () => request<{ maxImages: number; maxBytes: number; mimeTypes: string[] }>('/v1/attachments/limits'),
+
   /** Chat models from Meta's own list for this key, and the saved selection. */
   models: () => request<ModelsDto>('/v1/models'),
 
