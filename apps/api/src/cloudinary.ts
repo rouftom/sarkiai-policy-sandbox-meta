@@ -37,7 +37,9 @@ export async function uploadImage(source: string, publicId: string, folder = SPS
     })
     return { url: result.secure_url, publicId: result.public_id }
   } catch (error) {
-    console.error('Cloudinary upload failed:', (error as Error).message)
+    // The provider's message can quote the API key; never copy it to a log.
+    const status = (error as { http_code?: number }).http_code
+    console.error('Cloudinary upload failed:', status ? `HTTP ${status}` : 'unknown error')
     return null
   }
 }
@@ -60,6 +62,31 @@ export function attachmentThumbnailUrl(publicId: string, width: number): string 
     format: 'webp',
     transformation: [{ width, height: width, crop: 'limit' }, { quality: 'auto:good' }],
   })
+}
+
+/** The public delivery URL of an uploaded attachment, in its original format. */
+export function attachmentAssetUrl(publicId: string): string {
+  configure()
+  return cloudinary.url(publicId, { secure: true, resource_type: 'image' })
+}
+
+/**
+ * Reads an uploaded attachment back, for deployments that store the bytes in
+ * Cloudinary and need them again as vision context. Public delivery URLs need
+ * no credentials; `null` means the asset is gone or Cloudinary is unreachable.
+ */
+export async function fetchAttachmentImage(publicId: string): Promise<{ data: Buffer; contentType: string } | null> {
+  if (!cloudinaryConfigured()) return null
+  try {
+    const response = await fetch(attachmentAssetUrl(publicId))
+    if (!response.ok) return null
+    return {
+      data: Buffer.from(await response.arrayBuffer()),
+      contentType: response.headers.get('content-type') ?? 'application/octet-stream',
+    }
+  } catch {
+    return null
+  }
 }
 
 /**

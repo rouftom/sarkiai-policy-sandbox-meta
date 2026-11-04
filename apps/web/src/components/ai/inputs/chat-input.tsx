@@ -19,6 +19,8 @@ interface ChatInputProps {
   onBlur?: () => void
   onClose?: () => void
   isStreaming?: boolean
+  /** Send is unavailable (an image is still uploading, or one failed). */
+  sendDisabled?: boolean
   /** Dictation: when provided, the microphone button is shown. `text` is the whole dictation so far. */
   onTranscript?: (text: string, final: boolean) => void
   /** A dictation just started. */
@@ -28,7 +30,7 @@ interface ChatInputProps {
 }
 
 export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
-  function ChatInput({ input, handleInputChange, handleSubmit, status = 'ready', stop, placeholder: customPlaceholder, optionsMenu, onFocus, onBlur, onClose, isStreaming, onTranscript, onRecordingStart, accent }, ref) {
+  function ChatInput({ input, handleInputChange, handleSubmit, status = 'ready', stop, placeholder: customPlaceholder, optionsMenu, onFocus, onBlur, onClose, isStreaming, sendDisabled, onTranscript, onRecordingStart, accent }, ref) {
     const { t } = useI18n()
 
     const placeholderText = customPlaceholder || t('assistant.placeholder')
@@ -68,7 +70,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
                 onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
-                    handleSubmit()
+                    if (!sendDisabled) handleSubmit()
                   }
                 }}
                 onFocus={onFocus}
@@ -90,7 +92,7 @@ export const ChatInput = forwardRef<HTMLTextAreaElement, ChatInputProps>(
               <Button
                 type={isStreaming ? 'button' : 'submit'}
                 size="icon"
-                disabled={!input?.trim() && !isStreaming}
+                disabled={(!input?.trim() && !isStreaming) || (sendDisabled && !isStreaming)}
                 onClick={(e) => {
                   if (isStreaming) {
                     e.preventDefault()

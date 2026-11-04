@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import { Check, ChevronDown, GraduationCap, HeartPulse, History, ImagePlus, Landmark, ListChecks, Plus, RadioTower, Route, Scale, Shield, Sprout, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, GraduationCap, HeartPulse, History, ImagePlus, Landmark, ListChecks, Loader2, Plus, RadioTower, Route, Scale, Shield, Sprout, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -47,6 +47,7 @@ import {
   pickImages,
   type AttachmentLimits,
 } from '@/lib/attachment-limits'
+import { resolveAttachmentUrl } from '@/lib/attachment-url'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { institutionAccent, institutionInk } from '@/lib/institutions'
@@ -59,11 +60,15 @@ import { EFFORTS, useAssistantEffort, type AssistantEffort } from '@/lib/assista
 import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 
 interface Attachment {
+  /** Local identity of the pending upload, so the right item can be updated. */
+  key: string
   mime: string
-  dataBase64: string
-  /** Data URL preview kept on the user turn until the API returns the stored reference. */
-  url: string
   name: string
+  /** Blob URL shown while the upload runs; revoked when the item leaves the composer. */
+  previewUrl: string
+  status: 'uploading' | 'ready' | 'error'
+  /** The stored reference, once the API has the image. */
+  ref?: AttachmentRefDto
 }
 
 /** The stored reference, shaped for a turn: no bytes, no internal object key. */
@@ -111,6 +116,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [attachError, setAttachError] = React.useState<string | null>(null)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const fileRef = React.useRef<HTMLInputElement>(null)
+  /** Blob previews in flight: revoked when the image leaves the composer or the panel closes. */
+  const previewUrls = React.useRef<Set<string>>(new Set())
   const [actionStatus, setActionStatus] = React.useState<Record<string, ActionStatus>>({})
   const [actionBusy, setActionBusy] = React.useState<string | null>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
@@ -214,7 +221,45 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const addFiles = async (files: FileList | null) => {
+  /** Shows a blob preview for each file and starts its upload in the background. */
+  const stageFiles = (files: File[]): Attachment[] => {
+    const staged: Attachment[] = files.map((file) => {
+      const previewUrl = URL.createObjectURL(file)
+      previewUrls.current.add(previewUrl)
+      return {
+        key: crypto.randomUUID(),
+        mime: file.type,
+        name: file.name,
+        previewUrl,
+        status: 'uploading' as const,
+      }
+    })
+    setAttachments((previous) => [...previous, ...staged].slice(0, attachLimits.maxImages))
+    return staged
+  }
+
+  /** Stores one staged file; the composer item carries the upload's state. */
+  const uploadStaged = async (item: Attachment, file: File): Promise<AttachmentRefDto | null> => {
+    try {
+      const ref = await api.uploadAttachment(file)
+      setAttachments((previous) =>
+        previous.map((entry) => (entry.key === item.key ? { ...entry, status: 'ready', ref } : entry)),
+      )
+      return ref
+    } catch {
+      setAttachments((previous) =>
+        previous.map((entry) => (entry.key === item.key ? { ...entry, status: 'error' } : entry)),
+      )
+      return null
+    }
+  }
+
+  /**
+   * Stores the picked images as soon as they are chosen: the composer shows a
+   * blob preview (never base64), the API returns the reference, and the message
+   * only names it. The bytes are read back server-side for the vision model.
+   */
+  const addFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return
     const room = Math.max(0, attachLimits.maxImages - attachments.length)
     const { picked, error } = pickImages(Array.from(files), attachLimits, room)
@@ -227,25 +272,27 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             ? t('assistant.imageTooLarge', { size: formatBytes(attachLimits.maxBytes) })
             : t('assistant.imageMax', { count: attachLimits.maxImages }),
     )
+    const staged = stageFiles(picked)
+    void Promise.all(staged.map((item, index) => uploadStaged(item, picked[index]!)))
+  }
 
-    const next: Attachment[] = []
-    for (const file of picked) {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-      const commaIndex = dataUrl.indexOf(',')
-      if (commaIndex < 0) continue
-      next.push({
-        mime: file.type,
-        dataBase64: dataUrl.slice(commaIndex + 1),
-        url: dataUrl,
-        name: file.name,
-      })
-    }
-    setAttachments((previous) => [...previous, ...next].slice(0, attachLimits.maxImages))
+  const releasePreview = React.useCallback((attachment: Attachment) => {
+    URL.revokeObjectURL(attachment.previewUrl)
+    previewUrls.current.delete(attachment.previewUrl)
+  }, [])
+
+  React.useEffect(
+    () => () => {
+      for (const url of previewUrls.current) URL.revokeObjectURL(url)
+      previewUrls.current.clear()
+    },
+    [],
+  )
+
+  const removeAttachment = (key: string) => {
+    const target = attachments.find((entry) => entry.key === key)
+    if (target) releasePreview(target)
+    setAttachments((previous) => previous.filter((entry) => entry.key !== key))
   }
 
   /** Patch the assistant turn being written (always the last one). */
@@ -257,9 +304,18 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       return copy
     })
 
-  const send = async (override?: string) => {
+  /** An image still uploading (or one that failed) must not be dropped by a send. */
+  const attachmentPending = attachments.some((attachment) => attachment.status !== 'ready')
+
+  const send = async (override?: string, extraRefs: AttachmentRefDto[] = []) => {
     const question = (override ?? input).trim()
-    if (!question || busy || institutions.length === 0) return
+    // An image still uploading (or one that failed) is not sent silently: the
+    // operator either waits or removes it.
+    if (!question || busy || institutions.length === 0 || attachmentPending) return
+    const ready = attachments.filter(
+      (attachment): attachment is Attachment & { ref: AttachmentRefDto } =>
+        attachment.status === 'ready' && Boolean(attachment.ref),
+    )
     const now = Date.now()
     setInput('')
     // Whatever the recorder is still correcting belongs to the question just sent.
@@ -268,12 +324,13 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     // One controller per turn: Stop aborts the HTTP stream, not just the UI.
     const controller = new AbortController()
     streamRef.current = controller
-    const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64, name: attachment.name }))
-    // The previews stay on the user turn until the API returns the stored
-    // reference: the sent image is visible immediately, and only the reference
-    // is saved once it arrives.
-    const previews: TurnAttachment[] = attachments.map((attachment) => ({ url: attachment.url, mime: attachment.mime, name: attachment.name }))
-    // The files belong to this message: the next question starts without them.
+    // The message names stored references; the bytes never travel again. A card
+    // answer may carry a reference of its own (an image uploaded for that card).
+    const refs = [...ready.map((attachment) => attachment.ref), ...extraRefs]
+    const payload = refs.map((ref) => ({ id: ref.id, mime: ref.mime, name: ref.name }))
+    const previews: TurnAttachment[] = refs.map(toTurnAttachment)
+    // The images belong to this message: the next question starts without them.
+    ready.forEach(releasePreview)
     setAttachments([])
     setAttachError(null)
 
@@ -347,7 +404,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       domain: sectorOf,
       language: locale === 'fr' ? ('fr' as const) : ('en' as const),
       ...(effort !== 'auto' ? { effort: effort as Exclude<AssistantEffort, 'auto'> } : {}),
-      attachments: payload.length ? payload : undefined,
+      attachmentRefs: payload.length ? payload : undefined,
     }
     try {
       const result = await api.askStream(body, {
@@ -400,15 +457,6 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         endedAt: Date.now(),
         steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'complete' } : step)),
       }))
-      // The API stored the images and returned their references: the session
-      // keeps those, not the local data URLs. A stopped or failed run leaves the
-      // data URLs in the turn, and the save below drops them.
-      if (result.attachments?.length) {
-        const stored = result.attachments.map(toTurnAttachment)
-        setTurns((previous) =>
-          previous.map((turn) => (turn.id === userTurnId ? { ...turn, attachments: stored } : turn)),
-        )
-      }
     } catch (error) {
       closeOpen(Date.now())
       // Stop is a decision, not a failure: the turn ends where it was, the
@@ -442,28 +490,37 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }
 
   /** Sends the operator's answer to a question or input request as the next turn. */
-  const answerCard = (turnId: string, cardId: string, answer: string) => {
+  const answerCard = (turnId: string, cardId: string, answer: string, refs: AttachmentRefDto[] = []) => {
+    // The card closes only if the send happens: a pending composer image would
+    // otherwise be dropped, so the card stays open and the composer explains.
+    if (attachmentPending) {
+      setAttachError(
+        attachments.some((attachment) => attachment.status === 'error')
+          ? t('assistant.imageUploadFailed')
+          : t('assistant.imageUploading'),
+      )
+      return
+    }
     setTurns((previous) =>
       previous.map((turn) =>
         turn.id === turnId ? { ...turn, cards: (turn.cards ?? []).filter((card) => card.id !== cardId) } : turn,
       ),
     )
-    void send(answer)
+    void send(answer, refs)
   }
 
   const submitFile = async (turnId: string, card: Extract<AgentUiRequest, { kind: 'request_input' }>, file: File) => {
     if (file.type.startsWith('image/')) {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-      const commaIndex = dataUrl.indexOf(',')
-      setAttachments((previous) =>
-        [...previous, { mime: file.type, dataBase64: dataUrl.slice(commaIndex + 1), url: dataUrl, name: file.name }].slice(0, 3),
-      )
-      answerCard(turnId, card.id, `${card.label}: ${file.name}`)
+      // Same contract as a composer image: store it first, then name it in the
+      // answer. The blob preview only exists while the upload runs.
+      const [staged] = stageFiles([file])
+      if (!staged) return
+      const ref = await uploadStaged(staged, file)
+      if (!ref) return
+      // The image belongs to this answer, not to the composer's next question.
+      releasePreview(staged)
+      removeAttachment(staged.key)
+      answerCard(turnId, card.id, `${card.label}: ${file.name}`, [ref])
       return
     }
     const text = (await file.text()).slice(0, 20_000)
@@ -612,6 +669,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }
 
   const newConversation = () => {
+    attachments.forEach(releasePreview)
     setSessionId(null)
     setHistoryOpen(false)
     setTurns([])
@@ -933,13 +991,36 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         {attachError && <p className="px-2 text-[11px] text-destructive">{attachError}</p>}
         {attachments.length > 0 && (
           <div className="flex gap-1.5">
-            {attachments.map((attachment, index) => (
-              <div key={index} className="relative">
+            {attachments.map((attachment) => (
+              <div key={attachment.key} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={attachment.url} alt={attachment.name} className="h-11 w-11 rounded-lg border border-border object-cover" />
+                <img
+                  src={attachment.ref ? resolveAttachmentUrl(attachment.ref.thumbnailUrl) : attachment.previewUrl}
+                  alt={attachment.name}
+                  className={cn(
+                    'h-11 w-11 rounded-lg border object-cover',
+                    attachment.status === 'error' ? 'border-destructive' : 'border-border',
+                  )}
+                />
+                {attachment.status === 'uploading' && (
+                  <span
+                    className="absolute inset-0 grid place-items-center rounded-lg bg-background/60"
+                    aria-label={t('assistant.imageUploading')}
+                  >
+                    <Loader2 className="h-4 w-4 animate-spin text-foreground" />
+                  </span>
+                )}
+                {attachment.status === 'error' && (
+                  <span
+                    className="absolute inset-0 grid place-items-center rounded-lg bg-destructive/10 text-destructive"
+                    title={t('assistant.imageUploadFailed')}
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                  </span>
+                )}
                 <button
                   type="button"
-                  onClick={() => setAttachments((previous) => previous.filter((_, i) => i !== index))}
+                  onClick={() => removeAttachment(attachment.key)}
                   className="absolute -right-1 -top-1 rounded-lg bg-destructive p-0.5 text-white"
                   aria-label={t('assistant.removeImage')}
                 >
@@ -971,6 +1052,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
             void send()
           }}
           isStreaming={busy}
+          sendDisabled={attachments.some((attachment) => attachment.status !== 'ready')}
           placeholder={t('assistant.placeholder')}
           optionsMenu={optionsMenu}
           onRecordingStart={() => {
