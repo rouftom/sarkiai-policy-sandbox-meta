@@ -371,6 +371,12 @@ const scenarioSessions = new Map<string, ScenarioSession>()
 const GAZETTE_MAX_BYTES = 12 * 1024 * 1024
 
 /**
+ * JSON body ceiling for an assistant question: the configured images at their
+ * maximum, plus base64 overhead (4/3) and one megabyte of question and metadata.
+ */
+const ASK_BODY_LIMIT = Math.ceil(config.attachments.maxImages * config.attachments.maxBytes * (4 / 3)) + 1024 * 1024
+
+/**
  * The Meta Model API descriptor of a cloud deployment, whatever chat model is
  * active. SAM 3.1 and Muse Voice Transcribe are Meta-only services: they keep
  * running when the reasoning moves to Muse Spark Open on Baseten (a hybrid the
@@ -1139,37 +1145,43 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // ── Single mandated agent (text, optionally multimodal) ───────────────────
-  /** Persist attachments (content-addressed, best-effort: works without MinIO). */
-  /** Documents the operator may attach as reference text (PDF is read, the others are plain text). */
-  const DOCUMENT_MIMES = new Set(['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json'])
-  const REFERENCE_CHARS = 40_000
+  /** Vision MIME types the assistant accepts. Documents are not chat context. */
+  const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const
 
-  async function storeAttachments(
-    attachments: Array<{ mime: string; dataBase64: string; name?: string }> | undefined,
-  ) {
+  /**
+   * Persist the images of one message (content-addressed, best-effort: works
+   * without MinIO) after checking the deployment's caps. Images are the only
+   * accepted context: a document would need a text-extraction step and a
+   * different contract, and the composer only offers images.
+   */
+  async function storeAttachments(attachments: Array<{ mime: string; dataBase64: string; name?: string }> | undefined) {
+    const list = attachments ?? []
+    if (list.length > config.attachments.maxImages) {
+      return {
+        ok: false as const,
+        status: 400,
+        code: 'too_many_attachments',
+        message: `At most ${config.attachments.maxImages} images per message.`,
+      }
+    }
+    const maxMb = (config.attachments.maxBytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')
     const meta: Array<{ sha256: string; mime: string; size: number; key: string }> = []
-    const references: Array<{ name: string; text: string }> = []
-    for (const attachment of attachments ?? []) {
-      const isImage = attachment.mime.startsWith('image/')
-      const isDocument = DOCUMENT_MIMES.has(attachment.mime)
-      if (!isImage && !isDocument) {
-        return { ok: false as const, status: 415, code: 'unsupported_media_type', message: `Unsupported attachment type: ${attachment.mime}` }
+    for (const attachment of list) {
+      if (!(IMAGE_MIMES as readonly string[]).includes(attachment.mime)) {
+        return {
+          ok: false as const,
+          status: 415,
+          code: 'unsupported_media_type',
+          message: `Only PNG, JPEG, WebP or GIF images are accepted (got ${attachment.mime}).`,
+        }
       }
       const data = Buffer.from(attachment.dataBase64, 'base64')
-      if (data.byteLength > 10 * 1024 * 1024) {
-        return { ok: false as const, status: 413, code: 'attachment_too_large', message: 'Attachment too large (max 10 MB).' }
-      }
-      if (isDocument) {
-        try {
-          const text =
-            attachment.mime === 'application/pdf'
-              ? String(
-                  (await (await import('unpdf')).extractText(await (await import('unpdf')).getDocumentProxy(new Uint8Array(data)), { mergePages: true })).text ?? '',
-                )
-              : data.toString('utf8')
-          references.push({ name: attachment.name ?? 'document', text: text.slice(0, REFERENCE_CHARS) })
-        } catch {
-          return { ok: false as const, status: 422, code: 'invalid_document', message: `Could not read the document ${attachment.name ?? ''}.`.trim() }
+      if (data.byteLength > config.attachments.maxBytes) {
+        return {
+          ok: false as const,
+          status: 413,
+          code: 'attachment_too_large',
+          message: `Image too large (max ${maxMb} MB).`,
         }
       }
       try {
@@ -1179,10 +1191,21 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         meta.push({ sha256: sha256Hex(data), mime: attachment.mime, size: data.byteLength, key: '' })
       }
     }
-    return { ok: true as const, meta, references, images: (attachments ?? []).filter((a) => a.mime.startsWith('image/')) }
+    return { ok: true as const, meta, references: [] as Array<{ name: string; text: string }>, images: list }
   }
 
-  app.post('/v1/agents/ask', async (request, reply) => {
+  /**
+   * The image caps of this deployment, so the composer enforces exactly what
+   * the API will accept. Public data: no secret, but the route stays behind the
+   * session guard like the rest of the console API.
+   */
+  app.get('/v1/attachments/limits', async () => ({
+    maxImages: config.attachments.maxImages,
+    maxBytes: config.attachments.maxBytes,
+    mimeTypes: IMAGE_MIMES,
+  }))
+
+  app.post('/v1/agents/ask', { bodyLimit: ASK_BODY_LIMIT }, async (request, reply) => {
     const body = askBody.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
 
@@ -1215,7 +1238,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * is written, and a final `done` event carrying the very same assessment
    * object the buffered route returns (citations and validation included).
    */
-  app.post('/v1/agents/ask/stream', async (request, reply) => {
+  app.post('/v1/agents/ask/stream', { bodyLimit: ASK_BODY_LIMIT }, async (request, reply) => {
     const body = askBody.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
 

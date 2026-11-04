@@ -17,9 +17,9 @@ OCR, reranker or transcription service to size.
 | **Ollama: Muse Glimmer 30B** (Q4, multimodal, Apache-2.0) | **~18–20 GB** | **~24–32 GB VRAM**, or **48 GB+ unified memory** | yes | `local`, `sovereign` |
 | MongoDB (corpus `kb_chunks`, audit, CoT) | < 1 GB | ~0.5–1 GB | no | all |
 | MinIO (image attachments) | ~0.2 GB | ~0.5 GB | no | all |
-| API (Bun/Fastify: ingestion, agentic search, agents) | — | ~0.5–1 GB | no | all |
-| Web (Next.js) | — | ~0.5–1 GB | no | all |
-| Docker images (ollama, mongo, minio, node) | ~5–7 GB | — | — | all |
+| API (Bun/Fastify: ingestion, agentic search, agents) | n/a | ~0.5–1 GB | no | all |
+| Web (Next.js) | n/a | ~0.5–1 GB | no | all |
+| Docker images (ollama, mongo, minio, node) | ~5–7 GB | n/a | n/a | all |
 
 The corpus itself is text: 22 documents and 6 096 active chunks take a few
 megabytes in `kb_chunks`. The footprint comes from the model, not the data.

@@ -116,18 +116,18 @@ export const askBody = z.object({
     .enum(['minimal', 'low', 'medium', 'high'])
     .optional()
     .describe('Provider reasoning effort; absent leaves the choice to the model.'),
-  // Untrusted user files (context only, never citable): images, or documents read as reference text.
+  // Untrusted images sent as vision context (never citable). Bounded per message
+  // and per file; the route enforces the deployment's configured caps.
   attachments: z
     .array(
       z.object({
-        mime: z.string().describe('MIME type of the file.'),
-        dataBase64: z.string().describe('Base64 payload.'),
+        mime: z.string().describe('MIME type of the image.'),
+        dataBase64: z.string().describe('Base64 payload of the image.'),
         name: z.string().max(200).optional().describe('Display name.'),
       }),
     )
-    .max(3)
     .optional()
-    .describe('Context files (images or reference text). They are never citable.'),
+    .describe('Images sent as context (count and size caps come from `GET /v1/attachments/limits`). They are never citable.'),
 })
 
 export const agentRoutingRequest = z.object({
