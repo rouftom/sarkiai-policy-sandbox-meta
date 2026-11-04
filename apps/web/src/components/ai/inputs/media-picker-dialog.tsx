@@ -58,6 +58,8 @@ export interface MediaPickerDialogProps {
   onPick: (ref: AttachmentRefDto) => void
   /** Why the last device selection was partly refused, if it was. */
   error?: string | null
+  /** The library is still being read, so an empty grid is not final. */
+  loading?: boolean
 }
 
 export function MediaPickerDialog({
@@ -70,6 +72,7 @@ export function MediaPickerDialog({
   onFiles,
   onPick,
   error = null,
+  loading = false,
 }: MediaPickerDialogProps) {
   const { t } = useI18n()
   const selected = React.useMemo(() => new Set(selectedIds), [selectedIds])
@@ -95,7 +98,7 @@ export function MediaPickerDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue={gallery.length > 0 ? 'gallery' : 'device'} className="mt-4 gap-3">
+          <Tabs defaultValue={gallery.length > 0 || loading ? 'gallery' : 'device'} className="mt-4 gap-3">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="gallery" className="gap-1.5">
                 <Images className="h-3.5 w-3.5" />
@@ -108,7 +111,15 @@ export function MediaPickerDialog({
             </TabsList>
 
             <TabsContent value="gallery">
-              {gallery.length === 0 ? (
+              {loading ? (
+                <div
+                  role="status"
+                  aria-label={t('assistant.mediaLoading')}
+                  className="grid place-items-center gap-2 rounded-xl border border-dashed border-border px-3 py-8"
+                >
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : gallery.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
                   {t('assistant.mediaGalleryEmpty')}
                 </p>
