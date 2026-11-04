@@ -11,8 +11,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 COPY --from=build /app /app
-# The deployed image runs unprivileged.
-RUN addgroup -S app && adduser -S -G app app && chown -R app:app /app
+# The deployed image runs unprivileged. The runtime base is Debian slim, not
+# Alpine: `useradd --user-group` creates the matching group there.
+RUN useradd --system --create-home --user-group app && chown -R app:app /app
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=20s \
