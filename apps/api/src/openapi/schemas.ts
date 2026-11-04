@@ -128,6 +128,28 @@ export const askBody = z.object({
     )
     .optional()
     .describe('Images sent as context (count and size caps come from `GET /v1/attachments/limits`). They are never citable.'),
+  /**
+   * Preferred over `attachments`: the console uploads each image once
+   * (`POST /v1/attachments`) and a message only names the stored references.
+   * The bytes are read back server-side for the vision model.
+   */
+  attachmentRefs: z
+    .array(
+      z.object({
+        id: z
+          .string()
+          .min(1)
+          .max(300)
+          .describe('Stored image id: its SHA-256 (S3) or Cloudinary public id.'),
+        mime: z.string().describe('MIME type the image was uploaded with.'),
+        name: z.string().max(200).optional().describe('Display name.'),
+      }),
+    )
+    .max(32)
+    .optional()
+    .describe(
+      'Images already stored by this deployment, by reference. Takes precedence over `attachments`; caps come from `GET /v1/attachments/limits`. They are never citable.',
+    ),
 })
 
 export const agentRoutingRequest = z.object({
