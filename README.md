@@ -115,6 +115,11 @@ Screens built during the hackathon:
 
 More screens (crisis-scenario graph, knowledge graph, countries registry, AI-readiness lens, guide, preferences, security) live in [`docs/screenshots/`](docs/screenshots): 1295-pixel-wide captures of the hosted app, palette-optimised with ImageMagick.
 
+The assistant's **+ → Attach an image** action opens a media picker: **Library**
+offers the images already stored across the operator's conversations (check or
+uncheck a thumbnail to attach or detach it), and **Device** uploads a local file
+immediately with a visible progress spinner.
+
 ## One engine, two lenses, three profiles
 
 | Lens | Purpose | Basis |

@@ -3,16 +3,19 @@
 /**
  * The composer's media picker.
  *
- * Adapted from the organization console's `MediaPickerDialog`: the same two
- * entries (the images this conversation already stores, and the device), without
- * a global library — a conversation never lists another operator's images.
- * Picking a stored image re-attaches its reference, so the bytes never travel a
- * second time. A device pick starts the upload immediately; the parent owns the
- * transfer and hands back the in-flight items, shown here with a centred spinner
- * so progress is readable even while the dialog stays open.
+ * Adapted from the organization console's `MediaPickerDialog`: **Library** lists
+ * the images the operator saved across their own conversations (never another
+ * operator's) plus the open conversation and the composer, and **Device**
+ * imports local files. A library thumbnail is a toggle: it shows a check while
+ * its reference is in the message, and clicking it again detaches it without
+ * deleting the stored image. Adding reuses the reference, so the bytes never
+ * travel a second time. A device pick starts the upload immediately; the parent
+ * owns the transfer and hands back the in-flight items, shown here with the
+ * application's centred loader so progress is readable even while the dialog
+ * stays open.
  */
 import * as React from 'react'
-import { AlertTriangle, Check, HardDrive, Images, Loader2, Upload } from 'lucide-react'
+import { AlertTriangle, Check, HardDrive, Images, Loader, Upload, X } from 'lucide-react'
 import {
   Button,
   Dialog,
@@ -45,17 +48,17 @@ export interface MediaUploadItem {
 export interface MediaPickerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Images already stored in this conversation, newest first. */
+  /** Images offered as a library: the operator's own, the open conversation and the composer. */
   gallery: AttachmentRefDto[]
-  /** Ids the composer already holds, offered as "already attached". */
+  /** Ids the message already holds; their thumbnails show a check. */
   selectedIds?: readonly string[]
   /** Uploads in flight, with their centred progress overlay. */
   uploads?: readonly MediaUploadItem[]
   limits: AttachmentLimits
   /** A device pick: the parent validates and uploads it. */
   onFiles: (files: File[]) => void
-  /** Re-attaches a stored image without a second upload. */
-  onPick: (ref: AttachmentRefDto) => void
+  /** Toggles a stored image: adds its reference, or detaches it from the message. */
+  onToggle: (ref: AttachmentRefDto) => void
   /** Why the last device selection was partly refused, if it was. */
   error?: string | null
   /** The library is still being read, so an empty grid is not final. */
@@ -70,7 +73,7 @@ export function MediaPickerDialog({
   uploads = [],
   limits,
   onFiles,
-  onPick,
+  onToggle,
   error = null,
   loading = false,
 }: MediaPickerDialogProps) {
@@ -117,7 +120,7 @@ export function MediaPickerDialog({
                   aria-label={t('assistant.mediaLoading')}
                   className="grid place-items-center gap-2 rounded-xl border border-dashed border-border px-3 py-8"
                 >
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <Loader className="h-5 w-5 animate-spin text-brand-primary" />
                 </div>
               ) : gallery.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
@@ -127,19 +130,35 @@ export function MediaPickerDialog({
                 <div className="custom-scrollbar grid max-h-64 grid-cols-4 gap-2 overflow-y-auto pr-1">
                   {gallery.map((ref) => {
                     const attached = selected.has(ref.id)
+                    const blocked = !attached && full
                     return (
                       <button
                         key={ref.id}
                         type="button"
-                        onClick={() => onPick(ref)}
-                        disabled={attached}
-                        aria-label={attached ? t('assistant.mediaAlready') : ref.name}
-                        title={attached ? t('assistant.mediaAlready') : ref.name}
+                        onClick={() => onToggle(ref)}
+                        disabled={blocked}
+                        aria-pressed={attached}
+                        aria-label={
+                          attached
+                            ? t('assistant.mediaDetach')
+                            : blocked
+                              ? t('assistant.mediaFull')
+                              : t('assistant.mediaAdd')
+                        }
+                        title={
+                          attached
+                            ? t('assistant.mediaDetach')
+                            : blocked
+                              ? t('assistant.mediaFull')
+                              : ref.name
+                        }
                         className={cn(
                           'group relative aspect-square overflow-hidden rounded-xl border transition-colors',
                           attached
-                            ? 'cursor-default border-brand-primary/60'
-                            : 'border-border hover:border-brand-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            ? 'border-brand-primary/60'
+                            : blocked
+                              ? 'cursor-not-allowed border-border opacity-50'
+                              : 'border-border hover:border-brand-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         )}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -150,8 +169,9 @@ export function MediaPickerDialog({
                           className="h-full w-full object-cover"
                         />
                         {attached && (
-                          <span className="absolute inset-0 grid place-items-center bg-black/45">
-                            <Check className="h-5 w-5 text-white" />
+                          <span aria-hidden="true" className="absolute inset-0 grid place-items-center bg-black/35">
+                            <Check className="h-5 w-5 text-white group-hover:hidden" />
+                            <X className="hidden h-5 w-5 text-white group-hover:block" />
                           </span>
                         )}
                       </button>
@@ -212,7 +232,7 @@ export function MediaPickerDialog({
                             aria-label={t('assistant.imageUploading')}
                             className="absolute inset-0 grid place-items-center rounded-xl bg-black/55"
                           >
-                            <Loader2 className="h-6 w-6 animate-spin text-white" />
+                            <Loader className="h-6 w-6 animate-spin text-white" />
                           </span>
                         )}
                         {item.status === 'error' && (
