@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="1200" height="720" role="img" aria-labelledby="t d">
+<title id="t">SarkiAI Policy Sandbox: notifications and the approval loop</title>
+<desc id="d">When a joint report is ready, an administrator sends an approval request. WhatsApp messages use approved utility templates through the WhatsApp Cloud API; e-mails are rendered with React Email and sent through Resend. The focal point opens a signed, single-use link that leads to the decision page in the console and approves or rejects. Inbound WhatsApp webhooks are accepted only with a valid signature. Every send and every decision lands in the hash-chained audit trail.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#50627C"/></marker>
+<marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5AA9FF"/></marker></defs>
+<style>
+.kicker{font:600 15px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:2.5px;fill:#A9B4C6}
+.head{font:700 32px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#F2F5FA}
+.name{font:700 19px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#F2F5FA}
+.sub{font:400 14.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.note{font:italic 400 14.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.tag{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#5AA9FF}
+.tagh{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#FF8A65}
+.tags{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#7F8DA3}
+.legend{font:500 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.flow{fill:none;stroke:#50627C;stroke-width:2}
+.dash{fill:none;stroke:#50627C;stroke-width:2;stroke-dasharray:6 6}
+.metaflow{fill:none;stroke:#5AA9FF;stroke-width:2}
+.band{fill:#111827;stroke:#2A3648;stroke-width:1.5;stroke-dasharray:4 6}
+</style>
+<rect width="1200" height="720" rx="22" fill="#0E1420"/>
+<text class="kicker" x="44" y="62">NOTIFICATIONS AND APPROVAL</text>
+<text class="head" x="44" y="102">An agent proposes. A person decides.</text>
+<path class="flow" d="M174 260 V296" marker-end="url(#a)"/><path class="flow" d="M304 340 C 330 340, 330 205, 356 205" marker-end="url(#a)"/><path class="flow" d="M304 365 H356" marker-end="url(#a)"/><path class="flow" d="M690 205 H746" marker-end="url(#a)"/><path class="flow" d="M690 355 C 720 355, 720 240, 746 240" marker-end="url(#a)"/><path class="flow" d="M953 280 V316" marker-end="url(#a)"/><path class="dash" d="M690 230 C 720 230, 720 515, 746 515" marker-end="url(#a)"/>
+<rect class="band" x="44" y="600" width="1112" height="80" rx="16"/>
+<rect x="1004" y="52" width="14" height="14" rx="4" fill="#121925" stroke="#50627C" stroke-width="1.5" stroke-dasharray="4 3"/><text class="legend" x="1026" y="64">External service</text>
+<rect x="786" y="52" width="14" height="14" rx="4" fill="#2B1D1C" stroke="#FF8A65" stroke-width="2"/><text class="legend" x="808" y="64">People and institutions</text>
+<rect x="635" y="52" width="14" height="14" rx="4" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/><text class="legend" x="657" y="64">SarkiAI engine</text>
+<rect x="515" y="52" width="14" height="14" rx="4" fill="#14263F" stroke="#5AA9FF" stroke-width="2"/><text class="legend" x="537" y="64">Meta model</text>
+<rect x="44" y="150" width="260" height="110" rx="14" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/>
+<text class="tags" x="62" y="178">OUTPUT</text>
+<text class="name" x="62" y="204">Joint report ready</text>
+<text class="sub" x="62" y="228">From the coordinator</text>
+<rect x="44" y="300" width="260" height="130" rx="14" fill="#2B1D1C" stroke="#FF8A65" stroke-width="2"/>
+<text class="name" x="62" y="328">Administrator sends</text>
+<text class="sub" x="62" y="352">Approval request,</text>
+<text class="sub" x="62" y="372">administrators only</text>
+<rect x="360" y="150" width="330" height="110" rx="14" fill="#121925" stroke="#50627C" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text class="name" x="378" y="178">WhatsApp Cloud API</text>
+<text class="sub" x="378" y="202">Approved utility templates</text>
+<rect x="360" y="300" width="330" height="110" rx="14" fill="#121925" stroke="#50627C" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text class="name" x="378" y="328">E-mail</text>
+<text class="sub" x="378" y="352">React Email, sent through Resend</text>
+<rect x="750" y="150" width="406" height="130" rx="14" fill="#2B1D1C" stroke="#FF8A65" stroke-width="2"/>
+<text class="name" x="768" y="178">Focal point</text>
+<text class="sub" x="768" y="202">Receives the request and a</text>
+<text class="sub" x="768" y="222">signed, single-use link</text>
+<rect x="750" y="320" width="406" height="110" rx="14" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/>
+<text class="tags" x="768" y="348">CONSOLE</text>
+<text class="name" x="768" y="374">Decision page</text>
+<text class="sub" x="768" y="398">Approve or reject in the console</text>
+<rect x="750" y="460" width="406" height="110" rx="14" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/>
+<text class="tags" x="768" y="488">API</text>
+<text class="name" x="768" y="514">Signed webhook</text>
+<text class="sub" x="768" y="538">Inbound events accepted only</text>
+<text class="sub" x="768" y="558">with a valid signature</text>
+<text class="tags" x="60" y="622">AUDIT</text>
+<text class="legend" x="60" y="650" text-anchor="start">Every send, delivery event and decision lands in the same hash-chained audit trail as every agent step.</text>
+</svg>
