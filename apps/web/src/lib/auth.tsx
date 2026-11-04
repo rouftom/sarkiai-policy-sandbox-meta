@@ -8,7 +8,7 @@
  * it once and confirms a code; recovery codes are shown once. Every later
  * sign-in asks for the 6-digit code (or a single-use recovery code).
  *
- * The token is stateless and stored in `localStorage`; a 401 anywhere simply
+ * The token is signed and stored in `localStorage`; a 401 anywhere simply
  * sends the operator back to `/login`.
  */
 

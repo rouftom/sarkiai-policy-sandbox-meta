@@ -9,10 +9,12 @@
  * the console shows the otpauth URI (QR) and the operator confirms a 6-digit
  * code once. Later sign-ins require that code, or a single-use backup code.
  *
- * Sessions are stateless HMAC-signed tokens (7 days), so a restart does not sign
- * anyone out and no session table has to be reachable for the demo to work.
- * Operators are persisted in MongoDB when it is reachable; the service keeps an
- * in-memory copy so the console still authenticates while the cluster is down.
+ * Sessions are HMAC-signed tokens valid for seven days. Each token names the
+ * account's `sessionVersion`, and every request re-reads the account, so removing
+ * an operator or bumping that version (a password change, an explicit revoke)
+ * invalidates tokens already issued. Operators are persisted in MongoDB when it
+ * is reachable; the service keeps an in-memory copy so the console still
+ * authenticates while the cluster is down.
  */
 
 import { createHash, createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto'
@@ -72,6 +74,8 @@ export interface OperatorRecord {
   /** Last accepted TOTP time step: a code cannot be used twice. */
   totpLastStep?: number
   backupCodes?: string[]
+  /** Bumped whenever every issued token must stop working (password change, revoke). */
+  sessionVersion?: number
   preferences: Preferences
   createdAt: string
   lastLoginAt?: string
@@ -163,6 +167,8 @@ interface SessionClaims {
   role: Role
   name: string
   exp: number
+  /** The account's session version at issue time; a mismatch revokes the token. */
+  sv: number
 }
 
 interface ChallengeClaims {
@@ -800,6 +806,8 @@ export class AuthService {
 
     const before: OperatorRecord = { ...record }
     record.passwordHash = hashPassword(newPassword)
+    // Every token issued before this change must stop working.
+    record.sessionVersion = (record.sessionVersion ?? 0) + 1
     delete record.mustChangePassword
     await this.persistOrFail(record, before)
 
@@ -825,6 +833,8 @@ export class AuthService {
 
     const before: OperatorRecord = { ...record }
     record.passwordHash = hashPassword(newPassword)
+    // Every token issued before this change must stop working.
+    record.sessionVersion = (record.sessionVersion ?? 0) + 1
     delete record.mustChangePassword
     await this.persistOrFail(record, before)
 
@@ -943,7 +953,14 @@ export class AuthService {
 
   private async issueSession(record: OperatorRecord): Promise<SessionResult> {
     const exp = Math.floor(Date.now() / 1000) + this.sessionTtl
-    const claims: SessionClaims = { v: 1, sub: record.email, role: record.role, name: record.name, exp }
+    const claims: SessionClaims = {
+      v: 1,
+      sub: record.email,
+      role: record.role,
+      name: record.name,
+      exp,
+      sv: record.sessionVersion ?? 0,
+    }
     record.lastLoginAt = new Date().toISOString()
     await this.save(record)
     return {
@@ -1010,13 +1027,32 @@ export class AuthService {
     return this.issueSession(record)
   }
 
-  verifySession(token: string | undefined): PublicOperator | null {
+  /**
+   * Decode a bearer token and check it against the account it names.
+   *
+   * The signature proves the token was issued by this deployment; the stored
+   * record proves the account still exists and that its `sessionVersion` has not
+   * moved. An account that is gone, or a version bumped by a password change or
+   * a revoke, loses access at once instead of at the seven-day expiry.
+   */
+  async verifySession(token: string | undefined): Promise<PublicOperator | null> {
     if (!token) return null
     const claims = readToken<SessionClaims>(token, this.config.sessionSecret)
     if (!claims || claims.v !== 1 || claims.exp * 1000 < Date.now()) return null
-    const record = this.memory.get(normalizeEmail(claims.sub))
-    if (!record) return { email: claims.sub, name: claims.name, role: claims.role, mfaEnrolled: true, mustChangePassword: false, createdAt: '', preferences: { ...DEFAULT_PREFERENCES } }
+    // Fail closed: an unreadable store means the account cannot be checked.
+    const record = await this.load(claims.sub)
+    if (!record) return null
+    if ((claims.sv ?? 0) !== (record.sessionVersion ?? 0)) return null
     return toPublic(record)
+  }
+
+  /** Invalidate every token already issued for this account. */
+  async revokeSessions(email: string): Promise<void> {
+    const record = await this.load(email)
+    if (!record) return
+    const before: OperatorRecord = { ...record }
+    record.sessionVersion = (record.sessionVersion ?? 0) + 1
+    await this.persistOrFail(record, before)
   }
 
   /** Releases the client on shutdown: the host stops this process on every deploy. */

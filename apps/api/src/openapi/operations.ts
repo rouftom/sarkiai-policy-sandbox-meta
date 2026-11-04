@@ -303,7 +303,7 @@ export const OPERATIONS: Record<string, OperationDoc> = {
   'POST /v1/auth/logout': {
     summary: 'Record a sign-out',
     description:
-      'Sessions are stateless: the endpoint records the event in the audit chain and the client drops its token.',
+      'Revokes every token issued to the account, records the event in the audit chain, and the client drops its token.',
     tags: ['auth'],
   },
   'GET /v1/preferences': {
