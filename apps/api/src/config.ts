@@ -209,6 +209,16 @@ export const config = {
     secretKey: env('S3_SECRET_KEY', 'sps-minio-secret'),
   },
 
+  /**
+   * Assistant chat attachments: images only. The console reads the caps from
+   * `GET /v1/attachments/limits`, so a deployment that sets them keeps the
+   * composer in step. Defaults: four images of 2 MiB each.
+   */
+  attachments: {
+    maxImages: Math.max(1, Number(env('ASSISTANT_MAX_IMAGES', '4')) || 4),
+    maxBytes: Math.max(1, Number(env('ASSISTANT_MAX_IMAGE_BYTES', String(2 * 1024 * 1024))) || 2 * 1024 * 1024),
+  },
+
   // WhatsApp Cloud API, called directly from the API (no external gateway).
   // Cloud API is the only channel; approval decisions stay inside the web app.
   whatsapp: {

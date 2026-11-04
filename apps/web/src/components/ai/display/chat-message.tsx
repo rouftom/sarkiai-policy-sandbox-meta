@@ -26,6 +26,11 @@ export interface ChatTurn {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /**
+   * Images the operator attached to the question. Preview data URLs kept for
+   * the live conversation only: they are stripped before a session is saved.
+   */
+  attachments?: Array<{ url: string; mime?: string; name?: string }>
   reasoning?: string
   citations?: AssessmentDto['citations']
   webSources?: AssessmentDto['webSources']
@@ -76,6 +81,26 @@ export function ChatMessage({
       <div className="group/user mx-1 mt-2 flex flex-col items-end gap-2 py-4 sm:gap-3">
         <div className="flex max-w-[90%] flex-row-reverse items-start gap-2 sm:max-w-[85%] sm:gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:gap-2">
+            {turn.attachments && turn.attachments.length > 0 && (
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {turn.attachments.map((attachment, index) => (
+                  <a
+                    key={index}
+                    href={attachment.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block overflow-hidden rounded-xl border border-border"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={attachment.url}
+                      alt={attachment.name ?? ''}
+                      className="h-24 w-24 object-cover sm:h-28 sm:w-28"
+                    />
+                  </a>
+                ))}
+              </div>
+            )}
             <StarBorder as="div" className="rounded-2xl rounded-tr-none" color="var(--primary)" speed="2s" thickness={4} isAnimate={false}>
               <div className="rounded-2xl rounded-tr-none border-none bg-primary/10 px-4 py-2 text-xs font-semibold leading-relaxed text-foreground backdrop-blur-md dark:bg-primary/20 sm:text-xs">
                 <AnimatedTextCompletion isLast={isLast} text={turn.content} isStreaming={false} />

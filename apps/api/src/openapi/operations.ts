@@ -358,6 +358,12 @@ export const OPERATIONS: Record<string, OperationDoc> = {
   },
 
   /* ── Agents ────────────────────────────────────────────────────────────── */
+  'GET /v1/attachments/limits': {
+    summary: 'Image limits for the assistant',
+    description:
+      'The caps this deployment applies to assistant images: count per message, bytes per image, and the accepted MIME types. The console enforces them in the composer.',
+    tags: ['agents'],
+  },
   'POST /v1/agents/ask': {
     summary: 'Ask the mandated agents a question',
     description:
