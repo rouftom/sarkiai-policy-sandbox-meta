@@ -30,7 +30,7 @@ The baseline commit (tag `pre-hackathon-baseline`) imports, as a single commit, 
 - `[x]` Readiness gap engine (13 dimensions / 6 factors).
 - `[x]` 0–5 maturity scoring + weighted composite (`packages/readiness/src/scoring.ts`).
 - `[x]` Causal what-if propagation across dimensions (`packages/readiness/src/causal.ts`).
-- `[x]` African regional reference corpus — continental and regional instruments only (`data/global/africa/`, `scripts/fetch-corpus.sh`).
+- `[x]` African regional reference corpus: continental and regional instruments only (`data/global/africa/`, `scripts/fetch-corpus.sh`).
 - `[x]` Hash-chained audit + persisted CoT traces.
 - `[x]` **Local-first / sovereign**: Muse Glimmer 30B on Ollama, Muse Spark Open on Baseten. See `docs/SOVEREIGNTY-AND-MODELS.md`.
 - `[x]` **Admin design system** replicated in `@sps/theme` (packs meta/green/ocean/sunset/mono/fada, `meta` default): assistant uses SarkiAI Compact.

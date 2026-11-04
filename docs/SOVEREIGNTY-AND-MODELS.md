@@ -17,12 +17,12 @@ model that produced it. The console badge always shows which one is answering.
 
 The model is one per mode: there is no separate embedding, reranking or
 transcription model to pick. The corpus is searched lexically (BM25) and the
-reasoning model plans the search, runs the sub-agents and ranks the result — see
+reasoning model plans the search, runs the sub-agents and ranks the result; see
 [Agentic corpus search](../README.md#agentic-corpus-search).
 
 ## 1. Why it matters here
 
-- **Sensitive data**: the domain is health — patient records and inferred signals.
+- **Sensitive data**: the domain is health (patient records and inferred signals).
 - **Regulatory context**: personal-data protection law, the telecom regulator and
   the data-protection authority all constrain where records may travel.
 - **Institutional argument**: a system that runs **without depending on foreign

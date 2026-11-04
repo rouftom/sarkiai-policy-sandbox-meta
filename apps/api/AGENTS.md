@@ -1,4 +1,4 @@
-# `apps/api` — API rules
+# `apps/api`: API rules
 
 Bun + Fastify 5 service. It is the only process that talks to the model
 providers, MongoDB and the messaging providers.
@@ -16,7 +16,7 @@ providers, MongoDB and the messaging providers.
 
 Public routes (auth, health, webhook, signed approval links) are declared in
 `isPublicRoute`. Everything else runs behind the `onRequest` guard, which also
-enters the metering context. A new route is authenticated by default — never
+enters the metering context. A new route is authenticated by default: never
 add a permissive path without a comment explaining why.
 
 ## Conventions
@@ -46,7 +46,7 @@ add a permissive path without a comment explaining why.
 
 ## Tests
 
-- Unit: `bun test apps/api/src` — no infrastructure, no network, no clock.
+- Unit: `bun test apps/api/src`: no infrastructure, no network, no clock.
 - Gated integration: `*.integration.test.ts`, skipped unless the env is set.
 - A bug fix ships with the test that would have caught it.
 - `cd apps/api && bun run typecheck` must pass.

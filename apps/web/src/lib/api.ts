@@ -1305,6 +1305,17 @@ export interface OperatorDto {
   preferences: PreferencesDto
 }
 
+/**
+ * One row of the administrator operator directory. Identity only: the
+ * observability scope needs every account, including the ones that never spent.
+ */
+export interface OperatorSummaryDto {
+  email: string
+  name: string
+  role: OperatorRole
+  lastLoginAt?: string
+}
+
 export interface SessionDto {
   token: string
   expiresAt: string
@@ -1437,6 +1448,8 @@ export const authApi = {
       body: JSON.stringify({ challenge, code }),
     }),
   me: () => request<{ operator: OperatorDto }>('/v1/auth/me'),
+  /** Administrator only: every account, for the observability scope. */
+  operators: () => request<{ operators: OperatorSummaryDto[] }>('/v1/operators'),
   logout: () => request<{ ok: boolean }>('/v1/auth/logout', { method: 'POST' }),
   preferences: () => request<{ preferences: PreferencesDto }>('/v1/preferences'),
   updatePreferences: (patch: Partial<PreferencesDto>) =>

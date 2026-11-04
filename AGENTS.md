@@ -9,7 +9,7 @@ Read `docs/README.md` inside that installed package first, then read the relevan
 This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
 <!-- END:turborepo-agent-rules -->
 
-# SarkiAI Policy Sandbox — agent guide
+# SarkiAI Policy Sandbox: agent guide
 
 Entry point for every agent working in this repository. Read this file, then
 load the matching skill from `.agent/skills/` instead of exploring blindly.
@@ -57,7 +57,7 @@ and `.env.example`. Every source file carries a header comment stating its role.
 
 - **Branches**: `main` is production, `develop` is integration, `meta-hackathon`
   is the submission mirror, `feat/*`, `fix/*`, `docs/*`, `chore/*` are topic
-  branches. No direct pushes to the protected branches — PR only
+  branches. No direct pushes to the protected branches: PR only
   (`.githooks/pre-push` + GitHub protection).
 - **English**: code, comments, docs, commits, PRs, skills and rules are written
   in English. Conversation with the maintainer may be French.

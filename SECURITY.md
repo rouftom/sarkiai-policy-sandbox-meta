@@ -105,20 +105,6 @@ Out of scope:
   consumer, `rehype-katex`, still pins `^0.16`) and `glob` (pulled by the React
   Email CLI toolchain, which pins `^13.0.6`).
 
-## Accepted dependency risk
-
-Each entry is dated and reviewed when the related work lands. An advisory is
-only ignored with an explicit `--ignore=<GHSA>` in the workflow and an entry here.
-
-| Date | Finding | Severity | Reason and exit |
-| --- | --- | --- | --- |
-| 2026-11-03 | `recharts` 2.15.4 deprecation notice | deprecated, not a vulnerability | Surfaced by `apps/web` and `services/mcp-charts`. `recharts` v3 is an API migration, not a version bump; deferred as its own change. No advisory, no fix to apply today. |
-
-The `@react-email/*` deprecations and the low `deepmerge` advisory are gone: the
-operator e-mail moved to the maintained `react-email` package, and the CLI
-toolchain it pulls in is kept on a patched `glob` through a root `overrides`
-entry.
-
 ## Safe harbour
 
 We will not pursue legal action against researchers who:

@@ -21,7 +21,7 @@ install without an e-mail key, the one-time password is shown once on the page.
 - Create `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>` from
   `develop`, then open a PR into `develop`.
 - Documentation and skills follow the same rule.
-- Merges are **merge commits** — never squash.
+- Merges are **merge commits**: never squash.
 - Promotions are `develop → main`, then `develop → meta-hackathon`.
 
 Full procedure, including the hotfix path and the bootstrap bypass:

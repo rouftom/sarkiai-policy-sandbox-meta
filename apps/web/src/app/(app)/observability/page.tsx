@@ -59,10 +59,12 @@ import {
 import { INSTITUTIONS } from '@sps/shared'
 import {
   ASSISTANT_FINISHED,
+  authApi,
   observabilityApi,
   type ObservabilityBudgetDto,
   type ObservabilityForecastDto,
   type ObservabilitySummaryDto,
+  type OperatorSummaryDto,
   type UsageKindDto,
   type UsageRequestDto,
   type UsageRowDto,
@@ -216,6 +218,7 @@ export default function ObservabilityPage() {
   const [requests, setRequests] = React.useState<UsageRequestDto[]>([])
   const [total, setTotal] = React.useState(0)
   const [operatorNames, setOperatorNames] = React.useState<string[]>([])
+  const [directory, setDirectory] = React.useState<OperatorSummaryDto[]>([])
   const [loading, setLoading] = React.useState(true)
   const [unreachable, setUnreachable] = React.useState(false)
   const [bucket, setBucket] = React.useState<Bucket>('model')
@@ -248,7 +251,10 @@ export default function ObservabilityPage() {
       setRequests(pageOfCalls.requests)
       setTotal(pageOfCalls.total)
       // Keep the last known names: a single-operator view no longer lists them.
-      if (next.operators.length > 0) setOperatorNames(next.operators.map((row) => row.key))
+      // The `unknown` bucket stays in the table but is not a selectable scope:
+      // the API would read it as an operator filter and find no such account.
+      const spenders = next.operators.map((row) => row.key).filter((key) => key !== 'unknown')
+      if (spenders.length > 0) setOperatorNames(spenders)
     } catch {
       setUnreachable(true)
     } finally {
@@ -259,6 +265,24 @@ export default function ObservabilityPage() {
   React.useEffect(() => {
     void load()
   }, [load])
+
+  // The ledger only lists operators that spent in the window; the directory adds
+  // the accounts that did not, so an administrator can still open a quiet one.
+  React.useEffect(() => {
+    if (!isAdmin) return
+    let cancelled = false
+    authApi
+      .operators()
+      .then((result) => {
+        if (!cancelled) setDirectory(result.operators)
+      })
+      .catch(() => {
+        /* the ledger keys remain a usable fallback */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isAdmin])
 
   // Spend moves while the console stays open: coming back to the tab reads it
   // again, and a finished assistant turn has just written new ledger rows.
@@ -312,12 +336,14 @@ export default function ObservabilityPage() {
   }))
 
   const operatorOptions = React.useMemo(() => {
-    const names = scope && !operatorNames.includes(scope) ? [...operatorNames, scope] : operatorNames
+    const known = new Set(directory.map((entry) => entry.email))
+    const names = [...directory.map((entry) => entry.email), ...operatorNames.filter((name) => !known.has(name))]
+    if (scope && !names.includes(scope)) names.push(scope)
     return [
       { value: '', label: t('observability.allOperators') },
       ...names.map((name) => ({ value: name, label: name })),
     ]
-  }, [operatorNames, scope, t])
+  }, [directory, operatorNames, scope, t])
 
   return (
     <>
@@ -649,7 +675,9 @@ export default function ObservabilityPage() {
                                 ? t(KIND_LABEL[row.key as UsageKindDto] ?? 'observability.byKind')
                                 : bucket === 'agent'
                                   ? agentLabel(row.key, t('assistant.title'))
-                                  : row.key}
+                                  : bucket === 'operator' && row.key === 'unknown'
+                                    ? t('observability.unknownOperator')
+                                    : row.key}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {row.requests}
