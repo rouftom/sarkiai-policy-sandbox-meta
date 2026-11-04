@@ -300,6 +300,16 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     tags: ['auth'],
     errors: [error(401, 'The session is missing, expired or revoked.')],
   },
+  'GET /v1/operators': {
+    summary: 'Operator directory',
+    description:
+      'Every account, identity only. Administrator only: the observability scope needs the accounts that spent nothing in the selected window.',
+    tags: ['auth'],
+    errors: [
+      error(401, 'The session is missing, expired or revoked.'),
+      error(403, 'The caller is not an administrator.'),
+    ],
+  },
   'POST /v1/auth/logout': {
     summary: 'Record a sign-out',
     description:

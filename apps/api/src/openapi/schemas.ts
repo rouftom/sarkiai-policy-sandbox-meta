@@ -754,7 +754,8 @@ export const usageQuery = z.object({
   /** Admin only: read another operator's scope. An operator may only repeat their own. */
   operator: z
     .string()
-    .email()
+    .trim()
+    .min(1)
     .max(200)
     .optional()
     .describe('Admin only: read another operator’s rows.'),
