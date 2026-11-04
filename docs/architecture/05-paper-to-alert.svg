@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 854" width="1200" height="854" role="img" aria-labelledby="t d">
+<title id="t">SarkiAI Policy Sandbox: from a scanned official gazette to an impact alert</title>
+<desc id="d">A scanned page of the official gazette has no text layer. The pipeline finds its columns and zones. SAM 3.1 locates stamps, signatures and tables so that they never pollute the legal text, and Muse Spark transcribes each zone with its provenance. An administrator adds the page to the corpus, where text zones and tables become one lexically indexed page document; stamps and signatures stay in the overlay and are never retrieved as law. The impact analysis then reads every open incident: Muse Spark flags the ones the new text changes, with severity, changed deadlines and actions, and it cannot add a run.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5A6B85"/></marker>
+<marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0866FF"/></marker></defs>
+<style>
+.brand{font:700 15px 'Montserrat','Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
+.edition{font:500 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#5A6B85}
+.kicker{font:700 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:2.2px;fill:#0866FF}
+.head{font:700 30px 'Montserrat','Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
+.name{font:700 18px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
+.sub{font:400 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#46546B}
+.note{font:italic 400 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#5A6B85}
+.tag{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#0866FF}
+.tagh{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#0B8A62}
+.tags{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#5A6B85}
+.legend{font:500 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#46546B}
+.foot{font:500 12px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#8A97AD}
+.flow{fill:none;stroke:#5A6B85;stroke-width:1.8}
+.dash{fill:none;stroke:#5A6B85;stroke-width:1.8;stroke-dasharray:6 5}
+.metaflow{fill:none;stroke:#0866FF;stroke-width:2}
+.band{fill:#EEF3FB;stroke:#C9D3E3;stroke-width:1}
+</style>
+<rect width="1200" height="854" fill="#F7F9FC"/>
+<rect x="0" y="0" width="1200" height="6" fill="#0866FF"/>
+<g transform="translate(44,26) scale(0.9)"><path d="M20 2.5 35 7.5v12.2c0 8.4-6 15.6-15 18.8-9-3.2-15-10.4-15-18.8V7.5L20 2.5Z" fill="#0866FF"/><path d="M20 10.5c4.6 2.7 7 6.4 7 10.6 0 4.5-3.1 7.6-7 8.9-3.9-1.3-7-4.4-7-8.9 0-4.2 2.4-7.9 7-10.6Z" fill="#FFFFFF" fill-opacity="0.22" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="1"/><path d="M20 13.5v14.1M20 19.2c1.9-1.6 4-2.4 6.2-2.4M20 23.5c-1.9-1.6-4-2.4-6.2-2.4" stroke="#FFFFFF" stroke-width="1.3" stroke-linecap="round" fill="none"/></g>
+<text class="brand" x="84" y="46">SarkiAI Policy Sandbox</text>
+<text class="edition" x="84" y="64">Meta edition</text>
+<text class="kicker" x="44" y="100">FROM PAPER TO ALERT</text>
+<text class="head" x="44" y="136">A scanned decree changes the incidents running today.</text>
+<line x1="44" y1="814" x2="1156" y2="814" stroke="#D5DDEA" stroke-width="1"/>
+<text class="foot" x="44" y="836">Djotta · Douala, Cameroon</text>
+<text class="foot" x="1156" y="836" text-anchor="end">github.com/rouftom/sarkiai-policy-sandbox-meta</text>
+<rect x="1004" y="36" width="14" height="14" fill="#F7F9FC" stroke="#8A97AD" stroke-width="1.5" stroke-dasharray="4 3"/><text class="legend" x="1026" y="48">External service</text>
+<rect x="786" y="36" width="14" height="14" fill="#E8F7F1" stroke="#10AA78" stroke-width="2"/><text class="legend" x="808" y="48">People and institutions</text>
+<rect x="635" y="36" width="14" height="14" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/><text class="legend" x="657" y="48">SarkiAI engine</text>
+<rect x="515" y="36" width="14" height="14" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/><text class="legend" x="537" y="48">Meta model</text>
+<g transform="translate(0,44)"><path class="flow" d="M169 270 V306" marker-end="url(#a)"/><path class="metaflow" d="M294 365 C 322 365, 322 215, 346 215" marker-end="url(#am)"/><path class="metaflow" d="M294 380 H346" marker-end="url(#am)"/><path class="flow" d="M730 215 H786" marker-end="url(#a)"/><path class="flow" d="M730 365 C 760 365, 760 250, 786 250" marker-end="url(#a)"/><path class="metaflow" d="M973 280 V316" marker-end="url(#am)"/><path class="flow" d="M973 470 V506" marker-end="url(#a)"/>
+<rect x="44" y="150" width="250" height="120" rx="2" fill="#F7F9FC" stroke="#8A97AD" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text class="tags" x="62" y="178">SOURCE</text>
+<text class="name" x="62" y="204">Official gazette</text>
+<text class="sub" x="62" y="228">A scanned page,</text>
+<text class="sub" x="62" y="248">no text layer</text>
+<rect x="44" y="310" width="250" height="110" rx="2" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/>
+<text class="tags" x="62" y="338">LAYOUT</text>
+<text class="name" x="62" y="364">Columns and zones</text>
+<text class="sub" x="62" y="388">The page layout, zone by zone</text>
+<rect x="350" y="150" width="380" height="130" rx="2" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/>
+<text class="tag" x="368" y="178">META MODEL · SEGMENTATION</text>
+<text class="name" x="368" y="204">SAM 3.1</text>
+<text class="sub" x="368" y="228">Finds stamps, signatures and tables</text>
+<text class="sub" x="368" y="248">They stay in the overlay,</text>
+<text class="sub" x="368" y="268">never retrieved as law</text>
+<rect x="350" y="310" width="380" height="110" rx="2" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/>
+<text class="tag" x="368" y="338">META MODEL · VISION</text>
+<text class="name" x="368" y="364">Muse Spark</text>
+<text class="sub" x="368" y="388">Transcribes each zone,</text>
+<text class="sub" x="368" y="408">every line keeps its provenance</text>
+<rect x="790" y="150" width="366" height="130" rx="2" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/>
+<text class="tags" x="808" y="178">KNOWLEDGE BASE</text>
+<text class="name" x="808" y="204">Corpus</text>
+<text class="sub" x="808" y="228">Text zones and tables become one</text>
+<text class="sub" x="808" y="248">page document, lexically indexed</text>
+<text class="sub" x="808" y="268">Added by an administrator</text>
+<rect x="790" y="320" width="366" height="150" rx="2" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/>
+<text class="tag" x="808" y="348">META MODEL · MUSE SPARK</text>
+<text class="name" x="808" y="374">Impact analysis</text>
+<text class="sub" x="808" y="398">Reads every open incident</text>
+<text class="sub" x="808" y="418">Flags the runs the text changes</text>
+<text class="sub" x="808" y="438">It cannot add a run</text>
+<rect x="790" y="510" width="366" height="130" rx="2" fill="#E8F7F1" stroke="#10AA78" stroke-width="2"/>
+<text class="name" x="808" y="538">Affected incidents</text>
+<text class="sub" x="808" y="562">Severity, changed deadlines,</text>
+<text class="sub" x="808" y="582">actions: re-run the joint reports</text>
+<text class="note" x="44" y="700" text-anchor="start">In the demo: a sample decree replaces "a reasonable delay" with 72 hours for the health-data breach run, severity High.</text>
+</g>
+</svg>

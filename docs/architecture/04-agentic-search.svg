@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 904" width="1200" height="904" role="img" aria-labelledby="t d">
+<title id="t">SarkiAI Policy Sandbox: the agentic corpus search</title>
+<desc id="d">A question is planned by the Meta model of the mode, which splits it into sub-questions with short legal queries in French and English. One sub-agent per sub-question runs its queries on the lexical BM25 index, which is a scoring formula and not a model, and reads the whole article its best passages belong to. In deep mode, the model judges whether the passages answer the sub-question and the sub-agent loops with refined queries, two rounds at most. The lists are merged by reciprocal rank fusion, the model ranks the candidates in one call, and the citation validator still checks every quote. Three depths bound the cost: lexical, fast and deep.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5A6B85"/></marker>
+<marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0866FF"/></marker></defs>
+<style>
+.brand{font:700 15px 'Montserrat','Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
+.edition{font:500 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#5A6B85}
+.kicker{font:700 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:2.2px;fill:#0866FF}
+.head{font:700 30px 'Montserrat','Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
+.name{font:700 18px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
+.sub{font:400 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#46546B}
+.note{font:italic 400 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#5A6B85}
+.tag{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#0866FF}
+.tagh{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#0B8A62}
+.tags{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#5A6B85}
+.legend{font:500 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#46546B}
+.foot{font:500 12px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#8A97AD}
+.flow{fill:none;stroke:#5A6B85;stroke-width:1.8}
+.dash{fill:none;stroke:#5A6B85;stroke-width:1.8;stroke-dasharray:6 5}
+.metaflow{fill:none;stroke:#0866FF;stroke-width:2}
+.band{fill:#EEF3FB;stroke:#C9D3E3;stroke-width:1}
+</style>
+<rect width="1200" height="904" fill="#F7F9FC"/>
+<rect x="0" y="0" width="1200" height="6" fill="#0866FF"/>
+<g transform="translate(44,26) scale(0.9)"><path d="M20 2.5 35 7.5v12.2c0 8.4-6 15.6-15 18.8-9-3.2-15-10.4-15-18.8V7.5L20 2.5Z" fill="#0866FF"/><path d="M20 10.5c4.6 2.7 7 6.4 7 10.6 0 4.5-3.1 7.6-7 8.9-3.9-1.3-7-4.4-7-8.9 0-4.2 2.4-7.9 7-10.6Z" fill="#FFFFFF" fill-opacity="0.22" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="1"/><path d="M20 13.5v14.1M20 19.2c1.9-1.6 4-2.4 6.2-2.4M20 23.5c-1.9-1.6-4-2.4-6.2-2.4" stroke="#FFFFFF" stroke-width="1.3" stroke-linecap="round" fill="none"/></g>
+<text class="brand" x="84" y="46">SarkiAI Policy Sandbox</text>
+<text class="edition" x="84" y="64">Meta edition</text>
+<text class="kicker" x="44" y="100">AGENTIC CORPUS SEARCH</text>
+<text class="head" x="44" y="136">Muse Spark plans, searches, judges and ranks.</text>
+<line x1="44" y1="864" x2="1156" y2="864" stroke="#D5DDEA" stroke-width="1"/>
+<text class="foot" x="44" y="886">Djotta · Douala, Cameroon</text>
+<text class="foot" x="1156" y="886" text-anchor="end">github.com/rouftom/sarkiai-policy-sandbox-meta</text>
+<rect x="1004" y="36" width="14" height="14" fill="#F7F9FC" stroke="#8A97AD" stroke-width="1.5" stroke-dasharray="4 3"/><text class="legend" x="1026" y="48">External service</text>
+<rect x="786" y="36" width="14" height="14" fill="#E8F7F1" stroke="#10AA78" stroke-width="2"/><text class="legend" x="808" y="48">People and institutions</text>
+<rect x="635" y="36" width="14" height="14" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/><text class="legend" x="657" y="48">SarkiAI engine</text>
+<rect x="515" y="36" width="14" height="14" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/><text class="legend" x="537" y="48">Meta model</text>
+<g transform="translate(0,44)"><path class="metaflow" d="M730 190 C 760 190, 760 240, 730 240" marker-end="url(#am)"/><path class="metaflow" d="M730 340 C 760 340, 760 390, 730 390" marker-end="url(#am)"/><path class="metaflow" d="M730 490 C 760 490, 760 540, 730 540" marker-end="url(#am)"/><path class="metaflow" d="M169 260 V296" marker-end="url(#am)"/><path class="metaflow" d="M294 375 C 322 375, 322 200, 346 200" marker-end="url(#am)"/><path class="metaflow" d="M294 375 C 322 375, 322 350, 346 350" marker-end="url(#am)"/><path class="metaflow" d="M294 375 C 322 375, 322 500, 346 500" marker-end="url(#am)"/><path class="flow" d="M730 175 H786" marker-end="url(#a)"/><path class="flow" d="M730 400 C 758 400, 758 368, 786 368" marker-end="url(#a)"/><path class="flow" d="M973 416 V442" marker-end="url(#a)"/><path class="flow" d="M973 542 V568" marker-end="url(#a)"/>
+<rect class="band" x="44" y="700" width="1112" height="96" rx="2"/>
+<rect x="44" y="150" width="250" height="110" rx="2" fill="#E8F7F1" stroke="#10AA78" stroke-width="2"/>
+<text class="name" x="62" y="178">A question</text>
+<text class="sub" x="62" y="202">From an agent, the assistant</text>
+<text class="sub" x="62" y="222">or the retrieval playground</text>
+<rect x="44" y="300" width="250" height="150" rx="2" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/>
+<text class="tag" x="62" y="328">META MODEL</text>
+<text class="name" x="62" y="354">Plan</text>
+<text class="sub" x="62" y="378">Sub-questions, short legal</text>
+<text class="sub" x="62" y="398">queries in French and English,</text>
+<text class="sub" x="62" y="418">likely instruments and articles</text>
+<rect x="350" y="150" width="380" height="130" rx="2" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/>
+<text class="tag" x="368" y="178">IN PARALLEL · LOOP</text>
+<text class="name" x="368" y="204">Sub-agent 1</text>
+<text class="sub" x="368" y="228">Runs its queries, reads the whole article</text>
+<text class="sub" x="368" y="248">Judge: enough? If not, new queries</text>
+<text class="sub" x="368" y="268">Two rounds at most</text>
+<rect x="350" y="300" width="380" height="130" rx="2" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/>
+<text class="tag" x="368" y="328">IN PARALLEL · LOOP</text>
+<text class="name" x="368" y="354">Sub-agent 2</text>
+<text class="sub" x="368" y="378">Runs its queries, reads the whole article</text>
+<text class="sub" x="368" y="398">Judge: enough? If not, new queries</text>
+<text class="sub" x="368" y="418">Two rounds at most</text>
+<rect x="350" y="450" width="380" height="130" rx="2" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/>
+<text class="tag" x="368" y="478">IN PARALLEL · LOOP</text>
+<text class="name" x="368" y="504">Sub-agent 3</text>
+<text class="sub" x="368" y="528">Runs its queries, reads the whole article</text>
+<text class="sub" x="368" y="548">Judge: enough? If not, new queries</text>
+<text class="sub" x="368" y="568">Two rounds at most</text>
+<rect x="790" y="150" width="366" height="130" rx="2" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/>
+<text class="tags" x="808" y="178">CORPUS</text>
+<text class="name" x="808" y="204">Lexical index</text>
+<text class="sub" x="808" y="228">BM25: a scoring formula, not a model</text>
+<text class="sub" x="808" y="248">Atlas Search in the cloud,</text>
+<text class="sub" x="808" y="268">MongoDB text index on-premise</text>
+<rect x="790" y="320" width="366" height="96" rx="2" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/>
+<text class="tags" x="808" y="348">FUSION</text>
+<text class="name" x="808" y="374">Reciprocal rank fusion</text>
+<text class="sub" x="808" y="398">Merges every sub-agent's list</text>
+<rect x="790" y="446" width="366" height="96" rx="2" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/>
+<text class="tag" x="808" y="474">META MODEL</text>
+<text class="name" x="808" y="500">Rank</text>
+<text class="sub" x="808" y="524">One listwise call on the top 20</text>
+<rect x="790" y="572" width="366" height="96" rx="2" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/>
+<text class="tags" x="808" y="600">GUARD</text>
+<text class="name" x="808" y="626">Citation validator</text>
+<text class="sub" x="808" y="650">Every quote checked against the corpus</text>
+<text class="note" x="742" y="166" text-anchor="start">queries</text>
+<text class="note" x="738" y="440" text-anchor="start">ranked lists</text>
+<text class="tags" x="60" y="722">THREE DEPTHS</text>
+<text class="legend" x="60" y="748" text-anchor="start">lexical: no model call, the fallback of every step    ·    fast: plan and rank, used by the institutional agents and AI readiness</text>
+<text class="legend" x="60" y="774" text-anchor="start">deep: sub-agents and judge loops, used by the assistant and the retrieval playground    ·    cache, timeouts, lexical fallback</text>
+</g>
+</svg>
