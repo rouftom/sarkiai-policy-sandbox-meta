@@ -405,7 +405,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
    * and secrets stay behind `/v1/auth/me`.
    */
   app.get('/v1/operators', async (request, reply) => {
-    const operator = currentOperator(request)
+    const operator = await currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
     if (operator.role !== 'admin') {
       return reply.status(403).send({
