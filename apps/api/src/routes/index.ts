@@ -31,6 +31,13 @@ import {
 import { MetaAsrClient, toVoiceFacts, type VoiceMode } from '@sps/voice'
 import { buildRunDossier, renderDossierMarkdown } from '@sps/report'
 import { sha256Hex } from '@sps/storage'
+import { Readable } from 'node:stream'
+import {
+  ATTACHMENT_MIME_TYPES,
+  InvalidImageError,
+  verifyAttachmentSignature,
+  type MediaRef,
+} from '../media-store.js'
 import { hasLanguage, institutionsForDomain, institutionsForDomains, providerOptionsName, type ProviderDescriptor } from '@sps/shared'
 import {
   RIGHTS_BLOCKED_MESSAGE,
@@ -60,7 +67,7 @@ import { config } from '../config.js'
 import { currentOperator, registerAuthRoutes } from '../auth-routes.js'
 import { validationFailure } from '../http-errors.js'
 import { McpGateway } from '../mcp.js'
-import { ChatSessionStore } from '../chat-sessions.js'
+import { ChatSessionStore, sanitizeTurns } from '../chat-sessions.js'
 import { ReadinessRunStore, type ReadinessRun, type ReadinessRunInput, type ReadinessRunSummary } from '../readiness-runs.js'
 import { NotificationContactStore, type NotificationContact } from '../notification-contacts.js'
 import { COUNTRY_SECTORS, CountryStore, type CountryRecord } from '../countries.js'
@@ -1146,15 +1153,19 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Single mandated agent (text, optionally multimodal) ───────────────────
   /** Vision MIME types the assistant accepts. Documents are not chat context. */
-  const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const
+  const IMAGE_MIMES = ATTACHMENT_MIME_TYPES
 
   /**
-   * Persist the images of one message (content-addressed, best-effort: works
-   * without MinIO) after checking the deployment's caps. Images are the only
-   * accepted context: a document would need a text-extraction step and a
-   * different contract, and the composer only offers images.
+   * Persist the images of one message (content-addressed by the media store:
+   * MinIO / S3 locally, Cloudinary in the cloud demo) after checking the
+   * deployment's caps. Images are the only accepted context: a document would
+   * need a text-extraction step and a different contract, and the composer only
+   * offers images.
    */
-  async function storeAttachments(attachments: Array<{ mime: string; dataBase64: string; name?: string }> | undefined) {
+  async function storeAttachments(
+    attachments: Array<{ mime: string; dataBase64: string; name?: string }> | undefined,
+    log: FastifyRequest['log'],
+  ) {
     const list = attachments ?? []
     if (list.length > config.attachments.maxImages) {
       return {
@@ -1166,6 +1177,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
     const maxMb = (config.attachments.maxBytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')
     const meta: Array<{ sha256: string; mime: string; size: number; key: string }> = []
+    const refs: MediaRef[] = []
     for (const attachment of list) {
       if (!(IMAGE_MIMES as readonly string[]).includes(attachment.mime)) {
         return {
@@ -1176,6 +1188,14 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         }
       }
       const data = Buffer.from(attachment.dataBase64, 'base64')
+      if (data.byteLength === 0) {
+        return {
+          ok: false as const,
+          status: 400,
+          code: 'empty_attachment',
+          message: 'The image payload is empty.',
+        }
+      }
       if (data.byteLength > config.attachments.maxBytes) {
         return {
           ok: false as const,
@@ -1185,13 +1205,33 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         }
       }
       try {
-        const stored = await engine.storage.putContentAddressed(data, attachment.mime)
-        meta.push({ sha256: stored.sha256, mime: stored.mime, size: stored.size, key: stored.key })
-      } catch {
+        const ref = await engine.media.put({
+          data,
+          mime: attachment.mime,
+          name: attachment.name?.slice(0, 200) || 'image',
+        })
+        // The S3 object key is internal: the browser gets the signed URLs only.
+        const { key: _key, ...published } = ref
+        refs.push(published)
+        meta.push({ sha256: ref.sha256 ?? ref.id, mime: ref.mime, size: ref.size, key: ref.key ?? '' })
+      } catch (error) {
+        // Bytes that do not decode as an image are a client error, not a
+        // storage failure: refuse them instead of storing them under a lie.
+        if (error instanceof InvalidImageError) {
+          return {
+            ok: false as const,
+            status: 415,
+            code: 'invalid_image',
+            message: error.message,
+          }
+        }
+        // The storage provider is down: the answer still runs, the audit keeps
+        // the hash, but no reference is persisted for this image.
+        log.warn({ err: (error as Error).message }, 'attachment storage failed')
         meta.push({ sha256: sha256Hex(data), mime: attachment.mime, size: data.byteLength, key: '' })
       }
     }
-    return { ok: true as const, meta, references: [] as Array<{ name: string; text: string }>, images: list }
+    return { ok: true as const, meta, references: [] as Array<{ name: string; text: string }>, images: list, refs }
   }
 
   /**
@@ -1205,6 +1245,32 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     mimeTypes: IMAGE_MIMES,
   }))
 
+  /**
+   * Image bytes of a saved turn. Public on purpose, like the KB figures: an
+   * `<img>` cannot send the Bearer token. The URL is HMAC-signed, so only a
+   * client that was given the reference can read it, and the content is
+   * immutable (`Cache-Control: immutable`).
+   */
+  app.get('/v1/attachments/:file/:variant', async (request, reply) => {
+    const { file, variant } = request.params as { file: string; variant: string }
+    const signature = String((request.query as { sig?: unknown } | undefined)?.sig ?? '')
+    if (variant !== 'full' && variant !== 'thumb') {
+      return reply.status(404).send({ error: 'not_found', message: 'Unknown image variant.' })
+    }
+    if (!verifyAttachmentSignature(config.media.signingSecret, file, variant, signature)) {
+      return reply.status(403).send({ error: 'forbidden', message: 'Invalid attachment signature.' })
+    }
+    const stored = await engine.media.read(file, variant)
+    if (!stored) return reply.status(404).send({ error: 'not_found', message: 'Image not found.' })
+    reply.header('Cache-Control', 'public, max-age=31536000, immutable')
+    reply.header('ETag', stored.etag)
+    reply.type(stored.contentType)
+    if (stored.contentLength !== undefined) reply.header('Content-Length', stored.contentLength)
+    if (stored.data) return reply.send(Buffer.from(stored.data))
+    if (stored.body) return reply.send(Readable.from(stored.body))
+    return reply.status(404).send({ error: 'not_found', message: 'Image not found.' })
+  })
+
   app.post('/v1/agents/ask', { bodyLimit: ASK_BODY_LIMIT }, async (request, reply) => {
     const body = askBody.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
@@ -1212,10 +1278,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: 'not_found', message: `Unknown institution "${body.data.institutionId}"` })
 
-    const stored = await storeAttachments(body.data.attachments)
+    const stored = await storeAttachments(body.data.attachments, request.log)
     if (!stored.ok) return reply.status(stored.status).send({ error: stored.code, message: stored.message })
 
-    return operatorStack(request).orchestrator.runAgent({
+    const assessment = await operatorStack(request).orchestrator.runAgent({
       institution,
       question: body.data.question,
       country: body.data.country,
@@ -1228,6 +1294,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       references: stored.references,
       userId: operatorOf(request).email,
     })
+    return { ...assessment, ...(stored.refs.length ? { attachments: stored.refs } : {}) }
   })
 
   /**
@@ -1245,7 +1312,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: 'not_found', message: `Unknown institution "${body.data.institutionId}"` })
 
-    const stored = await storeAttachments(body.data.attachments)
+    const stored = await storeAttachments(body.data.attachments, request.log)
     if (!stored.ok) return reply.status(stored.status).send({ error: stored.code, message: stored.message })
 
     reply.hijack()
@@ -1319,7 +1386,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           onUi: (ui) => send({ type: 'ui', ui }),
         },
       )
-      send({ type: 'done', assessment }, true)
+      send({ type: 'done', assessment, ...(stored.refs.length ? { attachments: stored.refs } : {}) }, true)
     } catch (error) {
       send({ type: 'error', message: (error as Error).message }, true)
     } finally {
@@ -2166,7 +2233,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = chatSessionInput.safeParse(request.body ?? {})
     if (!body.success) return validationFailure(reply, body.error)
     if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return reply.status(400).send({ error: 'invalid_id' })
-    return chatSessions.save({ id, userId: operatorOf(request).email, ...body.data })
+    return chatSessions.save({ id, userId: operatorOf(request).email, ...body.data, turns: sanitizeTurns(body.data.turns) })
   })
 
   app.delete('/v1/chat/sessions/:id', async (request, reply) => {

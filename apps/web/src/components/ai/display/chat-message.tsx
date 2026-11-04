@@ -21,16 +21,33 @@ import { CitationDialog, type CitationView } from '@/components/ai/display/citat
 import { StreamLoader } from '@/components/ai/display/stream-loaders'
 import { StreamLink } from '@/components/ai/display/stream-link'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
+import { resolveAttachmentUrl } from '@/lib/attachment-url'
+
+export interface TurnAttachment {
+  /** Signed (S3) or Cloudinary URL of the full image. */
+  url: string
+  /** WebP thumbnail; falls back to the full image (legacy turns, live preview). */
+  thumbnailUrl?: string
+  mime?: string
+  name?: string
+  width?: number
+  height?: number
+  id?: string
+  provider?: 's3' | 'cloudinary'
+  size?: number
+  sha256?: string
+}
 
 export interface ChatTurn {
   id: string
   role: 'user' | 'assistant'
   content: string
   /**
-   * Images the operator attached to the question. Preview data URLs kept for
-   * the live conversation only: they are stripped before a session is saved.
+   * Images the operator attached to the question. Live turns show a local data
+   * URL until the API returns the stored reference; saved turns keep only the
+   * reference, never the bytes.
    */
-  attachments?: Array<{ url: string; mime?: string; name?: string }>
+  attachments?: TurnAttachment[]
   reasoning?: string
   citations?: AssessmentDto['citations']
   webSources?: AssessmentDto['webSources']
@@ -86,15 +103,19 @@ export function ChatMessage({
                 {turn.attachments.map((attachment, index) => (
                   <a
                     key={index}
-                    href={attachment.url}
+                    href={resolveAttachmentUrl(attachment.url)}
                     target="_blank"
                     rel="noreferrer"
                     className="block overflow-hidden rounded-xl border border-border"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={attachment.url}
+                      src={resolveAttachmentUrl(attachment.thumbnailUrl ?? attachment.url)}
                       alt={attachment.name ?? ''}
+                      loading="lazy"
+                      decoding="async"
+                      width={attachment.width}
+                      height={attachment.height}
                       className="h-24 w-24 object-cover sm:h-28 sm:w-28"
                     />
                   </a>

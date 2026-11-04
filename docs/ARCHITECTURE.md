@@ -24,7 +24,14 @@
 |-------|-------|-----|
 | **MongoDB** | corpus (`kb_chunks`), audit log and chain-of-thought | one document store for the corpus and the trail; the search index is an index on the same collection, not a second datastore |
 | **MongoDB Atlas** | same corpus, with **Atlas Search** (BM25) in `cloud` mode | managed lexical search over `kb_chunks` |
-| **MinIO** | assistant image attachments | S3-compatible local bucket, content-addressed (sha256) |
+| **MinIO** | assistant image attachments | S3-compatible local bucket, content-addressed (sha256); signed read route + WebP thumbnail |
+| **Cloudinary** | assistant image attachments, cloud demo | dedicated `sps/attachments` folder; the console reads Cloudinary thumbnails directly |
+
+A saved conversation keeps only an attachment **reference** (`sha256`, MIME, size,
+dimensions, signed/derived URLs): the bytes never enter MongoDB. Local and
+on-premise installs use MinIO / S3 (`MEDIA_STORE=s3`); cloud and sovereign
+deployments use Cloudinary (`MEDIA_STORE=cloudinary`) under the dedicated `sps`
+namespace, never the organization's `fada/resources` folder.
 
 The `KbChunk` contract is identical in both search backends: `RETRIEVAL_BACKEND`
 only changes **where the BM25 index lives** (Atlas Search or a MongoDB text
