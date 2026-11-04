@@ -2358,6 +2358,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // ── Chat sessions: the operator's saved conversations with the assistant ──
+  app.get('/v1/chat/attachments', async (request) => ({
+    attachments: await chatSessions.attachments(operatorOf(request).email),
+  }))
+
   app.get('/v1/chat/sessions', async (request) => {
     return { sessions: await chatSessions.list(operatorOf(request).email) }
   })

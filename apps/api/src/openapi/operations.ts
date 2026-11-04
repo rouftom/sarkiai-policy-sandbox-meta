@@ -900,6 +900,12 @@ export const OPERATIONS: Record<string, OperationDoc> = {
   },
 
   /* ── Chat ──────────────────────────────────────────────────────────────── */
+  'GET /v1/chat/attachments': {
+    summary: 'List the operator image library',
+    description:
+      "Returns the images saved across the caller's conversations, newest first and deduplicated by id, so the assistant media picker can re-attach a stored reference without uploading it again. Only the caller's own sessions are read.",
+    tags: ['chat'],
+  },
   'GET /v1/chat/sessions': {
     summary: 'List conversation sessions',
     description: 'Lists the sessions saved by the caller, newest first, with just enough metadata to reopen one.',
