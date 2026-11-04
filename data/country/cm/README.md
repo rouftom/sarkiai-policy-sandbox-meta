@@ -8,24 +8,24 @@ are **normalised** (ASCII, snake_case) so ingestion stays predictable. Payloads
 
 | File | Type | OCR? | Content |
 |------|------|------|---------|
-| `loi_2024_protection_donnees_personnelles.pdf` | law | — | Personal data protection law (23 Dec. 2024), **core** |
-| `plan_strategique_cameroun_numerique_2020.pdf` | strategy | — | Cameroon Digital strategic plan |
+| `loi_2024_protection_donnees_personnelles.pdf` | law | no | Personal data protection law (23 Dec. 2024), **core** |
+| `plan_strategique_cameroun_numerique_2020.pdf` | strategy | no | Cameroon Digital strategic plan |
 | `psnsn_sante_numerique_2026_2030.pdf` | policy | **yes** | National Digital Health Strategic Plan (114 p.) |
 | `compact_national_sante_2023.pdf` | policy | **yes** | National health compact / UHC (partly non-Unicode font) |
-| `resume_snd30.pdf` | strategy | — | SND30 summary |
-| `snd30_complet_2020_2030.pdf` | strategy | — | Full SND30 |
-| `cemac_protection_droits_utilisateurs.pdf` | regulation | — | CEMAC directive on users' rights (telecoms) |
+| `resume_snd30.pdf` | strategy | no | SND30 summary |
+| `snd30_complet_2020_2030.pdf` | strategy | no | Full SND30 |
+| `cemac_protection_droits_utilisateurs.pdf` | regulation | no | CEMAC directive on users' rights (telecoms) |
 | `loi_2010_021_commerce_electronique.pdf` | law | **yes** | Law 2010/021 on electronic commerce (14 p., scanned) |
-| `art_observatoire_marche_telecom_2016.pdf` | report | — | ART telecom market observatory, 2016 |
-| `loi_2010_012_cybersecurite_cybercriminalite.pdf` | law | — | Cybersecurity / cybercrime law 2010/012 |
-| `loi_2013_013_communications_electroniques.pdf` | law | — | Electronic communications law |
-| `decret_2023_interconnexion.pdf` | regulation | — | Decree on network interconnection and access (2023) |
-| `art_recueil_textes_2018.pdf` | law | — | Compilation of telecom texts (ART, 486 p.) |
+| `art_observatoire_marche_telecom_2016.pdf` | report | no | ART telecom market observatory, 2016 |
+| `loi_2010_012_cybersecurite_cybercriminalite.pdf` | law | no | Cybersecurity / cybercrime law 2010/012 |
+| `loi_2013_013_communications_electroniques.pdf` | law | no | Electronic communications law |
+| `decret_2023_interconnexion.pdf` | regulation | no | Decree on network interconnection and access (2023) |
+| `art_recueil_textes_2018.pdf` | law | no | Compilation of telecom texts (ART, 486 p.) |
 | `compendium_textes_poste_telecom_tic_2023.pdf` | law | **yes** | MINPOSTEL compendium 2023 (456 p.) |
 | `decret_certification_electronique.pdf` | regulation | **yes** | Decree on electronic certification |
 | `normes_standards_sr_pf_sante.pdf` | guidance | **yes** | SR/PF standards (164 p.) |
 | `penal_code_2016.pdf` | law | **yes** | Penal code (139 p.) |
-| `cameroon_id_cr_ecosystem_diagnostic.txt` | report | — | ID / civil registration diagnostic (docx → txt) |
+| `cameroon_id_cr_ecosystem_diagnostic.txt` | report | no | ID / civil registration diagnostic (docx → txt) |
 
 `manifest.json` is the machine-readable inventory: one entry per document, with
 its type, jurisdiction, readiness pillars, status, priority, OCR need and source
