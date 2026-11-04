@@ -604,6 +604,45 @@ export class AuthService {
     return { operator: toPublic(record), password, storage: this.storage }
   }
 
+  /**
+   * The operator directory: every account, newest login first.
+   *
+   * The observability scope needs the full list, not only the operators that
+   * spent during the selected window: a zero-spend account never appears in the
+   * ledger breakdown. Mongo is the source of truth when reachable; the in-memory
+   * copy covers accounts written during an outage. Returns `[]` when the store is
+   * unreachable and nothing is cached, so the console can fall back to the
+   * ledger's own keys.
+   */
+  async listOperators(): Promise<PublicOperator[]> {
+    const byEmail = new Map<string, OperatorRecord>()
+    for (const [email, record] of this.memory) byEmail.set(email, record)
+    const collection = await this.operators()
+    if (collection) {
+      try {
+        const docs = await collection.find({}).limit(500).toArray()
+        for (const doc of docs) {
+          const { _id, ...rest } = doc as unknown as OperatorRecord & { _id: string }
+          const record: OperatorRecord = {
+            ...rest,
+            email: rest.email ?? String(_id),
+            preferences: normalizePreferences(rest.preferences),
+          }
+          byEmail.set(normalizeEmail(record.email), record)
+        }
+      } catch {
+        this.markMongoFailure()
+      }
+    }
+    return [...byEmail.values()]
+      .sort((a, b) => {
+        const left = a.lastLoginAt ?? ''
+        const right = b.lastLoginAt ?? ''
+        return right.localeCompare(left) || a.email.localeCompare(b.email)
+      })
+      .map(toPublic)
+  }
+
   /** Number of operator accounts, used to cap the public sign-up. */
   async operatorCount(): Promise<number> {
     const collection = await this.operators()

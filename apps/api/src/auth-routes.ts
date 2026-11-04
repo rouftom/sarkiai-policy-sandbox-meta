@@ -393,6 +393,32 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     return { ok: true }
   })
 
+  /**
+   * The operator directory, administrator only. The observability scope is built
+   * from it: the ledger breakdown lists only accounts that spent in the window,
+   * so a zero-spend operator could never be selected. Identity only; preferences
+   * and secrets stay behind `/v1/auth/me`.
+   */
+  app.get('/v1/operators', async (request, reply) => {
+    const operator = currentOperator(request)
+    if (!operator) return reply.status(401).send({ error: 'unauthorized' })
+    if (operator.role !== 'admin') {
+      return reply.status(403).send({
+        error: 'admin_only',
+        message: 'This action is reserved for administrators on this shared deployment.',
+      })
+    }
+    const operators = await auth.listOperators()
+    return {
+      operators: operators.map((entry) => ({
+        email: entry.email,
+        name: entry.name,
+        role: entry.role,
+        ...(entry.lastLoginAt ? { lastLoginAt: entry.lastLoginAt } : {}),
+      })),
+    }
+  })
+
   app.get('/v1/preferences', async (request, reply) => {
     const operator = currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })

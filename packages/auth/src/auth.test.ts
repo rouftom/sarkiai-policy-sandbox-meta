@@ -212,6 +212,21 @@ describe('operator sign-in', () => {
   })
 })
 
+describe('operator directory', () => {
+  test('lists every account, including one that never signed in', async () => {
+    const auth = service({ signup: true })
+    await auth.createRoot({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL })
+    await auth.signup({ firstName: 'Bo', lastName: 'Njoya', email: 'bo@sarkiai.dev', password: CHOSEN })
+
+    const directory = await auth.listOperators()
+    expect(directory.map((entry) => entry.email).sort()).toEqual([EMAIL, 'bo@sarkiai.dev'].sort())
+    expect(directory.find((entry) => entry.email === EMAIL)?.role).toBe('admin')
+    expect(directory.find((entry) => entry.email === 'bo@sarkiai.dev')?.role).toBe('operator')
+    // The public projection must not carry a password hash or a TOTP secret.
+    expect(directory.every((entry) => !('passwordHash' in entry) && !('totpSecret' in entry))).toBe(true)
+  })
+})
+
 describe('public sign-up', () => {
   test('is closed unless the deployment opens it', async () => {
     const auth = service()

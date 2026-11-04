@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import Fastify from 'fastify'
 import { OpenApiCatalog, buildOpenApiDocument, registerOpenApiRoutes, toJsonSchema, toOpenApiPath } from './openapi.js'
 import { OPERATIONS, TAG_DESCRIPTIONS } from './openapi/operations.js'
-import { askBody, gazetteIngestInput } from './openapi/schemas.js'
+import { askBody, gazetteIngestInput, usageQuery } from './openapi/schemas.js'
 import { isPublicRoute } from './public-routes.js'
 
 const ROUTES = [
@@ -259,6 +259,16 @@ describe('Scalar reference', () => {
     expect(asset.headers['content-type']).toContain('application/javascript')
     expect(asset.body.length).toBeGreaterThan(1_000_000)
     await app.close()
+  })
+})
+
+describe('observability query schema', () => {
+  test('accepts a ledger bucket key as an operator scope', () => {
+    // The ledger labels rows with no operator `unknown`. That key is not an
+    // address, and rejecting it made every observability read answer 400.
+    expect(usageQuery.safeParse({ operator: 'unknown' }).success).toBe(true)
+    expect(usageQuery.safeParse({ operator: 'operator@sarkiai.dev' }).success).toBe(true)
+    expect(usageQuery.safeParse({ operator: '   ' }).success).toBe(false)
   })
 })
 
