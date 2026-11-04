@@ -26,10 +26,12 @@ import {
 import { FilterPopover } from '@/components/filter-popover'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { RowActionButton } from '@/components/ui/row-action-button'
+import { RowSpinner } from '@/components/ui/row-spinner'
 import { TableActionItem } from '@/components/ui/table-actions'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import type { ScenarioRunSummaryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { useRowNavigation } from '@/lib/use-row-navigation'
 import { useWorkspace } from '@/lib/workspace'
 
 const STATUSES = ['running', 'complete', 'failed'] as const
@@ -90,6 +92,11 @@ export function ScenarioHistory({
   const [filterOpen, setFilterOpen] = React.useState(false)
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(PAGE_SIZE)
+  const { pendingId, navigate } = useRowNavigation()
+
+  const openRun = (run: ScenarioRunSummaryDto) => {
+    navigate(run.id, () => onOpen(run))
+  }
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })
@@ -274,70 +281,78 @@ export function ScenarioHistory({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((entry) => (
-                <TableRow
-                  key={entry.id}
-                  className={cn('cursor-pointer', entry.id === activeId && 'bg-brand-primary/5')}
-                  onClick={() => onOpen(entry)}
-                >
-                  <TableCell className="min-w-[200px] text-[12px] font-medium text-foreground">{formatDate(entry.updatedAt)}</TableCell>
-                  <TableCell className="text-[12px]">{t(`domain.${entry.domain}` as 'domain.health')}</TableCell>
-                  <TableCell className="font-mono text-[12px]">{entry.country.toUpperCase()}</TableCell>
-                  <TableCell className="text-right font-mono text-[12px]">
-                    {entry.released}/{entry.total}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={cn(
-                        'rounded-full px-1.5 py-px text-[9px] font-semibold',
-                        entry.status === 'complete' && 'bg-emerald-500/10 text-emerald-600',
-                        entry.status === 'failed' && 'bg-destructive/10 text-destructive',
-                        entry.status === 'running' && 'bg-brand-primary/10 text-brand-primary',
-                      )}
-                    >
-                      {statusLabel(entry.status)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
-                    <RowActionMenu
-                      overlay
-                      busy={busy}
-                      inline={
-                        <div className="flex items-center justify-end gap-1">
-                          <RowActionButton label={t('scenario.table.open')} onClick={() => onOpen(entry)}>
-                            <Eye className="h-3.5 w-3.5" />
-                          </RowActionButton>
+              {rows.map((entry) => {
+                const opening = pendingId === entry.id
+                return (
+                  <TableRow
+                    key={entry.id}
+                    className={cn('cursor-pointer', entry.id === activeId && 'bg-brand-primary/5')}
+                    aria-busy={opening || undefined}
+                    onClick={() => openRun(entry)}
+                  >
+                    <TableCell className="min-w-[200px] text-[12px] font-medium text-foreground">{formatDate(entry.updatedAt)}</TableCell>
+                    <TableCell className="text-[12px]">{t(`domain.${entry.domain}` as 'domain.health')}</TableCell>
+                    <TableCell className="font-mono text-[12px]">{entry.country.toUpperCase()}</TableCell>
+                    <TableCell className="text-right font-mono text-[12px]">
+                      {entry.released}/{entry.total}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          'rounded-full px-1.5 py-px text-[9px] font-semibold',
+                          entry.status === 'complete' && 'bg-emerald-500/10 text-emerald-600',
+                          entry.status === 'failed' && 'bg-destructive/10 text-destructive',
+                          entry.status === 'running' && 'bg-brand-primary/10 text-brand-primary',
+                        )}
+                      >
+                        {statusLabel(entry.status)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
+                      {opening ? (
+                        <RowSpinner className="ml-auto" />
+                      ) : (
+                        <RowActionMenu
+                          overlay
+                          busy={busy}
+                          inline={
+                            <div className="flex items-center justify-end gap-1">
+                              <RowActionButton label={t('scenario.table.open')} onClick={() => openRun(entry)}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </RowActionButton>
+                              {entry.status !== 'complete' && (
+                                <RowActionButton label={t('scenario.resume')} disabled={busy} onClick={() => onResume(entry)}>
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                </RowActionButton>
+                              )}
+                              <RowActionButton
+                                label={t('scenario.delete.action')}
+                                tone="danger"
+                                disabled={busy}
+                                onClick={() => setPending(entry)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </RowActionButton>
+                            </div>
+                          }
+                        >
+                          <TableActionItem icon={Eye} onClick={() => openRun(entry)}>
+                            {t('scenario.table.open')}
+                          </TableActionItem>
                           {entry.status !== 'complete' && (
-                            <RowActionButton label={t('scenario.resume')} disabled={busy} onClick={() => onResume(entry)}>
-                              <RotateCcw className="h-3.5 w-3.5" />
-                            </RowActionButton>
+                            <TableActionItem icon={RotateCcw} disabled={busy} onClick={() => onResume(entry)}>
+                              {t('scenario.resume')}
+                            </TableActionItem>
                           )}
-                          <RowActionButton
-                            label={t('scenario.delete.action')}
-                            tone="danger"
-                            disabled={busy}
-                            onClick={() => setPending(entry)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </RowActionButton>
-                        </div>
-                      }
-                    >
-                      <TableActionItem icon={Eye} onClick={() => onOpen(entry)}>
-                        {t('scenario.table.open')}
-                      </TableActionItem>
-                      {entry.status !== 'complete' && (
-                        <TableActionItem icon={RotateCcw} disabled={busy} onClick={() => onResume(entry)}>
-                          {t('scenario.resume')}
-                        </TableActionItem>
+                          <TableActionItem icon={Trash2} variant="danger" disabled={busy} onClick={() => setPending(entry)}>
+                            {t('scenario.delete.action')}
+                          </TableActionItem>
+                        </RowActionMenu>
                       )}
-                      <TableActionItem icon={Trash2} variant="danger" disabled={busy} onClick={() => setPending(entry)}>
-                        {t('scenario.delete.action')}
-                      </TableActionItem>
-                    </RowActionMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
           <DataTablePagination

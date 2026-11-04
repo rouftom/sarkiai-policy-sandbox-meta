@@ -11,11 +11,13 @@ import * as React from 'react'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { TableActionItem } from '@/components/ui/table-actions'
 import { RowActionButton } from '@/components/ui/row-action-button'
+import { RowSpinner } from '@/components/ui/row-spinner'
 import { Eye, ImageIcon, Pencil, RotateCcw, Search, Trash2, Upload, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { KbImageUploader } from '@/components/kb-image-uploader'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { documentHref } from '@/lib/kb-links'
+import { useRowNavigation } from '@/lib/use-row-navigation'
 import { Badge, Button, DataTablePagination, Input, Select, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Dialog, DialogContent, DialogHeader, DialogTitle } from '@sps/ui'
 import { ApiError, knowledgeApi, type KbDocumentDto, type KbIngestResultDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
@@ -123,6 +125,11 @@ export function KbDocuments({
   const [uploadOpen, setUploadOpen] = React.useState(false)
   const [pendingDelete, setPendingDelete] = React.useState<KbDocumentDto | null>(null)
   const router = useRouter()
+  const { pendingId, navigate } = useRowNavigation()
+
+  const openDocument = (filename: string, href: string) => {
+    navigate(filename, () => router.push(href))
+  }
 
   return (
     <div className="space-y-3">
@@ -225,11 +232,13 @@ export function KbDocuments({
               <TableBody>
                 {rows.map((document) => {
                   const retired = document.activeChunks === 0
+                  const pending = pendingId === document.filename
                   return (
                     <TableRow
                       key={document.filename}
                       className="cursor-pointer"
-                      onClick={() => router.push(documentHref(document.filename, undefined, 'view'))}
+                      aria-busy={pending || undefined}
+                      onClick={() => openDocument(document.filename, documentHref(document.filename, undefined, 'view'))}
                     >
                       <TableCell className="min-w-[220px]">
                         <p className="text-[12px] font-medium text-foreground">{document.filename}</p>
@@ -246,62 +255,66 @@ export function KbDocuments({
                         {document.activeChunks.toLocaleString('en-US')}
                       </TableCell>
                       <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
-                        <RowActionMenu
-                          overlay
-                          inline={
-                            <div className="flex items-center justify-end gap-1">
-                              <RowActionButton label={t('kb.action.details')} onClick={() => router.push(documentHref(document.filename, undefined, 'view'))}>
-                                <Eye className="h-3.5 w-3.5" />
-                              </RowActionButton>
-                              <RowActionButton label={t('kb.action.edit')} onClick={() => router.push(documentHref(document.filename, undefined, 'edit'))}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </RowActionButton>
-                              <RowActionButton
-                                label={t('kb.action.media')}
-                                onClick={() => router.push(documentHref(document.filename, 'media'))}
-                              >
-                                <ImageIcon className="h-3.5 w-3.5" />
-                              </RowActionButton>
-                              <RowActionButton
-                                label={retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
-                                tone={retired ? 'default' : 'danger'}
-                                disabled={loading}
-                                onClick={() => void onToggle(document, retired)}
-                              >
-                                {retired ? <RotateCcw className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                              </RowActionButton>
-                              <RowActionButton
-                                label={t('knowledge.corpus.delete')}
-                                tone="danger"
-                                disabled={loading}
-                                onClick={() => setPendingDelete(document)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </RowActionButton>
-                            </div>
-                          }
-                        >
-                          <TableActionItem icon={Eye} onClick={() => router.push(documentHref(document.filename, undefined, 'view'))}>
-                            {t('kb.action.details')}
-                          </TableActionItem>
-                          <TableActionItem icon={Pencil} onClick={() => router.push(documentHref(document.filename, undefined, 'edit'))}>
-                            {t('kb.action.edit')}
-                          </TableActionItem>
-                          <TableActionItem icon={ImageIcon} onClick={() => router.push(documentHref(document.filename, 'media'))}>
-                            {t('kb.action.media')}
-                          </TableActionItem>
-                          <TableActionItem
-                            icon={retired ? RotateCcw : X}
-                            variant={retired ? 'default' : 'danger'}
-                            disabled={loading}
-                            onClick={() => void onToggle(document, retired)}
+                        {pending ? (
+                          <RowSpinner className="ml-auto" />
+                        ) : (
+                          <RowActionMenu
+                            overlay
+                            inline={
+                              <div className="flex items-center justify-end gap-1">
+                                <RowActionButton label={t('kb.action.details')} onClick={() => openDocument(document.filename, documentHref(document.filename, undefined, 'view'))}>
+                                  <Eye className="h-3.5 w-3.5" />
+                                </RowActionButton>
+                                <RowActionButton label={t('kb.action.edit')} onClick={() => openDocument(document.filename, documentHref(document.filename, undefined, 'edit'))}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </RowActionButton>
+                                <RowActionButton
+                                  label={t('kb.action.media')}
+                                  onClick={() => openDocument(document.filename, documentHref(document.filename, 'media'))}
+                                >
+                                  <ImageIcon className="h-3.5 w-3.5" />
+                                </RowActionButton>
+                                <RowActionButton
+                                  label={retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
+                                  tone={retired ? 'default' : 'danger'}
+                                  disabled={loading}
+                                  onClick={() => void onToggle(document, retired)}
+                                >
+                                  {retired ? <RotateCcw className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                                </RowActionButton>
+                                <RowActionButton
+                                  label={t('knowledge.corpus.delete')}
+                                  tone="danger"
+                                  disabled={loading}
+                                  onClick={() => setPendingDelete(document)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </RowActionButton>
+                              </div>
+                            }
                           >
-                            {retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
-                          </TableActionItem>
-                          <TableActionItem icon={Trash2} variant="danger" disabled={loading} onClick={() => setPendingDelete(document)}>
-                            {t('knowledge.corpus.delete')}
-                          </TableActionItem>
-                        </RowActionMenu>
+                            <TableActionItem icon={Eye} onClick={() => openDocument(document.filename, documentHref(document.filename, undefined, 'view'))}>
+                              {t('kb.action.details')}
+                            </TableActionItem>
+                            <TableActionItem icon={Pencil} onClick={() => openDocument(document.filename, documentHref(document.filename, undefined, 'edit'))}>
+                              {t('kb.action.edit')}
+                            </TableActionItem>
+                            <TableActionItem icon={ImageIcon} onClick={() => openDocument(document.filename, documentHref(document.filename, 'media'))}>
+                              {t('kb.action.media')}
+                            </TableActionItem>
+                            <TableActionItem
+                              icon={retired ? RotateCcw : X}
+                              variant={retired ? 'default' : 'danger'}
+                              disabled={loading}
+                              onClick={() => void onToggle(document, retired)}
+                            >
+                              {retired ? t('knowledge.corpus.restore') : t('knowledge.corpus.retire')}
+                            </TableActionItem>
+                            <TableActionItem icon={Trash2} variant="danger" disabled={loading} onClick={() => setPendingDelete(document)}>
+                              {t('knowledge.corpus.delete')}
+                            </TableActionItem>
+                          </RowActionMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   )

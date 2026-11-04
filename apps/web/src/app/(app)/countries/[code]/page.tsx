@@ -87,13 +87,17 @@ function ChartFrame({
   title,
   hint,
   empty,
+  loading,
   emptyLabel,
+  loadingLabel,
   children,
 }: {
   title: string
   hint?: string
   empty: boolean
+  loading?: boolean
   emptyLabel: string
+  loadingLabel: string
   children: React.ReactNode
 }) {
   return (
@@ -103,7 +107,21 @@ function ChartFrame({
         {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
       </CardHeader>
       <CardContent className="pt-2">
-        {empty ? (
+        {loading ? (
+          <div
+            className="flex h-[180px] items-end gap-2 px-1 pb-2 pt-6"
+            aria-busy="true"
+            aria-label={loadingLabel}
+          >
+            {[46, 72, 55, 84, 62, 78, 50].map((height, index) => (
+              <div
+                key={index}
+                className="shimmer flex-1 rounded-t bg-secondary"
+                style={{ height: `${height}%` }}
+              />
+            ))}
+          </div>
+        ) : empty ? (
           <p className="flex h-[180px] items-center justify-center text-center text-[10px] text-muted-foreground">
             {emptyLabel}
           </p>
@@ -126,7 +144,8 @@ export default function CountryPage() {
   const code = String(params.code)
 
   const [country, setCountry] = React.useState<CountryDto | null>(null)
-  const [insights, setInsights] = React.useState<CountryInsightsDto | null>(null)
+  /** `undefined` while the insights are on their way, `null` when they are unavailable. */
+  const [insights, setInsights] = React.useState<CountryInsightsDto | null | undefined>(undefined)
   const [runs, setRuns] = React.useState<ReadinessRunSummaryDto[] | null>(null)
   const [problem, setProblem] = React.useState<string | null>(null)
   const [tab, setTab] = React.useState<Tab>('overview')
@@ -142,6 +161,7 @@ export default function CountryPage() {
   }, [])
 
   const load = React.useCallback(async () => {
+    setInsights(undefined)
     try {
       const result = await countriesApi.get(code)
       setCountry(result.country)
@@ -154,6 +174,7 @@ export default function CountryPage() {
         .catch(() => setRuns([]))
     } catch (cause) {
       const status = cause instanceof ApiError ? cause.status : 0
+      setInsights(null)
       setProblem(status === 404 ? t('country.notFound') : (cause as Error).message)
     }
   }, [code, t])
@@ -275,7 +296,8 @@ export default function CountryPage() {
     runs: point.readinessRuns,
     score: point.averageComposite,
   }))
-  const noData = (totals?.readinessRuns ?? 0) === 0 && (totals?.scenarioRuns ?? 0) === 0
+  const insightsLoading = insights === undefined
+  const noData = !insightsLoading && (totals?.readinessRuns ?? 0) === 0 && (totals?.scenarioRuns ?? 0) === 0
   const countryNotes = country.notes?.trim()
   const visibleNotes = countryNotes && countryNotes !== LEGACY_SEED_NOTE ? countryNotes : null
 
@@ -421,6 +443,8 @@ export default function CountryPage() {
               hint={t('country.insights.hint')}
               empty={sectorData.length === 0}
               emptyLabel={t('country.insights.empty')}
+              loading={insightsLoading}
+              loadingLabel={t('country.insights.loading')}
             >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
@@ -437,6 +461,8 @@ export default function CountryPage() {
               title={t('country.insights.scoreBySector')}
               empty={sectorData.length === 0}
               emptyLabel={t('country.insights.empty')}
+              loading={insightsLoading}
+              loadingLabel={t('country.insights.loading')}
             >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
@@ -453,6 +479,8 @@ export default function CountryPage() {
               title={t('country.insights.trend')}
               empty={trendData.length === 0}
               emptyLabel={t('country.insights.empty')}
+              loading={insightsLoading}
+              loadingLabel={t('country.insights.loading')}
             >
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
@@ -480,6 +508,8 @@ export default function CountryPage() {
               title={t('country.insights.scenariosBySector')}
               empty={sectorData.length === 0}
               emptyLabel={t('country.insights.empty')}
+              loading={insightsLoading}
+              loadingLabel={t('country.insights.loading')}
             >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sectorData} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
