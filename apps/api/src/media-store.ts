@@ -17,7 +17,14 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import sharp from 'sharp'
 import { ObjectStore, sha256Hex } from '@sps/storage'
-import { attachmentThumbnailUrl, cloudinaryConfigured, uploadAttachmentImage } from './cloudinary.js'
+import {
+  ATTACHMENT_FOLDER,
+  attachmentAssetUrl,
+  attachmentThumbnailUrl,
+  cloudinaryConfigured,
+  fetchAttachmentImage,
+  uploadAttachmentImage,
+} from './cloudinary.js'
 
 export type MediaProvider = 's3' | 'cloudinary'
 export type AttachmentVariant = 'full' | 'thumb'
@@ -35,6 +42,14 @@ const EXT_BY_MIME: Record<string, string> = {
 const MIME_BY_EXT: Record<string, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+}
+
+/** What sharp reports as the decoded format, mapped to the MIME we serve it as. */
+const MIME_BY_FORMAT: Record<string, string> = {
+  png: 'image/png',
+  jpeg: 'image/jpeg',
   webp: 'image/webp',
   gif: 'image/gif',
 }
@@ -72,11 +87,23 @@ export interface ReadMediaResult {
   etag: string
 }
 
+/** One stored image, read back with its public reference rebuilt. */
+export interface ResolvedMedia {
+  data: Buffer
+  ref: MediaRef
+}
+
 export interface MediaStore {
   readonly provider: MediaProvider
   put(input: PutMediaInput): Promise<MediaRef>
   /** S3 only: the signed read route. Cloudinary serves the browser directly. */
   read(fileId: string, variant: AttachmentVariant): Promise<ReadMediaResult | null>
+  /**
+   * Reads an image that was uploaded earlier, so a message can name it by id
+   * instead of sending its bytes again. Rebuilds the reference the turn keeps.
+   * `null` means the id is not one of ours, or the object is gone.
+   */
+  resolve(input: { id: string; mime: string; name: string }): Promise<ResolvedMedia | null>
 }
 
 /** An invalid image is a client error, not a storage failure. */
@@ -130,6 +157,21 @@ export function attachmentPath(secret: string, fileId: string, variant: Attachme
   return `/v1/attachments/${fileId}/${variant}?sig=${encodeURIComponent(signature)}`
 }
 
+/** A Cloudinary attachment id is a public id under the attachment folder, named by its SHA-256. */
+export function isAttachmentPublicId(id: string): boolean {
+  if (!id.startsWith(`${ATTACHMENT_FOLDER}/`) || id.includes('..')) return false
+  return /^[a-f0-9]{64}$/.test(id.slice(id.lastIndexOf('/') + 1))
+}
+
+/** The bytes of a stored object, whichever shape the adapter returned. */
+async function storedBytes(stored: ReadMediaResult): Promise<Buffer | null> {
+  if (stored.data) return Buffer.from(stored.data)
+  if (!stored.body) return null
+  const chunks: Uint8Array[] = []
+  for await (const chunk of stored.body) chunks.push(chunk)
+  return Buffer.concat(chunks)
+}
+
 class S3MediaStore implements MediaStore {
   readonly provider = 's3' as const
 
@@ -141,7 +183,8 @@ class S3MediaStore implements MediaStore {
 
   async put(input: PutMediaInput): Promise<MediaRef> {
     const { data, mime, name } = input
-    const dimensions = await imageDimensions(data)
+    const { mime: detected, ...dimensions } = await imageInfo(data)
+    if (detected !== mime) throw new InvalidImageError(`The image content is ${detected}, not ${mime}.`)
     const stored = await this.storage.putContentAddressed(data, mime)
     const fileId = attachmentFileId(stored.sha256, mime)
     const thumbnail = await this.makeThumbnail(data, stored.sha256)
@@ -195,6 +238,39 @@ class S3MediaStore implements MediaStore {
     }
   }
 
+  async resolve(input: { id: string; mime: string; name: string }): Promise<ResolvedMedia | null> {
+    if (!/^[a-f0-9]{64}$/.test(input.id)) return null
+    let fileId: string
+    try {
+      fileId = attachmentFileId(input.id, input.mime)
+    } catch {
+      return null
+    }
+    const stored = await this.read(fileId, 'full')
+    if (!stored) return null
+    const data = await storedBytes(stored)
+    if (!data) return null
+    const info = await imageInfo(data).catch(() => null)
+    // The bytes must be the format the id claims: a client cannot relabel them.
+    if (!info || info.mime !== input.mime) return null
+    const { mime: _detected, ...dimensions } = info
+    return {
+      data,
+      ref: {
+        id: input.id,
+        provider: 's3',
+        mime: input.mime,
+        name: input.name,
+        size: data.byteLength,
+        ...dimensions,
+        sha256: input.id,
+        url: attachmentPath(this.signingSecret, fileId, 'full'),
+        // The read route rebuilds a missing thumbnail from the original.
+        thumbnailUrl: attachmentPath(this.signingSecret, fileId, 'thumb'),
+      },
+    }
+  }
+
   private async makeThumbnail(data: Buffer, sha256: string): Promise<Buffer | null> {
     try {
       const thumbnail = await sharp(data, { animated: false })
@@ -223,7 +299,8 @@ class CloudinaryMediaStore implements MediaStore {
 
   async put(input: PutMediaInput): Promise<MediaRef> {
     const { data, mime, name } = input
-    const dimensions = await imageDimensions(data)
+    const { mime: detected, ...dimensions } = await imageInfo(data)
+    if (detected !== mime) throw new InvalidImageError(`The image content is ${detected}, not ${mime}.`)
     const sha256 = sha256Hex(data)
     const uploaded = await uploadAttachmentImage(data, mime, sha256)
     if (!uploaded) throw new Error('Cloudinary upload failed.')
@@ -244,21 +321,52 @@ class CloudinaryMediaStore implements MediaStore {
     // Cloudinary serves the asset itself: the console never proxies the bytes.
     return null
   }
+
+  async resolve(input: { id: string; mime: string; name: string }): Promise<ResolvedMedia | null> {
+    // Only our own folder and content-addressed ids: a client cannot name
+    // someone else's asset, or an arbitrary URL, as its message context.
+    if (!isAttachmentPublicId(input.id)) return null
+    const fetched = await fetchAttachmentImage(input.id)
+    if (!fetched) return null
+    const info = await imageInfo(fetched.data).catch(() => null)
+    // The bytes must be the format the message claims.
+    if (!info || info.mime !== input.mime) return null
+    const { mime: _detected, ...dimensions } = info
+    return {
+      data: fetched.data,
+      ref: {
+        id: input.id,
+        provider: 'cloudinary',
+        mime: input.mime,
+        name: input.name,
+        size: fetched.data.byteLength,
+        ...dimensions,
+        sha256: input.id.slice(input.id.lastIndexOf('/') + 1),
+        url: attachmentAssetUrl(input.id),
+        thumbnailUrl: attachmentThumbnailUrl(input.id, this.thumbnailWidth),
+      },
+    }
+  }
 }
 
 /**
- * Reads the intrinsic size, and refuses bytes that are not an image whatever
- * their declared MIME type. A decoded image is the only thing that reaches the
- * store, so a mislabelled payload cannot be served as `image/png` later.
+ * Reads the intrinsic size and the decoded format, and refuses bytes that are
+ * not an image whatever their declared MIME type. A decoded image is the only
+ * thing that reaches the store, so a mislabelled payload cannot be served as
+ * `image/png` later.
  */
-async function imageDimensions(data: Buffer): Promise<{ width?: number; height?: number }> {
+async function imageInfo(data: Buffer): Promise<{ width?: number; height?: number; mime: string }> {
   try {
     const metadata = await sharp(data, { animated: false }).metadata()
+    const mime = MIME_BY_FORMAT[metadata.format ?? '']
+    if (!mime) throw new InvalidImageError()
     return {
       ...(metadata.width ? { width: metadata.width } : {}),
       ...(metadata.height ? { height: metadata.height } : {}),
+      mime,
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof InvalidImageError) throw error
     throw new InvalidImageError()
   }
 }

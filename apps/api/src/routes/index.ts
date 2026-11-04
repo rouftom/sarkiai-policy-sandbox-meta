@@ -1235,6 +1235,83 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }
 
   /**
+   * The same contract, for a client that already uploaded its images (see
+   * `POST /v1/attachments`). The message names the references; the bytes are
+   * read back from the media store, never sent twice by the browser.
+   */
+  async function resolveStoredAttachments(
+    refs: Array<{ id: string; mime: string; name?: string }> | undefined,
+    log: FastifyRequest['log'],
+  ) {
+    const list = refs ?? []
+    if (list.length > config.attachments.maxImages) {
+      return {
+        ok: false as const,
+        status: 400,
+        code: 'too_many_attachments',
+        message: `At most ${config.attachments.maxImages} images per message.`,
+      }
+    }
+    const maxMb = (config.attachments.maxBytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')
+    const meta: Array<{ sha256: string; mime: string; size: number; key: string }> = []
+    const images: Array<{ mime: string; dataBase64: string; name?: string }> = []
+    const stored: MediaRef[] = []
+    for (const ref of list) {
+      if (!(IMAGE_MIMES as readonly string[]).includes(ref.mime)) {
+        return {
+          ok: false as const,
+          status: 415,
+          code: 'unsupported_media_type',
+          message: `Only PNG, JPEG, WebP or GIF images are accepted (got ${ref.mime}).`,
+        }
+      }
+      const name = (ref.name ?? 'image').slice(0, 200) || 'image'
+      let resolved
+      try {
+        resolved = await engine.media.resolve({ id: ref.id, mime: ref.mime, name })
+      } catch (error) {
+        if (error instanceof InvalidImageError) {
+          return { ok: false as const, status: 415, code: 'invalid_image', message: error.message }
+        }
+        log.warn({ err: (error as Error).message }, 'attachment read failed')
+        return {
+          ok: false as const,
+          status: 502,
+          code: 'storage_unavailable',
+          message: 'The image store is unavailable. Try again later.',
+        }
+      }
+      if (!resolved) {
+        return {
+          ok: false as const,
+          status: 400,
+          code: 'unknown_attachment',
+          message: 'The image was not found in this deployment’s store. Upload it again.',
+        }
+      }
+      if (resolved.data.byteLength > config.attachments.maxBytes) {
+        return {
+          ok: false as const,
+          status: 413,
+          code: 'attachment_too_large',
+          message: `Image too large (max ${maxMb} MB).`,
+        }
+      }
+      images.push({ mime: resolved.ref.mime, dataBase64: resolved.data.toString('base64'), name: resolved.ref.name })
+      meta.push({
+        sha256: resolved.ref.sha256 ?? resolved.ref.id,
+        mime: resolved.ref.mime,
+        size: resolved.ref.size,
+        key: resolved.ref.key ?? '',
+      })
+      // The S3 object key is internal: the browser gets the signed URLs only.
+      const { key: _key, ...published } = resolved.ref
+      stored.push(published)
+    }
+    return { ok: true as const, meta, references: [] as Array<{ name: string; text: string }>, images, refs: stored }
+  }
+
+  /**
    * The image caps of this deployment, so the composer enforces exactly what
    * the API will accept. Public data: no secret, but the route stays behind the
    * session guard like the rest of the console API.
@@ -1244,6 +1321,66 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     maxBytes: config.attachments.maxBytes,
     mimeTypes: IMAGE_MIMES,
   }))
+
+  // The composer uploads the picked file as the request body (`Content-Type` is
+  // its MIME type), so no base64 ever crosses the browser→API hop. Fastify only
+  // hands those types through once they have a buffer parser; the route caps the
+  // size.
+  for (const mime of ATTACHMENT_MIME_TYPES) {
+    app.addContentTypeParser(mime, { parseAs: 'buffer' }, (_request, body, done) => done(null, body))
+  }
+
+  /**
+   * Uploads one chat image and returns its stored reference. The message that
+   * follows names the reference (`attachmentRefs`), and the API reads the bytes
+   * back for the vision model. A later message can reuse the same image without
+   * uploading it again.
+   */
+  app.post('/v1/attachments', { bodyLimit: config.attachments.maxBytes }, async (request, reply) => {
+    const mime = String(request.headers['content-type'] ?? '')
+      .split(';')[0]!
+      .trim()
+      .toLowerCase()
+    if (!(IMAGE_MIMES as readonly string[]).includes(mime)) {
+      return reply.status(415).send({
+        error: 'unsupported_media_type',
+        message: `Only PNG, JPEG, WebP or GIF images are accepted (got ${mime || 'no content type'}).`,
+      })
+    }
+    const data = Buffer.isBuffer(request.body) ? request.body : null
+    if (!data || data.byteLength === 0) {
+      return reply.status(400).send({ error: 'empty_attachment', message: 'The image payload is empty.' })
+    }
+    const maxMb = (config.attachments.maxBytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')
+    if (data.byteLength > config.attachments.maxBytes) {
+      return reply.status(413).send({
+        error: 'attachment_too_large',
+        message: `Image too large (max ${maxMb} MB).`,
+      })
+    }
+    const rawName = String(request.headers['x-file-name'] ?? 'image')
+    let name = 'image'
+    try {
+      name = decodeURIComponent(rawName).slice(0, 200) || 'image'
+    } catch {
+      name = 'image'
+    }
+    try {
+      const ref = await engine.media.put({ data, mime, name })
+      // The S3 object key is internal: the browser gets the public reference only.
+      const { key: _key, ...published } = ref
+      return published
+    } catch (error) {
+      if (error instanceof InvalidImageError) {
+        return reply.status(415).send({ error: 'invalid_image', message: error.message })
+      }
+      request.log.warn({ err: (error as Error).message }, 'attachment upload failed')
+      return reply.status(502).send({
+        error: 'storage_unavailable',
+        message: 'The image store is unavailable. Try again later.',
+      })
+    }
+  })
 
   /**
    * Image bytes of a saved turn. Public on purpose, like the KB figures: an
@@ -1278,7 +1415,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: 'not_found', message: `Unknown institution "${body.data.institutionId}"` })
 
-    const stored = await storeAttachments(body.data.attachments, request.log)
+    const stored = body.data.attachmentRefs?.length
+      ? await resolveStoredAttachments(body.data.attachmentRefs, request.log)
+      : await storeAttachments(body.data.attachments, request.log)
     if (!stored.ok) return reply.status(stored.status).send({ error: stored.code, message: stored.message })
 
     const assessment = await operatorStack(request).orchestrator.runAgent({
@@ -1312,7 +1451,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: 'not_found', message: `Unknown institution "${body.data.institutionId}"` })
 
-    const stored = await storeAttachments(body.data.attachments, request.log)
+    const stored = body.data.attachmentRefs?.length
+      ? await resolveStoredAttachments(body.data.attachmentRefs, request.log)
+      : await storeAttachments(body.data.attachments, request.log)
     if (!stored.ok) return reply.status(stored.status).send({ error: stored.code, message: stored.message })
 
     reply.hijack()

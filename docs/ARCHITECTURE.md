@@ -33,6 +33,13 @@ on-premise installs use MinIO / S3 (`MEDIA_STORE=s3`); cloud and sovereign
 deployments use Cloudinary (`MEDIA_STORE=cloudinary`) under the dedicated `sps`
 namespace, never the organization's `fada/resources` folder.
 
+The console uploads each image **once, when it is picked** (`POST /v1/attachments`,
+raw bytes: no base64 in the browser or in a request body). The message that
+follows names the reference (`attachmentRefs`) and the API reads the bytes back
+from the store for the vision model, so a saved turn and its session payload
+carry the reference only. The composer shows a spinner until the upload returns
+and blocks sending while one is in flight or has failed.
+
 The `KbChunk` contract is identical in both search backends: `RETRIEVAL_BACKEND`
 only changes **where the BM25 index lives** (Atlas Search or a MongoDB text
 index), not what the engine reads or cites. There is no vector store: the corpus

@@ -377,6 +377,18 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     responseType: 'image/*',
     errors: [error(403, 'The signature is missing or does not match.'), NOT_FOUND],
   },
+  'POST /v1/attachments': {
+    summary: 'Store a chat image',
+    description:
+      'Uploads one image once and returns its stored reference. The request body is the raw image bytes, with the image MIME type as `Content-Type` and the display name percent-encoded in `X-File-Name`. A message then names the reference in `attachmentRefs` (`POST /v1/agents/ask`), and the API reads the bytes back server-side for the vision model. The accepted types and byte cap come from `GET /v1/attachments/limits`.',
+    tags: ['agents'],
+    errors: [
+      BAD_REQUEST,
+      PAYLOAD_TOO_LARGE,
+      error(415, 'The content type is not an accepted image MIME type.'),
+      BAD_GATEWAY,
+    ],
+  },
   'POST /v1/agents/ask': {
     summary: 'Ask the mandated agents a question',
     description:

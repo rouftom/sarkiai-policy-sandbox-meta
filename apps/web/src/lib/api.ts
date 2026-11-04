@@ -101,6 +101,27 @@ async function requestText(path: string, init?: RequestInit): Promise<string> {
   return response.text()
 }
 
+/**
+ * Uploads one chat image as raw bytes, so no base64 ever crosses the browser.
+ * The message that follows names the returned reference (`attachmentRefs`) and
+ * the API reads the bytes back for the vision model.
+ */
+async function uploadAttachment(file: File): Promise<AttachmentRefDto> {
+  const token = readToken()
+  const response = await send('/v1/attachments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type,
+      // A header cannot carry non-ASCII safely; the API decodes it back.
+      'X-File-Name': encodeURIComponent(file.name),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: file,
+  })
+  if (!response.ok) throw new ApiError(response.status, await response.text())
+  return (await response.json()) as AttachmentRefDto
+}
+
 export interface GapDto {
   id: string
   dimension: string
@@ -864,7 +885,10 @@ async function streamAgentAnswer(
     language?: 'fr' | 'en'
     /** Reasoning effort; absent means the provider decides. */
     effort?: 'minimal' | 'low' | 'medium' | 'high'
+    /** Legacy inline images; the console uploads first and sends `attachmentRefs`. */
     attachments?: Array<{ mime: string; dataBase64: string }>
+    /** Images already stored by this deployment, by reference. */
+    attachmentRefs?: Array<{ id: string; mime: string; name?: string }>
   },
   handlers: AgentStreamHandlers = {},
 ): Promise<AssessmentDto> {
@@ -1035,6 +1059,9 @@ export const api = {
 
   /** Image caps for assistant messages: count, bytes per image, MIME types. */
   attachmentLimits: () => request<{ maxImages: number; maxBytes: number; mimeTypes: string[] }>('/v1/attachments/limits'),
+
+  /** Stores one image and returns its reference; the message then names it. */
+  uploadAttachment,
 
   /** Chat models from Meta's own list for this key, and the saved selection. */
   models: () => request<ModelsDto>('/v1/models'),
