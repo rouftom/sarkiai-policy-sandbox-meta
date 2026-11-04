@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" width="1200" height="720" role="img" aria-labelledby="t d">
+<title id="t">SarkiAI Policy Sandbox: an AI-readiness assessment</title>
+<desc id="d">A ministry chooses up to five sectors and the dimensions to evaluate, thirteen by default. For each sector, one agent per dimension gathers evidence: the agentic corpus search on the national law, and live sources through the built-in web search of the Meta Model API on Muse Spark. The evaluation and the synthesis run on the model chosen per task, such as Muse Spark Open. Three execution modes are available: parallel, sequential, or orchestrated by a lead agent. The result is a bilingual report in Markdown, HTML and Word, with charts from MCP apps and a cover drawn by Muse Image, and a comparison across sectors.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#50627C"/></marker>
+<marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5AA9FF"/></marker></defs>
+<style>
+.kicker{font:600 15px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:2.5px;fill:#A9B4C6}
+.head{font:700 32px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#F2F5FA}
+.name{font:700 19px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#F2F5FA}
+.sub{font:400 14.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.note{font:italic 400 14.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.tag{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#5AA9FF}
+.tagh{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#FF8A65}
+.tags{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#7F8DA3}
+.legend{font:500 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.flow{fill:none;stroke:#50627C;stroke-width:2}
+.dash{fill:none;stroke:#50627C;stroke-width:2;stroke-dasharray:6 6}
+.metaflow{fill:none;stroke:#5AA9FF;stroke-width:2}
+.band{fill:#111827;stroke:#2A3648;stroke-width:1.5;stroke-dasharray:4 6}
+</style>
+<rect width="1200" height="720" rx="22" fill="#0E1420"/>
+<text class="kicker" x="44" y="62">AI READINESS, LIVE</text>
+<text class="head" x="44" y="102">One agent per dimension, sector by sector.</text>
+<path class="flow" d="M174 280 V316" marker-end="url(#a)"/><path class="metaflow" d="M304 395 C 330 395, 330 205, 356 205" marker-end="url(#am)"/><path class="flow" d="M304 410 C 330 410, 330 328, 356 328" marker-end="url(#a)"/><path class="metaflow" d="M304 440 C 330 440, 330 460, 356 460" marker-end="url(#am)"/><path class="metaflow" d="M740 460 C 770 460, 770 215, 796 215" marker-end="url(#am)"/><path class="flow" d="M978 280 V316" marker-end="url(#a)"/><path class="metaflow" d="M978 500 V474" marker-end="url(#am)"/>
+<rect x="1004" y="52" width="14" height="14" rx="4" fill="#121925" stroke="#50627C" stroke-width="1.5" stroke-dasharray="4 3"/><text class="legend" x="1026" y="64">External service</text>
+<rect x="786" y="52" width="14" height="14" rx="4" fill="#2B1D1C" stroke="#FF8A65" stroke-width="2"/><text class="legend" x="808" y="64">People and institutions</text>
+<rect x="635" y="52" width="14" height="14" rx="4" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/><text class="legend" x="657" y="64">SarkiAI engine</text>
+<rect x="515" y="52" width="14" height="14" rx="4" fill="#14263F" stroke="#5AA9FF" stroke-width="2"/><text class="legend" x="537" y="64">Meta model</text>
+<rect x="44" y="150" width="260" height="130" rx="14" fill="#2B1D1C" stroke="#FF8A65" stroke-width="2"/>
+<text class="name" x="62" y="178">The ministry chooses</text>
+<text class="sub" x="62" y="202">Up to five sectors,</text>
+<text class="sub" x="62" y="222">thirteen dimensions by default</text>
+<rect x="44" y="320" width="260" height="150" rx="14" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/>
+<text class="tags" x="62" y="348">RUN</text>
+<text class="name" x="62" y="374">Execution mode</text>
+<text class="sub" x="62" y="398">Parallel, sequential, or</text>
+<text class="sub" x="62" y="418">orchestrated by a lead agent</text>
+<rect x="360" y="150" width="380" height="110" rx="14" fill="#14263F" stroke="#5AA9FF" stroke-width="2"/>
+<text class="tag" x="378" y="178">META MODEL · MUSE SPARK</text>
+<text class="name" x="378" y="204">Web search</text>
+<text class="sub" x="378" y="228">Live, current sources</text>
+<text class="sub" x="378" y="248">Built into the Meta Model API</text>
+<rect x="360" y="280" width="380" height="96" rx="14" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/>
+<text class="tags" x="378" y="308">RETRIEVAL</text>
+<text class="name" x="378" y="334">Corpus evidence</text>
+<text class="sub" x="378" y="358">Agentic search on the national law</text>
+<rect x="360" y="396" width="380" height="130" rx="14" fill="#14263F" stroke="#5AA9FF" stroke-width="2"/>
+<text class="tag" x="378" y="424">META MODEL · E.G. MUSE SPARK OPEN</text>
+<text class="name" x="378" y="450">Dimension agents</text>
+<text class="sub" x="378" y="474">One per dimension and sector</text>
+<text class="sub" x="378" y="494">Score and justification, on the</text>
+<text class="sub" x="378" y="514">model chosen per task</text>
+<rect x="800" y="150" width="356" height="130" rx="14" fill="#14263F" stroke="#5AA9FF" stroke-width="2"/>
+<text class="tag" x="818" y="178">META MODEL</text>
+<text class="name" x="818" y="204">Synthesis</text>
+<text class="sub" x="818" y="228">Composite score and summary</text>
+<text class="sub" x="818" y="248">for each sector</text>
+<rect x="800" y="320" width="356" height="150" rx="14" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/>
+<text class="tags" x="818" y="348">OUTPUT</text>
+<text class="name" x="818" y="374">Bilingual report</text>
+<text class="sub" x="818" y="398">Markdown, HTML and Word</text>
+<text class="sub" x="818" y="418">Charts from MCP apps</text>
+<text class="sub" x="818" y="438">Comparison across sectors</text>
+<rect x="800" y="500" width="356" height="96" rx="14" fill="#14263F" stroke="#5AA9FF" stroke-width="2"/>
+<text class="tag" x="818" y="528">META MODEL · IMAGE</text>
+<text class="name" x="818" y="554">Muse Image</text>
+<text class="sub" x="818" y="578">Draws the report cover</text>
+<text class="note" x="44" y="670" text-anchor="start">Every stage records the model that ran it, so a ministry can show which model produced which score.</text>
+</svg>

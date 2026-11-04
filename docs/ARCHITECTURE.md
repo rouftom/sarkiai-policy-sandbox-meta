@@ -1,5 +1,11 @@
 # Architecture
 
+![One engine, three modes](architecture/01-overview.svg)
+
+![One incident run](architecture/03-incident-run.svg)
+
+![One assistant turn](architecture/02-assistant-turn.svg)
+
 ## Guiding principles
 
 1. **One engine, two lenses.** A lens is a `WorkflowProfile` (data), never a

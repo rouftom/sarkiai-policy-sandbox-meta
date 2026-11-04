@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="1200" height="560" role="img" aria-labelledby="t d">
+<title id="t">SarkiAI Policy Sandbox: a table-top crisis exercise</title>
+<desc id="d">Injects arrive on a clock. The team logs what it does. The score is computed from the log by rules, not by the model: each inject is addressed, late or missed, and an inject can only move from missed to addressed. Muse Spark then writes the after-action report, which cannot change the score. The exercise is recorded in the audit trail.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#50627C"/></marker>
+<marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5AA9FF"/></marker></defs>
+<style>
+.kicker{font:600 15px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:2.5px;fill:#A9B4C6}
+.head{font:700 32px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#F2F5FA}
+.name{font:700 19px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#F2F5FA}
+.sub{font:400 14.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.note{font:italic 400 14.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.tag{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#5AA9FF}
+.tagh{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#FF8A65}
+.tags{font:700 11px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#7F8DA3}
+.legend{font:500 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#A9B4C6}
+.flow{fill:none;stroke:#50627C;stroke-width:2}
+.dash{fill:none;stroke:#50627C;stroke-width:2;stroke-dasharray:6 6}
+.metaflow{fill:none;stroke:#5AA9FF;stroke-width:2}
+.band{fill:#111827;stroke:#2A3648;stroke-width:1.5;stroke-dasharray:4 6}
+</style>
+<rect width="1200" height="560" rx="22" fill="#0E1420"/>
+<text class="kicker" x="44" y="62">TABLE-TOP EXERCISE</text>
+<text class="head" x="44" y="102">Rules score the team. The model writes the report.</text>
+<path class="flow" d="M274 210 H310" marker-end="url(#a)"/><path class="flow" d="M544 210 H580" marker-end="url(#a)"/><path class="metaflow" d="M840 225 H876" marker-end="url(#am)"/>
+<rect class="band" x="44" y="340" width="1112" height="90" rx="16"/>
+<rect x="1004" y="52" width="14" height="14" rx="4" fill="#121925" stroke="#50627C" stroke-width="1.5" stroke-dasharray="4 3"/><text class="legend" x="1026" y="64">External service</text>
+<rect x="786" y="52" width="14" height="14" rx="4" fill="#2B1D1C" stroke="#FF8A65" stroke-width="2"/><text class="legend" x="808" y="64">People and institutions</text>
+<rect x="635" y="52" width="14" height="14" rx="4" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/><text class="legend" x="657" y="64">SarkiAI engine</text>
+<rect x="515" y="52" width="14" height="14" rx="4" fill="#14263F" stroke="#5AA9FF" stroke-width="2"/><text class="legend" x="537" y="64">Meta model</text>
+<rect x="44" y="150" width="230" height="120" rx="14" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/>
+<text class="tags" x="62" y="178">EXERCISE</text>
+<text class="name" x="62" y="204">Timed injects</text>
+<text class="sub" x="62" y="228">Events arrive on a clock</text>
+<rect x="314" y="150" width="230" height="120" rx="14" fill="#2B1D1C" stroke="#FF8A65" stroke-width="2"/>
+<text class="name" x="332" y="178">The team</text>
+<text class="sub" x="332" y="202">Logs every action</text>
+<text class="sub" x="332" y="222">it takes</text>
+<rect x="584" y="150" width="256" height="150" rx="14" fill="#151D2C" stroke="#2A3648" stroke-width="1.5"/>
+<text class="tags" x="602" y="178">NO MODEL</text>
+<text class="name" x="602" y="204">Rule-based score</text>
+<text class="sub" x="602" y="228">Addressed, late or missed,</text>
+<text class="sub" x="602" y="248">computed from the log</text>
+<text class="sub" x="602" y="268">Missed can turn into addressed</text>
+<rect x="880" y="150" width="276" height="150" rx="14" fill="#14263F" stroke="#5AA9FF" stroke-width="2"/>
+<text class="tag" x="898" y="178">META MODEL</text>
+<text class="name" x="898" y="204">After-action report</text>
+<text class="sub" x="898" y="228">Written by Muse Spark</text>
+<text class="sub" x="898" y="248">It cannot change the score</text>
+<text class="tags" x="60" y="362">AUDIT</text>
+<text class="legend" x="60" y="390" text-anchor="start">The injects, the actions, the score and the report are recorded in the hash-chained audit trail.</text>
+<text class="note" x="44" y="490" text-anchor="start">A fluent report cannot hide a missed inject: the score is fixed before the model writes a word.</text>
+</svg>
