@@ -8,7 +8,7 @@ are **normalised** (ASCII, snake_case) so ingestion stays predictable. Payloads
 
 | File | Type | OCR? | Content |
 |------|------|------|---------|
-| `loi_2024_protection_donnees_personnelles.pdf` | law | — | Personal data protection law (23 Dec. 2024) — **core** |
+| `loi_2024_protection_donnees_personnelles.pdf` | law | — | Personal data protection law (23 Dec. 2024), **core** |
 | `plan_strategique_cameroun_numerique_2020.pdf` | strategy | — | Cameroon Digital strategic plan |
 | `psnsn_sante_numerique_2026_2030.pdf` | policy | **yes** | National Digital Health Strategic Plan (114 p.) |
 | `compact_national_sante_2023.pdf` | policy | **yes** | National health compact / UHC (partly non-Unicode font) |
@@ -74,13 +74,13 @@ authority and the original URL with any document added to the corpus.
 Payloads (PDF/TXT) are **not versioned**: only this README and `manifest.json`
 are committed. Each entry carries a `rights` field:
 
-- `official-text` — laws, decrees, regulations, codes and official compilations,
+- `official-text`: laws, decrees, regulations, codes and official compilations,
   generally outside copyright under Cameroonian law;
-- `open-licence` — explicit reuse licence (attribution and licence recorded);
-- `quotation-only` — press articles, journal articles and research papers
+- `open-licence`: explicit reuse licence (attribution and licence recorded);
+- `quotation-only`: press articles, journal articles and research papers
   without a reuse licence: short attributed quotations only, payload not
   published;
-- `to-confirm` — rights not established: do not publish the payload.
+- `to-confirm`: rights not established: do not publish the payload.
 
 Rights were checked against the source publications (November 2026):
 

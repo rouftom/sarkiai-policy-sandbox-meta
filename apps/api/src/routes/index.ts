@@ -355,6 +355,8 @@ interface ScenarioSession {
   domain: Domain
   /** The language the agents answer in: the operator's. */
   lang: ScenarioLang
+  /** The model the facilitator had selected when the session was created. */
+  model?: string
   institutions: InstitutionSpec[]
   events: ScenarioEvent[]
   ticks: number[]
@@ -502,6 +504,15 @@ function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
 function operatorOf(request: FastifyRequest) {
   if (!request.operator) throw new Error('Operator missing after the auth guard.')
   return request.operator
+}
+
+/**
+ * The model stack for the operator behind this request. The preference is on
+ * the session (`/v1/auth/me` hydrates it from the store), so one operator's
+ * choice never leaks into another's run.
+ */
+function operatorStack(request: FastifyRequest) {
+  return engine.stackFor(operatorOf(request).preferences.model)
 }
 
 /**
@@ -705,7 +716,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', async (request, reply) => {
     const path = request.url.split('?')[0] ?? request.url
     if (isPublicRoute(request.method, path)) return
-    const operator = currentOperator(request)
+    const operator = await currentOperator(request)
     if (!operator) {
       return reply.status(401).send({
         error: 'unauthorized',
@@ -767,12 +778,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ── Chat models: Meta's own list, one saved choice per operator ───────────
   app.get('/v1/models', async (request, reply) => {
     if (engine.catalogMode !== 'cloud') {
-      return { mode: engine.provider.mode, selected: engine.provider.models.reasoning, models: [] }
+      return { mode: engine.provider.mode, selected: operatorStack(request).provider.models.reasoning, models: [] }
     }
     try {
       return {
         mode: engine.provider.mode,
-        selected: engine.provider.models.reasoning,
+        selected: operatorStack(request).provider.models.reasoning,
         models: await engine.listModels(),
       }
     } catch (error) {
@@ -782,7 +793,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.put('/v1/models/selection', async (request, reply) => {
-    const operator = currentOperator(request)
+    const operator = await currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthenticated' })
     const body = modelSelectionInput.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
@@ -801,7 +812,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ error: 'model_not_eligible', message: 'This model is not in the Meta list for this key.' })
     }
 
-    engine.useModel(body.data.model)
+    engine.stackFor(body.data.model)
     await auth.updatePreferences(operator.email, { model: body.data.model })
     await engine.audit
       .logAction({
@@ -822,7 +833,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   }))
 
   // ── Active provider (secret-free: what answers, and where) ────────────────
-  app.get('/v1/provider', async () => engine.provider)
+  app.get('/v1/provider', async (request) => operatorStack(request).provider)
 
   // ── Knowledge base ────────────────────────────────────────────────────────
   // Live corpus + lexical index state. This is the source of truth behind the
@@ -832,7 +843,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       const status = await knowledge.status()
       return {
         backend: engine.retrievalBackend,
-        provider: { mode: engine.provider.mode, reasoning: engine.provider.models.reasoning },
+        provider: { mode: engine.provider.mode, reasoning: operatorStack(request).provider.models.reasoning },
         ...status,
       }
     } catch (error) {
@@ -1070,7 +1081,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = searchInput.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
     try {
-      const exploration = await engine.retriever.explore({
+      const exploration = await operatorStack(request).retriever.explore({
         text: body.data.text,
         country: body.data.country,
         ...(body.data.jurisdiction ? { jurisdiction: body.data.jurisdiction } : {}),
@@ -1181,7 +1192,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const stored = await storeAttachments(body.data.attachments)
     if (!stored.ok) return reply.status(stored.status).send({ error: stored.code, message: stored.message })
 
-    return engine.orchestrator.runAgent({
+    return operatorStack(request).orchestrator.runAgent({
       institution,
       question: body.data.question,
       country: body.data.country,
@@ -1257,7 +1268,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       send({ type: 'open', agentId: institution.id, runId: body.data.runId })
-      const assessment = await engine.orchestrator.streamAgent(
+      const assessment = await operatorStack(request).orchestrator.streamAgent(
         {
           institution,
           question: body.data.question,
@@ -1301,7 +1312,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/voice/correct', async (request, reply) => {
     const body = voiceCorrectBody.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
-    return correctTranscript(body.data.text, { model: engine.model })
+    return correctTranscript(body.data.text, { model: operatorStack(request).model })
   })
 
   /**
@@ -1319,7 +1330,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const fallback = { primary: institutions[0]!.id, others: [] as string[], reason: '' }
     try {
       const choice = await generateStructured({
-        model: engine.model,
+        model: operatorStack(request).model,
         system:
           'Route a policy question to the institutions whose mandate it concerns. Choose one institution, or two or three when the question clearly touches several. Use only the ids listed.',
         prompt: `QUESTION:\n${body.data.question}\n\nINSTITUTIONS:\n${institutions
@@ -1345,7 +1356,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Scenarios: progressive release + multi-agent reconciliation ───────────
 
-  function buildSession(country: string, domain: Domain, userId: string, lang: ScenarioLang = 'en'): ScenarioSession {
+  function buildSession(
+    country: string,
+    domain: Domain,
+    userId: string,
+    lang: ScenarioLang = 'en',
+    model?: string,
+  ): ScenarioSession {
     const run = createScenario(scenarioFor(domain, country, lang), 'simulation').toRun()
     return {
       runId: `${run.id}-${crypto.randomUUID()}`,
@@ -1353,6 +1370,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       country,
       domain,
       lang,
+      model,
       institutions: institutionsForDomain(domain),
       events: run.events,
       ticks: [...new Set(run.events.map((e) => e.releaseChunk))].sort((a, b) => a - b),
@@ -1369,8 +1387,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * entry is gone while the run itself is saved. Rebuilding it from the record keeps
    * the next batch, the read and the resume working instead of answering 404.
    */
-  function sessionFromRecord(record: ScenarioRunRecord): ScenarioSession {
-    const session = buildSession(record.country, record.domain as Domain, record.userId, record.lang)
+  function sessionFromRecord(record: ScenarioRunRecord, model?: string): ScenarioSession {
+    const session = buildSession(record.country, record.domain as Domain, record.userId, record.lang, model)
     session.runId = record.id
     session.released = record.released
     session.reports = [...record.reports]
@@ -1385,7 +1403,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const events = session.events.filter((e) => e.releaseChunk === tick)
     session.history.push(...events)
 
-    const assessments = await engine.coordinator.runTick({
+    const stack = engine.stackFor(session.model)
+    const assessments = await stack.coordinator.runTick({
       language: session.lang,
       runId: session.runId,
       userId: session.userId,
@@ -1397,7 +1416,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       events,
       history: [...session.history],
     })
-    const report = await engine.coordinator.reconcile({
+    const report = await stack.coordinator.reconcile({
       language: session.lang,
       runId: session.runId,
       userId: session.userId,
@@ -1468,7 +1487,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = scenarioRunInput.safeParse(request.body ?? {})
     if (!body.success) return validationFailure(reply, body.error)
 
-    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang)
+    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang, operatorOf(request).preferences.model)
     scenarioSessions.set(session.runId, session)
     await recordScenarioRun(session)
     return {
@@ -1497,7 +1516,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       const record = await scenarioRuns.get(runId, userId)
       if (!record) return reply.status(404).send({ error: 'run_not_found', message: `Unknown scenario session "${runId}"` })
       if (record.status === 'complete') return reply.status(409).send({ error: 'run_complete', message: 'This run is already complete.' })
-      session = sessionFromRecord(record)
+      session = sessionFromRecord(record, operatorOf(request).preferences.model)
       scenarioSessions.set(session.runId, session)
       if (record.status === 'failed') await scenarioRuns.update(record.id, userId, { status: 'running' })
     }
@@ -1597,7 +1616,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!record) return reply.status(404).send({ error: 'run_not_found', message: 'Scenario run not found.' })
     if (record.status === 'complete') return reply.status(409).send({ error: 'run_complete', message: 'This run is already complete.' })
 
-    const session = sessionFromRecord(record)
+    const session = sessionFromRecord(record, operatorOf(request).preferences.model)
     scenarioSessions.set(session.runId, session)
     await scenarioRuns.update(record.id, userId, { status: 'running' })
     return {
@@ -1621,7 +1640,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!session || session.userId !== userId) {
       const record = await scenarioRuns.get(runId, userId)
       if (!record) return reply.status(404).send({ error: 'run_not_found', message: `Unknown scenario session "${runId}"` })
-      session = sessionFromRecord(record)
+      session = sessionFromRecord(record, operatorOf(request).preferences.model)
       scenarioSessions.set(runId, session)
     }
     return {
@@ -1640,7 +1659,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = scenarioRunInput.safeParse(request.body ?? {})
     if (!body.success) return validationFailure(reply, body.error)
 
-    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang)
+    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang, operatorOf(request).preferences.model)
     scenarioSessions.set(session.runId, session)
     await recordScenarioRun(session)
     while (session.released < session.ticks.length) {
@@ -1667,7 +1686,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = readinessAssessInput.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
 
-    return engine.readiness.assess({
+    return operatorStack(request).readiness.assess({
       country: body.data.country,
       domain: body.data.domain as Domain,
       globalCountry: body.data.globalCountry,
@@ -1720,7 +1739,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const signal = abortOnDisconnect(reply)
 
     try {
-      const report = await engine.readiness.assess(
+      const report = await operatorStack(request).readiness.assess(
         {
           country: input.country,
           domain: input.domain as Domain,
@@ -1738,7 +1757,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
                 ...(input.maxDecisions ? { maxDecisions: input.maxDecisions } : {}),
                 ...(input.language ? { language: input.language } : {}),
                 lead: (state: LeadState) =>
-                  engine.coordinator.decideReadinessStep({ ...state, userId: operator.email }) as Promise<LeadDecision>,
+                  operatorStack(request).coordinator.decideReadinessStep({ ...state, userId: operator.email }) as Promise<LeadDecision>,
               }
             : {}),
           ...(resume ? { completed: resume.report.scores } : {}),
@@ -1905,7 +1924,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const run = await readinessRuns.get(id, operator.email)
     if (!run) return reply.status(404).send({ error: 'not_found', message: 'Assessment not found.' })
     if (hasLanguage(run.report.scores, body.data.lang)) return run
-    const localized = await engine.readiness.localize(run.report, body.data.lang, undefined, abortOnDisconnect(reply))
+    const localized = await operatorStack(request).readiness.localize(run.report, body.data.lang, undefined, abortOnDisconnect(reply))
     const updated = await readinessRuns.updateRun(id, operator.email, { report: localized, status: run.status })
     await engine.audit.logAction({
       actor: operator.email,
@@ -1953,7 +1972,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const baseline =
       (body.data.scores as Parameters<typeof whatIf>[0]['scores'] | undefined) ??
-      (await engine.readiness.assess({ country: body.data.country, domain: body.data.domain as Domain })).scores
+      (await operatorStack(request).readiness.assess({ country: body.data.country, domain: body.data.domain as Domain })).scores
 
     return whatIf({
       country: body.data.country,
@@ -1987,9 +2006,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         filename: body.data.filename,
         page: body.data.page,
         ...(body.data.sourceUrl ? { sourceUrl: body.data.sourceUrl } : {}),
-        model: engine.model,
-        modelLabel: engine.provider.models.vision,
-        provider: engine.provider,
+        model: operatorStack(request).model,
+        modelLabel: operatorStack(request).provider.models.vision,
+        provider: operatorStack(request).provider,
         sam,
         maxZones: body.data.maxZones,
         concurrency: body.data.concurrency,
@@ -2240,15 +2259,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       const analysis = await analyzeImpact({
-        model: engine.model,
-        modelLabel: engine.provider.models.reasoning,
+        model: operatorStack(request).model,
+        modelLabel: operatorStack(request).provider.models.reasoning,
         provision: body.data.provision,
         cases,
         // Muse Spark Open on Baseten defaults to xhigh reasoning, whose tokens
         // count against maxOutputTokens. Local engines reject the field, so it
         // only travels to the providers that document it.
-        ...(engine.provider.servedBy === 'Meta' || engine.provider.servedBy === 'Baseten'
-          ? { providerName: providerOptionsName(engine.provider.servedBy) }
+        ...(operatorStack(request).provider.servedBy === 'Meta' || operatorStack(request).provider.servedBy === 'Baseten'
+          ? { providerName: providerOptionsName(operatorStack(request).provider.servedBy) }
           : {}),
       })
       try {
@@ -2882,7 +2901,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const replies: string[] = []
     try {
       const object = await generateStructured({
-        model: engine.model,
+        model: operatorStack(request).model,
         system: `You write ${purpose} for an institutional WhatsApp notification. Use only the facts in the prompt: never invent names, figures, legal claims or a decision. Write in ${language}.`,
         prompt: `${facts}\n\nWrite one plain-text summary, at most 420 characters, no bullet list and no markdown.`,
         schema: z.object({ summary: z.string().trim().min(1).max(900) }),
@@ -3229,8 +3248,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     try {
       const [report, images] = await Promise.all([
         writeAfterAction({
-          model: engine.model,
-          modelLabel: describeProvider(engine.provider),
+          model: operatorStack(request).model,
+          modelLabel: describeProvider(operatorStack(request).provider),
           definition,
           log: parsed.data.actions,
           evaluatedAtMinute: parsed.data.evaluatedAtMinute,

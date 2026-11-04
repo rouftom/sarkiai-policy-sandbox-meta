@@ -33,8 +33,8 @@ Requirements for the host:
    **The API refuses to start on a public cloud origin without a private
    session secret.** `SANDBOX_MODE=cloud` (or the presence of `MODEL_API_KEY`,
    which also selects the cloud profile) combined with a non-local
-   `WEB_PUBLIC_URL` makes a missing `SESSION_SECRET` / `APPROVAL_SECRET` — or
-   the public placeholder `change-me-approval-secret` — a startup error, not a
+   `WEB_PUBLIC_URL` makes a missing `SESSION_SECRET` / `APPROVAL_SECRET` (or
+   the public placeholder `change-me-approval-secret`) a startup error, not a
    warning. Anyone who knows that value could forge an operator session. Generate
    one with `openssl rand -hex 32` and set it in the host's secret settings:
 
@@ -72,7 +72,7 @@ Requirements for the host:
 6. Backpressure. Model work is capped in flight rather than queued:
    `AI_CONCURRENCY_PER_OPERATOR` (default 8, above the five parallel sector
    streams of a series) and `AI_CONCURRENCY_GLOBAL` (default 16, one instance).
-   Past a cap the API answers `429` with `error: "busy"` immediately — retry
+   Past a cap the API answers `429` with `error: "busy"` immediately: retry
    once a run finishes. `READINESS_DIMENSION_CONCURRENCY` (default 4) bounds the
    dimensions one assessment evaluates at once (13 otherwise, per sector).
    Closing the console tab aborts the run; a readiness run stopped this way is

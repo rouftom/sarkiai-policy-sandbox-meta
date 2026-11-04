@@ -42,6 +42,11 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 
+# The deployed image runs as the image's unprivileged `node` user. Only the dev
+# stage keeps root, because a bind-mounted source tree must stay writable.
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 HEALTHCHECK --interval=20s --timeout=5s --retries=5 --start-period=30s \
   CMD node -e "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

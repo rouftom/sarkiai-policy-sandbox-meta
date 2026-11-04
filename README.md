@@ -79,9 +79,9 @@ Three paths are enough:
 
 | Path | What you need | What it shows |
 |---|---|---|
-| **A — Run locally, no key** | Docker only. The **default model is Muse Glimmer 30B** (~32 GB VRAM, or 48 GB+ unified memory). | The full engine offline: ingestion, retrieval, agents, scenario, readiness, audit chain. |
-| **B — Run on your own keys** | Path A, then `SANDBOX_MODE=cloud` + `MODEL_API_KEY`, or `SANDBOX_MODE=sovereign` + `BASETEN_API_KEY` | The same workflow on Muse Spark (Meta Model API) or Muse Spark Open (Baseten). |
-| **C — Review the recorded run** | Nothing | The demo video (https://youtu.be/sQcTU5R30UU, shot list in [`docs/DEMO.md`](docs/DEMO.md)) and the captures in [`docs/screenshots/`](docs/screenshots/). |
+| **A: Run locally, no key** | Docker only. The **default model is Muse Glimmer 30B** (~32 GB VRAM, or 48 GB+ unified memory). | The full engine offline: ingestion, retrieval, agents, scenario, readiness, audit chain. |
+| **B: Run on your own keys** | Path A, then `SANDBOX_MODE=cloud` + `MODEL_API_KEY`, or `SANDBOX_MODE=sovereign` + `BASETEN_API_KEY` | The same workflow on Muse Spark (Meta Model API) or Muse Spark Open (Baseten). |
+| **C: Review the recorded run** | Nothing | The demo video (https://youtu.be/sQcTU5R30UU, shot list in [`docs/DEMO.md`](docs/DEMO.md)) and the captures in [`docs/screenshots/`](docs/screenshots/). |
 
 The *replay* path is the audit trail: every run keeps its prompts, answers,
 model ids, citations and a hash-chained audit entry, so a recorded run can be
@@ -186,7 +186,7 @@ sarkiai-policy-sandbox/
 > uses Ollama, so nothing leaves the machine. Meta Model API (`MODEL_API_KEY`,
 > cloud mode) and Baseten (`BASETEN_API_KEY`, sovereign mode) are **optional**:
 > set one to run the same workflow on the hackathon models. Resend and Cloudflare
-> Turnstile are optional too — see [Optional keys and limits](#optional-keys-and-limits).
+> Turnstile are optional too: see [Optional keys and limits](#optional-keys-and-limits).
 > The badge in the console shows which provider is answering.
 > A first local run pulls Muse Glimmer (30B, see `docs/HARDWARE-REQUIREMENTS.md`).
 
@@ -279,7 +279,7 @@ empty?*
      through [Resend](https://resend.com). If delivery fails, the account is
      rolled back and the screen can be retried.
    - **No e-mail, local install** (no `AUTH_RESEND_KEY`, and `WEB_PUBLIC_URL` is
-     unset or points at localhost / a private network — the default
+     unset or points at localhost / a private network, as in the default
      `docker compose` run): the password is returned **once** to the setup page
      and displayed with a copy button. It is never stored by the console.
    - **E-mail not configured on a public host**: setup answers
@@ -308,7 +308,9 @@ The Turnstile **site key** is public. The API reads it server-side from
 on `GET /v1/auth/captcha`; the browser fetches it there at runtime, so the
 console build carries no Turnstile variable.
 
-Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators
+Sessions are signed HMAC tokens (7 days, `Authorization: Bearer`) checked against
+the operator record on every request, so removing an operator, changing a
+password or signing out invalidates the tokens already issued. Operators
 live in MongoDB when it is reachable; otherwise the service keeps them in memory
 so the console still authenticates, and `/setup` warns that the account will not
 survive a restart. Password, enrolment and recovery-code writes fail loudly
@@ -344,7 +346,7 @@ Every authenticated call is counted per operator: `RATE_LIMIT_MAX` requests per
 `RATE_LIMIT_WINDOW_MS` for the API, and a tighter `RATE_LIMIT_EXPENSIVE_MAX` for
 the routes that spend model credits (readiness, scenarios, agents, ingestion,
 voice). A refused call answers `429` with `Retry-After` and `RateLimit-*`
-headers. Counters live in the process — one instance, reset on deploy — and
+headers. Counters live in the process (one instance, reset on deploy), and
 `RATE_LIMIT_ENABLED=false` removes both caps. The public auth screens keep their
 own windows: 5–6 attempts per 15 minutes per IP, and sign-in is now capped per
 IP as well as per address.
