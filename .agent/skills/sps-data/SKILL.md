@@ -1,6 +1,6 @@
 ---
 name: SarkiAI data and knowledge base
-description: How SarkiAI stores data — the MongoDB `kb_chunks` corpus with its Atlas Search or text index, the operational collections, the retrieval filter contract, indexes, seeding, re-ingestion and the demo reset. Use for schema changes, index work, corpus ingestion, retrieval filters, migrations or "where is this record stored".
+description: How SarkiAI stores data (the MongoDB `kb_chunks` corpus with its Atlas Search or text index, the operational collections, the retrieval filter contract, indexes, seeding, re-ingestion and the demo reset). Use for schema changes, index work, corpus ingestion, retrieval filters, migrations or "where is this record stored".
 ---
 
 # SarkiAI data and knowledge base
@@ -91,7 +91,7 @@ ingestion path. A missing `rights` value fails closed to `to-confirm`.
 1. Update the type in `packages/shared` first, then producers, then readers.
 2. Never rewrite an existing collection in place without a backup step and a
    documented rollback.
-3. Re-ingestion is safe (content hash ids); deletion is not — prefer
+3. Re-ingestion is safe (content hash ids); deletion is not: prefer
    `isActive: false`.
 4. `bun run demo:reset -- --dry-run` then `-- --yes` wipes accounts and
    operational collections but leaves `kb_chunks` and config untouched. It

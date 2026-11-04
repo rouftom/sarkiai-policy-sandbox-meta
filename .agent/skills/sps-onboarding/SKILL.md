@@ -1,6 +1,6 @@
 ---
 name: SarkiAI onboarding
-description: Fast takeover of the SarkiAI Policy Sandbox repository — what the product does, the service map and ports, the golden commands, the three runtime modes and the traps that waste time. Use at the start of a session, for "how do I run this", "where does X live", "what is this repo", or before exploring unfamiliar code.
+description: Fast takeover of the SarkiAI Policy Sandbox repository (what the product does, the service map and ports, the golden commands, the three runtime modes and the traps that waste time). Use at the start of a session, for "how do I run this", "where does X live", "what is this repo", or before exploring unfamiliar code.
 ---
 
 # SarkiAI onboarding
@@ -67,10 +67,10 @@ in the API process, and scanned pages go through the Gazette screen.
 
 `SANDBOX_MODE=local | sovereign | cloud`, default `local`.
 
-- `local` — Ollama, **Muse Glimmer 30B** (`OLLAMA_MODEL`). No key, no network.
-- `sovereign` — the same engine on Muse Glimmer (Ollama `sps-glimmer`) or
+- `local`: Ollama, **Muse Glimmer 30B** (`OLLAMA_MODEL`). No key, no network.
+- `sovereign`: the same engine on Muse Glimmer (Ollama `sps-glimmer`) or
   Muse Spark Open on Baseten (`BASETEN_API_KEY`).
-- `cloud` — Meta Model API (`MODEL_API_KEY`), corpus in MongoDB Atlas with
+- `cloud`: Meta Model API (`MODEL_API_KEY`), corpus in MongoDB Atlas with
   Atlas Search.
 
 Mode is configuration, never a code path: every agent receives the same

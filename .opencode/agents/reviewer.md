@@ -19,13 +19,13 @@ staged changes or a given branch/PR) without modifying anything.
 Report findings in severity order, each with a file and line reference and a
 concrete fix suggestion:
 
-1. **Critical** — secret or key in the change, auth bypass, unauthenticated
+1. **Critical**: secret or key in the change, auth bypass, unauthenticated
    access to operator data, data loss or a broken audit chain.
-2. **High** — behavioural regression, missing citation enforcement, wrong
+2. **High**: behavioural regression, missing citation enforcement, wrong
    provider mode, money-spending call not metered, production-only failure.
-3. **Medium** — missing test for the changed behaviour, missing French or
+3. **Medium**: missing test for the changed behaviour, missing French or
    English i18n key, inconsistent error contract, missing index or migration.
-4. **Low** — naming, dead code, comment drift, style against the UI charter.
+4. **Low**: naming, dead code, comment drift, style against the UI charter.
 
 Also flag:
 

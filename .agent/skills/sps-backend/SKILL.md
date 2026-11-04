@@ -1,6 +1,6 @@
 ---
 name: SarkiAI API backend
-description: Conventions for the Fastify API in apps/api — where routes and stores live, the API-wide Bearer guard, config access, zod validation, metering, SSE, rate limits and backpressure, and the tests to run. Use when adding or changing a route, an auth behaviour, a store, a cron, or an error contract.
+description: Conventions for the Fastify API in apps/api (where routes and stores live, the API-wide Bearer guard, config access, zod validation, metering, SSE, rate limits and backpressure, and the tests to run). Use when adding or changing a route, an auth behaviour, a store, a cron, or an error contract.
 ---
 
 # SarkiAI API backend
@@ -28,7 +28,7 @@ description: Conventions for the Fastify API in apps/api — where routes and st
 
 3. Auth is automatic: the guard resolves the Bearer token, sets
    `request.operator` and enters the metering context. Only `isPublicRoute`
-   paths skip it — add one only with a written reason (signed links, webhooks,
+   paths skip it: add one only with a written reason (signed links, webhooks,
    `/health`, auth).
 4. Return typed payloads; failures use
    `reply.status(code).send({ error, message })`. Stable codes the UI depends

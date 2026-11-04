@@ -33,7 +33,7 @@ template still `PENDING` is reported as such by `GET /v1/notifications/status`
 and refused at send time by Meta; the console never presents it as usable.
 
 The exact sample name `hello_world` cannot be created: Meta reserves it and
-answers `400 / code 100 / subcode 2388155` — *"Le nom du modèle est déjà utilisé
+answers `400 / code 100 / subcode 2388155`: *"Le nom du modèle est déjà utilisé
 comme exemple de modèle"*. Use `meta_hackathon_hello_world` instead.
 
 `WEB_PUBLIC_URL` is the public address of the web app, so the approval button
@@ -110,7 +110,7 @@ the WABA (the system user token in `WHATSAPP_ACCESS_TOKEN`) to point its
 `whatsapp_business_account` callback at `https://<api-host>/v1/whatsapp/webhook`.
 That app is shared and already routes its WhatsApp callback to another product.
 Repointing it would risk an unrelated integration for a feature the demo does not
-need — sending works without receipts.
+need: sending works without receipts.
 
 Accepted consequences:
 
