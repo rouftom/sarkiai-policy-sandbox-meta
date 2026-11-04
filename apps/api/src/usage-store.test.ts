@@ -81,6 +81,18 @@ describe('usage ledger summary (memory)', () => {
     expect(summary.operators).toEqual([])
   })
 
+  test('the summary reads the same status slice as the calls list', async () => {
+    const store = await seeded()
+    const failures = await store.summary({ from: FROM, to: TO, operator: 'ada@sps.dev', status: 'error' })
+
+    expect(failures.totals).toMatchObject({ requests: 1, errors: 1, inputTokens: 0, outputTokens: 0, costUsd: 0 })
+    expect(failures.byRoute).toEqual([expect.objectContaining({ key: '/v1/agents/ask', requests: 1 })])
+    expect(failures.series.find((point) => point.date === '2026-10-29')).toMatchObject({ requests: 1, errors: 1 })
+
+    const successes = await store.summary({ from: FROM, to: TO, operator: 'ada@sps.dev', status: 'ok' })
+    expect(successes.totals).toMatchObject({ requests: 1, errors: 0, costUsd: 0.002 })
+  })
+
   test('the daily series fills empty days and keeps the range boundaries', async () => {
     const store = await seeded()
     const summary = await store.summary({ from: FROM, to: TO, operator: 'ada@sps.dev' })
