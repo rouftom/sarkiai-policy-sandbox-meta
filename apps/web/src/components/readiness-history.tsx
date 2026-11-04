@@ -14,9 +14,11 @@ import { FilterPopover } from '@/components/filter-popover'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { TableActionItem } from '@/components/ui/table-actions'
 import { RowActionButton } from '@/components/ui/row-action-button'
+import { RowSpinner } from '@/components/ui/row-spinner'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { api, type ReadinessRunSummaryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { useRowNavigation } from '@/lib/use-row-navigation'
 import { useWorkspace } from '@/lib/workspace'
 
 const STATUSES = ['complete', 'failed'] as const
@@ -57,6 +59,11 @@ export function ReadinessHistory({
   const [rows, setRows] = React.useState<ReadinessRunSummaryDto[] | null>(null)
   const [total, setTotal] = React.useState(0)
   const cache = React.useRef(new Map<number, { runs: ReadinessRunSummaryDto[]; total: number }>())
+  const { pendingId, navigate } = useRowNavigation()
+
+  const openRun = (id: string) => {
+    navigate(id, () => onOpen(id))
+  }
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })
@@ -245,11 +252,13 @@ export function ReadinessHistory({
             <TableBody>
               {rows.map((entry) => {
                 const deleting = entry.id === deletingId
+                const opening = pendingId === entry.id
                 return (
                   <TableRow
                     key={entry.id}
                     className={cn('cursor-pointer', entry.id === activeId && 'bg-brand-primary/5')}
-                    onClick={() => onOpen(entry.id)}
+                    aria-busy={opening || undefined}
+                    onClick={() => openRun(entry.id)}
                   >
                     <TableCell className="min-w-[200px]">
                       <p className="text-[12px] font-medium text-foreground">{formatDate(entry.createdAt)}</p>
@@ -269,31 +278,35 @@ export function ReadinessHistory({
                       )}
                     </TableCell>
                     <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
-                      <RowActionMenu
-                        overlay
-                        inline={
-                          <div className="flex items-center justify-end gap-1">
-                            <RowActionButton label={t('readiness.table.open')} onClick={() => onOpen(entry.id)}>
-                              <Eye className="h-3.5 w-3.5" />
-                            </RowActionButton>
-                            <RowActionButton
-                              label={t('readiness.history.delete')}
-                              tone="danger"
-                              disabled={deleting}
-                              onClick={() => setPending(entry)}
-                            >
-                              {deleting ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                            </RowActionButton>
-                          </div>
-                        }
-                      >
-                        <TableActionItem icon={Eye} onClick={() => onOpen(entry.id)}>
-                          {t('readiness.table.open')}
-                        </TableActionItem>
-                        <TableActionItem icon={Trash2} variant="danger" disabled={deleting} onClick={() => setPending(entry)}>
-                          {t('readiness.history.delete')}
-                        </TableActionItem>
-                      </RowActionMenu>
+                      {opening ? (
+                        <RowSpinner className="ml-auto" />
+                      ) : (
+                        <RowActionMenu
+                          overlay
+                          inline={
+                            <div className="flex items-center justify-end gap-1">
+                              <RowActionButton label={t('readiness.table.open')} onClick={() => openRun(entry.id)}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </RowActionButton>
+                              <RowActionButton
+                                label={t('readiness.history.delete')}
+                                tone="danger"
+                                disabled={deleting}
+                                onClick={() => setPending(entry)}
+                              >
+                                {deleting ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                              </RowActionButton>
+                            </div>
+                          }
+                        >
+                          <TableActionItem icon={Eye} onClick={() => openRun(entry.id)}>
+                            {t('readiness.table.open')}
+                          </TableActionItem>
+                          <TableActionItem icon={Trash2} variant="danger" disabled={deleting} onClick={() => setPending(entry)}>
+                            {t('readiness.history.delete')}
+                          </TableActionItem>
+                        </RowActionMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 )
