@@ -6,7 +6,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import { GetObjectCommand, PutObjectCommand, S3Client, HeadObjectCommand } from '@aws-sdk/client-s3'
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 export interface StorageConfig {
   endpoint: string
@@ -24,6 +24,15 @@ export interface StoredObject {
   size: number
   /** True when the object already existed (deduped). */
   existed: boolean
+}
+
+/** One readable object: its bytes as a Node stream, plus the HTTP metadata. */
+export interface ObjectStream {
+  /** Node `Readable` (the S3 response body), piped straight to the HTTP response. */
+  body: AsyncIterable<Uint8Array>
+  contentType?: string
+  contentLength?: number
+  etag?: string
 }
 
 const EXT: Record<string, string> = {
@@ -78,5 +87,29 @@ export class ObjectStore {
     const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }))
     const bytes = await result.Body!.transformToByteArray()
     return { data: bytes, contentType: result.ContentType }
+  }
+
+  /**
+   * Opens one object for streaming. The caller pipes `body` to the response:
+   * an attachment is never buffered whole in the API process.
+   */
+  async getStream(key: string): Promise<ObjectStream | null> {
+    try {
+      const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }))
+      if (!result.Body) return null
+      return {
+        body: result.Body as unknown as AsyncIterable<Uint8Array>,
+        ...(result.ContentType ? { contentType: result.ContentType } : {}),
+        ...(typeof result.ContentLength === 'number' ? { contentLength: result.ContentLength } : {}),
+        ...(result.ETag ? { etag: result.ETag } : {}),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /** Puts one object at an explicit key (thumbnails are not content-addressed by mime). */
+  async put(key: string, data: Uint8Array, mime: string): Promise<void> {
+    await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: data, ContentType: mime }))
   }
 }

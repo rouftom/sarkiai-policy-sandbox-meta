@@ -256,6 +256,27 @@ export interface AssessmentDto {
   validation?: { ok: boolean; attempts: number; rejected: string[]; used: unknown[] }
   /** Live web sources the agent consulted; they are not legal sources. */
   webSources?: Array<{ title: string; url: string; snippet?: string }>
+  /**
+   * The images the operator attached to the question, as stored references.
+   * The bytes live in MinIO/S3 or Cloudinary; the turn only keeps this.
+   */
+  attachments?: AttachmentRefDto[]
+}
+
+/** One stored chat image: metadata and signed/derived URLs, never base64. */
+export interface AttachmentRefDto {
+  /** Content hash (S3) or Cloudinary public id. */
+  id: string
+  provider: 's3' | 'cloudinary'
+  mime: string
+  name: string
+  size: number
+  width?: number
+  height?: number
+  sha256?: string
+  /** Relative signed URL for S3, absolute Cloudinary URL in the cloud demo. */
+  url: string
+  thumbnailUrl: string
 }
 
 export interface MandateConflictDto {
@@ -814,7 +835,7 @@ export type AgentStreamEvent =
   | { type: 'tool'; phase: 'start' | 'end'; id: string; name: string; summary?: string; ok?: boolean }
   /** An interactive card: a question, an input request or a proposed side effect. */
   | { type: 'ui'; ui: AgentUiRequest }
-  | { type: 'done'; assessment: AssessmentDto }
+  | { type: 'done'; assessment: AssessmentDto; attachments?: AttachmentRefDto[] }
   | { type: 'error'; message: string }
 
 export interface AgentStreamHandlers {
@@ -878,7 +899,8 @@ async function streamAgentAnswer(
     else if (event.type === 'reasoning') handlers.onReasoning?.(event.text)
     else if (event.type === 'tool') handlers.onTool?.(event)
     else if (event.type === 'ui') handlers.onUi?.(event.ui)
-    else if (event.type === 'done') assessment = event.assessment
+    else if (event.type === 'done')
+      assessment = { ...event.assessment, ...(event.attachments ? { attachments: event.attachments } : {}) }
     else if (event.type === 'error') throw new Error(event.message)
   }
 

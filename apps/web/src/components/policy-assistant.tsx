@@ -23,7 +23,7 @@ import {
   cn,
 } from '@sps/ui'
 import { institutionsForDomains, type Domain } from '@sps/shared'
-import { ASSISTANT_FINISHED, api, type AssessmentDto, type MetaModelDto } from '@/lib/api'
+import { ASSISTANT_FINISHED, api, type AssessmentDto, type AttachmentRefDto, type MetaModelDto } from '@/lib/api'
 import type { ActionRecord, ActionStatus, AgentUiRequest } from '@/lib/agent-ui'
 import { decideAction, listActions } from '@/lib/actions-client'
 import { ActionCenter } from '@/components/ai/tools/action-center'
@@ -53,7 +53,7 @@ import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
 import { BrandBackdrop } from '@/components/brand-backdrop'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
-import { ChatMessage, type ChatTurn } from '@/components/ai/display/chat-message'
+import { ChatMessage, type ChatTurn, type TurnAttachment } from '@/components/ai/display/chat-message'
 import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
 import { EFFORTS, useAssistantEffort, type AssistantEffort } from '@/lib/assistant-effort'
 import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
@@ -61,9 +61,25 @@ import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 interface Attachment {
   mime: string
   dataBase64: string
-  /** Data URL preview kept on the user turn so the sent image stays visible. */
+  /** Data URL preview kept on the user turn until the API returns the stored reference. */
   url: string
   name: string
+}
+
+/** The stored reference, shaped for a turn: no bytes, no internal object key. */
+function toTurnAttachment(ref: AttachmentRefDto): TurnAttachment {
+  return {
+    id: ref.id,
+    provider: ref.provider,
+    mime: ref.mime,
+    name: ref.name,
+    size: ref.size,
+    ...(ref.width ? { width: ref.width } : {}),
+    ...(ref.height ? { height: ref.height } : {}),
+    ...(ref.sha256 ? { sha256: ref.sha256 } : {}),
+    url: ref.url,
+    thumbnailUrl: ref.thumbnailUrl,
+  }
 }
 
 const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting'] as const
@@ -253,9 +269,10 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     const controller = new AbortController()
     streamRef.current = controller
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64, name: attachment.name }))
-    // The previews stay on the user turn: the sent image remains visible in the
-    // conversation, even though it is not saved with the session.
-    const previews = attachments.map((attachment) => ({ url: attachment.url, mime: attachment.mime, name: attachment.name }))
+    // The previews stay on the user turn until the API returns the stored
+    // reference: the sent image is visible immediately, and only the reference
+    // is saved once it arrives.
+    const previews: TurnAttachment[] = attachments.map((attachment) => ({ url: attachment.url, mime: attachment.mime, name: attachment.name }))
     // The files belong to this message: the next question starts without them.
     setAttachments([])
     setAttachError(null)
@@ -263,11 +280,13 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     // The question and the agent's turn are shown before any network call: the
     // conversation appears the moment the operator sends, then the trail fills in.
     let target = pinned ?? institutions[0]!
+    const userTurnId = crypto.randomUUID()
+    const assistantTurnId = crypto.randomUUID()
     setTurns((previous) => [
       ...previous,
-      { id: crypto.randomUUID(), role: 'user', content: question, ...(previews.length ? { attachments: previews } : {}) },
+      { id: userTurnId, role: 'user', content: question, ...(previews.length ? { attachments: previews } : {}) },
       {
-        id: crypto.randomUUID(),
+        id: assistantTurnId,
         role: 'assistant',
         content: '',
         agentName: target.name,
@@ -381,6 +400,15 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         endedAt: Date.now(),
         steps: (turn.steps ?? []).map((step) => (step.status === 'active' ? { ...step, status: 'complete' } : step)),
       }))
+      // The API stored the images and returned their references: the session
+      // keeps those, not the local data URLs. A stopped or failed run leaves the
+      // data URLs in the turn, and the save below drops them.
+      if (result.attachments?.length) {
+        const stored = result.attachments.map(toTurnAttachment)
+        setTurns((previous) =>
+          previous.map((turn) => (turn.id === userTurnId ? { ...turn, attachments: stored } : turn)),
+        )
+      }
     } catch (error) {
       closeOpen(Date.now())
       // Stop is a decision, not a failure: the turn ends where it was, the
@@ -543,9 +571,17 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     const id = sessionId ?? crypto.randomUUID()
     if (!sessionId) setSessionId(id)
     const title = turns.find((turn) => turn.role === 'user')?.content ?? ''
-    // Images are previews, not conversation state: saving them would write
-    // base64 into MongoDB for every turn. The turn keeps its text and sources.
-    const payload = turns.map(({ active: _active, attachments: _attachments, ...turn }) => ({ ...turn }) as unknown as Record<string, unknown>)
+    // Images are references, not conversation state: a saved turn keeps the
+    // stored image URL and its thumbnail, never base64. A turn whose upload
+    // never completed (a stopped run, a storage outage) keeps its text and
+    // sources only.
+    const payload = turns.map(({ active: _active, ...turn }) => {
+      const attachments = (turn.attachments ?? []).filter(
+        (attachment) => Boolean(attachment.provider) && !attachment.url.startsWith('data:'),
+      )
+      const { attachments: _attachments, ...rest } = turn
+      return (attachments.length > 0 ? { ...rest, attachments } : rest) as unknown as Record<string, unknown>
+    })
     void saveChatSession(id, { title, turns: payload })
       .then(() => undefined)
       .catch(() => undefined)

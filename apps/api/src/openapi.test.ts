@@ -15,6 +15,7 @@ const ROUTES = [
   { method: 'GET', path: '/v1/audit/dossier/:runId' },
   { method: 'GET', path: '/v1/kb/images/:id' },
   { method: 'GET', path: '/v1/attachments/limits' },
+  { method: 'GET', path: '/v1/attachments/:file/:variant' },
 ]
 
 type Operation = Record<string, any>
@@ -92,6 +93,7 @@ describe('OpenAPI document', () => {
     expect(paths['/v1/auth/me']?.get?.security).toEqual([{ bearerAuth: [] }])
     expect(paths['/v1/agents/ask']?.post?.security).toEqual([{ bearerAuth: [] }])
     expect(paths['/v1/attachments/limits']?.get?.security).toEqual([{ bearerAuth: [] }])
+    expect(paths['/v1/attachments/{file}/{variant}']?.get?.security).toEqual([])
   })
 
   test('generates request bodies from the zod schemas', () => {
