@@ -24,6 +24,7 @@ import {
 } from '@sps/ui'
 import { ApiError, countriesApi, type CountryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { useRowNavigation } from '@/lib/use-row-navigation'
 import { PageIntro } from '@/components/page-intro'
 import { CountryDialog } from '@/components/country-dialog'
 import { CountryFlag } from '@/components/country-flag'
@@ -33,6 +34,7 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { useToast } from '@/components/shared/toast'
 import { RowActionMenu } from '@/components/ui/row-action-menu'
 import { RowActionButton } from '@/components/ui/row-action-button'
+import { RowSpinner } from '@/components/ui/row-spinner'
 import { TableActionItem } from '@/components/ui/table-actions'
 
 const TOTAL_SECTORS = 5
@@ -72,8 +74,7 @@ export default function CountriesPage() {
   const [editing, setEditing] = React.useState<CountryDto | null>(null)
   const [deleting, setDeleting] = React.useState<CountryDto | null>(null)
   const [deleteProblem, setDeleteProblem] = React.useState<string | null>(null)
-  const [pendingCode, setPendingCode] = React.useState<string | null>(null)
-  const [isPending, startTransition] = React.useTransition()
+  const { pendingId, navigate } = useRowNavigation()
 
   /**
    * Row navigation. The transition keeps the row's flag replaced by a spinner
@@ -81,8 +82,7 @@ export default function CountriesPage() {
    * on the row that was actually clicked.
    */
   const openCountry = (code: string) => {
-    setPendingCode(code)
-    startTransition(() => router.push(`/countries/${code}`))
+    navigate(code, () => router.push(`/countries/${code}`))
   }
 
   const load = React.useCallback(async () => {
@@ -339,7 +339,7 @@ export default function CountriesPage() {
               </TableHeader>
               <TableBody>
                 {rows.map((country) => {
-                  const pending = pendingCode === country.code && isPending
+                  const pending = pendingId === country.code
                   return (
                     <TableRow
                       key={country.code}
@@ -350,9 +350,7 @@ export default function CountriesPage() {
                       <TableCell>
                         <div className="flex items-center gap-2 font-medium text-foreground">
                           {pending ? (
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center">
-                              <Loader className="h-4 w-4 animate-spin text-brand-primary" aria-hidden="true" />
-                            </span>
+                            <RowSpinner />
                           ) : (
                             <CountryFlag code={country.code} />
                           )}

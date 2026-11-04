@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://youtu.be/sQcTU5R30UU" title="Watch the demo (2:39)">
+  <a href="https://youtu.be/sQcTU5R30UU" target="_blank" rel="noopener noreferrer" title="Watch the demo (2:39)">
     <img src="docs/screenshots/demo-cover.jpg" alt="Watch the SarkiAI Policy Sandbox demo (2:39)" width="720">
   </a>
 </p>
