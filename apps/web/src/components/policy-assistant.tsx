@@ -41,6 +41,12 @@ import { AskUserPanel } from '@/components/ai/tools/ask-user-panel'
 import { RequestInputCard } from '@/components/ai/tools/request-input-card'
 import { ApprovalCard } from '@/components/ai/tools/approval-card'
 import { failureMessage } from '@/lib/failure'
+import {
+  DEFAULT_ATTACHMENT_LIMITS,
+  formatBytes,
+  pickImages,
+  type AttachmentLimits,
+} from '@/lib/attachment-limits'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { institutionAccent, institutionInk } from '@/lib/institutions'
@@ -55,14 +61,10 @@ import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 interface Attachment {
   mime: string
   dataBase64: string
-  /** Preview for images; documents have none. */
+  /** Data URL preview kept on the user turn so the sent image stays visible. */
   url: string
   name: string
 }
-
-const DOCUMENT_TYPES = ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json']
-const ACCEPTED_FILES = ['image/*', '.pdf', '.txt', '.md', '.csv', '.json'].join(',')
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting'] as const
 
@@ -89,6 +91,8 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = React.useState(false)
   const [turns, setTurns] = React.useState<ChatTurn[]>([])
   const [attachments, setAttachments] = React.useState<Attachment[]>([])
+  const [attachLimits, setAttachLimits] = React.useState<AttachmentLimits>(DEFAULT_ATTACHMENT_LIMITS)
+  const [attachError, setAttachError] = React.useState<string | null>(null)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const fileRef = React.useRef<HTMLInputElement>(null)
   const [actionStatus, setActionStatus] = React.useState<Record<string, ActionStatus>>({})
@@ -160,6 +164,25 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }, [])
 
   React.useEffect(() => {
+    let cancelled = false
+    api
+      .attachmentLimits()
+      .then((limits) => {
+        if (cancelled) return
+        const mimeTypes = limits.mimeTypes?.length ? limits.mimeTypes : DEFAULT_ATTACHMENT_LIMITS.mimeTypes
+        setAttachLimits({
+          maxImages: limits.maxImages > 0 ? limits.maxImages : DEFAULT_ATTACHMENT_LIMITS.maxImages,
+          maxBytes: limits.maxBytes > 0 ? limits.maxBytes : DEFAULT_ATTACHMENT_LIMITS.maxBytes,
+          mimeTypes,
+        })
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [turns])
 
@@ -176,12 +199,19 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }
 
   const addFiles = async (files: FileList | null) => {
-    if (!files) return
-    const room = 3 - attachments.length
-    const picked = Array.from(files)
-      .filter((file) => file.type.startsWith('image/') || DOCUMENT_TYPES.includes(file.type) || /\.(pdf|txt|md|csv|json)$/i.test(file.name))
-      .filter((file) => file.size <= MAX_ATTACHMENT_BYTES)
-      .slice(0, Math.max(0, room))
+    if (!files || files.length === 0) return
+    const room = Math.max(0, attachLimits.maxImages - attachments.length)
+    const { picked, error } = pickImages(Array.from(files), attachLimits, room)
+    setAttachError(
+      error === null
+        ? null
+        : error === 'type'
+          ? t('assistant.imageOnly')
+          : error === 'size'
+            ? t('assistant.imageTooLarge', { size: formatBytes(attachLimits.maxBytes) })
+            : t('assistant.imageMax', { count: attachLimits.maxImages }),
+    )
+
     const next: Attachment[] = []
     for (const file of picked) {
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -192,16 +222,14 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       })
       const commaIndex = dataUrl.indexOf(',')
       if (commaIndex < 0) continue
-      const header = dataUrl.slice(0, commaIndex)
-      const mime = file.type || header.slice(header.indexOf(':') + 1, header.indexOf(';'))
       next.push({
-        mime,
+        mime: file.type,
         dataBase64: dataUrl.slice(commaIndex + 1),
-        url: mime.startsWith('image/') ? dataUrl : '',
+        url: dataUrl,
         name: file.name,
       })
     }
-    setAttachments((previous) => [...previous, ...next].slice(0, 3))
+    setAttachments((previous) => [...previous, ...next].slice(0, attachLimits.maxImages))
   }
 
   /** Patch the assistant turn being written (always the last one). */
@@ -225,15 +253,19 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     const controller = new AbortController()
     streamRef.current = controller
     const payload = attachments.map((attachment) => ({ mime: attachment.mime, dataBase64: attachment.dataBase64, name: attachment.name }))
+    // The previews stay on the user turn: the sent image remains visible in the
+    // conversation, even though it is not saved with the session.
+    const previews = attachments.map((attachment) => ({ url: attachment.url, mime: attachment.mime, name: attachment.name }))
     // The files belong to this message: the next question starts without them.
     setAttachments([])
+    setAttachError(null)
 
     // The question and the agent's turn are shown before any network call: the
     // conversation appears the moment the operator sends, then the trail fills in.
     let target = pinned ?? institutions[0]!
     setTurns((previous) => [
       ...previous,
-      { id: crypto.randomUUID(), role: 'user', content: question },
+      { id: crypto.randomUUID(), role: 'user', content: question, ...(previews.length ? { attachments: previews } : {}) },
       {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -511,7 +543,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
     const id = sessionId ?? crypto.randomUUID()
     if (!sessionId) setSessionId(id)
     const title = turns.find((turn) => turn.role === 'user')?.content ?? ''
-    const payload = turns.map(({ active: _active, ...turn }) => ({ ...turn }) as unknown as Record<string, unknown>)
+    // Images are previews, not conversation state: saving them would write
+    // base64 into MongoDB for every turn. The turn keeps its text and sources.
+    const payload = turns.map(({ active: _active, attachments: _attachments, ...turn }) => ({ ...turn }) as unknown as Record<string, unknown>)
     void saveChatSession(id, { title, turns: payload })
       .then(() => undefined)
       .catch(() => undefined)
@@ -723,7 +757,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
       <input
         ref={fileRef}
         type="file"
-        accept={ACCEPTED_FILES}
+        accept={attachLimits.mimeTypes.join(',')}
         multiple
         hidden
         onChange={(event) => {
@@ -860,18 +894,13 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </div>
         )}
         {actionError && <p className="px-2 text-[11px] text-destructive">{actionError}</p>}
+        {attachError && <p className="px-2 text-[11px] text-destructive">{attachError}</p>}
         {attachments.length > 0 && (
           <div className="flex gap-1.5">
             {attachments.map((attachment, index) => (
               <div key={index} className="relative">
-                {attachment.url ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={attachment.url} alt="" className="h-11 w-11 rounded-lg border border-border object-cover" />
-                ) : (
-                  <span className="flex h-11 max-w-[9rem] items-center truncate rounded-lg border border-border bg-card px-2 text-[10px] font-medium" title={attachment.name}>
-                    <span className="truncate">{attachment.name}</span>
-                  </span>
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={attachment.url} alt={attachment.name} className="h-11 w-11 rounded-lg border border-border object-cover" />
                 <button
                   type="button"
                   onClick={() => setAttachments((previous) => previous.filter((_, i) => i !== index))}
