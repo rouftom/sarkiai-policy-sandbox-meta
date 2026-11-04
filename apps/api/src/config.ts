@@ -16,6 +16,17 @@ const cloudDeployment =
   env('SANDBOX_MODE', 'local').toLowerCase() === 'cloud' || Boolean(env('MODEL_API_KEY'))
 
 /**
+ * `local`, `sovereign` or `cloud`. An unknown value is treated as local. Cloud
+ * and sovereign deployments keep assistant media in Cloudinary (the enterprise
+ * setup) unless `MEDIA_STORE` says otherwise; local and self-hosted installs use
+ * MinIO / S3 by default.
+ */
+const sandboxMode = env('SANDBOX_MODE', 'local').toLowerCase()
+
+const requestedMediaStore = env('MEDIA_STORE', '').toLowerCase()
+const defaultMediaStore = sandboxMode === 'cloud' || sandboxMode === 'sovereign' ? 'cloudinary' : 's3'
+
+/**
  * Console origins.
  *
  * Nothing is hardcoded: `WEB_PUBLIC_URL` is the canonical origin (every link the
@@ -217,6 +228,28 @@ export const config = {
   attachments: {
     maxImages: Math.max(1, Number(env('ASSISTANT_MAX_IMAGES', '4')) || 4),
     maxBytes: Math.max(1, Number(env('ASSISTANT_MAX_IMAGE_BYTES', String(2 * 1024 * 1024))) || 2 * 1024 * 1024),
+  },
+
+  /**
+   * Where the assistant keeps the images it was sent.
+   *
+   * `s3` (local, sovereign without Cloudinary) stores the bytes in MinIO / S3,
+   * content-addressed, and serves them through a signed read route with a WebP
+   * thumbnail. `cloudinary` (cloud demo) uploads them to the dedicated
+   * `CLOUDINARY_SPS_FOLDER/attachments` folder. `MEDIA_STORE` overrides the
+   * mode-derived default; an unconfigured Cloudinary falls back to S3 at boot.
+   *
+   * Signed read URLs never expire: the content is immutable, so rotating
+   * `ATTACHMENT_SIGNING_SECRET` (or the session secret it falls back to) is the
+   * way to revoke them.
+   */
+  media: {
+    store: (requestedMediaStore === 's3' || requestedMediaStore === 'cloudinary'
+      ? requestedMediaStore
+      : defaultMediaStore) as 's3' | 'cloudinary',
+    thumbnailWidth: Math.max(64, Number(env('ATTACHMENT_THUMBNAIL_WIDTH', '480')) || 480),
+    signingSecret:
+      env('ATTACHMENT_SIGNING_SECRET') || env('SESSION_SECRET') || env('APPROVAL_SECRET') || 'sps-attachments-dev',
   },
 
   // WhatsApp Cloud API, called directly from the API (no external gateway).

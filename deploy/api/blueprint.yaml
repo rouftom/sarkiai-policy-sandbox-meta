@@ -105,6 +105,23 @@ services:
       - key: TURNSTILE_HOSTNAMES
         sync: false
 
+      # ── assistant images ───────────────────────────────────────────────────
+      # Cloudinary in the cloud demo, under the dedicated `sps` namespace (never
+      # the organization's `fada/resources`). Credentials come from the
+      # dashboard; without them the API falls back to S3 (not deployed here).
+      - key: MEDIA_STORE
+        value: cloudinary
+      - key: CLOUDINARY_SPS_FOLDER
+        value: sps
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: ATTACHMENT_THUMBNAIL_WIDTH
+        value: "480"
+
       # ── request budgets ────────────────────────────────────────────────────
       # Per-caller rate limiting. The demo runs one instance; a burst of console
       # polls stays far below the global cap, and the model routes (readiness,

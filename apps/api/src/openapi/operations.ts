@@ -364,6 +364,19 @@ export const OPERATIONS: Record<string, OperationDoc> = {
       'The caps this deployment applies to assistant images: count per message, bytes per image, and the accepted MIME types. The console enforces them in the composer.',
     tags: ['agents'],
   },
+  'GET /v1/attachments/:file/:variant': {
+    summary: 'Read a chat image',
+    description:
+      'Public: the bytes are content-addressed and the query string carries an HMAC capability. `full` answers the original image, `thumb` a WebP thumbnail. Answers the image itself, not JSON, with an immutable cache policy.',
+    tags: ['agents'],
+    params: z.object({
+      file: z.string().describe('`<sha256>.<ext>` returned with the assessment attachments.'),
+      variant: z.enum(['full', 'thumb']).describe('Original image or WebP thumbnail.'),
+    }),
+    query: z.object({ sig: z.string().describe('HMAC capability signed by the API.') }),
+    responseType: 'image/*',
+    errors: [error(403, 'The signature is missing or does not match.'), NOT_FOUND],
+  },
   'POST /v1/agents/ask': {
     summary: 'Ask the mandated agents a question',
     description:
