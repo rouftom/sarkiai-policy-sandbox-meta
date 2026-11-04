@@ -1,8 +1,8 @@
 # Accessibility statement
 
 Accessibility is a core priority for this project. The policy sandbox is a
-console used by public institutions, so everyone — including people with
-disabilities and people using assistive technology — must be able to read,
+console used by public institutions, so everyone, including people with
+disabilities and people using assistive technology, must be able to read,
 navigate, and contribute to it.
 
 This document explains the project's accessibility commitment, what contributors
@@ -15,19 +15,19 @@ and the [Open Source Guide on accessibility statements](https://opensource.guide
 - **Accessibility target:** we work toward [WCAG 2.2 Level AA](https://www.w3.org/TR/WCAG22).
   This target guides our work but is **not** a claim of verified conformance: no
   external evaluation has been completed.
-- **Keyboard support** — every interactive element is reachable and operable
+- **Keyboard support:** every interactive element is reachable and operable
   with a keyboard alone, with a visible focus indicator and a logical tab order.
-- **Screen reader support** — pages use semantic HTML and a logical heading
+- **Screen reader support:** pages use semantic HTML and a logical heading
   hierarchy so they can be navigated with VoiceOver, NVDA, JAWS, TalkBack and
   similar tools.
-- **Readable content** — plain language where possible, descriptive link text,
+- **Readable content:** plain language where possible, descriptive link text,
   sufficient colour contrast, real lists and tables, and meaningful alternative
   text.
-- **Bilingual content** — the console ships in English and French; the active
+- **Bilingual content:** the console ships in English and French; the active
   language is declared in the document so assistive technology pronounces it
   correctly.
-- **Reduced motion** — animations respect `prefers-reduced-motion`.
-- **Themes** — light and dark themes both meet contrast requirements.
+- **Reduced motion:** animations respect `prefers-reduced-motion`.
+- **Themes:** light and dark themes both meet contrast requirements.
 
 ## Contributor expectations
 

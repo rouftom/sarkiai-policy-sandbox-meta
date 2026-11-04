@@ -1,6 +1,6 @@
 ---
 name: SarkiAI provider modes
-description: How SANDBOX_MODE selects local, sovereign or cloud inference — Muse Glimmer as the local default, Baseten/Modal open weights, the Meta Model API, and the lexical retrieval backend and depth that follow. Use when changing models, adding a provider, debugging "provider not ready", or documenting keys.
+description: How SANDBOX_MODE selects local, sovereign or cloud inference (Muse Glimmer as the local default, Baseten/Modal open weights, the Meta Model API, and the lexical retrieval backend and depth that follow). Use when changing models, adding a provider, debugging "provider not ready", or documenting keys.
 ---
 
 # SarkiAI provider modes
@@ -46,7 +46,7 @@ from `packages/agents/src/provider.ts`. A switch is audited as
 - `text` → the MongoDB text index over `kb_chunks`, created at the first
   ingestion. Works in any mode.
 
-An unknown value throws at startup — do not silently fall back.
+An unknown value throws at startup: do not silently fall back.
 
 `RETRIEVAL_DEPTH=lexical | fast | deep` sets the default agentic depth:
 `lexical` calls no model, `fast` plans and ranks, `deep` runs parallel

@@ -3,8 +3,9 @@
  *
  * The console (Vercel) and the API (Render) are different origins, so the
  * session travels as an `Authorization: Bearer <token>` header rather than a
- * cookie: no third-party-cookie policy can break the demo. Tokens are stateless
- * and signed for seven days; the client drops the token on sign-out.
+ * cookie: no third-party-cookie policy can break the demo. Tokens are signed for
+ * seven days and checked against the account on every request, so a removal or a
+ * revoke invalidates them at once; the client drops the token on sign-out.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
@@ -38,7 +39,7 @@ function bearer(request: FastifyRequest): string | undefined {
   return header.slice('Bearer '.length).trim()
 }
 
-export function currentOperator(request: FastifyRequest): PublicOperator | null {
+export async function currentOperator(request: FastifyRequest): Promise<PublicOperator | null> {
   return auth.verifySession(bearer(request))
 }
 
@@ -379,28 +380,58 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   })
 
   app.get('/v1/auth/me', async (request, reply) => {
-    const operator = currentOperator(request)
+    const operator = await currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
-    // Hydrate from Mongo: `verifySession` is stateless and its in-memory copy is
-    // empty after a restart, which used to reset preferences to the defaults.
-    const hydrated = await auth.me(operator.email)
-    return { operator: hydrated ?? operator }
+    // `verifySession` reads the stored record, so preferences are current even on
+    // the first request after a restart.
+    return { operator }
   })
 
   app.post('/v1/auth/logout', async (request) => {
-    const operator = currentOperator(request)
-    if (operator) await record(operator.email, 'auth.logout', undefined, operator.email)
+    const operator = await currentOperator(request)
+    if (operator) {
+      // Sign-out revokes every token of this account, not just the client copy:
+      // a stolen token must not survive the sign-out it was meant to end.
+      await auth.revokeSessions(operator.email).catch(() => undefined)
+      await record(operator.email, 'auth.logout', undefined, operator.email)
+    }
     return { ok: true }
   })
 
+  /**
+   * The operator directory, administrator only. The observability scope is built
+   * from it: the ledger breakdown lists only accounts that spent in the window,
+   * so a zero-spend operator could never be selected. Identity only; preferences
+   * and secrets stay behind `/v1/auth/me`.
+   */
+  app.get('/v1/operators', async (request, reply) => {
+    const operator = await currentOperator(request)
+    if (!operator) return reply.status(401).send({ error: 'unauthorized' })
+    if (operator.role !== 'admin') {
+      return reply.status(403).send({
+        error: 'admin_only',
+        message: 'This action is reserved for administrators on this shared deployment.',
+      })
+    }
+    const operators = await auth.listOperators()
+    return {
+      operators: operators.map((entry) => ({
+        email: entry.email,
+        name: entry.name,
+        role: entry.role,
+        ...(entry.lastLoginAt ? { lastLoginAt: entry.lastLoginAt } : {}),
+      })),
+    }
+  })
+
   app.get('/v1/preferences', async (request, reply) => {
-    const operator = currentOperator(request)
+    const operator = await currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
     return { preferences: await auth.preferences(operator.email) }
   })
 
   app.put('/v1/preferences', async (request, reply) => {
-    const operator = currentOperator(request)
+    const operator = await currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
     const patch = preferencesPatch.safeParse(request.body)
     if (!patch.success) return validationFailure(reply, patch.error)
@@ -419,7 +450,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
    * Every query is per operator and served by the `audit_user_ts` index.
    */
   app.get('/v1/audit/events', async (request, reply) => {
-    const operator = currentOperator(request)
+    const operator = await currentOperator(request)
     if (!operator) return reply.status(401).send({ error: 'unauthorized' })
     const query = auditQuery.safeParse(request.query)
     if (!query.success) return validationFailure(reply, query.error)

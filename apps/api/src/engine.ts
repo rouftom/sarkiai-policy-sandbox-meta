@@ -19,10 +19,8 @@ import {
   KB_INDEX_DEFINITIONS,
   ensureAtlasIndexes,
   resolveRetrievalBackend,
-  type Retriever,
   type RetrievalBackend,
 } from '@sps/retrieval'
-import type { LanguageModel } from 'ai'
 import { generateText } from 'ai'
 import { ReadinessEngine } from '@sps/readiness'
 import { AuditService } from '@sps/audit'
@@ -40,14 +38,15 @@ import { config } from './config.js'
 
 
 /**
- * Everything that talks to the chat model. Rebuilt when the operator picks a
- * different Meta model, so the agents, the coordinator and the readiness lens
- * always share one handle.
+ * Everything that talks to the chat model, for one model id: the agents, the
+ * coordinator, the readiness lens and the retriever that plans corpus searches.
+ * Each id owns its stack, so two operators on different models never share one
+ * handle. The corpus source, the audit store and the reports are shared.
  */
 function buildModelStack(
   provider: ProviderDescriptor,
   modelId: string,
-  retriever: Retriever,
+  source: CorpusSource,
   audit: AuditService,
   baseten: ProviderDescriptor | null,
 ) {
@@ -63,6 +62,24 @@ function buildModelStack(
   // Web search is a Meta tool (Responses API `web_search`): when Muse Spark Open on
   // Baseten reasons, the search still runs on Meta's default model (hybrid).
   const webSearch = webSearchFor(active) ?? (provider.mode === 'cloud' ? webSearchFor(provider) : undefined)
+  // The retriever plans, judges and ranks with this stack's model. It shares the
+  // deployment's corpus source: `close()` is called once, on the default stack.
+  const retriever: AgenticRetriever = new AgenticRetriever({
+    source,
+    think: async (prompt, options) => {
+      const result = await generateText({
+        model,
+        prompt,
+        ...(options?.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+        // Planning, judging and ranking are short structured steps: low effort
+        // keeps each one fast and cheap; the token budget stays as a ceiling.
+        providerOptions: { meta: { reasoningEffort: 'low' }, openaiCompatible: { reasoningEffort: 'low' } },
+      })
+      return result.text
+    },
+    modelLabel: () => active.models.reasoning,
+    defaultDepth: config.retrieval.depth,
+  })
   const orchestrator = new PolicyOrchestrator({
     model,
     retriever,
@@ -82,7 +99,7 @@ function buildModelStack(
     modelFor: (id) => createModel({ provider: onModel(id) }),
     webSearchFor: (id) => webSearchFor(onModel(id)),
   })
-  return { provider: active, model, orchestrator, coordinator, readiness }
+  return { provider: active, model, retriever, orchestrator, coordinator, readiness }
 }
 
 export function createEngine() {
@@ -102,26 +119,6 @@ export function createEngine() {
     textIndex: config.retrieval.atlas.textIndex,
     searchMode: retrievalBackend,
   })
-  // The engine's live model, read by the retriever at call time (set below).
-  const live: { model: LanguageModel | null; reasoning: string } = { model: null, reasoning: provider.models.reasoning }
-  const retriever: AgenticRetriever = new AgenticRetriever({
-    source,
-    // Read at call time: a model switch (Muse Spark ↔ Muse Spark Open) applies at once.
-    think: async (prompt, options) => {
-      if (!live.model) throw new Error('model not ready')
-      const result = await generateText({
-        model: live.model,
-        prompt,
-        ...(options?.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
-        // Planning, judging and ranking are short structured steps: low effort
-        // keeps each one fast and cheap; the token budget stays as a ceiling.
-        providerOptions: { meta: { reasoningEffort: 'low' }, openaiCompatible: { reasoningEffort: 'low' } },
-      })
-      return result.text
-    },
-    modelLabel: () => live.reasoning,
-    defaultDepth: config.retrieval.depth,
-  })
 
   const audit = new AuditService({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
   const reports = new ReportStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
@@ -132,13 +129,37 @@ export function createEngine() {
     secretKey: config.s3.secretKey,
   })
 
+  /**
+   * One stack per model id, built on demand and shared by every caller naming
+   * that id. The catalogue is small, so the cache is bounded: an arbitrary id
+   * can never grow it for ever.
+   */
+  const stacks = new Map<string, ReturnType<typeof buildModelStack>>()
+  /** The model used when the caller has no saved preference. */
+  let fallbackModelId = provider.models.reasoning
+
+  function stackFor(modelId?: string) {
+    const id = modelId || fallbackModelId
+    const cached = stacks.get(id)
+    if (cached) return cached
+    const stack = buildModelStack(provider, id, source, audit, baseten)
+    if (stacks.size >= 8) {
+      const oldest = stacks.keys().next().value
+      if (oldest) stacks.delete(oldest)
+    }
+    stacks.set(id, stack)
+    return stack
+  }
+
+  const base = stackFor(fallbackModelId)
+
   const engine = {
-    retriever,
+    retriever: base.retriever,
     retrievalBackend,
     audit,
     reports,
     storage,
-    ...buildModelStack(provider, '', retriever, audit, baseten),
+    provider: base.provider,
     /**
      * The deployment's catalogue mode. It does not change when a Baseten model is
      * active, so the operator can always switch back to a Meta model.
@@ -150,13 +171,16 @@ export function createEngine() {
      * here, so they keep running when Muse Spark Open on Baseten does the reasoning.
      */
     catalogProvider: provider,
-    /** Point the engine at a model id of the catalogue. Rebuilds the model stack. */
+    /** The stack for one model id. Callers pass the operator's saved preference. */
+    stackFor,
+    /** Point the fallback at a model id of the catalogue. */
     useModel(modelId: string): ProviderDescriptor {
       if (provider.mode !== 'cloud') return engine.provider
-      Object.assign(engine, buildModelStack(provider, modelId, retriever, audit, baseten))
-      live.model = engine.model
-      live.reasoning = engine.provider.models.reasoning
-      return engine.provider
+      fallbackModelId = modelId || provider.models.reasoning
+      const stack = stackFor(fallbackModelId)
+      engine.provider = stack.provider
+      engine.retriever = stack.retriever
+      return stack.provider
     },
     /** Chat-capable models this key may use: Meta's list, plus Baseten's when configured. */
     async listModels() {
@@ -164,8 +188,6 @@ export function createEngine() {
       return baseten ? [...meta, ...(await listBasetenModels(process.env))] : meta
     },
   }
-  live.model = engine.model
-  live.reasoning = engine.provider.models.reasoning
   return engine
 }
 

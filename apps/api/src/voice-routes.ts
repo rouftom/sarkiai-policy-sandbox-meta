@@ -76,9 +76,9 @@ export async function registerVoiceRoutes(app: FastifyInstance, options: VoiceRo
   const openSockets = new Map<string, number>()
   let openTotal = 0
 
-  app.get('/v1/voice/realtime', { websocket: true }, (socket, request) => {
+  app.get('/v1/voice/realtime', { websocket: true }, async (socket, request) => {
     const query = request.query as { token?: string; sampleRate?: string; languageBias?: string }
-    const operator = query.token ? auth.verifySession(query.token) : null
+    const operator = query.token ? await auth.verifySession(query.token) : null
     request.log.info({ verified: Boolean(operator) }, 'voice socket handshake')
     if (!operator) {
       socket.close(4401, 'unauthorized')

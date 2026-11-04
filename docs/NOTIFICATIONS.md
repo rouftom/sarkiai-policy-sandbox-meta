@@ -15,7 +15,7 @@ e-mail address, an optional phone number, and one consent flag per channel.
 
 Both are **business-initiated** messages, so both obey the same rule: nothing is
 sent to a person who has not consented to that channel. The recipient picker of
-the console is filtered by the consent flag — there is no "send to everyone"
+the console is filtered by the consent flag: there is no "send to everyone"
 shortcut, and the API re-checks the flag for every recipient.
 
 Phone numbers are stored in **E.164 only** (`+237612345678`), validated with
@@ -23,7 +23,7 @@ Phone numbers are stored in **E.164 only** (`+237612345678`), validated with
 server (`packages/notifications/src/phone.ts`). A number is rejected rather than
 guessed: the operator picks the country, the parser completes the national form,
 and anything that does not parse as a valid number never reaches the address
-book. Adding an existing number or address again answers `409 duplicate` — it is
+book. Adding an existing number or address again answers `409 duplicate`: it is
 a mistake, not a second contact.
 
 The address book is **shared between operators**: a focal point belongs to an
@@ -56,7 +56,7 @@ who else was notified.
 
 WhatsApp kinds map to templates exactly as in
 `deploy/whatsapp/templates.md`. `test` uses `meta_hackathon_hello_world`, the
-only template that needs no variable — useful to prove that the channel works
+only template that needs no variable, useful to prove that the channel works
 before the Utility templates are approved.
 
 The composer's feather button (`POST /v1/notifications/summary-suggestion`) asks
@@ -94,7 +94,7 @@ messages.
 
 The intended production flow is a small public registration portal:
 
-1. The contact receives (or is given) a link to `/consent/<token>` — a signed,
+1. The contact receives (or is given) a link to `/consent/<token>`, a signed,
    single-use link, not an open form.
 2. The page states which organisation sends what, on which channel, and how to
    opt out; the person selects the channels explicitly. Both boxes start

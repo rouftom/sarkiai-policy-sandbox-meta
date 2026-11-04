@@ -123,7 +123,7 @@ describe('operator sign-in', () => {
     expect(session.operator.mfaEnrolled).toBe(true)
     expect(session.operator.mustChangePassword).toBe(false)
     expect(session.backupCodes).toHaveLength(10)
-    expect(replay.verifySession(session.token)?.email).toBe(EMAIL)
+    expect((await replay.verifySession(session.token))?.email).toBe(EMAIL)
 
     // Once replaced, the invited password no longer works.
     await expect(replay.login(EMAIL, invited)).rejects.toThrow(/Invalid credentials/)
@@ -145,7 +145,7 @@ describe('operator sign-in', () => {
     expect(second.status).toBe('mfa_required')
 
     const verified = await auth.verify(second.challenge, totpCode(secret))
-    expect(auth.verifySession(verified.token)?.email).toBe(EMAIL)
+    expect((await auth.verifySession(verified.token))?.email).toBe(EMAIL)
 
     const third = await auth.login(EMAIL, CHOSEN)
     const withBackup = await auth.verify(third.challenge, backup)
@@ -212,6 +212,21 @@ describe('operator sign-in', () => {
   })
 })
 
+describe('operator directory', () => {
+  test('lists every account, including one that never signed in', async () => {
+    const auth = service({ signup: true })
+    await auth.createRoot({ firstName: 'Ada', lastName: 'Njoya', email: EMAIL })
+    await auth.signup({ firstName: 'Bo', lastName: 'Njoya', email: 'bo@sarkiai.dev', password: CHOSEN })
+
+    const directory = await auth.listOperators()
+    expect(directory.map((entry) => entry.email).sort()).toEqual([EMAIL, 'bo@sarkiai.dev'].sort())
+    expect(directory.find((entry) => entry.email === EMAIL)?.role).toBe('admin')
+    expect(directory.find((entry) => entry.email === 'bo@sarkiai.dev')?.role).toBe('operator')
+    // The public projection must not carry a password hash or a TOTP secret.
+    expect(directory.every((entry) => !('passwordHash' in entry) && !('totpSecret' in entry))).toBe(true)
+  })
+})
+
 describe('public sign-up', () => {
   test('is closed unless the deployment opens it', async () => {
     const auth = service()
@@ -270,6 +285,30 @@ describe('public sign-up', () => {
     await expect(
       auth.signup({ firstName: 'Bo', lastName: 'Njoya', email: 'bo@sarkiai.dev', password: CHOSEN }),
     ).rejects.toThrow(/limited/)
+  })
+})
+
+describe('session revocation', () => {
+  test('an explicit revoke invalidates every token already issued', async () => {
+    const auth = service()
+    const { secret, session } = await onboard(auth)
+    expect((await auth.verifySession(session.token))?.email).toBe(EMAIL)
+
+    await auth.revokeSessions(EMAIL)
+    expect(await auth.verifySession(session.token)).toBeNull()
+
+    const login = await auth.login(EMAIL, CHOSEN)
+    expect(login.status).toBe('mfa_required')
+    if (login.status !== 'mfa_required') throw new Error('expected a second factor')
+    const next = await auth.verify(login.challenge, totpCode(secret))
+    expect((await auth.verifySession(next.token))?.email).toBe(EMAIL)
+  })
+
+  test('a removed account loses access at once, even with a valid signature', async () => {
+    const auth = service()
+    const { session } = await onboard(auth)
+    await auth.remove(EMAIL)
+    expect(await auth.verifySession(session.token)).toBeNull()
   })
 })
 
