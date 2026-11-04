@@ -48,12 +48,14 @@ import {
   type AttachmentLimits,
 } from '@/lib/attachment-limits'
 import { resolveAttachmentUrl } from '@/lib/attachment-url'
+import { galleryRefs } from '@/lib/attachment-gallery'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { institutionAccent, institutionInk } from '@/lib/institutions'
 import { BrandMark } from '@/components/layout/brand-mark'
 import { BrandBackdrop } from '@/components/brand-backdrop'
 import { ChatInput } from '@/components/ai/inputs/chat-input'
+import { MediaPickerDialog } from '@/components/ai/inputs/media-picker-dialog'
 import { ChatMessage, type ChatTurn, type TurnAttachment } from '@/components/ai/display/chat-message'
 import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
 import { EFFORTS, useAssistantEffort, type AssistantEffort } from '@/lib/assistant-effort'
@@ -115,7 +117,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const [attachLimits, setAttachLimits] = React.useState<AttachmentLimits>(DEFAULT_ATTACHMENT_LIMITS)
   const [attachError, setAttachError] = React.useState<string | null>(null)
   const [menuOpen, setMenuOpen] = React.useState(false)
-  const fileRef = React.useRef<HTMLInputElement>(null)
+  const [mediaOpen, setMediaOpen] = React.useState(false)
   /** Blob previews in flight: revoked when the image leaves the composer or the panel closes. */
   const previewUrls = React.useRef<Set<string>>(new Set())
   const [actionStatus, setActionStatus] = React.useState<Record<string, ActionStatus>>({})
@@ -259,10 +261,10 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
    * blob preview (never base64), the API returns the reference, and the message
    * only names it. The bytes are read back server-side for the vision model.
    */
-  const addFiles = (files: FileList | null) => {
-    if (!files || files.length === 0) return
+  const addFiles = (files: File[]) => {
+    if (files.length === 0) return
     const room = Math.max(0, attachLimits.maxImages - attachments.length)
-    const { picked, error } = pickImages(Array.from(files), attachLimits, room)
+    const { picked, error } = pickImages(files, attachLimits, room)
     setAttachError(
       error === null
         ? null
@@ -277,9 +279,41 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }
 
   const releasePreview = React.useCallback((attachment: Attachment) => {
-    URL.revokeObjectURL(attachment.previewUrl)
+    // A stored image has no blob to revoke: only a local preview owns an object URL.
+    if (attachment.previewUrl.startsWith('blob:')) URL.revokeObjectURL(attachment.previewUrl)
     previewUrls.current.delete(attachment.previewUrl)
   }, [])
+
+  /**
+   * Re-attaches an image this conversation already stores. The reference is
+   * reused as-is: no upload, no second copy, and the send only names the id.
+   */
+  const attachFromGallery = (ref: AttachmentRefDto) => {
+    if (attachments.some((entry) => entry.ref?.id === ref.id)) return
+    if (attachments.length >= attachLimits.maxImages) {
+      setAttachError(t('assistant.imageMax', { count: attachLimits.maxImages }))
+      return
+    }
+    setAttachError(null)
+    setAttachments((previous) => [
+      ...previous,
+      {
+        key: crypto.randomUUID(),
+        mime: ref.mime,
+        name: ref.name,
+        // The stored thumbnail is already served; nothing to revoke.
+        previewUrl: resolveAttachmentUrl(ref.thumbnailUrl),
+        status: 'ready',
+        ref,
+      },
+    ])
+  }
+
+  /** The conversation's stored images, plus what the composer holds right now. */
+  const gallery = React.useMemo(
+    () => galleryRefs(turns, attachments.flatMap((entry) => (entry.ref ? [entry.ref] : []))),
+    [turns, attachments],
+  )
 
   React.useEffect(
     () => () => {
@@ -832,7 +866,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => fileRef.current?.click()}>
+        <DropdownMenuItem onSelect={() => setMediaOpen(true)}>
           <ImagePlus className="h-3.5 w-3.5 text-muted-foreground" />
           {t('assistant.attach')}
         </DropdownMenuItem>
@@ -848,17 +882,6 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   return (
     <div className="relative isolate flex min-h-0 flex-1 flex-col overflow-hidden">
       <BrandBackdrop variant="panel" className="-z-10" />
-      <input
-        ref={fileRef}
-        type="file"
-        accept={attachLimits.mimeTypes.join(',')}
-        multiple
-        hidden
-        onChange={(event) => {
-          void addFiles(event.target.files)
-          event.target.value = ''
-        }}
-      />
 
       <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -1004,10 +1027,10 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                 />
                 {attachment.status === 'uploading' && (
                   <span
-                    className="absolute inset-0 grid place-items-center rounded-lg bg-background/60"
+                    className="absolute inset-0 grid place-items-center rounded-lg bg-black/55"
                     aria-label={t('assistant.imageUploading')}
                   >
-                    <Loader2 className="h-4 w-4 animate-spin text-foreground" />
+                    <Loader2 className="h-5 w-5 animate-spin text-white" />
                   </span>
                 )}
                 {attachment.status === 'error' && (
@@ -1077,6 +1100,18 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
           {t('assistant.disclaimer')}
         </p>
       </div>
+
+      <MediaPickerDialog
+        open={mediaOpen}
+        onOpenChange={setMediaOpen}
+        gallery={gallery}
+        selectedIds={attachments.flatMap((entry) => (entry.ref ? [entry.ref.id] : []))}
+        uploads={attachments}
+        limits={attachLimits}
+        onFiles={addFiles}
+        onPick={attachFromGallery}
+        error={attachError}
+      />
     </div>
   )
 }
