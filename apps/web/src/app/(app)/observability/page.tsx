@@ -232,18 +232,17 @@ export default function ObservabilityPage() {
     const from = new Date(to.getTime() - days * 86_400_000)
     const history = new Date(to.getTime() - FORECAST_DAYS * 86_400_000)
     const budgetFrom = new Date(to.getTime() - BUDGET_DAYS * 86_400_000)
+    // The toolbar filters the whole page: every panel reads the same slice.
+    const filters = {
+      ...(scope ? { operator: scope } : {}),
+      ...(status ? { status } : {}),
+    }
     try {
       const [next, pageOfCalls, prediction, spend] = await Promise.all([
-        observabilityApi.summary({ from, to, ...(scope ? { operator: scope } : {}) }),
-        observabilityApi.requests({
-          from,
-          to,
-          ...(scope ? { operator: scope } : {}),
-          ...(status ? { status } : {}),
-          limit: FETCH_SIZE,
-        }),
-        observabilityApi.forecast({ from: history, to, ...(scope ? { operator: scope } : {}) }),
-        observabilityApi.budget({ from: budgetFrom, to, ...(scope ? { operator: scope } : {}) }),
+        observabilityApi.summary({ from, to, ...filters }),
+        observabilityApi.requests({ from, to, ...filters, limit: FETCH_SIZE }),
+        observabilityApi.forecast({ from: history, to, ...filters }),
+        observabilityApi.budget({ from: budgetFrom, to, ...filters }),
       ])
       setSummary(next)
       setForecast(prediction)
@@ -489,8 +488,12 @@ export default function ObservabilityPage() {
           {summary && summary.totals.requests === 0 && (
             <Card>
               <CardContent className="flex flex-col gap-1 p-4">
-                <p className="text-xs font-medium">{t('observability.empty')}</p>
-                <p className="text-[11px] text-muted-foreground">{t('observability.emptyHint')}</p>
+                <p className="text-xs font-medium">
+                  {status ? t('observability.emptyFiltered') : t('observability.empty')}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {status ? t('observability.emptyFilteredHint') : t('observability.emptyHint')}
+                </p>
               </CardContent>
             </Card>
           )}
@@ -732,7 +735,7 @@ export default function ObservabilityPage() {
             <CardContent className="p-0">
               {requests.length === 0 ? (
                 <p className="px-4 py-8 text-xs text-muted-foreground">
-                  {loading ? t('observability.loading') : t('observability.empty')}
+                  {loading ? t('observability.loading') : status ? t('observability.emptyFiltered') : t('observability.empty')}
                 </p>
               ) : (
                 <>
