@@ -1,6 +1,6 @@
 ---
 name: SarkiAI web console
-description: Rules for the Next.js console in apps/web — App Router layout, the bilingual flat i18n map, the API client, auth/session handling, the SarkiAI Compact UI charter and the checks before shipping a screen. Use when editing a page, a component, a translation, the assistant panel or the auth journeys.
+description: Rules for the Next.js console in apps/web (App Router layout, the bilingual flat i18n map, the API client, auth/session handling, the SarkiAI Compact UI charter and the checks before shipping a screen). Use when editing a page, a component, a translation, the assistant panel or the auth journeys.
 ---
 
 # SarkiAI web console

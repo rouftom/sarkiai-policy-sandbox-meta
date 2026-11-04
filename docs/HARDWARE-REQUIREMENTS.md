@@ -64,5 +64,5 @@ megabytes in `kb_chunks`. The footprint comes from the model, not the data.
 
 This frugality is an argument in itself: it feeds **D13 Digital Infrastructure**
 (compute and energy) and **D11 Edge Privacy** (deployment at the edge, without
-egress), and shows that a sovereign deployment can run on a single GPU — or on
+egress), and shows that a sovereign deployment can run on a single GPU, or on
 none at all in cloud mode.

@@ -1,6 +1,6 @@
 ---
 name: SarkiAI deploy and verify
-description: How the API and console are deployed and checked — container web service for apps/api, Next.js host for apps/web, environment variables, health and auth probes, keep-warm, and rollback. Use when deploying, changing a production variable, or verifying a release.
+description: How the API and console are deployed and checked (container web service for apps/api, Next.js host for apps/web, environment variables, health and auth probes, keep-warm, and rollback). Use when deploying, changing a production variable, or verifying a release.
 ---
 
 # SarkiAI deploy and verify
@@ -32,7 +32,7 @@ container (SSE, webhooks, WebSockets); the console is a Next.js build.
 - Host root directory: `apps/web`; the workspace install runs from the repo.
 - Variables: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_DEFAULT_LOCALE`,
   `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_WEB_ORIGINS`.
-- `NEXT_PUBLIC_*` values are **inlined at build time** — rebuild after any
+- `NEXT_PUBLIC_*` values are **inlined at build time**: rebuild after any
   change, including the API address.
 - `next.config.ts` transpiles `@sps/ui`, `@sps/shared`, `@sps/theme` from
   source; no prebuild step.

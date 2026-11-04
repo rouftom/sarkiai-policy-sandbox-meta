@@ -20,7 +20,7 @@ harness). Adapt-and-reuse is fine; keep this repo publishable.
 ## Branches & commits
 
 - `main`: production, deployed. `develop`: integration. `meta-hackathon`:
-  submission mirror. All three are protected — **no direct push**.
+  submission mirror. All three are protected: **no direct push**.
 - `feat/<scope>`, `fix/<scope>`, `docs/<scope>`, `chore/<scope>`: work
   branches, cut from `develop`. Every change, documentation included, lands
   through a pull request into `develop`.

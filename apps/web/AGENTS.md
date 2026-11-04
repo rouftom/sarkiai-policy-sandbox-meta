@@ -1,4 +1,4 @@
-# `apps/web` — console rules
+# `apps/web`: console rules
 
 Next.js 16 App Router, React 19, Tailwind v4, bilingual (EN default, FR).
 
@@ -46,7 +46,7 @@ Next.js 16 App Router, React 19, Tailwind v4, bilingual (EN default, FR).
 ## Tests and checks
 
 - `cd apps/web && bun run typecheck`
-- `bun run build` from the root (or `--filter=@sps/web`) — required when routes,
+- `bun run build` from the root (or `--filter=@sps/web`): required when routes,
   metadata or env handling change.
 - Unit tests live beside the code (`*.test.ts`), no DOM library by default.
 - Verify a changed screen in both locales and both themes before opening a PR.

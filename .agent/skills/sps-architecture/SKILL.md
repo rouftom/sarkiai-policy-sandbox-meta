@@ -1,6 +1,6 @@
 ---
 name: SarkiAI architecture
-description: The invariants behind the SarkiAI engine — one engine with two lenses, the MongoDB corpus and operational stores, the package boundaries, the data flow per lens and the failure-isolation rules. Use before a cross-cutting change, when explaining how the engine works, or when deciding where new logic belongs.
+description: The invariants behind the SarkiAI engine (one engine with two lenses, the MongoDB corpus and operational stores, the package boundaries, the data flow per lens and the failure-isolation rules). Use before a cross-cutting change, when explaining how the engine works, or when deciding where new logic belongs.
 ---
 
 # SarkiAI architecture
@@ -51,7 +51,7 @@ browser ─▶ apps/web (Next.js 16) ── REST + SSE ──▶ apps/api (Fasti
 `cloud` substitutes the Meta Model API for Ollama and Atlas Search for the
 MongoDB text index; nothing else changes. Ingestion runs in the API process.
 
-## Data flow — simulation lens
+## Data flow: simulation lens
 
 1. `AtlasIngestor` writes structure-aware chunks to `kb_chunks` and ensures the
    search index exists.
@@ -63,7 +63,7 @@ MongoDB text index; nothing else changes. Ingestion runs in the API process.
 5. `AuditService.traceStep()` records each reasoning step; `logAction()`
    appends a hash-chained record.
 
-## Data flow — readiness lens
+## Data flow: readiness lens
 
 `ReadinessEngine.assess()` iterates 13 dimensions (Report 2.0, 6 factors),
 retrieves national provisions **and** the regional/international corpus, and

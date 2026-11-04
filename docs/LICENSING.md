@@ -114,7 +114,7 @@ The manifest entry is removed first; no payload is stored in git.
 
 Parts of this codebase were **adapted** from the internal *SarkiAI Enterprise*
 monorepo (proprietary, © Djotta, all rights reserved). No proprietary or
-unpublished module — notably the AgenticUI harness — is included here. The
+unpublished module, notably the AgenticUI harness, is included here. The
 project is designed to be publishable and standalone.
 
 ## 7. Attribution

@@ -1,6 +1,6 @@
 ---
 name: SarkiAI git and release
-description: The SarkiAI branch and release workflow — topic branch, PR to develop, promotion to main, mirror to meta-hackathon, merge-commit strategy, the pre-push guard and the bootstrap bypass. Use whenever you commit, push, open or merge a pull request, promote a release, or prepare the hackathon submission branch.
+description: The SarkiAI branch and release workflow (topic branch, PR to develop, promotion to main, mirror to meta-hackathon, merge-commit strategy, the pre-push guard and the bootstrap bypass). Use whenever you commit, push, open or merge a pull request, promote a release, or prepare the hackathon submission branch.
 ---
 
 # SarkiAI git and release
@@ -23,7 +23,7 @@ feat/*  fix/*  docs/*  chore/*  refactor/*
 | `meta-hackathon` | hackathon submission mirror | **forbidden** |
 | `feat/*`, `fix/*`, `docs/*`, `chore/*`, `refactor/*` | work | allowed |
 
-**Every change goes through a branch and a PR — documentation and skills
+**Every change goes through a branch and a PR: documentation and skills
 included.** No exception for "just a README fix".
 
 ## Work PR
@@ -40,7 +40,7 @@ gh pr create --base develop --title "<type>(<scope>): <summary>" --body-file <fi
 - One topic per PR; a PR that mixes refactor and behaviour is split.
 - Address review by pushing more commits to the same branch; never force-push a
   branch another person may have based work on.
-- Merge with a merge commit — **never squash**, never rebase a shared branch:
+- Merge with a merge commit: **never squash**, never rebase a shared branch:
   `gh pr merge <n> --merge --delete-branch`.
 
 ## Promotion to production
@@ -74,7 +74,7 @@ branch protection is authoritative (PR required, force-push and deletion
 blocked, administrators included). `gh pr merge` happens server-side and is not
 blocked by the hook.
 
-**Bootstrap only** — synchronising protected branches before protection is
+**Bootstrap only**: synchronising protected branches before protection is
 enabled:
 
 ```bash
@@ -101,9 +101,9 @@ One paragraph on the behaviour changed.
 The problem or requirement it answers.
 
 ## Checks
-- `bun run typecheck` — pass
-- `bun test apps/api/src` — N pass
-- `bun run build` — pass
+- `bun run typecheck`: pass
+- `bun test apps/api/src`: N pass
+- `bun run build`: pass
 - manual smoke: <commands and result>
 
 ## Notes
