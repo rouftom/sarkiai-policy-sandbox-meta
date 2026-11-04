@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import { AlertTriangle, Check, ChevronDown, GraduationCap, HeartPulse, History, ImagePlus, Landmark, ListChecks, Loader2, Plus, RadioTower, Route, Scale, Shield, Sprout, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, GraduationCap, HeartPulse, History, ImagePlus, Landmark, ListChecks, Loader, Plus, RadioTower, Route, Scale, Shield, Sprout, X } from 'lucide-react'
 import {
   Button,
   DropdownMenu,
@@ -316,11 +316,19 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   }, [])
 
   /**
-   * Re-attaches an image this conversation already stores. The reference is
-   * reused as-is: no upload, no second copy, and the send only names the id.
+   * Toggles an image this conversation already stores. Adding reuses the
+   * reference as-is (no upload, no second copy) and the send only names the id;
+   * removing takes it out of the message without deleting the stored image, so
+   * it stays in the library.
    */
-  const attachFromGallery = (ref: AttachmentRefDto) => {
-    if (attachments.some((entry) => entry.ref?.id === ref.id)) return
+  const toggleGalleryRef = (ref: AttachmentRefDto) => {
+    const held = attachments.find((entry) => entry.ref?.id === ref.id)
+    if (held) {
+      releasePreview(held)
+      setAttachments((previous) => previous.filter((entry) => entry.key !== held.key))
+      setAttachError(null)
+      return
+    }
     if (attachments.length >= attachLimits.maxImages) {
       setAttachError(t('assistant.imageMax', { count: attachLimits.maxImages }))
       return
@@ -1061,7 +1069,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
                     className="absolute inset-0 grid place-items-center rounded-lg bg-black/55"
                     aria-label={t('assistant.imageUploading')}
                   >
-                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                    <Loader className="h-5 w-5 animate-spin text-white" />
                   </span>
                 )}
                 {attachment.status === 'error' && (
@@ -1140,7 +1148,7 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         uploads={attachments}
         limits={attachLimits}
         onFiles={addFiles}
-        onPick={attachFromGallery}
+        onToggle={toggleGalleryRef}
         error={attachError}
         loading={libraryLoading && gallery.length === 0}
       />

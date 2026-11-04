@@ -37,13 +37,16 @@ The console uploads each image **once, when it is picked** (`POST /v1/attachment
 raw bytes: no base64 in the browser or in a request body). The message that
 follows names the reference (`attachmentRefs`) and the API reads the bytes back
 from the store for the vision model, so a saved turn and its session payload
-carry the reference only. The composer shows a spinner until the upload returns
-and blocks sending while one is in flight or has failed. The attach action opens
-a media picker with two entries: **Library** lists the images the operator has
-saved across their conversations (newest first, deduplicated, read from their
-own sessions only) and re-attaches a reference without a second transfer, while
-**Device** imports local files and shows each upload's progress; there is no
-shared library, so an operator never sees another conversation's images.
+carry the reference only. The composer shows the shared loader until the upload
+returns and blocks sending while one is in flight or has failed. The attach
+action opens a media picker with two entries: **Library** lists the images the
+operator has saved across their conversations (`GET /v1/chat/attachments`,
+newest first, deduplicated, read from their own sessions only); a thumbnail is
+checked when its reference is in the message, and clicking it again detaches it
+without deleting the stored image, so the same reference can be reused with no
+second transfer. **Device** imports local files and shows each upload's progress
+with the same centred loader. There is no shared library, so an operator never
+sees another conversation's images.
 
 The `KbChunk` contract is identical in both search backends: `RETRIEVAL_BACKEND`
 only changes **where the BM25 index lives** (Atlas Search or a MongoDB text
