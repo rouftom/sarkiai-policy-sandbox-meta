@@ -28,6 +28,10 @@ WORKDIR /app/apps/api
 ENV NODE_ENV=production
 # Most container hosts inject PORT; keep 8000 as the image default.
 ENV PORT=8000
+# The deployed image runs unprivileged. Only the dev stage keeps root, because a
+# bind-mounted source tree on the host must stay writable by the host user.
+RUN addgroup -S app && adduser -S -G app app && chown -R app:app /app
+USER app
 EXPOSE 8000 10000
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=20s \
   CMD bun -e "fetch('http://localhost:'+(process.env.PORT??8000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

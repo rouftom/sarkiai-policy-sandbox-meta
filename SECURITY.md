@@ -83,6 +83,11 @@ Out of scope:
 - **Credentials.** Passwords are hashed with scrypt; tokens and codes are compared
   in constant time; TOTP codes are single-use; password-reset and approval links
   are signed single-use tokens; authentication and costly routes are rate-limited.
+  Session tokens are checked against the account on every request, so removing an
+  operator or revoking their sessions invalidates tokens already issued.
+- **Containers run unprivileged.** The production images create an `app` user
+  (`node` for the console) and drop to it; only the development stages keep root,
+  where a bind-mounted source tree must stay writable.
 - **Server-side keys stay server-side.** The MCP gateway is only reached from
   authenticated agent runs, and the Meta egress relay requires a shared secret,
   rejects dot segments and only forwards an allowlist of upstream paths.
@@ -99,15 +104,6 @@ Out of scope:
   the fixed range, and it is recorded with that reason: `katex` (the only
   consumer, `rehype-katex`, still pins `^0.16`) and `glob` (pulled by the React
   Email CLI toolchain, which pins `^13.0.6`).
-
-## Known limitations
-
-- Sessions are signed tokens valid for seven days: revoking an account or
-  changing a role does not invalidate a token already issued (M1).
-- The model preference is saved per operator, but the shared engine applies one
-  model at a time, so the last selection drives every operator's runs until
-  per-operator routing lands (M2).
-- The containers run as root (M7).
 
 ## Safe harbour
 

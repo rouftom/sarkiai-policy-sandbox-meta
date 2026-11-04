@@ -308,7 +308,9 @@ The Turnstile **site key** is public. The API reads it server-side from
 on `GET /v1/auth/captcha`; the browser fetches it there at runtime, so the
 console build carries no Turnstile variable.
 
-Sessions are stateless HMAC tokens (7 days, `Authorization: Bearer`). Operators
+Sessions are signed HMAC tokens (7 days, `Authorization: Bearer`) checked against
+the operator record on every request, so removing an operator, changing a
+password or signing out invalidates the tokens already issued. Operators
 live in MongoDB when it is reachable; otherwise the service keeps them in memory
 so the console still authenticates, and `/setup` warns that the account will not
 survive a restart. Password, enrolment and recovery-code writes fail loudly
