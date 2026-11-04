@@ -1,9 +1,12 @@
 # Roadmap
 
 Where SarkiAI Policy Sandbox goes after the hackathon. Everything below is
-**planned, not built**: what exists today is described in the [README](README.md),
-and what was built during the event is listed in [`HACKATHON.md`](HACKATHON.md).
-Completed sprints are in [`docs/SPRINTS.md`](docs/SPRINTS.md).
+**planned, not built**, except the short **Built already** notes under a
+milestone: those capabilities landed during the hackathon and are listed here so
+the roadmap matches the code. What exists today is described in the
+[README](README.md), and what was built during the event is listed in
+[`HACKATHON.md`](HACKATHON.md). Completed sprints are in
+[`docs/SPRINTS.md`](docs/SPRINTS.md).
 
 Horizons are indicative and follow the milestones' dependencies. Every model the
 system calls stays a Meta model.
@@ -20,10 +23,14 @@ system calls stays a Meta model.
 
 ### M1 · Identity and access
 
-- Authentication aligned on [better-auth](https://www.better-auth.com/): revocable
-  sessions, password and TOTP flows, passkeys.
+- Authentication aligned on [better-auth](https://www.better-auth.com/): passkeys
+  alongside the shipped password, TOTP and revocable-session flows.
 - Organizations: one per institution, with its own members and invitations.
 - Single sign-on (OIDC, SAML) for administrations that run their own directory.
+
+**Built already:** revocable sessions — signing out or changing a password
+invalidates every issued token at once (`packages/auth/src/index.ts`,
+`POST /v1/auth/logout`).
 
 **Done when** a revoked account loses access at once, and an institution signs in
 with its own directory.
@@ -32,8 +39,10 @@ with its own directory.
 
 - Roles: administrator, institution focal point, analyst, observer, auditor.
 - Incidents, reports and exercises scoped to the institutions involved.
-- Model choice per operator instead of per deployment.
 - Every permission change recorded in the audit chain.
+
+**Built already:** model choice per operator (`PUT /v1/models/selection`, audit
+event `model.selected`).
 
 **Done when** every action is checked against a role and traced in the audit chain.
 
@@ -77,19 +86,24 @@ affected incidents are flagged without manual work.
 ### M7 · Sovereign package
 
 - An installable on-premise image: Muse Glimmer, MongoDB, object storage.
-- Hardened containers (non-root users, internal ports only).
+- Hardened containers: internal ports only.
 - Backups, tested restores and a documented disaster recovery plan.
+
+**Built already:** non-root production containers — the API, web and both MCP
+images run as `app` or `node` (`USER` in the four `Dockerfile`s).
 
 **Done when** an institution installs the system offline in a day and restores it
 from a backup.
 
 ### M8 · Integrations
 
-- A published OpenAPI schema generated from the API's validation schemas, an
-  interactive reference and ready-made API collections.
+- Ready-made API collections for the published OpenAPI document.
 - Webhooks for national CERTs and regulators.
 - Exports of joint reports and incident files, signed decisions.
 - A documentation site built from the existing Markdown.
+
+**Built already:** the OpenAPI document generated from the API's validation
+schemas (`GET /openapi.json`) and its interactive Scalar reference (`GET /docs/`).
 
 **Done when** a CERT receives the joint report of an incident automatically.
 

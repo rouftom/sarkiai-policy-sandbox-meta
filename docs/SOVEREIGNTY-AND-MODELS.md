@@ -1,5 +1,7 @@
 # Data and model sovereignty
 
+![Trust and sovereignty](architecture/06-trust-sovereignty.svg)
+
 The engine runs on three interchangeable provider modes. They differ in where
 the model calls go, not in what the engine does: the same agents, citation
 validator, gap engine and audit chain sit on top. **Every model the system calls

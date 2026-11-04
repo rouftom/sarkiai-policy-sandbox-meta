@@ -137,6 +137,19 @@ Gap analysis is a **shared service** consumed by every lens, so no evaluation cr
 
 ## Architecture
 
+![One engine, three modes: every model the system calls is a Meta model](docs/architecture/01-overview.svg)
+
+| Diagram | What it shows |
+|---|---|
+| [One assistant turn](docs/architecture/02-assistant-turn.svg) | Voice, images and tools around Muse Spark, with the citation validator and a person in the loop |
+| [One incident run](docs/architecture/03-incident-run.svg) | Four mandated agents, the citation validator, the coordinator and the joint report |
+| [Agentic corpus search](docs/architecture/04-agentic-search.svg) | Plan, parallel sub-agents with judge loops, fusion and Meta ranking |
+| [From paper to alert](docs/architecture/05-paper-to-alert.svg) | A scanned gazette through SAM 3.1 and Muse Spark into the corpus, then the impact analysis |
+| [Trust and sovereignty](docs/architecture/06-trust-sovereignty.svg) | Where the reasoning runs in each mode, what leaves the institution, the controls |
+| [Notifications and approval](docs/architecture/07-notifications.svg) | WhatsApp and e-mail, signed single-use links, signed webhooks |
+| [AI readiness](docs/architecture/08-readiness.svg) | One agent per dimension and sector, web search, synthesis and report |
+| [Table-top exercise](docs/architecture/09-exercise.svg) | Rule-based scoring and the after-action report |
+
 ```
  data sources ──▶ collection ──▶ processing ──▶ retrieval & model ──▶ application ──▶ governance
       │               │              │                 │                   │              │
@@ -458,6 +471,8 @@ bun run check:provider sovereign  # Muse Glimmer on Ollama
 
 ### Agentic corpus search
 
+![Agentic corpus search](docs/architecture/04-agentic-search.svg)
+
 The corpus is small, structured (instrument → article) and rich in exact legal
 terms. It is searched lexically, and the Meta model of the mode does the
 reasoning:
@@ -539,6 +554,8 @@ Background and limits: [`docs/KNOWLEDGE-BASE.md`](docs/KNOWLEDGE-BASE.md).
 
 ### WhatsApp channel and approvals (N4)
 
+![Notifications and approval](docs/architecture/07-notifications.svg)
+
 The API talks to the **WhatsApp Cloud API directly** (`packages/whatsapp`,
 ~100 lines of `fetch`); no notification worker sits in between. Business-initiated
 messages use approved utility templates prefixed `meta_hackathon_`:
@@ -581,6 +598,8 @@ are documented in [`docs/NOTIFICATIONS.md`](docs/NOTIFICATIONS.md).
 
 ### Scanned gazettes (N3)
 
+![From paper to alert](docs/architecture/05-paper-to-alert.svg)
+
 Official journals are often published as scans with no text layer. The console's
 **Scanned gazette** panel (or `POST /v1/gazette/analyze`) does four things:
 
@@ -622,6 +641,8 @@ and unaffected runs are returned alongside the findings, and the pass is recorde
 as `impact.analyzed` in the audit chain.
 
 ### Crisis exercise (N8)
+
+![Table-top exercise](docs/architecture/09-exercise.svg)
 
 A scenario replays an incident; an exercise adds a clock and a team. The console's
 **Table-top crisis exercise** panel loads a drill whose injects are released at
