@@ -6,6 +6,9 @@ import { MessageSquare, Trash2 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { useToast } from '@/components/shared/toast'
 import { HistoryShimmer } from '@/components/ai/display/conversation-shimmer'
+import { RowActionMenu } from '@/components/ui/row-action-menu'
+import { RowActionButton } from '@/components/ui/row-action-button'
+import { TableActionItem } from '@/components/ui/table-actions'
 import { useI18n } from '@/lib/i18n'
 import type { ChatSessionSummary } from '@/lib/chat-sessions-client'
 
@@ -110,8 +113,11 @@ export function ChatHistory({
           const active = session.id === activeId
           return (
             <div
-              className={`group/row mx-3 flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${
-                active ? 'bg-brand-primary/10 dark:bg-brand-primary-dark/20' : 'hover:bg-black/5 dark:hover:bg-white/5'
+              data-history-item
+              className={`group/row relative mx-3 flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors ${
+                active
+                  ? 'bg-brand-primary/10 dark:bg-brand-primary-dark/20'
+                  : 'hover:bg-black/5 data-[history-menu-open=true]:bg-black/5 dark:hover:bg-white/10 dark:data-[history-menu-open=true]:bg-white/10'
               }`}
             >
               <button type="button" onClick={() => onOpen(session.id)} className="min-w-0 flex-1 text-left">
@@ -120,14 +126,30 @@ export function ChatHistory({
                   {new Date(session.updatedAt).toLocaleDateString()} · {session.turnCount}
                 </span>
               </button>
-              <button
-                type="button"
-                onClick={() => setPendingDelete(session)}
-                aria-label={t('history.delete')}
-                className="shrink-0 rounded-lg p-1 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover/row:opacity-100"
+              <RowActionMenu
+                containerSelector="[data-history-item]"
+                highlightAttribute="data-history-menu-open"
+                menuLabel={
+                  <span className="block max-w-[180px] truncate">{session.title || t('assistant.newChat')}</span>
+                }
+                inline={
+                  <RowActionButton
+                    label={t('history.delete')}
+                    tone="danger"
+                    onClick={() => setPendingDelete(session)}
+                    className="h-7 w-7 bg-transparent opacity-0 pointer-events-none group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 dark:bg-transparent"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </RowActionButton>
+                }
               >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+                <TableActionItem icon={MessageSquare} onClick={() => onOpen(session.id)}>
+                  {t('history.open')}
+                </TableActionItem>
+                <TableActionItem icon={Trash2} variant="danger" onClick={() => setPendingDelete(session)}>
+                  {t('history.delete')}
+                </TableActionItem>
+              </RowActionMenu>
             </div>
           )
         }}
