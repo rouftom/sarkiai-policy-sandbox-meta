@@ -9,6 +9,53 @@
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import { mongoPoolOptions } from '@sps/shared'
 
+/** The only fields a turn may keep for an image; the bytes never reach Mongo. */
+const ATTACHMENT_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+const ATTACHMENT_PROVIDERS = new Set(['s3', 'cloudinary'])
+const S3_ATTACHMENT_URL = /^\/v1\/attachments\/[a-f0-9]{64}\.(png|jpg|webp|gif)\/(full|thumb)\?sig=[A-Za-z0-9_-]+$/
+const CLOUDINARY_ATTACHMENT_URL = /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/.+$/
+
+/**
+ * Keeps conversation turns small and safe: an image is stored as a reference
+ * (`MediaRef`) and never as base64 or a `data:` URL. A client that sends
+ * anything else — an old tab, a crafted request — has those entries dropped
+ * before the write, so no session can grow a base64 payload again.
+ */
+export function sanitizeTurns(turns: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return turns.map((turn) => {
+    if (!Array.isArray(turn.attachments)) return turn
+    const attachments = turn.attachments.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return []
+      const value = entry as Record<string, unknown>
+      const url = typeof value.url === 'string' ? value.url : ''
+      const thumbnailUrl = typeof value.thumbnailUrl === 'string' ? value.thumbnailUrl : ''
+      const mime = typeof value.mime === 'string' ? value.mime : ''
+      const provider = typeof value.provider === 'string' ? value.provider : ''
+      if (!ATTACHMENT_MIMES.has(mime) || !ATTACHMENT_PROVIDERS.has(provider)) return []
+      if (!isAttachmentUrl(url) || !isAttachmentUrl(thumbnailUrl)) return []
+      const ref: Record<string, unknown> = {
+        id: typeof value.id === 'string' ? value.id.slice(0, 200) : '',
+        provider,
+        mime,
+        name: typeof value.name === 'string' ? value.name.slice(0, 200) : '',
+        size: typeof value.size === 'number' && Number.isFinite(value.size) ? value.size : 0,
+        url,
+        thumbnailUrl,
+      }
+      if (typeof value.width === 'number' && Number.isFinite(value.width)) ref.width = value.width
+      if (typeof value.height === 'number' && Number.isFinite(value.height)) ref.height = value.height
+      if (typeof value.sha256 === 'string' && /^[a-f0-9]{64}$/.test(value.sha256)) ref.sha256 = value.sha256
+      return [ref]
+    })
+    const { attachments: _attachments, ...rest } = turn
+    return attachments.length > 0 ? { ...rest, attachments } : rest
+  })
+}
+
+function isAttachmentUrl(url: string): boolean {
+  return S3_ATTACHMENT_URL.test(url) || CLOUDINARY_ATTACHMENT_URL.test(url)
+}
+
 export interface ChatSessionSummary {
   id: string
   title: string

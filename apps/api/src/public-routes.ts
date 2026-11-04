@@ -17,6 +17,10 @@ export function isPublicRoute(method: string, path: string): boolean {
   if (path === '/v1/whatsapp/webhook') return true
   if (path.startsWith('/v1/whatsapp/approvals/')) return true
   if (path.startsWith('/v1/kb/images/') && method === 'GET') return true
+  // Signed, immutable chat images: an `<img>` cannot send the Bearer token, and
+  // the HMAC in the query string is the capability. `/v1/attachments/limits`
+  // keeps the session guard (it has no third segment and is not matched here).
+  if (method === 'GET' && /^\/v1\/attachments\/[^/]+\/[^/]+$/.test(path)) return true
   if (path === '/v1/auth/setup') return true
   if (path === '/v1/auth/captcha') return true
   if (path === '/v1/auth/signup') return true

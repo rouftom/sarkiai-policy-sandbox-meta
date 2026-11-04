@@ -29,6 +29,9 @@ Requirements for the host:
    | `TURNSTILE_SECRET` | Cloudflare Turnstile widget secret (optional; `CLOUDFLARE_TURNSITE_SITE_SECRET` is still read) |
    | `NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` | the same widget's public site key (optional) |
    | `TURNSTILE_HOSTNAMES` | console hostnames siteverify accepts, comma-separated (optional, but set it in production) |
+   | `CLOUDINARY_CLOUD_NAME` | Cloudinary account name (assistant images; `MEDIA_STORE=cloudinary`) |
+   | `CLOUDINARY_API_KEY` | Cloudinary API key |
+   | `CLOUDINARY_API_SECRET` | Cloudinary API secret |
 
    **The API refuses to start on a public cloud origin without a private
    session secret.** `SANDBOX_MODE=cloud` (or the presence of `MODEL_API_KEY`,
@@ -47,6 +50,15 @@ Requirements for the host:
    development key, so a LAN demo needs no configuration. The same cloud gate
    applies to `WHATSAPP_APP_SECRET`: without it, the WhatsApp webhook answers
    `503 webhook_secret_missing` instead of accepting unsigned events.
+
+3b. Assistant images. `MEDIA_STORE` selects the adapter: `s3` (MinIO / S3,
+   the local default) or `cloudinary` (the default in `cloud` and `sovereign`
+   mode). The blueprint sets `MEDIA_STORE=cloudinary` and
+   `CLOUDINARY_SPS_FOLDER=sps`; chat images land in `sps/attachments`, never in
+   the organization's `fada/resources` folder. Without the Cloudinary
+   credentials the API logs a warning and falls back to S3 at boot, so a fork
+   still runs. Only the reference (`sha256`, MIME, size, dimensions, signed or
+   Cloudinary URL) is written with a conversation turn.
 
 4. Bot protection (optional). The sign-up and password-reset forms ask for a
    Cloudflare Turnstile token when `SANDBOX_MODE` is `cloud` or `sovereign` and

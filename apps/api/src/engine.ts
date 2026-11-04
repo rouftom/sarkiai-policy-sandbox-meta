@@ -35,6 +35,7 @@ import {
   type WorkflowLens,
 } from '@sps/shared'
 import { config } from './config.js'
+import { createMediaStore } from './media-store.js'
 
 
 /**
@@ -130,6 +131,18 @@ export function createEngine() {
   })
 
   /**
+   * Assistant images: Cloudinary in cloud/sovereign, MinIO / S3 elsewhere. The
+   * adapter owns the thumbnail and the read URL; Mongo only ever sees the ref.
+   */
+  const media = createMediaStore({
+    provider: config.media.store,
+    storage,
+    signingSecret: config.media.signingSecret,
+    thumbnailWidth: config.media.thumbnailWidth,
+    warn: (message) => console.warn(`[media] ${message}`),
+  })
+
+  /**
    * One stack per model id, built on demand and shared by every caller naming
    * that id. The catalogue is small, so the cache is bounded: an arbitrary id
    * can never grow it for ever.
@@ -159,6 +172,7 @@ export function createEngine() {
     audit,
     reports,
     storage,
+    media,
     provider: base.provider,
     /**
      * The deployment's catalogue mode. It does not change when a Baseten model is
