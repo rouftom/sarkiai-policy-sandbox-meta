@@ -1143,10 +1143,10 @@ export const api = {
   readiness: (body: { country: string; domain: string; globalCountry?: string }) =>
     request<ReadinessReportDto>('/v1/readiness/report', { method: 'POST', body: JSON.stringify(body) }),
 
-  runScenario: (body: { id?: string; country: string; domain: string }) =>
+  runScenario: (body: { id?: string; country: string; domain: string; agentIds?: string[] }) =>
     request<RunResultDto>('/v1/scenarios/run', { method: 'POST', body: JSON.stringify(body) }),
 
-  startScenario: (body: { id?: string; country: string; domain: string; lang?: 'en' | 'fr' }) =>
+  startScenario: (body: { id?: string; country: string; domain: string; lang?: 'en' | 'fr'; agentIds?: string[] }) =>
     request<ScenarioStartDto>('/v1/scenarios/start', { method: 'POST', body: JSON.stringify(body) }),
 
   nextTick: (runId: string) =>
@@ -1928,4 +1928,78 @@ export const observabilityApi = {
     request<ObservabilityBudgetDto>(`/v1/observability/budget?${observabilityQuery(params)}`),
   run: (runId: string) =>
     request<ObservabilityRunDto>(`/v1/observability/runs/${encodeURIComponent(runId)}`),
+}
+
+// ── Agents & AI registry ────────────────────────────────────────────────────
+export type RegistryEntityPath = 'roles' | 'institutions' | 'agents'
+export type RegistryStatusDto = 'draft' | 'active' | 'retired'
+
+interface RegistryBaseDto {
+  id: string
+  name: string
+  builtIn: boolean
+  status: RegistryStatusDto
+  version: number
+  createdAt: string
+  updatedAt: string
+  updatedBy: string
+}
+export interface RoleDto extends RegistryBaseDto {
+  description: string
+  capabilities: string[]
+  requiresInstitution: boolean
+}
+export interface InstitutionDto extends RegistryBaseDto {
+  country: string
+  mandate: string
+  legalBasis: Array<{ filename: string; article?: string; note?: string }>
+  domains: Domain[]
+  mustNot: string[]
+}
+export interface AgentDto extends RegistryBaseDto {
+  roleId: string
+  institutionId?: string
+  model?: string
+  instructions: string
+  informationScope: 'all_events' | 'domain_events' | 'addressed_events'
+  color: string
+}
+export type RegistryRecordDto = RoleDto | InstitutionDto | AgentDto
+export interface RegistryVersionDto {
+  entity: string
+  id: string
+  version: number
+  snapshot: Record<string, unknown>
+  savedAt: string
+  savedBy: string
+}
+export interface AgentSpecDto {
+  id: string
+  name: string
+  role: string
+  mandate: string
+  domains: Domain[]
+  color: string
+}
+
+export const registryApi = {
+  guarantees: () => request<{ guarantees: string[]; capabilities: string[] }>('/v1/registry/guarantees'),
+  list: <T extends RegistryRecordDto>(path: RegistryEntityPath) => request<{ items: T[] }>(`/v1/registry/${path}`),
+  get: <T extends RegistryRecordDto>(path: RegistryEntityPath, id: string) =>
+    request<T>(`/v1/registry/${path}/${encodeURIComponent(id)}`),
+  versions: (path: RegistryEntityPath, id: string) =>
+    request<{ versions: RegistryVersionDto[] }>(`/v1/registry/${path}/${encodeURIComponent(id)}/versions`),
+  create: <T extends RegistryRecordDto>(path: RegistryEntityPath, body: Record<string, unknown>) =>
+    request<T>(`/v1/registry/${path}`, { method: 'POST', body: JSON.stringify(body) }),
+  update: <T extends RegistryRecordDto>(path: RegistryEntityPath, id: string, body: Record<string, unknown>) =>
+    request<T>(`/v1/registry/${path}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  setStatus: <T extends RegistryRecordDto>(path: RegistryEntityPath, id: string, status: RegistryStatusDto) =>
+    request<T>(`/v1/registry/${path}/${encodeURIComponent(id)}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+  agentSpecs: (options: { domains?: Domain[]; ids?: string[] } = {}) => {
+    const query = new URLSearchParams()
+    if (options.domains?.length) query.set('domains', options.domains.join(','))
+    if (options.ids?.length) query.set('ids', options.ids.join(','))
+    const suffix = query.toString() ? `?${query}` : ''
+    return request<{ agents: AgentSpecDto[] }>(`/v1/registry/agent-specs${suffix}`)
+  },
 }
