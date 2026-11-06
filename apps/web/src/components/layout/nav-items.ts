@@ -9,6 +9,11 @@
 import type { ComponentType } from 'react'
 import {
   Activity,
+  BadgeCheck,
+  Bot,
+  Building2,
+  Landmark,
+  Sparkles,
   Cpu,
   Database,
   Gauge,
@@ -42,13 +47,39 @@ export const GUIDE_CHILDREN: NavEntry[] = [
   { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Layers },
 ]
 
+/**
+ * A section with `children` renders as a collapsible group: its own href is only
+ * a key (the group opens, it does not navigate).
+ */
 export const GENERAL_NAV: NavEntry[] = [
   { href: '/', labelKey: 'nav.overview', icon: LayoutDashboard },
-  { href: '/countries', labelKey: 'nav.countries', icon: Globe2 },
-  { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
+  {
+    href: '#institutions',
+    labelKey: 'nav.group_institutions',
+    icon: Landmark,
+    children: [
+      { href: '/countries', labelKey: 'nav.countries', icon: Globe2 },
+      { href: '/institutions', labelKey: 'nav.institutions', icon: Building2 },
+    ],
+  },
+  {
+    href: '#agents-ai',
+    labelKey: 'nav.group_agents_ai',
+    icon: Sparkles,
+    children: [
+      { href: '/agents', labelKey: 'nav.agents', icon: Bot },
+      { href: '/roles', labelKey: 'nav.roles', icon: BadgeCheck },
+      { href: '/knowledge', labelKey: 'nav.knowledge', icon: Database },
+    ],
+  },
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
 ]
+
+/** Every navigable entry, groups flattened: titles, the mobile drawer, the collapsed rail. */
+export function flattenNav(entries: NavEntry[]): NavEntry[] {
+  return entries.flatMap((entry) => (entry.children ? entry.children : [entry]))
+}
 
 export const OPERATIONS_NAV: NavEntry[] = [
   { href: '/exercise', labelKey: 'nav.exercise', icon: Siren },

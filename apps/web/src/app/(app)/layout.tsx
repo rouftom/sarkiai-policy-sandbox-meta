@@ -81,6 +81,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     panelRef.current?.resize(isMobile ? '50%' : '30%')
   }
 
+  // "Try in the assistant" from an agent's page opens the panel.
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('assistant')) openAssistant()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const closeAssistant = () => {
     setAssistantOpen(false)
     panelRef.current?.collapse()

@@ -135,6 +135,17 @@ profile. WhatsApp, voice notes, impact analysis, the table-top exercise and the
 The lens is a **declarative workflow profile** (`packages/shared`), never a duplicated code path.
 Gap analysis is a **shared service** consumed by every lens, so no evaluation criterion is lost.
 
+## Agents & AI registry
+
+Roles, institutions and agents are configured in the console (**Agents & AI**
+and **Institutions**), not hard-coded: a role is built from fixed capabilities,
+an institution carries its mandate and its legal basis in the corpus, and an
+agent combines a role, an institution when mandated, and a Meta model. Every
+change is administrator-only, versioned and audited, and the guarantees (the
+citation check, a person for every side effect, rule-based scores, Meta models
+only) cannot be lifted by any setting. Crisis scenarios let you choose the agents
+taking part. Details: [`docs/AGENTS-AND-ROLES.md`](docs/AGENTS-AND-ROLES.md).
+
 ## Architecture
 
 ![One engine, three modes: every model the system calls is a Meta model](docs/architecture/01-overview.svg)

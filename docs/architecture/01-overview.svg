@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 854" width="1200" height="854" role="img" aria-labelledby="t d">
 <title id="t">SarkiAI Policy Sandbox architecture overview</title>
-<desc id="d">Operators use the Next.js console, which calls the Fastify API. The API keeps the corpus, the audit log and the chain-of-thought in MongoDB, and sends each reasoning step to the Meta model chosen by the operator: Muse Spark on the Meta Model API in the cloud, Muse Spark Open served by Baseten in sovereign mode, or Muse Glimmer on Ollama on the institution's own hardware. SAM 3.1, Muse Voice Transcribe, Muse Image and the built-in web search run on the Meta Model API. Focal points are notified through the WhatsApp Cloud API and e-mail; charts and documents come from MCP apps.</desc>
-<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5A6B85"/></marker>
-<marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0866FF"/></marker></defs>
+<desc id="d">Operators use the web console, which calls the API. The API keeps the corpus, the audit log and the chain-of-thought in MongoDB, and sends each reasoning step to the Meta model chosen by the operator: Muse Spark on the Meta Model API in the cloud, Muse Spark Open served by Baseten in sovereign mode, or Muse Glimmer on Ollama on the institution's own hardware. SAM 3.1, Muse Voice Transcribe, Muse Image and the built-in web search run on the Meta Model API. Focal points are notified on WhatsApp or by e-mail; charts and documents come from MCP apps.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5A6B85"/></marker>
+<marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0866FF"/></marker></defs>
 <style>
 .brand{font:700 15px 'Montserrat','Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
 .edition{font:500 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#5A6B85}
 .kicker{font:700 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:2.2px;fill:#0866FF}
-.head{font:700 30px 'Montserrat','Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
-.name{font:700 18px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
-.sub{font:400 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#46546B}
-.note{font:italic 400 14px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#5A6B85}
-.tag{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#0866FF}
-.tagh{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#0B8A62}
-.tags{font:700 10.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#5A6B85}
-.legend{font:500 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#46546B}
+.head{font:700 27px 'Montserrat','Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
+.name{font:700 16.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#0A1633}
+.sub{font:400 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#46546B}
+.note{font:italic 400 13px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#5A6B85}
+.tag{font:700 10px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#0866FF}
+.tagh{font:700 10px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#0B8A62}
+.tags{font:700 10px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:1.4px;fill:#5A6B85}
+.legend{font:500 12.5px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#46546B}
 .foot{font:500 12px 'Inter','Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:#8A97AD}
 .flow{fill:none;stroke:#5A6B85;stroke-width:1.8}
 .dash{fill:none;stroke:#5A6B85;stroke-width:1.8;stroke-dasharray:6 5}
@@ -35,29 +35,28 @@
 <rect x="786" y="36" width="14" height="14" fill="#E8F7F1" stroke="#10AA78" stroke-width="2"/><text class="legend" x="808" y="48">People and institutions</text>
 <rect x="635" y="36" width="14" height="14" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/><text class="legend" x="657" y="48">SarkiAI engine</text>
 <rect x="515" y="36" width="14" height="14" fill="#EAF2FF" stroke="#0866FF" stroke-width="2"/><text class="legend" x="537" y="48">Meta model</text>
-<g transform="translate(0,44)"><path class="flow" d="M294 205 H336" marker-end="url(#a)"/><path class="flow" d="M490 260 V296" marker-end="url(#a)"/><path class="flow" d="M490 490 V526" marker-end="url(#a)"/><path class="metaflow" d="M640 340 C 670 340, 670 215, 696 215" marker-end="url(#am)"/><path class="metaflow" d="M640 370 H696" marker-end="url(#am)"/><path class="metaflow" d="M640 400 C 670 400, 670 495, 696 495" marker-end="url(#am)"/><path class="flow" d="M640 450 C 672 450, 672 610, 696 615" marker-end="url(#a)"/><path class="flow" d="M640 470 C 666 470, 666 562, 700 562 H 1046 V 571" marker-end="url(#a)"/><path class="dash" d="M700 650 C 500 720, 380 690, 298 650" marker-end="url(#a)"/>
+<g transform="translate(0,44)"><path class="flow" d="M294.0 205.0 H340.0" marker-end="url(#a)"/><path class="flow" d="M490.0 260.0 V300.0" marker-end="url(#a)"/><path class="flow" d="M490.0 490.0 V530.0" marker-end="url(#a)"/><path class="metaflow" d="M640.0 328.5 C670.0 328.5, 673.0 215.0, 688.0 215.0 H700.0" marker-end="url(#am)"/><path class="metaflow" d="M640.0 370.3 C670.0 370.3, 673.0 365.0, 688.0 365.0 H700.0" marker-end="url(#am)"/><path class="metaflow" d="M640.0 414.0 C670.0 414.0, 673.0 495.0, 688.0 495.0 H700.0" marker-end="url(#am)"/><path class="flow" d="M640.0 455.8 C670.0 455.8, 673.0 635.0, 688.0 635.0 H700.0" marker-end="url(#a)"/><path class="flow" d="M640 476 L658 476 Q668 476 668 486 L668 555 Q668 565 678 565 L1036 565 Q1046 565 1046 575 L1046 576" marker-end="url(#a)"/><path class="dash" d="M810 690 L810 698 Q810 708 800 708 L328 708 Q318 708 318 698 L318 645 Q318 635 308 635 L298 635" marker-end="url(#a)"/>
 <rect x="44" y="150" width="250" height="110" rx="2" fill="#E8F7F1" stroke="#10AA78" stroke-width="2"/>
 <text class="name" x="62" y="178">Operators</text>
 <text class="sub" x="62" y="202">Ministries, regulators,</text>
 <text class="sub" x="62" y="222">national CERT</text>
-<rect x="44" y="575" width="250" height="110" rx="2" fill="#E8F7F1" stroke="#10AA78" stroke-width="2"/>
-<text class="name" x="62" y="603">Focal points</text>
-<text class="sub" x="62" y="627">Notified on WhatsApp</text>
-<text class="sub" x="62" y="647">or by e-mail</text>
+<rect x="44" y="580" width="250" height="110" rx="2" fill="#E8F7F1" stroke="#10AA78" stroke-width="2"/>
+<text class="name" x="62" y="608">Focal points</text>
+<text class="sub" x="62" y="632">Notified on WhatsApp</text>
+<text class="sub" x="62" y="652">or by e-mail</text>
 <rect x="340" y="150" width="300" height="110" rx="2" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/>
 <text class="tags" x="358" y="178">WEB</text>
 <text class="name" x="358" y="204">Console</text>
-<text class="sub" x="358" y="228">Next.js on Vercel, EN and FR</text>
+<text class="sub" x="358" y="228">Web console, EN and FR</text>
 <text class="sub" x="358" y="248">Live agent graphs, citations</text>
 <rect x="340" y="300" width="300" height="190" rx="2" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/>
 <text class="tags" x="358" y="328">ENGINE</text>
 <text class="name" x="358" y="354">API</text>
-<text class="sub" x="358" y="378">Fastify on Render</text>
-<text class="sub" x="358" y="398">OpenAPI reference on /docs</text>
-<text class="sub" x="358" y="418">Model chosen per operator,</text>
-<text class="sub" x="358" y="438">per request</text>
-<text class="sub" x="358" y="458">Revocable sessions, admin-only</text>
-<text class="sub" x="358" y="478">shared state</text>
+<text class="sub" x="358" y="378">OpenAPI reference on /docs</text>
+<text class="sub" x="358" y="398">Model chosen per operator,</text>
+<text class="sub" x="358" y="418">per request</text>
+<text class="sub" x="358" y="438">Revocable sessions,</text>
+<text class="sub" x="358" y="458">admin-only shared state</text>
 <rect x="340" y="530" width="300" height="120" rx="2" fill="#FFFFFF" stroke="#0A1633" stroke-width="1.5"/>
 <text class="tags" x="358" y="558">STORE</text>
 <text class="name" x="358" y="584">MongoDB</text>
@@ -79,16 +78,16 @@
 <text class="name" x="718" y="494">Muse Glimmer</text>
 <text class="sub" x="718" y="518">30B open weights on the institution's</text>
 <text class="sub" x="718" y="538">own hardware: nothing leaves it</text>
-<rect x="700" y="575" width="220" height="110" rx="2" fill="#F7F9FC" stroke="#8A97AD" stroke-width="1.5" stroke-dasharray="6 5"/>
-<text class="tags" x="718" y="603">EXTERNAL</text>
-<text class="name" x="718" y="629">WhatsApp</text>
-<text class="sub" x="718" y="653">Cloud API: approved</text>
-<text class="sub" x="718" y="673">templates, signed links</text>
-<rect x="936" y="575" width="220" height="110" rx="2" fill="#F7F9FC" stroke="#8A97AD" stroke-width="1.5" stroke-dasharray="6 5"/>
-<text class="tags" x="954" y="603">EXTERNAL</text>
-<text class="name" x="954" y="629">E-mail, MCP apps</text>
-<text class="sub" x="954" y="653">React Email via Resend,</text>
-<text class="sub" x="954" y="673">charts and documents</text>
-<text class="note" x="44" y="730" text-anchor="start">Dashed: a message leaves the system for a person. Blue: a call to a Meta model.</text>
+<rect x="700" y="580" width="220" height="110" rx="2" fill="#F7F9FC" stroke="#8A97AD" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text class="tags" x="718" y="608">EXTERNAL</text>
+<text class="name" x="718" y="634">WhatsApp</text>
+<text class="sub" x="718" y="658">Cloud API, approved</text>
+<text class="sub" x="718" y="678">templates, signed links</text>
+<rect x="936" y="580" width="220" height="110" rx="2" fill="#F7F9FC" stroke="#8A97AD" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text class="tags" x="954" y="608">EXTERNAL</text>
+<text class="name" x="954" y="634">E-mail, MCP apps</text>
+<text class="sub" x="954" y="658">Transactional e-mail,</text>
+<text class="sub" x="954" y="678">charts and documents</text>
+<text class="note" x="44" y="750" text-anchor="start">Dashed: a message leaves the system for a person. Blue: a call to a Meta model.</text>
 </g>
 </svg>

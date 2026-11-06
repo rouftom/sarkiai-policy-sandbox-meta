@@ -414,6 +414,11 @@ export const scenarioRunInput = z.object({
     .default('health')
     .describe('Policy sector the scenario is played in.'),
   lang: z.enum(['fr', 'en']).default('en').describe('Language of the generated reports.'),
+  agentIds: z
+    .array(z.string().regex(/^[a-z0-9][a-z0-9_-]*$/))
+    .max(12)
+    .optional()
+    .describe("Agents from the Agents & AI registry taking part; omitted, the sector's active agents."),
 })
 
 export const scenarioReleaseQuery = z.object({

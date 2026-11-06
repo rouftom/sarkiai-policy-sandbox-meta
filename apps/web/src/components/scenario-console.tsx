@@ -14,6 +14,7 @@ import {
   type ScenarioRunSummaryDto,
 } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { AgentPicker } from '@/components/registry/agent-picker'
 import { useToast } from '@/components/shared/toast'
 import { ProcessingBar } from '@/components/processing-bar'
 import { ScenarioHistory } from '@/components/scenario-history'
@@ -58,6 +59,8 @@ export function ScenarioConsole({
   const [blocks, setBlocks] = React.useState<ScenarioBlock[]>([])
   const [history, setHistory] = React.useState<ScenarioRunSummaryDto[] | null>(null)
   const [maxSectors, setMaxSectors] = React.useState(5)
+  /** Agents taking part, from the registry; empty: every active agent of the sector. */
+  const [agentIds, setAgentIds] = React.useState<string[]>([])
 
   React.useEffect(() => {
     const saved = Number(window.localStorage.getItem(MAX_SECTORS_KEY))
@@ -103,7 +106,7 @@ export function ScenarioConsole({
 
   const startRun = async (domain: Domain): Promise<RunStart> => {
     if (!country) throw new Error(t('scenario.noCountry'))
-    const start = await api.startScenario({ country, domain, lang })
+    const start = await api.startScenario({ country, domain, lang, ...(agentIds.length ? { agentIds } : {}) })
     return { runId: start.runId, domain, agenda: start.agenda, totalTicks: start.totalTicks, released: 0 }
   }
 
@@ -314,6 +317,8 @@ export function ScenarioConsole({
 
       {blocks.length === 0 ? (
         runId || !showHistory ? null : (
+          <>
+          <AgentPicker domains={domains} value={agentIds} onChange={setAgentIds} disabled={busy} />
           <ScenarioHistory
             runs={history}
             busy={busy}
@@ -326,6 +331,7 @@ export function ScenarioConsole({
             onFacilitate={() => void startFacilitated()}
             onAuto={() => void runAll()}
           />
+          </>
         )
       ) : (
         <>

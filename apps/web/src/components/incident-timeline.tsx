@@ -13,6 +13,7 @@ import * as React from 'react'
 import { Clock, Eye, Lock, Play } from 'lucide-react'
 import { cn } from '@sps/ui'
 import { institutionsForDomain, type Domain } from '@sps/shared'
+import { useRegistryAgents } from '@/components/registry/agent-picker'
 import { useI18n } from '@/lib/i18n'
 
 export interface TimelineItem {
@@ -43,11 +44,13 @@ export function IncidentTimeline({
 }) {
   const { t } = useI18n()
 
+  const registryAgents = useRegistryAgents([domain])
   const names = React.useMemo(() => {
     const map = new Map<string, string>()
     for (const institution of institutionsForDomain(domain)) map.set(institution.id, institution.name)
+    for (const agent of registryAgents ?? []) map.set(agent.id, agent.name)
     return map
-  }, [domain])
+  }, [domain, registryAgents])
 
   if (items.length === 0) return null
 
