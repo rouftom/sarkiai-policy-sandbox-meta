@@ -6,7 +6,7 @@
  * browser only receives tool results and UI resource URIs.
  */
 
-import { parseMcpServers, type McpServerConfig } from '@sps/shared'
+import { parseMcpServers, type McpServerConfig } from '@sps/shared/mcp-servers'
 
 export type McpServerEntry = McpServerConfig
 

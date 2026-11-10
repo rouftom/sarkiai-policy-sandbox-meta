@@ -1,14 +1,10 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
+import type { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
 import type { ClientCapabilities } from '@modelcontextprotocol/sdk/types.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { readToken } from './session'
-import {
-  type ClientCapabilitiesWithExtensions,
-  UI_EXTENSION_CAPABILITIES,
-} from '@mcp-ui/client'
+import type { ClientCapabilitiesWithExtensions } from '@mcp-ui/client'
 import { MCP_SERVERS } from '@/lib/mcp-config'
 
 // Registry of client instances by server name
@@ -35,13 +31,21 @@ async function getOrCreateMcpClient(serverName: string = 'xlab_3d_render'): Prom
   // Create new connection
   connectionPromises[serverName] = (async () => {
     try {
+      // Loaded on first connection only: the MCP SDK and the UI extension
+      // capabilities are not needed to render the console.
+      const [{ Client }, { StreamableHTTPClientTransport }, { UI_EXTENSION_CAPABILITIES }] = await Promise.all([
+        import('@modelcontextprotocol/sdk/client/index.js'),
+        import('@modelcontextprotocol/sdk/client/streamableHttp.js'),
+        import('@mcp-ui/client'),
+      ])
+
       // Create the client with UI extension capabilities
       const capabilities: ClientCapabilitiesWithExtensions = {
         roots: { listChanged: true },
         extensions: UI_EXTENSION_CAPABILITIES,
       }
 
-      const client = new McpClient(
+      const client = new Client(
         { name: `sps-${serverName.toLowerCase()}-client`, version: '1.0.0' },
         { capabilities: capabilities as ClientCapabilities }
       )
