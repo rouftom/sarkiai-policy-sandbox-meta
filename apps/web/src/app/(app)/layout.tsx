@@ -68,28 +68,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('resize', check)
   }, [])
 
+  const openAssistant = () => {
+    setAssistantOpen(true)
+    panelRef.current?.resize(isMobile ? '50%' : '30%')
+  }
+
+  const closeAssistant = () => {
+    setAssistantOpen(false)
+    panelRef.current?.collapse()
+  }
+
+  // "Try in the assistant" from an agent's page opens the panel. This hook has
+  // to sit above the loading guard: a hook declared after an early return is
+  // only reached once the shell renders, which breaks the hook order and
+  // triggers React #310. The ref keeps the deep link a one-shot, as before, and
+  // the `isMobile` dependency lets it pick the right panel size.
+  const assistantDeepLink = React.useRef(false)
+  React.useEffect(() => {
+    if (assistantDeepLink.current || loading || !operator) return
+    assistantDeepLink.current = true
+    if (new URLSearchParams(window.location.search).has('assistant')) openAssistant()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, operator, isMobile])
+
   if (loading || !operator) {
     return (
       <div className="grid min-h-dvh place-items-center bg-background">
         <BrandIntro wordmark={t('app.shortName')} />
       </div>
     )
-  }
-
-  const openAssistant = () => {
-    setAssistantOpen(true)
-    panelRef.current?.resize(isMobile ? '50%' : '30%')
-  }
-
-  // "Try in the assistant" from an agent's page opens the panel.
-  React.useEffect(() => {
-    if (new URLSearchParams(window.location.search).has('assistant')) openAssistant()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const closeAssistant = () => {
-    setAssistantOpen(false)
-    panelRef.current?.collapse()
   }
 
   const assistantPanel = (
