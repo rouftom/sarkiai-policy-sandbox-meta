@@ -25,6 +25,9 @@ the same steps.
 - Retrieval needs no key: the corpus is in MongoDB. `RETRIEVAL_BACKEND`
   (`auto | atlas | text`) follows the mode and `RETRIEVAL_DEPTH`
   (`lexical | fast | deep`) sets the default search depth.
+- `MCP_SERVERS` lists the first-party MCP apps as a JSON array; the console's
+  `NEXT_PUBLIC_MCP_SERVERS` carries the same value and is inlined at build time,
+  so set both and rebuild the console.
 - Set `WEB_PUBLIC_URL` to the origin users open; add `WEB_PUBLIC_URL_ALIASES`
   for a second domain or a preview host. No provider-specific preview rule.
 - The client address comes from an edge-overwritten header:
@@ -42,9 +45,9 @@ the same steps.
   a container host, build `apps/web/Dockerfile` with the repository root as
   context instead of using a framework preset.
 - Variables: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_DEFAULT_LOCALE`,
-  `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_WEB_ORIGINS`. `NEXT_PUBLIC_WEB_URL` is the
-  canonical origin and the metadata base; without it, links fall back to
-  `http://localhost:3000`.
+  `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_WEB_ORIGINS`, `NEXT_PUBLIC_MCP_SERVERS`.
+  `NEXT_PUBLIC_WEB_URL` is the canonical origin and the metadata base; without it,
+  links fall back to `http://localhost:3000`.
 - `NEXT_PUBLIC_*` values are **inlined at build time**: set them in the build
   environment and rebuild after any change, including the API address.
 - `next.config.ts` transpiles `@sps/ui`, `@sps/shared`, `@sps/theme` from

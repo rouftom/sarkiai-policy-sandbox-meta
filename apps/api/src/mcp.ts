@@ -6,25 +6,16 @@
  * browser only receives tool results and UI resource URIs.
  */
 
-export interface McpServerEntry {
-  name: string
-  url: string
-  /** First-party servers protected by the shared `SEA_MCP_API_KEY` (sent as `x-api-key`). */
-  requiresApiKey: boolean
-}
+import { parseMcpServers, type McpServerConfig } from '@sps/shared'
+
+export type McpServerEntry = McpServerConfig
 
 /**
- * Same registry as the console (apps/web/src/lib/mcp-config.ts). Keep the two in sync.
- * The charts and Word servers run locally (services/mcp-charts, services/mcp-docx,
- * docker-compose) when MCP_CHARTS_URL and MCP_DOCX_URL point at them; otherwise
- * the hosted copies are used.
+ * Registry read from `MCP_SERVERS` (JSON array), the same value the console
+ * receives as `NEXT_PUBLIC_MCP_SERVERS`. Nothing is hardcoded: an unset variable
+ * means the agent has no MCP tools. Shape: `[{ name, url, requiresApiKey? }]`.
  */
-export const MCP_SERVERS: McpServerEntry[] = [
-  { name: 'tic_tac_toe', url: 'https://tic-tac-toe-mcp-app.vercel.app/mcp', requiresApiKey: true },
-  { name: 'sarkiai_charts', url: process.env.MCP_CHARTS_URL || 'https://sarkiai-charts-mcp-app.vercel.app/mcp', requiresApiKey: true },
-  { name: 'xlab_3d_render', url: 'https://xlab-3d-render-mcp-app.vercel.app/mcp', requiresApiKey: true },
-  { name: 'sea_mcp_docx', url: process.env.MCP_DOCX_URL || 'https://sea-mcp-docx.vercel.app/mcp', requiresApiKey: true },
-]
+export const MCP_SERVERS: McpServerEntry[] = parseMcpServers(process.env.MCP_SERVERS)
 
 export interface McpToolSummary {
   name: string
@@ -42,12 +33,6 @@ const TIMEOUT_MS = 20_000
 const PROTOCOL_VERSION = '2025-06-18'
 
 type JsonRpcResponse = { result?: unknown; error?: { message?: string } }
-
-function serverNamed(name: string): McpServerEntry {
-  const server = MCP_SERVERS.find((entry) => entry.name === name)
-  if (!server) throw new Error(`Unknown MCP server "${name}".`)
-  return server
-}
 
 /** Streamable HTTP answers either plain JSON or one SSE event carrying the JSON-RPC message. */
 function parseBody(text: string, contentType: string): JsonRpcResponse {
@@ -67,11 +52,20 @@ export class McpGateway {
   private readonly sessions = new Map<string, string>()
   private readonly tools = new Map<string, McpToolSummary[]>()
 
-  constructor(private readonly key: string | undefined) {}
+  constructor(
+    private readonly key: string | undefined,
+    private readonly registry: McpServerEntry[] = MCP_SERVERS,
+  ) {}
 
   /** Names the agent may use, in registry order. */
   get servers(): string[] {
-    return MCP_SERVERS.map((entry) => entry.name)
+    return this.registry.map((entry) => entry.name)
+  }
+
+  private serverNamed(name: string): McpServerEntry {
+    const server = this.registry.find((entry) => entry.name === name)
+    if (!server) throw new Error(`Unknown MCP server "${name}".`)
+    return server
   }
 
   private headers(server: McpServerEntry, session?: string): Record<string, string> {
@@ -127,7 +121,7 @@ export class McpGateway {
   }
 
   async listTools(serverName: string): Promise<McpToolSummary[]> {
-    const server = serverNamed(serverName)
+    const server = this.serverNamed(serverName)
     const cached = this.tools.get(server.name)
     if (cached) return cached
     const result = (await this.rpc(server, 'tools/list', {})) as { tools?: Array<Record<string, unknown>> } | undefined
@@ -144,7 +138,7 @@ export class McpGateway {
   }
 
   async callTool(serverName: string, tool: string, args: Record<string, unknown>): Promise<McpCallResult> {
-    const server = serverNamed(serverName)
+    const server = this.serverNamed(serverName)
     const definition = (await this.listTools(server.name).catch(() => [])).find((entry) => entry.name === tool)
     const result = (await this.rpc(server, 'tools/call', { name: tool, arguments: args })) as
       | { _meta?: { ui?: { resourceUri?: string } } }

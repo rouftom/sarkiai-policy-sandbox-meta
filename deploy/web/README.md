@@ -28,12 +28,14 @@ A host without a "root directory" setting builds the workspace and runs
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | `en` | The UI is bilingual; English is the default |
 | `NEXT_PUBLIC_WEB_URL` | the console's canonical origin | Absolute metadata URLs; without it, `http://localhost:<NEXT_PUBLIC_WEB_PORT>` |
 | `NEXT_PUBLIC_WEB_ORIGINS` | extra accepted origins | Comma-separated |
+| `NEXT_PUBLIC_MCP_SERVERS` | first-party MCP apps | JSON array; same value as the API's `MCP_SERVERS`, **inlined at build time** |
 
 Set the variables in the host's dashboard or with its CLI, for the production
 environment, then deploy.
 
-`NEXT_PUBLIC_WEB_URL` and `NEXT_PUBLIC_WEB_ORIGINS` are read at build time: pass
-them as build arguments (`docker build --build-arg ...`) when building an image.
+`NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_WEB_ORIGINS` and `NEXT_PUBLIC_MCP_SERVERS`
+are read at build time: pass them as build arguments
+(`docker build --build-arg ...`) when building an image.
 They are optional. Server Actions accept a request whose `Origin` matches the
 `Host` header, so an on-premise console opened through a LAN name, an internal
 DNS entry or a remapped port works without listing anything; the list only

@@ -85,12 +85,25 @@ function originsOf(value: string | undefined): string[] {
     .filter((entry): entry is string => Boolean(entry))
 }
 
-const MCP_APP_ORIGINS = [
-  'https://tic-tac-toe-mcp-app.vercel.app',
-  'https://sarkiai-charts-mcp-app.vercel.app',
-  'https://xlab-3d-render-mcp-app.vercel.app',
-  'https://sea-mcp-docx.vercel.app',
-]
+/**
+ * Origins of the configured MCP apps, from `NEXT_PUBLIC_MCP_SERVERS` (the same
+ * JSON the console reads): a configured server is framed, nothing else is.
+ * A malformed value is left to the app's parser, which fails loudly; here it
+ * only means no extra frame origin.
+ */
+function mcpOrigins(value: string | undefined): string[] {
+  try {
+    const parsed = JSON.parse(firstNonEmpty(value) ?? '[]') as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((entry) => (entry && typeof entry === 'object' ? originOfUrl((entry as { url?: string }).url) : null))
+      .filter((origin): origin is string => Boolean(origin))
+  } catch {
+    return []
+  }
+}
+
+const MCP_APP_ORIGINS = mcpOrigins(process.env.NEXT_PUBLIC_MCP_SERVERS)
 
 function sourceList(values: (string | null | undefined)[]): string {
   return [...new Set(values.filter((value): value is string => Boolean(value)))].join(' ')
@@ -110,8 +123,6 @@ const frameSources = sourceList([
   'data:',
   'blob:',
   ...MCP_APP_ORIGINS,
-  originOfUrl(process.env.MCP_CHARTS_URL),
-  originOfUrl(process.env.MCP_DOCX_URL),
   'https://challenges.cloudflare.com',
   ...originsOf(process.env.NEXT_PUBLIC_CSP_FRAME_SOURCES),
 ])
