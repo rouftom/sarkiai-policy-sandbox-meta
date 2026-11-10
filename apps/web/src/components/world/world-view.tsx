@@ -51,6 +51,14 @@ const SECTORS: readonly Domain[] = ['health', 'education', 'telecom', 'public_se
 
 type WorldTab = 'table' | 'map' | 'battle' | 'watch' | 'settings'
 
+const WORLD_TABS: ReadonlyArray<{ id: WorldTab; key: MessageKey }> = [
+  { id: 'table', key: 'world.tab.table' },
+  { id: 'map', key: 'world.tab.map' },
+  { id: 'battle', key: 'world.tab.battle' },
+  { id: 'watch', key: 'world.tab.watch' },
+  { id: 'settings', key: 'world.tab.settings' },
+]
+
 const STATE_META: Record<
   WorldStateDto,
   { icon: LucideIcon; tone: 'neutral' | 'warning' | 'danger' | 'success'; label: MessageKey; hint: MessageKey }
@@ -175,12 +183,12 @@ export function WorldView() {
         </Button>
       </PageIntro>
 
-      <TabsList className="mb-3">
-        <TabsTrigger value="table">{t('world.tab.table')}</TabsTrigger>
-        <TabsTrigger value="map">{t('world.tab.map')}</TabsTrigger>
-        <TabsTrigger value="battle">{t('world.tab.battle')}</TabsTrigger>
-        <TabsTrigger value="watch">{t('world.tab.watch')}</TabsTrigger>
-        <TabsTrigger value="settings">{t('world.tab.settings')}</TabsTrigger>
+      <TabsList className="mb-3 max-w-full overflow-x-auto">
+        {WORLD_TABS.map((entry) => (
+          <TabsTrigger key={entry.id} value={entry.id} className="text-[11px]">
+            {t(entry.key)}
+          </TabsTrigger>
+        ))}
       </TabsList>
 
       <TabsContent value="table" className="space-y-3">
