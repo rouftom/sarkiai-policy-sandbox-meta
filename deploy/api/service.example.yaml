@@ -1,11 +1,13 @@
-# API host blueprint (container web service, one instance).
+# API service example (container web service, one instance).
 #
 # The API is a long-lived process that keeps an SSE stream open and receives
 # webhooks on a stable HTTPS origin: a container web service fits, a serverless
 # function does not. See deploy/api/README.md for the steps.
 #
-# `sync: false` means Render asks for the value at creation time and never stores
-# it in this file. Never commit real values here.
+# This file is one host's manifest format, kept for the variable list. Any other
+# host maps the same values (see the table in deploy/api/README.md).
+# `sync: false` means the host prompts for the value at creation time instead of
+# storing it here. Never commit real values.
 
 services:
   - type: web
