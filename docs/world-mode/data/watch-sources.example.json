@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "country": "xx",
+  "note": "Structure only. Real domains to be documented per country and reviewed by two people.",
+  "tier1": [
+    "<official-gazette-domain>",
+    "<parliament-domain>",
+    "<ministry-domain>",
+    "<regulator-domain>"
+  ],
+  "tier2": [
+    "<regional-body-domain>",
+    "<international-body-domain>"
+  ],
+  "discovery": {
+    "allowed": true,
+    "humanValidationRequired": true
+  },
+  "lastReviewedAt": null,
+  "reviewedBy": []
+}

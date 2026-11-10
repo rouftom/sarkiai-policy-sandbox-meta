@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sps/world/world-settings.schema.json",
+  "title": "WorldSettings",
+  "description": "Admin runtime settings (collection world_settings). null means: use the environment variable, then the mode default.",
+  "type": "object",
+  "required": ["schemaVersion", "thresholds", "queue", "watch"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "thresholds": {
+      "type": "object", "additionalProperties": false,
+      "required": ["minCountryChunks", "minCoverage", "minConfidence", "rankMinCoverage", "rankMinConfidence", "staleAfterDays"],
+      "properties": {
+        "minCountryChunks": { "type": "integer", "minimum": 1 },
+        "minCoverage": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rankMinCoverage": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rankMinConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "staleAfterDays": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "queue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "queueMax", "maxCountriesPerTest", "jobTimeoutMs", "jobRetries", "autoResume"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "concurrencyPerOperator": { "type": ["integer", "null"], "minimum": 1 },
+        "concurrencyGlobal": { "type": ["integer", "null"], "minimum": 1 },
+        "queueMax": { "type": "integer", "minimum": 1 },
+        "maxCountriesPerTest": { "type": "integer", "minimum": 1, "maximum": 250 },
+        "jobTimeoutMs": { "type": "integer", "minimum": 1000 },
+        "jobRetries": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "autoResume": { "type": "boolean" }
+      }
+    },
+    "watch": {
+      "type": "object", "additionalProperties": false, "required": ["enabled"],
+      "properties": { "enabled": { "type": "boolean" } }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "thresholds": {
+    "minCountryChunks": 1,
+    "minCoverage": 0.4,
+    "minConfidence": 0.4,
+    "rankMinCoverage": 0.6,
+    "rankMinConfidence": 0.5,
+    "staleAfterDays": 90
+  },
+  "queue": {
+    "enabled": true,
+    "concurrencyPerOperator": null,
+    "concurrencyGlobal": null,
+    "queueMax": 500,
+    "maxCountriesPerTest": 60,
+    "jobTimeoutMs": 900000,
+    "jobRetries": 2,
+    "autoResume": true
+  },
+  "watch": {
+    "enabled": false
+  }
+}

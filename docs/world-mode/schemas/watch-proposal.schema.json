@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sps/world/watch-proposal.schema.json",
+  "title": "WatchProposal",
+  "description": "A legal text proposed for the corpus (collection world_watch_proposals). Nothing is ingested before a human decision and a rights value.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "country",
+    "sourceUrl",
+    "title",
+    "docType",
+    "jurisdiction",
+    "rights",
+    "excerpt",
+    "contentHash",
+    "status",
+    "discovery"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string",
+      "pattern": "^[a-z]{2}$"
+    },
+    "sourceUrl": {
+      "type": "string",
+      "format": "uri"
+    },
+    "sourceTier": {
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "authority": {
+      "type": "string"
+    },
+    "docType": {
+      "enum": [
+        "law",
+        "strategy",
+        "regulation",
+        "policy",
+        "treaty",
+        "standard",
+        "guidance",
+        "report"
+      ]
+    },
+    "jurisdiction": {
+      "enum": [
+        "national",
+        "subnational",
+        "regional",
+        "international"
+      ]
+    },
+    "publishedAt": {
+      "type": "string"
+    },
+    "rights": {
+      "enum": [
+        "official-text",
+        "open-licence",
+        "quotation-only",
+        "to-confirm"
+      ]
+    },
+    "rightsReason": {
+      "type": "string"
+    },
+    "excerpt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 400
+    },
+    "excerptVerified": {
+      "const": true,
+      "description": "Verified verbatim in the fetched text by code; proposals failing the check are never stored as pending."
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "accepted",
+        "rejected",
+        "ingested"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "required": [
+        "by",
+        "at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "required": [
+        "query",
+        "at",
+        "via"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "via": {
+          "enum": [
+            "web-search",
+            "update-check",
+            "offline-bundle"
+          ]
+        }
+      }
+    },
+    "ingestRef": {
+      "type": "string"
+    },
+    "subdivision": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}-[A-Z0-9]{1,3}$|^X-[A-Z]{2}-[a-z0-9-]+$",
+      "description": "ISO 3166-2, required when jurisdiction is subnational."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "accepted",
+              "ingested"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "decision"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "jurisdiction": {
+            "const": "subnational"
+          }
+        },
+        "required": [
+          "jurisdiction"
+        ]
+      },
+      "then": {
+        "required": [
+          "subdivision"
+        ]
+      }
+    }
+  ]
+}
