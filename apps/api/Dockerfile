@@ -24,6 +24,9 @@ CMD ["bun", "--watch", "src/index.ts"]
 # ── prod ─────────────────────────────────────────────────────────────────────
 FROM base AS prod
 COPY apps/api ./apps/api
+# Operational scripts (the operator migration, index and backfill jobs) run in
+# the deployment network, where the database is reachable.
+COPY scripts ./scripts
 WORKDIR /app/apps/api
 ENV NODE_ENV=production
 # Most container hosts inject PORT; keep 8000 as the image default.
