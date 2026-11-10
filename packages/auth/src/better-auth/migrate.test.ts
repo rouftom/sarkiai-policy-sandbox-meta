@@ -73,7 +73,7 @@ describe('two-factor migration', () => {
     expect(await planTwoFactor(operator(), SECRET)).toBeNull()
   })
 
-  test('the secret and the recovery codes are encrypted with the auth secret', async () => {
+  test('the secret is encrypted with the auth secret, the digests are dropped', async () => {
     const source = operator({ totpSecret: 'JBSWY3DPEHPK3PXP', backupCodes: ['abcde-23456'] })
     const row = await planTwoFactor(source, SECRET)
     expect(row).not.toBeNull()
@@ -82,9 +82,14 @@ describe('two-factor migration', () => {
 
     // better-auth reads both fields with `symmetricDecrypt` and the auth secret.
     expect(await symmetricDecrypt({ key: SECRET, data: row!.secret })).toBe('JBSWY3DPEHPK3PXP')
-    expect(JSON.parse(await symmetricDecrypt({ key: SECRET, data: row!.backupCodes }))).toEqual([
-      'abcde-23456',
-    ])
+    // The legacy list holds SHA-256 digests, which better-auth cannot match
+    // against a code typed by the operator, so nothing is copied.
+    expect(JSON.parse(await symmetricDecrypt({ key: SECRET, data: row!.backupCodes }))).toEqual([])
+  })
+
+  test('carries the last TOTP step over', () => {
+    const { user } = planOperatorMigration(operator({ totpSecret: 'JBSWY3DPEHPK3PXP', totpLastStep: 42 }))
+    expect(user.totpLastStep).toBe(42)
   })
 
   test('a different secret cannot read the row', async () => {
@@ -104,7 +109,14 @@ describe('two-factor migration', () => {
 
 describe('migration warnings', () => {
   test('silent on a clean operator', () => {
-    expect(migrationWarnings(operator({ totpSecret: 'JBSWY3DPEHPK3PXP', backupCodes: ['abcde-23456'] }))).toEqual([])
+    expect(migrationWarnings(operator())).toEqual([])
+  })
+
+  test('flags the recovery codes that cannot be imported', () => {
+    const warnings = migrationWarnings(
+      operator({ totpSecret: 'JBSWY3DPEHPK3PXP', backupCodes: ['abcde-23456'] }),
+    )
+    expect(warnings.some((warning) => warning.includes('must regenerate'))).toBe(true)
   })
 
   test('flags a TOTP without recovery codes', () => {
