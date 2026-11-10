@@ -307,6 +307,12 @@ export const config = {
   mongodb: {
     uri: env('MONGODB_URI', 'mongodb://localhost:27017'),
     dbName: env('MONGODB_DB_NAME', 'policy_sandbox'),
+    /**
+     * False when the install runs without a Mongo store. Operator accounts then
+     * fall back to the in-memory service; better-auth owns the accounts (and
+     * therefore needs Mongo) only when the URI is actually configured.
+     */
+    configured: Boolean(env('MONGODB_URI')),
   },
 
   // Local LLM (Ollama, OpenAI-compatible). Muse Glimmer (Meta open weights) by default.
@@ -376,12 +382,27 @@ export const config = {
   auth: {
     sessionSecret: env('SESSION_SECRET') || env('APPROVAL_SECRET'),
     /**
+     * better-auth's own signing key: it encrypts the TOTP secret and recovery
+     * codes and signs the links better-auth would issue. Must be at least 32
+     * characters; when unset the session secret is used (or a SHA-256 of it).
+     */
+    betterAuthSecret: env('BETTER_AUTH_SECRET'),
+    /** Public origin of this API, used by better-auth to build links. */
+    baseUrl: env('API_PUBLIC_URL') || `http://localhost:${env('PORT', '8000')}`,
+    /**
      * Public self-service sign-up. Open on the cloud demo only (the hackathon
      * judges create their own account); closed for local / sovereign runs.
      * `AUTH_SIGNUP` can force it either way.
      */
     signup: env('AUTH_SIGNUP', cloudDeployment ? 'true' : 'false') === 'true',
     maxOperators: Number(env('AUTH_MAX_OPERATORS', '12')) || 12,
+    /**
+     * better-auth runs a password reset (consume the token, revoke the
+     * sessions, set the password) in a MongoDB transaction when this is on.
+     * Default off: a transaction needs a replica set or a mongos, and a bare
+     * local `mongod` — which this project supports — refuses them.
+     */
+    betterAuthTransactions: env('BETTER_AUTH_TRANSACTIONS', 'false') === 'true',
   },
 
   /**
@@ -422,8 +443,8 @@ export const config = {
   },
 
   // The console's own origins. `canonicalUrl` builds every link we send (auth
-  // e-mails, approval buttons); `allowedOrigins` is what the CORS layer accepts,
-  // so a custom domain and its aliases work during a switch.
+  // e-mails, approval buttons); `allowedOrigins` is what the CORS layer and
+  // better-auth accept, so a custom domain and its aliases work during a switch.
   web: {
     canonicalUrl: publicOrigin,
     allowedOrigins: publicOrigins,
