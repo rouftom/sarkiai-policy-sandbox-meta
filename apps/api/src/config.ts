@@ -110,10 +110,10 @@ export function resolveClientIp(
 /**
  * Is this the cloud demo?
  *
- * `SANDBOX_MODE=cloud` is the explicit switch, but a Render deployment that
- * received the Meta key without the mode still runs on Meta models. Treating
- * that as cloud keeps public sign-up open instead of silently closing it when
- * one environment variable is missing.
+ * `SANDBOX_MODE=cloud` is the explicit switch, but a deployment that received
+ * the Meta key without the mode still runs on Meta models. Treating that as
+ * cloud keeps public sign-up open instead of silently closing it when one
+ * environment variable is missing.
  */
 const cloudDeployment =
   env('SANDBOX_MODE', 'local').toLowerCase() === 'cloud' || Boolean(env('MODEL_API_KEY'))
