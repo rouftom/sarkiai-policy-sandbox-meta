@@ -21,7 +21,7 @@ deployed separately (see `deploy/api/README.md`).
 | `NEXT_PUBLIC_API_URL` | the public address of the API | **Inlined at build time**: rebuild after any change |
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | `en` | The UI is bilingual; English is the default |
 | `NEXT_PUBLIC_WEB_URL` | the console's canonical origin | Absolute metadata URLs; falls back to the host's production URL, then `localhost` |
-| `NEXT_PUBLIC_WEB_ORIGINS` | extra accepted origins | Comma-separated; `*.vercel.app` previews are always accepted |
+| `NEXT_PUBLIC_WEB_ORIGINS` | extra accepted origins | Comma-separated |
 
 Set the variables in the host's dashboard or with its CLI, for the production
 environment, then deploy.
@@ -31,7 +31,9 @@ them as build arguments (`docker build --build-arg ...`) when building an image.
 They are optional. Server Actions accept a request whose `Origin` matches the
 `Host` header, so an on-premise console opened through a LAN name, an internal
 DNS entry or a remapped port works without listing anything; the list only
-matters behind a reverse proxy that rewrites the host.
+matters behind a reverse proxy that rewrites the host. A preview host is just
+another origin: add it to `NEXT_PUBLIC_WEB_ORIGINS`. On Vercel, the platform's
+own preview domain is accepted automatically.
 
 ## Why the root directory is `apps/web`
 

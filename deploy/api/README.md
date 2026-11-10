@@ -110,21 +110,48 @@ build time, so a rebuild is required after any change.
 
 `WEB_PUBLIC_URL` is the origin used in every link the API sends (invitation,
 e-mail confirmation, password reset, WhatsApp approval button). Point it at the
-custom domain; the Vercel deployment address stays accepted by the CORS layer,
-so the app keeps working during a domain switch and in previews:
+custom domain:
 
 ```bash
 WEB_PUBLIC_URL=https://<web-host>
-WEB_PUBLIC_URL_ALIASES=https://<project>.vercel.app
+WEB_PUBLIC_URL_ALIASES=https://<other-host>   # optional, comma-separated
 ```
 
-Both are origins (scheme + host, no path). `WEB_PUBLIC_URL_ALIASES` accepts a
-comma-separated list. Vercel previews of **this project** are accepted too:
-`VERCEL_PROJECT_NAME` (default `sarkiai-policy-sandbox-meta`) allows
-`<project>.vercel.app` and `<project>-<suffix>.vercel.app`; when
-`VERCEL_TEAM_SLUG` is set, a preview host must also end with `-<team-slug>`.
-Any other `*.vercel.app` host is refused, so another Vercel project cannot call
-the API from a browser.
+Both are origins (scheme + host, no path). A preview or review host is just
+another origin: add it to `WEB_PUBLIC_URL_ALIASES`.
+
+### Client IPs behind an edge
+
+The host's proxy terminates TLS, so the socket address is an internal one. The
+API reads the caller from a header the edge **overwrites** on every request:
+`CLIENT_IP_HEADERS`, an ordered comma-separated list (first valid address wins).
+
+The default — `cf-connecting-ip,true-client-ip,x-real-ip` — covers the common
+edges without naming one: Cloudflare and compatible CDNs, Akamai / Fastly, and
+nginx or a reverse proxy configured with `proxy_set_header X-Real-IP
+$remote_addr`. Leave the variable empty on those hosts. Set it when your edge
+uses another name:
+
+```bash
+CLIENT_IP_HEADERS=fly-client-ip
+CLIENT_IP_HEADERS=cf-connecting-ip       # explicit, same as the default
+CLIENT_IP_HEADERS=none                   # socket address only
+```
+
+`TRUST_PROXY` is only the fallback used when no listed header matches. It
+decides how much of `X-Forwarded-For` is believed:
+
+| Value | Use |
+|---|---|
+| unset | one proxy in front (the default) |
+| `false` | the process is reached directly; the socket address is used |
+| `2` | two proxies in the chain |
+| `true` | every hop — only when the process is unreachable except through the proxy |
+
+The header must be one your edge sets itself. On a host whose own hostname is
+directly reachable, a caller can forge a header the edge does not overwrite, so
+either keep the origin private to the edge or use `CLIENT_IP_HEADERS=none` with
+`TRUST_PROXY` matching the chain.
 
 ### Self-hosted and on-premise installs
 
@@ -138,9 +165,9 @@ its own public origin (LAN address, reverse proxy, remapped port):
   `169.254/16`), single-label hostnames (a container or NetBIOS name) and the
   `.local`, `.internal`, `.lan`, `.home.arpa` suffixes. A remapped `WEB_PORT`, a
   LAN address or an internal DNS entry therefore needs no configuration.
-- setting `WEB_PUBLIC_URL` closes the allowlist to that origin, its aliases,
-  local-network origins and Vercel previews. If the console is opened through a
-  *public* name that differs from `WEB_PUBLIC_URL`, list it in
+- setting `WEB_PUBLIC_URL` closes the allowlist to that origin, its aliases and
+  local-network origins. If the console is
+  opened through a *public* name that differs from `WEB_PUBLIC_URL`, list it in
   `WEB_PUBLIC_URL_ALIASES`.
 - `WEB_ALLOW_ANY_ORIGIN=true` accepts every origin, for a proxy setup that
   cannot be expressed as a list.

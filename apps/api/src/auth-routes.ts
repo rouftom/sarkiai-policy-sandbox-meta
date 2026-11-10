@@ -15,7 +15,7 @@ import { AuthError, type PublicOperator } from '@sps/auth'
 import { auth } from './auth.js'
 import { validationFailure } from './http-errors.js'
 import { resolveAuditWindow } from './audit-window.js'
-import { config, localSetupPasswordFallback } from './config.js'
+import { config, clientIp, localSetupPasswordFallback } from './config.js'
 import { MailError, sendEmailVerification, sendInvitation, sendPasswordReset } from './mailer.js'
 import { RateLimiter, type RateLimitRule } from './rate-limit.js'
 import { turnstileConfig, verifyTurnstile } from './turnstile.js'
@@ -143,14 +143,14 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
       // (local, sovereign, or keys missing) the helper accepts every request.
       const header = request.headers['x-turnstile-token']
       const raw = Array.isArray(header) ? header[0] : header
-      if (!(await verifyTurnstile(raw, 'signup', request.ip))) {
+      if (!(await verifyTurnstile(raw, 'signup', clientIp(request)))) {
         return reply.status(403).send({
           error: 'captcha_failed',
           message: 'Human verification failed.',
         })
       }
 
-      throttleSignup(request.ip)
+      throttleSignup(clientIp(request))
       const result = await auth.signup(body)
       try {
         await sendVerificationTo(result.operator.email)
@@ -193,7 +193,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/email/resend', async (request, reply) => {
     try {
-      limit(RESEND_RULE, `resend:${request.ip}`, 'Too many requests, try again later.')
+      limit(RESEND_RULE, `resend:${clientIp(request)}`, 'Too many requests, try again later.')
       const body = forgotInput.parse(request.body)
       try {
         await sendVerificationTo(body.email.trim().toLowerCase())
@@ -223,14 +223,14 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
       // sovereign, or keys missing) the helper accepts every request.
       const header = request.headers['x-turnstile-token']
       const raw = Array.isArray(header) ? header[0] : header
-      if (!(await verifyTurnstile(raw, 'password_reset', request.ip))) {
+      if (!(await verifyTurnstile(raw, 'password_reset', clientIp(request)))) {
         return reply.status(403).send({
           error: 'captcha_failed',
           message: 'Human verification failed.',
         })
       }
 
-      throttleForgot(request.ip)
+      throttleForgot(clientIp(request))
       const reset = await auth.createPasswordReset(body.email)
       if (reset) {
         try {
@@ -256,7 +256,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   app.post('/v1/auth/password/reset', async (request, reply) => {
     try {
       // The token is single-use, but nothing stopped an unlimited guessing loop.
-      limit(RESET_RULE, `reset:${request.ip}`, 'Too many reset attempts, try again later.')
+      limit(RESET_RULE, `reset:${clientIp(request)}`, 'Too many reset attempts, try again later.')
       const body = resetInput.parse(request.body)
       const operator = await auth.resetPassword(body.token, body.password)
       await record(operator.email, 'auth.password_reset', undefined, operator.email)
@@ -268,7 +268,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
 
   app.post('/v1/auth/setup', async (request, reply) => {
     try {
-      throttleSetup(request.ip)
+      throttleSetup(clientIp(request))
       const body = setupInput.parse(request.body)
       if (!(await auth.isEmpty())) {
         return reply.status(409).send({
@@ -335,7 +335,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
     try {
       // Per-IP cap on top of the per-address one in AuthService: rotating
       // e-mails used to bypass the only existing counter.
-      limit(LOGIN_IP_RULE, `login-ip:${request.ip}`, 'Too many sign-in attempts, try again later.')
+      limit(LOGIN_IP_RULE, `login-ip:${clientIp(request)}`, 'Too many sign-in attempts, try again later.')
       const body = credentials.parse(request.body)
       email = body.email
       const result = await auth.login(body.email, body.password)

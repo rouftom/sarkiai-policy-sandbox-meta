@@ -256,8 +256,8 @@ WEB_PUBLIC_URL_ALIASES=https://<other-host>    # optional, comma-separated
 ```
 
 Once `WEB_PUBLIC_URL` is set, the API allowlist contains that origin, its
-aliases, local-network origins and `*.vercel.app` previews. A *public* name that
-differs from `WEB_PUBLIC_URL` (second domain, staging host) goes in
+aliases and local-network origins. A *public* name that
+differs from `WEB_PUBLIC_URL` (second domain, staging host, preview host) goes in
 `WEB_PUBLIC_URL_ALIASES`; a LAN address or internal name never needs to.
 `WEB_ALLOW_ANY_ORIGIN=true` is the escape hatch for a reverse proxy that cannot
 be expressed as a list. Details in
@@ -327,7 +327,7 @@ AUTH_RESEND_KEY=re_...                       # optional locally, required on a p
 AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
 AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
 WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
-WEB_PUBLIC_URL_ALIASES=https://your-project.vercel.app  # optional, comma-separated
+WEB_PUBLIC_URL_ALIASES=https://your-console.old-host   # optional, comma-separated
 TURNSTILE_SECRET=...                         # optional: human check on the auth forms
 TURNSTILE_HOSTNAMES=your-console.example     # optional: hostnames siteverify accepts
 ```

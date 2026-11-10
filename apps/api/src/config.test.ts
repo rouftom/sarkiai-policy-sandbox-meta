@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { config, isAllowedOrigin, isOriginAllowed, localSetupPasswordFallback } from './config'
+import {
+  config,
+  DEFAULT_CLIENT_IP_HEADERS,
+  isAllowedOrigin,
+  isOriginAllowed,
+  localSetupPasswordFallback,
+  parseClientIpHeaders,
+  parseTrustProxy,
+  resolveClientIp,
+} from './config'
 
 /** A configured deployment: canonical host plus the local dev origin. */
 const configured = {
@@ -54,26 +63,6 @@ describe('console origins', () => {
     expect(isOriginAllowed('http://172.32.0.1:3000', configured)).toBe(false)
   })
 
-  test('accepts this project on Vercel (production and previews)', () => {
-    const policy = { ...configured, vercelProject: 'sarkiai-policy-sandbox-meta' }
-    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta.vercel.app', policy)).toBe(true)
-    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta-git-develop-rouftom.vercel.app', policy)).toBe(true)
-    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta-a1b2c3-rouftom.vercel.app', policy)).toBe(true)
-  })
-
-  test('refuses another Vercel project', () => {
-    const policy = { ...configured, vercelProject: 'sarkiai-policy-sandbox-meta' }
-    expect(isOriginAllowed('https://any-project-git-branch.vercel.app', policy)).toBe(false)
-    expect(isOriginAllowed('https://evil-sarkiai-policy-sandbox-meta.vercel.app', policy)).toBe(false)
-    expect(isOriginAllowed('http://sarkiai-policy-sandbox-meta.vercel.app', policy)).toBe(false)
-  })
-
-  test('with a team slug, a preview must belong to that team', () => {
-    const policy = { ...configured, vercelProject: 'sarkiai-policy-sandbox-meta', vercelScope: 'rouftom' }
-    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta-git-develop-rouftom.vercel.app', policy)).toBe(true)
-    expect(isOriginAllowed('https://sarkiai-policy-sandbox-meta-copy-attacker.vercel.app', policy)).toBe(false)
-  })
-
   test('refuses an unrelated origin', () => {
     expect(isOriginAllowed('https://evil.example', configured)).toBe(false)
   })
@@ -101,6 +90,123 @@ describe('console origins', () => {
     expect(config.web.canonicalUrl).toMatch(/^https?:\/\//)
     expect(config.mail.publicUrl).toBe(config.web.canonicalUrl)
     expect(config.whatsapp.webPublicUrl).toBe(config.web.canonicalUrl)
+  })
+})
+
+/**
+ * Client IPs come from a header the edge overwrites. `TRUST_PROXY` only decides
+ * how much of `X-Forwarded-For` the socket fallback believes. Both are
+ * deployment configuration, not constants.
+ */
+describe('proxy trust', () => {
+  test('defaults to trusting one hop', () => {
+    for (const value of [undefined, '', '   ']) {
+      const policy = parseTrustProxy(value)
+      expect(typeof policy).toBe('function')
+      if (typeof policy !== 'function') continue
+      expect(policy('203.0.113.1', 0)).toBe(true)
+      expect(policy('203.0.113.1', 1)).toBe(false)
+    }
+  })
+
+  test('reads an explicit boolean', () => {
+    expect(parseTrustProxy('false')).toBe(false)
+    expect(parseTrustProxy('off')).toBe(false)
+    expect(parseTrustProxy('true')).toBe(true)
+    expect(parseTrustProxy('on')).toBe(true)
+  })
+
+  test('reads a hop count', () => {
+    const policy = parseTrustProxy('2')
+    expect(typeof policy).toBe('function')
+    if (typeof policy !== 'function') return
+    expect(policy('203.0.113.1', 0)).toBe(true)
+    expect(policy('203.0.113.1', 1)).toBe(true)
+    expect(policy('203.0.113.1', 2)).toBe(false)
+    expect(parseTrustProxy('0')).toBe(false)
+  })
+
+  test('an unrecognised value keeps the safe default', () => {
+    const policy = parseTrustProxy('10.0.0.0/8')
+    expect(typeof policy).toBe('function')
+    if (typeof policy !== 'function') return
+    expect(policy('203.0.113.1', 0)).toBe(true)
+    expect(policy('203.0.113.1', 1)).toBe(false)
+  })
+
+  test('is part of the live configuration', () => {
+    expect(config.proxy.trust).not.toBeUndefined()
+  })
+})
+
+/**
+ * The edge header is the primary source: the hosting provider's proxy address
+ * would make every throttle global, so the first valid value wins and the
+ * socket is only a fallback.
+ */
+describe('client IP resolution', () => {
+  const socketIp = '10.231.26.97'
+
+  test('reads the first configured header that carries an address', () => {
+    const resolved = resolveClientIp(
+      { 'cf-connecting-ip': '203.0.113.7', 'x-real-ip': '203.0.113.8' },
+      socketIp,
+      parseClientIpHeaders('cf-connecting-ip, x-real-ip'),
+    )
+    expect(resolved).toEqual({ ip: '203.0.113.7', source: 'cf-connecting-ip' })
+  })
+
+  test('falls through headers that are empty or invalid', () => {
+    const resolved = resolveClientIp(
+      { 'cf-connecting-ip': 'not-an-ip', 'x-real-ip': '2001:db8::1' },
+      socketIp,
+      ['cf-connecting-ip', 'x-real-ip'],
+    )
+    expect(resolved).toEqual({ ip: '2001:db8::1', source: 'x-real-ip' })
+  })
+
+  test('reads the first address of a list value', () => {
+    const resolved = resolveClientIp(
+      { 'x-real-ip': '203.0.113.9, 10.0.0.1' },
+      socketIp,
+      ['x-real-ip'],
+    )
+    expect(resolved).toEqual({ ip: '203.0.113.9', source: 'x-real-ip' })
+  })
+
+  test('accepts an IPv4 address with a port', () => {
+    expect(resolveClientIp({ 'x-real-ip': '203.0.113.10:443' }, socketIp, ['x-real-ip'])).toEqual({
+      ip: '203.0.113.10',
+      source: 'x-real-ip',
+    })
+  })
+
+  test('uses the socket when no header matches', () => {
+    expect(resolveClientIp({}, socketIp, DEFAULT_CLIENT_IP_HEADERS)).toEqual({
+      ip: socketIp,
+      source: null,
+    })
+  })
+
+  test('the default list covers common edges without X-Forwarded-For', () => {
+    expect(parseClientIpHeaders(undefined)).toEqual([...DEFAULT_CLIENT_IP_HEADERS])
+    expect(parseClientIpHeaders('')).toEqual([...DEFAULT_CLIENT_IP_HEADERS])
+    expect(parseClientIpHeaders('CF-Connecting-IP, X-Real-IP')).toEqual([
+      'cf-connecting-ip',
+      'x-real-ip',
+    ])
+    expect(DEFAULT_CLIENT_IP_HEADERS).not.toContain('x-forwarded-for')
+  })
+
+  test('none disables header lookup for a hardened deployment', () => {
+    expect(parseClientIpHeaders('none')).toEqual([])
+    expect(parseClientIpHeaders('off')).toEqual([])
+  })
+
+  test('is part of the live configuration', () => {
+    if (!process.env.CLIENT_IP_HEADERS) {
+      expect(config.proxy.clientIpHeaders).toEqual([...DEFAULT_CLIENT_IP_HEADERS])
+    }
   })
 })
 

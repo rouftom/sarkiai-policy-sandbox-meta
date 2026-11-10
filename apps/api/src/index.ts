@@ -8,7 +8,7 @@ import { registerRoutes, seedReferenceImages, closeStores } from './routes/index
 import { OpenApiCatalog, registerOpenApiRoutes } from './openapi.js'
 import { prepareCloudStores } from './engine.js'
 import { auth } from './auth.js'
-import { config } from './config.js'
+import { config, clientIpResolution } from './config.js'
 import { resetDemoState } from './demo-reset.js'
 import { maintainAuditChain, ensureAuditReadIndexes } from './audit-maintenance.js'
 import type { PublicOperator } from '@sps/auth'
@@ -29,19 +29,24 @@ export async function buildServer() {
       // The realtime voice socket carries the session token in its query string: never log it.
       serializers: {
         req(request) {
+          const client = clientIpResolution(request)
           return {
             method: request.method,
             url: request.url.replace(/([?&]token=)[^&]*/, '$1[redacted]'),
             host: request.hostname,
-            remoteAddress: request.ip,
+            remoteAddress: client.ip,
+            // `socket` means no edge header matched and `TRUST_PROXY` decided.
+            clientIpSource: client.source ?? 'socket',
             remotePort: request.socket?.remotePort,
           }
         },
       },
     },
-    // Render terminates TLS in front of the service: without this, every
-    // request shares the proxy's IP and the sign-up/sign-in throttles are global.
-    trustProxy: true,
+    // TLS terminates at the host's edge, so the socket carries an internal
+    // address. `clientIp()` reads the address from the edge header it overwrites
+    // (`CLIENT_IP_HEADERS`); `TRUST_PROXY` only governs the `request.ip`
+    // fallback, i.e. how much of `X-Forwarded-For` is believed.
+    trustProxy: config.proxy.trust,
     // A signed approval token in the URL is about 200 characters; Fastify's default limit is 100.
     maxParamLength: 1024,
   })
@@ -62,11 +67,11 @@ export async function buildServer() {
     }
   })
 
-  // Browser calls come from the console: the canonical origin, its aliases,
-  // loopback and Vercel previews. A self-hosted install with no configured
-  // origin keeps the historical permissive policy, so a LAN name or a remapped
-  // port never breaks it (see config.web.isAllowedOrigin). Server-to-server
-  // calls (Meta webhook, curl) send no Origin and are unaffected.
+  // Browser calls come from the console: the canonical origin, its aliases and
+  // loopback. A self-hosted install with no configured origin keeps the
+  // historical permissive policy, so a LAN name or a remapped port never breaks
+  // it (see config.web.isAllowedOrigin).
+  // Server-to-server calls (webhooks, curl) send no Origin and are unaffected.
   await app.register(cors, {
     origin: (origin, callback) => callback(null, config.web.isAllowedOrigin(origin)),
   })

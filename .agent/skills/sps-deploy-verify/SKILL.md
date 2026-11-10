@@ -21,8 +21,11 @@ container (SSE, webhooks, WebSockets); the console is a Next.js build.
   (`auto | atlas | text`) follows the mode and `RETRIEVAL_DEPTH`
   (`lexical | fast | deep`) sets the default search depth.
 - Set `WEB_PUBLIC_URL` to the origin users open; add `WEB_PUBLIC_URL_ALIASES`
-  for a second domain or a preview host. A `*.vercel.app` preview is always
-  accepted.
+  for a second domain or a preview host. No provider-specific preview rule.
+- The client address comes from an edge-overwritten header:
+  `CLIENT_IP_HEADERS` (default `cf-connecting-ip,true-client-ip,x-real-ip`).
+  `TRUST_PROXY` is only the `request.ip` fallback (unset = one hop; a number;
+  `true` only when the origin is not directly reachable).
 - Scale notes: in-flight model work is bounded by `AI_CONCURRENCY_GLOBAL`;
   counters and rate limits are per instance. One instance is the supported
   topology today.
