@@ -109,6 +109,20 @@ services:
       # Raised from 12 to 32 for the judging period (Nov 5-9, 2026).
       - key: AUTH_MAX_OPERATORS
         value: "32"
+      # better-auth signs sessions and encrypts the TOTP secrets and recovery
+      # codes with BETTER_AUTH_SECRET. The migration encrypted them with
+      # SESSION_SECRET, so set both to the same value; rotating it invalidates
+      # every enrolment. When it is empty the API derives a stable key from
+      # SESSION_SECRET, which is why a deployment that only sets SESSION_SECRET
+      # keeps working.
+      - key: SESSION_SECRET
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      # Public API origin better-auth uses to build e-mail links. No host is
+      # committed; BETTER_AUTH_URL wins over the historical API_PUBLIC_URL.
+      - key: BETTER_AUTH_URL
+        sync: false
 
       # ── bot protection (sign-up + password reset) ──────────────────────────
       # Cloudflare Turnstile. The site key is public (served to the console by

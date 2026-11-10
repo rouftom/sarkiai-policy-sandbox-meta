@@ -7,12 +7,15 @@
  */
 
 export {
+  authIndexes,
+  createAuthOptions,
   createBetterAuth,
   ac,
   adminRole,
   operatorRole,
   ROLES,
   statement,
+  type AuthIndex,
   type AuthMessage,
   type BetterAuthEvents,
   type BetterAuthInput,

@@ -1,9 +1,0 @@
-item,brotli_kb,points,features
-"world countries L0 (50m, 5% Visvalingam, Equal Earth, q=8000)",19,5448,242
-"world countries (10%)",27,9569,242
-"world countries L1 (50m, 40%, q=16000)",77,34153,242
-"world countries full 50m",129,80683,242
-"admin-1 ALL at 8%",268,95759,4596
-"admin-1 CM at 8% / 20%",1 / 2,,10
-"admin-1 FR (101 departments) at 8% / 20%",6 / 8,,101
-"admin-1 US at 8% / 20%",10 / 19,,51

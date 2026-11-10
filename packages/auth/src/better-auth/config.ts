@@ -1,9 +1,9 @@
 /**
  * better-auth configuration for the operator console.
  *
- * `BetterAuthService` owns the live routes whenever MongoDB is configured. This
- * module builds the instance with the same guarantees the legacy service had, so
- * the cut-over did not have to rewrite authentication blind:
+ * `BetterAuthService` owns the live routes. This module builds the instance with
+ * the same guarantees the legacy service had, so the cut-over did not have to
+ * rewrite authentication blind:
  *
  * - the console and the API are different origins, so the `bearer` plugin keeps
  *   the session in an `Authorization` header instead of a cookie;
@@ -22,13 +22,17 @@
  * remaining phases.
  */
 
-import type { Db, MongoClient } from 'mongodb'
+import type { Db, IndexSpecification, MongoClient } from 'mongodb'
 import { betterAuth } from 'better-auth'
 import type { BetterAuthOptions } from 'better-auth/types'
 import { mongodbAdapter } from 'better-auth/adapters/mongodb'
 import { admin, twoFactor } from 'better-auth/plugins'
 import { bearer } from 'better-auth/plugins/bearer'
 import { createAccessControl } from 'better-auth/plugins/access'
+import {
+  getAuthTablesWithResolvedIndexes,
+  getDatabaseFieldIndexName,
+} from '@better-auth/core/db/internal'
 import {
   adminAc as adminPluginAc,
   defaultStatements as adminStatements,
@@ -145,14 +149,15 @@ function requireMail<K extends keyof BetterAuthMailer>(
 }
 
 /**
- * Build the better-auth instance. Construction touches no network: the adapter
- * only stores the `Db`, so this is safe at import time and in tests.
+ * Build the better-auth options. Kept separate from `createBetterAuth` so the
+ * database index bootstrap can derive the exact same schema (the adapter and
+ * the bootstrap must agree on collection and index names).
  */
-export function createBetterAuth(input: BetterAuthInput) {
+export function createAuthOptions(input: BetterAuthInput): BetterAuthOptions {
   const secure = input.useSecureCookies ?? input.baseURL.startsWith('https:')
   const mail = input.mail
 
-  const options: BetterAuthOptions = {
+  return {
     appName: input.appName ?? 'SarkiAI Policy Sandbox',
     baseURL: input.baseURL,
     secret: input.secret,
@@ -304,9 +309,82 @@ export function createBetterAuth(input: BetterAuthInput) {
         backupCodeOptions: { storeBackupCodes: 'encrypted' },
       }) as any,
     ],
+  } as BetterAuthOptions
+}
+
+/**
+ * Build the better-auth instance. Construction touches no network: the adapter
+ * only stores the `Db`, so this is safe at import time and in tests.
+ */
+export function createBetterAuth(input: BetterAuthInput) {
+  return betterAuth(createAuthOptions(input) as any)
+}
+
+/** One index better-auth depends on, resolved to its stored collection. */
+export interface AuthIndex {
+  collection: string
+  name: string
+  keys: IndexSpecification
+  unique: boolean
+}
+
+/**
+ * The indexes better-auth's own schema declares, derived from the real options
+ * rather than copied by hand.
+ *
+ * The MongoDB adapter creates them lazily on the first write for a model. A
+ * deployment whose rows were inserted by the one-off migration (`auth:migrate`)
+ * never went through that path, so the auth collections can stay unindexed:
+ * `user.email`, `session.token`, `session.userId`, `account.userId`,
+ * `verification.identifier` and the two `twoFactor` lookups all miss their
+ * index. `BetterAuthService.ensureIndexes()` applies this list at boot, which
+ * makes the lazy path and the migrated collections converge.
+ */
+export function authIndexes(input: BetterAuthInput): AuthIndex[] {
+  const { tables, indexesByTable } = getAuthTablesWithResolvedIndexes(createAuthOptions(input))
+  const resolved: AuthIndex[] = []
+
+  // Field-level metadata (`index: true` / `unique: true`) is what the core
+  // schema uses for `user.email`, `session.token`, `session.userId`,
+  // `account.userId`, `verification.identifier` and the `twoFactor` lookups.
+  // The adapter's table-level resolver does not expand it, so it is expanded
+  // here with better-auth's own naming helper.
+  for (const table of Object.values(tables)) {
+    const collection = table.modelName
+    for (const [fieldName, field] of Object.entries(table.fields)) {
+      if (!field.index && !field.unique) continue
+      const column = field.fieldName ?? fieldName
+      const unique = field.unique ?? false
+      resolved.push({
+        collection,
+        name: getDatabaseFieldIndexName(collection, column, unique),
+        keys: { [column === 'id' ? '_id' : column]: 1 } as IndexSpecification,
+        unique,
+      })
+    }
   }
 
-  return betterAuth(options as any)
+  // Table-level indexes declared by plugins.
+  for (const [collection, indexes] of indexesByTable) {
+    for (const index of indexes) {
+      resolved.push({
+        collection,
+        name: index.name,
+        keys: Object.fromEntries(
+          index.columns.map((field) => [field === 'id' ? '_id' : field, 1 as const]),
+        ) as IndexSpecification,
+        unique: index.unique ?? false,
+      })
+    }
+  }
+
+  const seen = new Set<string>()
+  return resolved.filter((index) => {
+    const key = `${index.collection}.${index.name}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export type BetterAuthInstance = ReturnType<typeof createBetterAuth>
