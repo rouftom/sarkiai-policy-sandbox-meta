@@ -1,7 +1,6 @@
 /** Shared operator auth instance (one per process). */
 
 import { createHash } from 'node:crypto'
-import { AuthService } from '@sps/auth'
 import { BetterAuthService } from '@sps/auth/better-auth'
 import { config, isLocalOrigin } from './config.js'
 
@@ -38,27 +37,29 @@ function betterAuthSecret(): string {
   return createHash('sha256').update(material).digest('hex')
 }
 
+if (!config.mongodb.configured) {
+  // Operator auth is durable by design now: the legacy in-memory service is
+  // gone, so an install without `MONGODB_URI` still targets the local default
+  // and logs the requirement instead of silently keeping accounts in RAM.
+  console.warn(
+    '[auth] MONGODB_URI is not set · operator accounts need a MongoDB store; using the local default.',
+  )
+}
+
 /**
- * better-auth owns the accounts whenever a Mongo store is configured: `user`,
- * `account`, `session`, `verification` and `twoFactor`. Without one the legacy
- * in-memory service keeps the console usable on a bare local install. Both
- * expose the same method surface, so the routes never branch.
+ * better-auth owns the accounts: `user`, `account`, `session`, `verification`
+ * and `twoFactor`. It is the only backend; the in-memory legacy service was
+ * removed once the production cut-over was validated.
  */
-export const auth: AuthService | BetterAuthService = config.mongodb.configured
-  ? new BetterAuthService({
-      mongodbUri: config.mongodb.uri,
-      dbName: config.mongodb.dbName,
-      secret: betterAuthSecret(),
-      sessionSecret,
-      baseURL: config.auth.baseUrl,
-      signup: config.auth.signup,
-      maxOperators: config.auth.maxOperators,
-      transactions: config.auth.betterAuthTransactions,
-      trustedOrigins: config.web.allowedOrigins,
-    })
-  : new AuthService({
-      dbName: config.mongodb.dbName,
-      sessionSecret,
-      signup: config.auth.signup,
-      maxOperators: config.auth.maxOperators,
-    })
+export const auth = new BetterAuthService({
+  mongodbUri: config.mongodb.uri,
+  dbName: config.mongodb.dbName,
+  secret: betterAuthSecret(),
+  sessionSecret,
+  baseURL: config.auth.baseUrl,
+  cookiePrefix: config.auth.cookiePrefix,
+  signup: config.auth.signup,
+  maxOperators: config.auth.maxOperators,
+  transactions: config.auth.betterAuthTransactions,
+  trustedOrigins: config.web.allowedOrigins,
+})

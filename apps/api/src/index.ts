@@ -176,6 +176,23 @@ async function main(): Promise<void> {
     auditIndexed ? 'audit read index ready' : 'audit read index unavailable; reads will be slower',
   )
 
+  // better-auth's own indexes. The adapter creates them lazily on the first
+  // write of each model, but the one-off `auth:migrate` inserted its rows
+  // directly, so a migrated deployment can lack them. Best-effort: a missing
+  // index slows reads, it must not keep the console down.
+  try {
+    const indexes = await auth.ensureIndexes()
+    app.log.info(
+      { indexes: indexes.length, created: indexes.filter((index) => index.created).length },
+      'better-auth indexes ready',
+    )
+  } catch (error) {
+    app.log.warn(
+      { message: error instanceof Error ? error.message : 'unknown error' },
+      'better-auth indexes unavailable; writes will create them lazily',
+    )
+  }
+
   // Cloud vector store only: create kb_chunks then its Atlas indexes. A failure
   // is logged, not fatal (the console still boots and the provider is visible).
   // Accounts are created from the console: no seeded operator, no seeded password.

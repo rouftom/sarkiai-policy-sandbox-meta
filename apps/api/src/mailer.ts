@@ -71,7 +71,7 @@ export function invitationSubject(): string {
 export interface EmailVerification {
   to: string
   firstName?: string
-  /** Signed, 24-hour token from `AuthService.createEmailVerification`. */
+  /** Signed, 24-hour token from `BetterAuthService.createEmailVerification`. */
   token: string
   expiresAt: string
 }
@@ -87,7 +87,7 @@ export function emailVerificationSubject(): string {
 export interface PasswordReset {
   to: string
   firstName?: string
-  /** Signed, single-use token from `AuthService.createPasswordReset`. */
+  /** Signed, single-use token from `BetterAuthService.createPasswordReset`. */
   token: string
   expiresAt: string
 }

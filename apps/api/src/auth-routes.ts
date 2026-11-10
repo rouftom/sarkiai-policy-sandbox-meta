@@ -333,7 +333,7 @@ export async function registerAuthRoutes(app: FastifyInstance, audit: AuditServi
   app.post('/v1/auth/login', async (request, reply) => {
     let email = 'unknown'
     try {
-      // Per-IP cap on top of the per-address one in AuthService: rotating
+      // Per-IP cap on top of the per-address one in BetterAuthService: rotating
       // e-mails used to bypass the only existing counter.
       limit(LOGIN_IP_RULE, `login-ip:${clientIp(request)}`, 'Too many sign-in attempts, try again later.')
       const body = credentials.parse(request.body)
