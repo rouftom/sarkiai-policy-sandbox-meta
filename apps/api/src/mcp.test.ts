@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { McpGateway } from './mcp'
+import { McpGateway, type McpServerEntry } from './mcp'
+
+/** The registry is configuration in production; the tests pin their own. */
+const TEST_SERVERS: McpServerEntry[] = [
+  { name: 'sarkiai_charts', url: 'https://charts.example/mcp', requiresApiKey: true },
+]
 
 const realFetch = globalThis.fetch
 afterEach(() => {
@@ -34,7 +39,7 @@ describe('MCP gateway', () => {
   test('opens one session, sends the key server-side, and parses SSE results', async () => {
     const calls: Array<{ method: string; headers: Headers }> = []
     stubServer(calls)
-    const gateway = new McpGateway('secret-test-key')
+    const gateway = new McpGateway('secret-test-key', TEST_SERVERS)
     const { result, uiResourceUri } = await gateway.callTool('sarkiai_charts', 'bar', { x: 1 })
     expect(uiResourceUri).toBe('ui://bar')
     expect(result).toEqual({ content: [{ type: 'text', text: 'done' }] })
@@ -46,7 +51,7 @@ describe('MCP gateway', () => {
   test('refuses servers outside the registry without calling them', async () => {
     const calls: Array<{ method: string; headers: Headers }> = []
     stubServer(calls)
-    await expect(new McpGateway('k').callTool('evil_server', 'x', {})).rejects.toThrow('Unknown MCP server')
+    await expect(new McpGateway('k', TEST_SERVERS).callTool('evil_server', 'x', {})).rejects.toThrow('Unknown MCP server')
     expect(calls).toHaveLength(0)
   })
 })

@@ -66,6 +66,12 @@ maps the same settings:
    applies to `WHATSAPP_APP_SECRET`: without it, the WhatsApp webhook answers
    `503 webhook_secret_missing` instead of accepting unsigned events.
 
+   Optional: `MCP_SERVERS` is the JSON array of the first-party MCP apps the
+   agent may call, for example
+   `[{"name":"sarkiai_charts","url":"https://charts.example/mcp","requiresApiKey":true}]`.
+   Empty leaves the agent without MCP tools. The console receives the same JSON
+   as `NEXT_PUBLIC_MCP_SERVERS`, which is inlined at build time.
+
 3b. Assistant images. `MEDIA_STORE` selects the adapter: `s3` (MinIO / S3,
    the local default) or `cloudinary` (the default in `cloud` and `sovereign`
    mode). The example manifest sets `MEDIA_STORE=cloudinary` and

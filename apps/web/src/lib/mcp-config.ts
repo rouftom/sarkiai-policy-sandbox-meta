@@ -1,32 +1,14 @@
-export interface McpServerEntry {
-  name: string;
-  url: string;
-  /** First-party servers protected by the shared SEA_MCP_API_KEY (sent as `x-api-key`). */
-  requiresApiKey?: boolean;
-}
+import { parseMcpServers, type McpServerConfig } from '@sps/shared'
 
-export const MCP_SERVERS: McpServerEntry[] = [
-  {
-    name: 'tic_tac_toe',
-    url: 'https://tic-tac-toe-mcp-app.vercel.app/mcp',
-    requiresApiKey: true,
-  },
-  {
-    name: 'sarkiai_charts',
-    url: process.env.MCP_CHARTS_URL || 'https://sarkiai-charts-mcp-app.vercel.app/mcp',
-    requiresApiKey: true,
-  },
-  {
-    name: 'xlab_3d_render',
-    url: 'https://xlab-3d-render-mcp-app.vercel.app/mcp',
-    requiresApiKey: true,
-  },
-  {
-    name: 'sea_mcp_docx',
-    url: process.env.MCP_DOCX_URL || 'https://sea-mcp-docx.vercel.app/mcp',
-    requiresApiKey: true,
-  },
-];
+export type McpServerEntry = McpServerConfig
+
+/**
+ * Registry read from `NEXT_PUBLIC_MCP_SERVERS` (JSON array), the same value the
+ * API receives as `MCP_SERVERS`. It is public because the browser lists the
+ * servers, and inlined at build time, so rebuild after changing it. The proxy
+ * route resolves the url server-side; nothing is hardcoded here.
+ */
+export const MCP_SERVERS: McpServerEntry[] = parseMcpServers(process.env.NEXT_PUBLIC_MCP_SERVERS)
 
 /**
  * Server-side only: authentication headers for a first-party MCP server.
