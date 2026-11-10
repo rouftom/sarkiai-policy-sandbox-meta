@@ -227,6 +227,12 @@ export interface ReadinessRunSummaryDto {
   runBy: string
   composite: number | null
   dimensions: number
+  /** Dimensions backed by at least one passage of the country's own corpus. */
+  groundedDimensions: number
+  /** Weighted mean of the dimension confidences, 0..1; null when nothing was scored. */
+  meanConfidence: number | null
+  /** `excluded`: hidden from other operators' dashboards and World summaries. */
+  sharing: 'shared' | 'excluded'
   /** The series this assessment belongs to, when it was run with other sectors. */
   batchId?: string
   /** An interrupted assessment can be resumed. */
@@ -367,6 +373,8 @@ export interface ScenarioRunSummaryDto {
   failure?: string
   released: number
   total: number
+  /** `excluded`: hidden from other operators' dashboards and World summaries. */
+  sharing: 'shared' | 'excluded'
 }
 
 export interface ScenarioRunDto extends ScenarioRunSummaryDto {
@@ -625,6 +633,8 @@ export interface CountryDto {
   currency: string
   languages: string[]
   timezone: string
+  adminLevel?: { en: string; fr: string }
+  groups?: string[]
   sectors: Domain[]
   status: CountryStatusDto
   notes: string | null
@@ -642,6 +652,8 @@ export interface CountryInputDto {
   currency?: string
   languages?: string[]
   timezone?: string
+  adminLevel?: { en: string; fr: string }
+  groups?: string[]
   sectors?: Domain[]
   status?: CountryStatusDto
   notes?: string
@@ -1132,6 +1144,13 @@ export const api = {
     streamReadinessFrom(`/v1/readiness/runs/${encodeURIComponent(id)}/resume`, {}, onEvent),
 
   readinessDelete: (id: string) => request<{ deleted: boolean; id: string }>(`/v1/readiness/runs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** Owner-only: shares or excludes one run summary from other operators. */
+  setRunSharing: (kind: 'readiness' | 'scenario', id: string, sharing: 'shared' | 'excluded') =>
+    request<{ run: { kind: 'readiness' | 'scenario'; id: string; sharing: 'shared' | 'excluded' } }>(
+      `/v1/world/runs/${kind}/${encodeURIComponent(id)}/sharing`,
+      { method: 'PATCH', body: JSON.stringify({ sharing }) },
+    ),
 
   /** Adds a language to a saved assessment (translated once, then kept with it). */
   readinessLocalize: (id: string, lang: ReadinessLangDto) =>

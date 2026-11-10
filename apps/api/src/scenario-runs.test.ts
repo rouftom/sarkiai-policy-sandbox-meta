@@ -51,4 +51,17 @@ describe('scenario runs', () => {
     expect(await store.list('op')).toEqual([])
     expect(await store.delete(base.id, 'op')).toBe(false)
   })
+
+  test('an excluded run leaves the shared scope but stays with its owner', async () => {
+    const store = new ScenarioRunStore({})
+    const mine = await store.create(base)
+    const other = await store.create({ ...base, id: 'health-data-breach-2', userId: 'other' })
+    expect(mine.sharing).toBe('shared')
+
+    expect(await store.setSharing(mine.id, 'other', 'excluded')).toBe(false)
+    expect(await store.setSharing(mine.id, 'op', 'excluded')).toBe(true)
+
+    expect((await store.byCountry('cm', 'other')).map((run) => run.id)).toEqual([other.id])
+    expect((await store.byCountry('cm', 'op')).map((run) => run.id).sort()).toEqual([mine.id, other.id].sort())
+  })
 })

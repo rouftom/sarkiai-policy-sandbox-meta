@@ -33,6 +33,7 @@ import {
   type TabItem,
 } from '@sps/ui'
 import { READINESS_DIMENSIONS, flagOf, type Domain } from '@sps/shared'
+import { maturityColor } from '@sps/theme'
 import { type DimensionScoreDto, type ReadinessReportDto, type ReadinessReportFileDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
@@ -424,7 +425,7 @@ function ReportBody({
               <span className="w-8 shrink-0 text-muted-foreground">D{score.dimensionId}</span>
               <span className="min-w-0 flex-1 truncate">{score.dimensionName}</span>
               <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-secondary">
-                <span className="block h-full rounded-full bg-brand-primary dark:bg-brand-primary-light" style={{ width: `${(score.score / 5) * 100}%` }} />
+                <span className="block h-full rounded-full" style={{ width: `${(score.score / 5) * 100}%`, backgroundColor: maturityColor(score.score) }} />
               </span>
               <span className="w-8 shrink-0 text-right font-semibold">{score.score}/5</span>
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
@@ -617,7 +618,7 @@ function SectorComparison({ batch }: { batch: SectorResult[] }) {
                       {score ? (
                         <span className="flex items-center gap-2">
                           <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-secondary">
-                            <span className="block h-full rounded-full bg-brand-primary dark:bg-brand-primary-light" style={{ width: `${(score.score / 5) * 100}%` }} />
+                            <span className="block h-full rounded-full" style={{ width: `${(score.score / 5) * 100}%`, backgroundColor: maturityColor(score.score) }} />
                           </span>
                           <span className="font-semibold">{score.score}/5</span>
                         </span>
@@ -669,7 +670,7 @@ function LiveScores({ steps }: { steps: Step[] }) {
             <span className="w-8 shrink-0 text-muted-foreground">D{step.dimensionId}</span>
             <span className="min-w-0 flex-1 truncate">{step.name}</span>
             <span className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-secondary">
-              <span className="block h-full rounded-full bg-brand-primary dark:bg-brand-primary-light" style={{ width: `${((step.score?.score ?? 0) / 5) * 100}%` }} />
+              <span className="block h-full rounded-full" style={{ width: `${((step.score?.score ?? 0) / 5) * 100}%`, backgroundColor: maturityColor(step.score?.score ?? 0) }} />
             </span>
             <span className="w-8 shrink-0 text-right font-semibold">{step.score?.score}/5</span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />

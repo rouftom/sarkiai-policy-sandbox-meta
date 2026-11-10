@@ -9,6 +9,7 @@ import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { JointSituationReport } from '@sps/shared'
 import type { ScenarioLang } from './scenarios.js'
 import { mongoPoolOptions } from '@sps/shared'
+import { isSharedWith, sharingClause, type RunSharing } from './run-sharing.js'
 
 export type ScenarioRunStatus = 'running' | 'complete' | 'failed'
 
@@ -29,6 +30,8 @@ export interface ScenarioRunRecord {
   reports: JointSituationReport[]
   /** Agents chosen from the registry at the start; absent, the sector's active agents. */
   agentIds?: string[]
+  /** Summary sharing, default `shared`; see `run-sharing.ts`. */
+  sharing?: RunSharing
 }
 
 export interface ScenarioRunSummary {
@@ -43,11 +46,12 @@ export interface ScenarioRunSummary {
   failure?: string
   released: number
   total: number
+  sharing: RunSharing
 }
 
 function summaryOf(record: ScenarioRunRecord): ScenarioRunSummary {
   const { userId: _owner, reports: _reports, ...rest } = record
-  return rest
+  return { ...rest, sharing: record.sharing ?? 'shared' }
 }
 
 function summaryOfDoc(doc: Document): ScenarioRunSummary {
@@ -63,6 +67,7 @@ function summaryOfDoc(doc: Document): ScenarioRunSummary {
     ...(typeof doc.failure === 'string' ? { failure: doc.failure } : {}),
     released: Number(doc.released ?? 0),
     total: Number(doc.total ?? 0),
+    sharing: doc.sharing === 'excluded' ? 'excluded' : 'shared',
   }
 }
 
@@ -99,7 +104,7 @@ export class ScenarioRunStore {
 
   async create(record: Omit<ScenarioRunRecord, 'createdAt' | 'updatedAt'>): Promise<ScenarioRunSummary> {
     const now = new Date().toISOString()
-    const full: ScenarioRunRecord = { ...record, createdAt: now, updatedAt: now }
+    const full: ScenarioRunRecord = { ...record, sharing: record.sharing ?? 'shared', createdAt: now, updatedAt: now }
     this.memory.set(full.id, full)
     const col = await this.col()
     if (col) {
@@ -168,12 +173,15 @@ export class ScenarioRunStore {
       .map(summaryOf)
   }
 
-  /** Every scenario run for a country, across operators: the country dashboard. */
-  async byCountry(country: string, limit = 200): Promise<ScenarioRunSummary[]> {
+  /**
+   * Every scenario run for a country, across operators: the country dashboard.
+   * Runs another operator excluded are skipped; the viewer's own are kept.
+   */
+  async byCountry(country: string, viewer: string, limit = 200): Promise<ScenarioRunSummary[]> {
     const col = await this.col()
     if (col) {
       const docs = await col
-        .find({ country }, { projection: { reports: 0 } })
+        .find({ country, ...sharingClause(viewer) }, { projection: { reports: 0 } })
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray()
@@ -181,10 +189,25 @@ export class ScenarioRunStore {
       if (docs) return docs.map(summaryOfDoc)
     }
     return [...this.memory.values()]
-      .filter((run) => run.country === country)
+      .filter((run) => run.country === country && isSharedWith(run, viewer))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit)
       .map(summaryOf)
+  }
+
+  /** Owner-only: excludes or re-shares one run. False when it is not theirs. */
+  async setSharing(id: string, userId: string, sharing: RunSharing): Promise<boolean> {
+    const current = await this.get(id, userId)
+    if (!current) return false
+    this.memory.set(id, { ...current, sharing })
+    const col = await this.col()
+    if (col) {
+      const result = await col
+        .updateOne({ _id: id as unknown as Document['_id'], userId }, { $set: { sharing } })
+        .catch(() => null)
+      if (!result) throw new Error('The sharing state could not be saved.')
+    }
+    return true
   }
 
   /** How many scenario runs reference a country, across operators (deletion guard). */

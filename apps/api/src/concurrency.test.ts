@@ -48,4 +48,19 @@ describe('WorkGate', () => {
     for (const lease of leases) lease?.release()
     expect(gate.active).toBe(0)
   })
+
+  test('setLimits raises a cap without touching work in flight', () => {
+    const gate = new WorkGate({ perOperator: 1, global: 2 })
+    const lease = gate.tryEnter('a@example.com')
+    expect(gate.tryEnter('a@example.com')).toBeNull()
+
+    gate.setLimits({ perOperator: 2 })
+    expect(gate.activeFor('a@example.com')).toBe(1)
+    expect(gate.tryEnter('a@example.com')).not.toBeNull()
+    expect(gate.currentLimits).toEqual({ perOperator: 2, global: 2 })
+
+    lease?.release()
+    gate.setLimits({ perOperator: 0, global: 0 })
+    expect(gate.currentLimits).toEqual({ perOperator: 1, global: 1 })
+  })
 })

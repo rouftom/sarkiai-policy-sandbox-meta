@@ -27,6 +27,7 @@
     "check:provider": "bun scripts/check-provider.ts",
     "check:gazette": "bun scripts/check-gazette.ts",
     "kb:indexes": "bun scripts/ensure-mongo-indexes.ts",
+    "runs:backfill-summary": "bun scripts/backfill-readiness-summary.ts",
     "kb:seed": "bun scripts/seed-corpus.ts",
     "kb:purge": "bun scripts/purge-kb.ts",
     "demo:reset": "bun apps/api/scripts/reset-demo.ts",
