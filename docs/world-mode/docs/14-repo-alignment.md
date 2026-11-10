@@ -47,3 +47,22 @@ Analysed state: repository `main` (fbeb652), tree identical to the submission mi
 - [ ] No secrets, no `.env*` handling; placeholders in `.env.example`; docs use `<api-host>`/`<web-host>`.
 - [ ] `bun run typecheck` and `bun run test` green; `bun run build` when `apps/web` or a package changes; docs updated in the same PR.
 - [ ] MCP sidecar contracts changed on both sides together, if ever.
+
+## 5. Implementation progress
+
+Applied in the repository, one reviewable slice per item group:
+
+| Item | Where |
+|---|---|
+| 10 · `subnational` + `subdivision` | `@sps/shared`, `@sps/retrieval`, API schemas, console labels, both index definitions |
+| 2 · `./scoring` subpath | `packages/readiness/package.json` (`@sps/readiness/scoring`) |
+| 1 · `groundedDimensions`, `meanConfidence` | `readiness-runs.ts`, `scripts/backfill-readiness-summary.ts` (`bun run runs:backfill-summary`) |
+| 3 · `adminLevel`, `groups` | `apps/api/src/countries.ts`, country schema and console DTO |
+| 5 · `WorkGate.setLimits()` | `apps/api/src/concurrency.ts` |
+| 6 · `maturityRamp` | `@sps/theme` (`packages/theme/src/maturity.ts`), adopted by the readiness bars |
+| 7 · World audit labels | `apps/web/src/lib/audit-labels.ts` and `i18n.tsx` (EN + FR) |
+| 11 · run `sharing` | both run stores, `run-sharing.ts`, `PATCH /v1/world/runs/:kind/:runId/sharing`, country insights |
+
+Still open: 4 (`EXPENSIVE_ROUTES` entries land with the World launch routes),
+8 (`referenceNamespaces`, ticket T-059) and 9 (US/FR seeds, pending the
+authority names in Q-19).

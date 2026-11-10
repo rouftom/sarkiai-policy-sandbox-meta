@@ -32,6 +32,34 @@ export function computeComposite(
   return totalWeight === 0 ? 0 : Number((weightedSum / totalWeight).toFixed(2))
 }
 
+/**
+ * Weighted mean of the dimensions' confidence, 0..1, or null when nothing was
+ * scored. The same weights as `computeComposite`: a confidence figure that no
+ * dimension backs would be a number without meaning.
+ */
+export function meanConfidence(
+  dimensions: DimensionScore[],
+  weights: Partial<Record<ReadinessDimension, number>> = {},
+): number | null {
+  let weightedSum = 0
+  let totalWeight = 0
+  for (const dim of dimensions) {
+    const weight = weights[dim.dimension] ?? 1
+    if (weight <= 0) continue
+    weightedSum += dim.confidence * weight
+    totalWeight += weight
+  }
+  if (totalWeight === 0) return null
+  return Number((weightedSum / totalWeight).toFixed(3))
+}
+
+/** Dimensions backed by at least one passage of the country's own corpus. */
+export function groundedDimensionCount(report: {
+  dimensions: ReadonlyArray<{ countryChunks: ReadonlyArray<unknown> }>
+}): number {
+  return report.dimensions.filter((dimension) => dimension.countryChunks.length > 0).length
+}
+
 export function computeOverall(dimensions: DimensionScore[]): number {
   if (dimensions.length === 0) return 0
   const sum = dimensions.reduce((acc, d) => acc + d.score, 0)

@@ -246,6 +246,18 @@ export const countryBodySchema = z.object({
     .optional()
     .describe('Working languages, as ISO 639-1 codes.'),
   timezone: z.string().trim().max(60).optional().describe('IANA timezone.'),
+  adminLevel: z
+    .object({
+      en: z.string().trim().min(1).max(40),
+      fr: z.string().trim().min(1).max(40),
+    })
+    .optional()
+    .describe('Label of the region level below the country (`state`, `region`), in both languages.'),
+  groups: z
+    .array(z.string().trim().min(1).max(40))
+    .max(12)
+    .optional()
+    .describe('Group ids the country belongs to; a cache of `world_groups` for the country sheet.'),
   status: z.enum(['active', 'planned']).optional().describe('Whether the country is usable in the console.'),
   notes: z.string().trim().max(600).optional().describe('Free-form editorial note.'),
   sectors: countrySectorsSchema.optional().describe('Sectors enabled for this country.'),

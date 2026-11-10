@@ -26,6 +26,12 @@ export const COUNTRY_SECTORS: readonly Domain[] = [
 export type CountryJurisdiction = 'national' | 'regional' | 'international'
 export type CountryStatus = 'active' | 'planned'
 
+/** Bilingual label of the administrative level below the country (state, region). */
+export interface CountryAdminLevel {
+  en: string
+  fr: string
+}
+
 export interface CountryRecord {
   /** ISO 3166-1 alpha-2, lower-cased. */
   code: string
@@ -44,6 +50,10 @@ export interface CountryRecord {
   languages: string[]
   /** IANA time zone. */
   timezone: string
+  /** Label of the region level when the country has one (`state`, `region`). */
+  adminLevel?: CountryAdminLevel
+  /** Cached group ids (CEMAC, ECOWAS, EU…) for the country sheet; `world_groups` owns the members. */
+  groups?: string[]
   /** Enabled sectors, at least one. */
   sectors: Domain[]
   status: CountryStatus
@@ -63,6 +73,8 @@ export interface CountryInput {
   currency?: string
   languages?: string[]
   timezone?: string
+  adminLevel?: CountryAdminLevel
+  groups?: string[]
   sectors?: Domain[]
   status?: CountryStatus
   notes?: string
@@ -78,6 +90,8 @@ export interface CountryPatch {
   currency?: string
   languages?: string[]
   timezone?: string
+  adminLevel?: CountryAdminLevel
+  groups?: string[]
   sectors?: Domain[]
   status?: CountryStatus
   notes?: string
@@ -113,7 +127,29 @@ function sectorsFrom(value: unknown): Domain[] {
   return valid.length > 0 ? valid : [...COUNTRY_SECTORS]
 }
 
+/** A stored admin level: both labels must be non-empty, otherwise it is dropped. */
+function adminLevelFrom(value: unknown): CountryAdminLevel | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { en, fr } = value as { en?: unknown; fr?: unknown }
+  if (typeof en !== 'string' || typeof fr !== 'string' || !en.trim() || !fr.trim()) return undefined
+  return { en: en.trim(), fr: fr.trim() }
+}
+
+/** Group ids are lower-case slugs, de-duplicated, at most 12. */
+function groupsFrom(value: unknown): string[] | undefined {
+  const list = Array.isArray(value) ? value : []
+  const seen = new Set<string>()
+  for (const entry of list) {
+    const id = typeof entry === 'string' ? entry.trim().toLowerCase() : ''
+    if (id) seen.add(id)
+  }
+  const groups = [...seen].slice(0, 12)
+  return groups.length > 0 ? groups : undefined
+}
+
 function toCountry(doc: Document): CountryRecord {
+  const adminLevel = adminLevelFrom(doc.adminLevel)
+  const groups = groupsFrom(doc.groups)
   return {
     code: String(doc.code ?? doc._id ?? ''),
     name: String(doc.name ?? ''),
@@ -125,6 +161,8 @@ function toCountry(doc: Document): CountryRecord {
     currency: String(doc.currency ?? ''),
     languages: Array.isArray(doc.languages) ? doc.languages.map(String) : [],
     timezone: String(doc.timezone ?? ''),
+    ...(adminLevel ? { adminLevel } : {}),
+    ...(groups ? { groups } : {}),
     sectors: sectorsFrom(doc.sectors),
     status: doc.status === 'planned' ? 'planned' : 'active',
     ...(typeof doc.notes === 'string' && doc.notes && doc.notes !== LEGACY_SEED_NOTE ? { notes: doc.notes } : {}),
@@ -221,6 +259,8 @@ export class CountryStore {
     const code = input.code.toLowerCase()
     if (await this.get(code)) return null
     const now = new Date().toISOString()
+    const adminLevel = adminLevelFrom(input.adminLevel)
+    const groups = groupsFrom(input.groups)
     const country: CountryRecord = {
       code,
       name: input.name,
@@ -231,6 +271,8 @@ export class CountryStore {
       currency: input.currency ?? '',
       languages: input.languages ?? [],
       timezone: input.timezone ?? '',
+      ...(adminLevel ? { adminLevel } : {}),
+      ...(groups ? { groups } : {}),
       sectors: sectorsFrom(input.sectors),
       status: input.status ?? 'active',
       ...(input.notes ? { notes: input.notes } : {}),
@@ -260,12 +302,16 @@ export class CountryStore {
       ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
       ...(patch.languages !== undefined ? { languages: patch.languages } : {}),
       ...(patch.timezone !== undefined ? { timezone: patch.timezone } : {}),
+      ...(patch.adminLevel !== undefined ? (adminLevelFrom(patch.adminLevel) ? { adminLevel: patch.adminLevel } : {}) : {}),
+      ...(patch.groups !== undefined ? (groupsFrom(patch.groups) ? { groups: patch.groups } : {}) : {}),
       ...(patch.sectors !== undefined ? { sectors: sectorsFrom(patch.sectors) } : {}),
       ...(patch.status !== undefined ? { status: patch.status } : {}),
       ...(patch.notes !== undefined ? (patch.notes ? { notes: patch.notes } : {}) : {}),
       updatedAt: new Date().toISOString(),
     }
     if (patch.notes === '') delete next.notes
+    if (patch.adminLevel !== undefined && !adminLevelFrom(patch.adminLevel)) delete next.adminLevel
+    if (patch.groups !== undefined && !groupsFrom(patch.groups)) delete next.groups
     this.memory.set(next.code, next)
     const col = await this.col()
     if (col) {
@@ -282,6 +328,8 @@ export class CountryStore {
               currency: next.currency,
               languages: next.languages,
               timezone: next.timezone,
+              adminLevel: next.adminLevel ?? null,
+              groups: next.groups ?? null,
               sectors: next.sectors,
               status: next.status,
               notes: next.notes ?? null,

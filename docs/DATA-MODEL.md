@@ -41,6 +41,24 @@ Indexes:
 - MongoDB text index (`local`, `sovereign`): created at the first ingestion.
 - Plain indexes for the console queries (`filename`, `isActive`).
 
+## Run summaries (`readiness_runs`, `scenario_runs`)
+
+Both collections store the full record for the owner and a summary for the
+listings. The summary carries:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `groundedDimensions` | number | dimensions backed by at least one passage of the country's own corpus |
+| `meanConfidence` | number? | weighted mean of the dimension confidences (same weights as the composite); null when nothing was scored |
+| `sharing` | shared \| excluded | `excluded` hides the summary from other operators, country insights and World aggregates; the owner keeps it in `mine` |
+
+`groundedDimensions` and `meanConfidence` are computed at save time, so the
+country dashboard never loads a full report. Runs saved before they existed are
+filled once by `bun run runs:backfill-summary` (idempotent, `--dry-run` prints
+what it would touch). `sharing` defaults to `shared`; `PATCH
+/v1/world/runs/:kind/:runId/sharing` changes it for the owner and is audited as
+`world.run.sharing.changed`.
+
 ## `kb_images` and `kb_documents`
 
 `kb_images` holds the figures attached to a document: `_id`, `filename`,

@@ -79,6 +79,7 @@ import { auth } from '../auth.js'
 import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
 import { registerRegistryRoutes } from '../registry-routes.js'
+import { registerWorldRoutes } from '../world-routes.js'
 import { RegistryStore } from '../registry.js'
 import { isPublicRoute } from '../public-routes.js'
 import {
@@ -2887,6 +2888,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   await registry.refresh()
   await registerRegistryRoutes(app, { registry, audit: engine.audit })
+  await registerWorldRoutes(app, { readinessRuns, scenarioRuns, audit: engine.audit })
 
   app.get('/v1/countries', async () => {
     return { countries: (await countries.list()).map(countryDto) }
@@ -3018,8 +3020,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!country) return reply.status(404).send({ error: 'not_found' })
 
     const [runs, scenarioRows, knowledgeStatus] = await Promise.all([
-      readinessRuns.byCountry(code, 200),
-      scenarioRuns.byCountry(code, 200),
+      readinessRuns.byCountry(code, operatorOf(request).email, 200),
+      scenarioRuns.byCountry(code, operatorOf(request).email, 200),
       knowledge.status().catch(() => null),
     ])
 
