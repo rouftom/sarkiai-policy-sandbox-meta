@@ -13,6 +13,7 @@ import type {
   CitationValidation,
   Domain,
   InstitutionSpec,
+  Jurisdiction,
   KbChunk,
   ProviderDescriptor,
   WorkflowLens,
@@ -42,7 +43,7 @@ export interface AgentRunInput {
   institution: InstitutionSpec
   question: string
   country: string
-  jurisdiction?: 'national' | 'regional' | 'international'
+  jurisdiction?: Jurisdiction
   domain: Domain
   lens: WorkflowLens
   /** The language of the answer (default English). */

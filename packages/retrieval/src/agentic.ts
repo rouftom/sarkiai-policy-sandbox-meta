@@ -25,8 +25,16 @@ import type { KbChunk, RetrievalDepth, RetrievalQuery } from '@sps/shared'
 import type { Retriever } from './types'
 
 /** Lexical access to the corpus. Implemented on MongoDB Atlas Search or a MongoDB text index. */
+/**
+ * A corpus filter clause. Plain values are exact matches; `$in` lists are
+ * matched as a set, which is what the Atlas mapping turns into an `in` clause
+ * and what the MongoDB text-index path accepts verbatim.
+ */
+export type CorpusFilterValue = string | boolean | { $in: string[] }
+export type CorpusFilter = Record<string, CorpusFilterValue>
+
 export interface LexicalSource {
-  lexical(text: string, limit: number, filter: Record<string, string | boolean>): Promise<KbChunk[]>
+  lexical(text: string, limit: number, filter: CorpusFilter): Promise<KbChunk[]>
   /** Passages of one article of one instrument, in reading order. */
   article?(filename: string, articleNumber: string, limit: number): Promise<KbChunk[]>
   /** Attaches the figures of each passage's document. */
@@ -95,7 +103,7 @@ export interface AgenticStageItem {
 
 export interface AgenticExploration {
   query: string
-  filter: Record<string, string | boolean>
+  filter: CorpusFilter
   topK: number
   depth: RetrievalDepth
   model: string
@@ -126,10 +134,14 @@ const DEFAULTS = {
 }
 
 /** Exact-match filter on the corpus taxonomy; only active passages are searched. */
-export function corpusFilter(query: RetrievalQuery): Record<string, string | boolean> {
-  const filter: Record<string, string | boolean> = { isActive: true }
+export function corpusFilter(query: RetrievalQuery): CorpusFilter {
+  const filter: CorpusFilter = { isActive: true }
   if (query.country) filter.country = query.country
-  if (query.jurisdiction) filter.jurisdiction = query.jurisdiction
+  const jurisdictions = query.jurisdictions?.filter(Boolean) ?? []
+  if (jurisdictions.length > 1) filter.jurisdiction = { $in: [...jurisdictions] }
+  else if (jurisdictions.length === 1) filter.jurisdiction = jurisdictions[0]!
+  else if (query.jurisdiction) filter.jurisdiction = query.jurisdiction
+  if (query.subdivision) filter.subdivision = query.subdivision
   if (query.docType) filter.docType = query.docType
   if (query.namespace) filter.namespace = query.namespace
   return filter
@@ -301,7 +313,18 @@ export class AgenticRetriever implements Retriever {
   }
 
   private cacheKey(query: RetrievalQuery, depth: RetrievalDepth): string {
-    return JSON.stringify([depth, this.model(), query.country, query.jurisdiction, query.docType, query.namespace, query.topK, query.text.trim().toLowerCase()])
+    return JSON.stringify([
+      depth,
+      this.model(),
+      query.country,
+      query.jurisdiction,
+      query.jurisdictions ?? [],
+      query.subdivision,
+      query.docType,
+      query.namespace,
+      query.topK,
+      query.text.trim().toLowerCase(),
+    ])
   }
 
   private async think(prompt: string, label: string, fallbacks: string[], maxOutputTokens: number): Promise<Record<string, unknown> | null> {
@@ -318,7 +341,7 @@ export class AgenticRetriever implements Retriever {
     }
   }
 
-  private async lexical(text: string, filter: Record<string, string | boolean>, limit: number): Promise<KbChunk[]> {
+  private async lexical(text: string, filter: CorpusFilter, limit: number): Promise<KbChunk[]> {
     try {
       return await this.config.source.lexical(text, limit, filter)
     } catch (error) {
@@ -328,7 +351,7 @@ export class AgenticRetriever implements Retriever {
   }
 
   /** Passages of the articles the top hits belong to: the provision is read whole. */
-  private async expandArticles(hits: KbChunk[], filter: Record<string, string | boolean>): Promise<KbChunk[]> {
+  private async expandArticles(hits: KbChunk[], filter: CorpusFilter): Promise<KbChunk[]> {
     const read = this.config.source.article
     if (!read) return []
     const targets = hits
@@ -344,7 +367,7 @@ export class AgenticRetriever implements Retriever {
 
   private async runSubAgent(
     sub: PlannedSubQuestion,
-    filter: Record<string, string | boolean>,
+    filter: CorpusFilter,
     depth: RetrievalDepth,
     fallbacks: string[],
     timings: AgenticExploration['timings'],

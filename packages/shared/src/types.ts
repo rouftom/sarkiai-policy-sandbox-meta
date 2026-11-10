@@ -13,7 +13,12 @@ export type Domain =
   | 'public_services'
   | 'agriculture'
 
-export type Jurisdiction = 'national' | 'regional' | 'international'
+/**
+ * Legal scope of a document. `regional` keeps its supranational meaning (the
+ * African or European level); `subnational` is below the country (US states,
+ * French regions, Cameroonian regions) and carries an ISO 3166-2 `subdivision`.
+ */
+export type Jurisdiction = 'national' | 'subnational' | 'regional' | 'international'
 
 export type DocType =
   | 'law'
@@ -190,6 +195,8 @@ export interface WhatIfResult {
 export interface Taxonomy {
   country: string // ISO-3166 alpha-2, or 'global'
   jurisdiction: Jurisdiction
+  /** ISO 3166-2 code (`US-CA`) when `jurisdiction` is `subnational`. */
+  subdivision?: string
   docType: DocType
   /** Reuse rights recorded in the corpus manifest; absent means `to-confirm`. */
   rights?: CorpusRights
@@ -343,6 +350,13 @@ export interface RetrievalQuery {
   text: string
   country: string
   jurisdiction?: Jurisdiction
+  /**
+   * Several legal scopes at once (a country job combines its national corpus
+   * with a reference corpus). Takes precedence over `jurisdiction`.
+   */
+  jurisdictions?: Jurisdiction[]
+  /** ISO 3166-2 code; narrows a subnational search to one region. */
+  subdivision?: string
   docType?: DocType
   namespace?: string
   topK?: number
