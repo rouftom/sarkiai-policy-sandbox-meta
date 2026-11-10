@@ -19,7 +19,13 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { MongoClient, type MongoClientOptions } from 'mongodb'
 import { runWithEndpointContext, type AuthEndpointContext } from '@better-auth/core/context'
 import { signJWT, symmetricDecrypt, symmetricEncrypt, verifyJWT } from 'better-auth/crypto'
-import { createBetterAuth, type BetterAuthEvents, type BetterAuthInstance } from './config.js'
+import {
+  authIndexes,
+  createBetterAuth,
+  type BetterAuthEvents,
+  type BetterAuthInput,
+  type BetterAuthInstance,
+} from './config.js'
 import {
   AuthError,
   DEFAULT_PREFERENCES,
@@ -50,6 +56,7 @@ export interface BetterAuthServiceConfig {
   sessionSecret?: string
   appName?: string
   issuer?: string
+  cookiePrefix?: string
   trustedOrigins?: string[]
   sessionTtlSeconds?: number
   challengeTtlSeconds?: number
@@ -149,6 +156,7 @@ function messageOf(error: unknown): string {
 export class BetterAuthService {
   private readonly client: MongoClient
   private readonly auth: BetterAuthInstance
+  private readonly authInput: BetterAuthInput
   private readonly secret: string
   private readonly challengeSecret: string
   private readonly sessionTtl: number
@@ -167,17 +175,43 @@ export class BetterAuthService {
     this.challengeTtl = config.challengeTtlSeconds ?? 5 * 60
     this.resetTtl = config.resetTtlSeconds ?? 30 * 60
     this.verificationTtl = config.verificationTtlSeconds ?? 24 * 60 * 60
-    this.auth = createBetterAuth({
+    this.authInput = {
       db: this.client.db(config.dbName),
       client: this.client,
       secret: config.secret,
       baseURL: config.baseURL,
       ...(config.appName ? { appName: config.appName } : {}),
       ...(config.issuer ? { issuer: config.issuer } : {}),
+      ...(config.cookiePrefix ? { cookiePrefix: config.cookiePrefix } : {}),
       ...(config.trustedOrigins ? { trustedOrigins: config.trustedOrigins } : {}),
       ...(config.events ? { events: config.events } : {}),
       ...(config.transactions !== undefined ? { transactions: config.transactions } : {}),
-    })
+    }
+    this.auth = createBetterAuth(this.authInput)
+  }
+
+  /**
+   * Create the indexes better-auth declares on its collections.
+   *
+   * The adapter does this lazily on the first write of a model. The one-off
+   * `auth:migrate` inserted its rows directly, so a migrated deployment can
+   * still be missing `user.email`, `session.token`, `session.userId`,
+   * `account.userId`, `verification.identifier` and the `twoFactor` indexes.
+   * Calling this at boot converges both paths; `createIndex` is idempotent.
+   */
+  async ensureIndexes(): Promise<Array<{ collection: string; name: string; created: boolean }>> {
+    const db = this.client.db(this.config.dbName)
+    const results: Array<{ collection: string; name: string; created: boolean }> = []
+    for (const index of authIndexes(this.authInput)) {
+      const collection = db.collection(index.collection)
+      const existing = await collection
+        .indexes()
+        .then((indexes) => new Set(indexes.map((entry) => entry.name)))
+        .catch(() => new Set<string>())
+      await collection.createIndex(index.keys, { name: index.name, unique: index.unique })
+      results.push({ collection: index.collection, name: index.name, created: !existing.has(index.name) })
+    }
+    return results
   }
 
   get storage(): 'mongo' {

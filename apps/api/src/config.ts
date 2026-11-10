@@ -387,8 +387,14 @@ export const config = {
      * characters; when unset the session secret is used (or a SHA-256 of it).
      */
     betterAuthSecret: env('BETTER_AUTH_SECRET'),
-    /** Public origin of this API, used by better-auth to build links. */
-    baseUrl: env('API_PUBLIC_URL') || `http://localhost:${env('PORT', '8000')}`,
+    /**
+     * Public origin of this API, used by better-auth to build links.
+     * `BETTER_AUTH_URL` is the name the shared auth packages use; `API_PUBLIC_URL`
+     * is the historical name kept for this deployment.
+     */
+    baseUrl: env('BETTER_AUTH_URL') || env('API_PUBLIC_URL') || `http://localhost:${env('PORT', '8000')}`,
+    /** Cookie prefix better-auth issues; mirrors the shared auth default. */
+    cookiePrefix: env('BETTER_AUTH_COOKIE_PREFIX', 'sps-'),
     /**
      * Public self-service sign-up. Open on the cloud demo only (the hackathon
      * judges create their own account); closed for local / sovereign runs.

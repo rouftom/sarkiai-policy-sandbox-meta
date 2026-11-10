@@ -41,6 +41,9 @@ maps the same settings:
    | `MONGODB_URI` | database connection string (user with read and write on the application database) |
    | `WHATSAPP_*` | messaging provider app settings |
    | `APPROVAL_SECRET` | a random value, for example `openssl rand -hex 32` |
+   | `SESSION_SECRET` | a random value, for example `openssl rand -hex 32` (signs operator sessions) |
+   | `BETTER_AUTH_SECRET` | the same value as `SESSION_SECRET` (encrypts TOTP secrets and recovery codes) |
+   | `BETTER_AUTH_URL` | public API origin used in e-mail links (optional; `API_PUBLIC_URL` is still read) |
    | `TURNSTILE_SECRET` | Cloudflare Turnstile widget secret (optional; `CLOUDFLARE_TURNSITE_SITE_SECRET` is still read) |
    | `NEXT_PUBLIC_CLOUDFLARE_TURNSITE_SITE_KEY` | the same widget's public site key (optional) |
    | `TURNSTILE_HOSTNAMES` | console hostnames siteverify accepts, comma-separated (optional, but set it in production) |
@@ -58,10 +61,16 @@ maps the same settings:
 
    ```bash
    SESSION_SECRET=<openssl rand -hex 32>
+   BETTER_AUTH_SECRET=<the same value as SESSION_SECRET>
+   BETTER_AUTH_URL=https://api.example.com
    ```
 
    Session tokens are signed with it: changing the value signs every operator
-   out. A local or on-premise install only logs a warning and keeps the insecure
+   out. `BETTER_AUTH_SECRET` also encrypts the TOTP secrets and recovery codes;
+   set it to the `SESSION_SECRET` value so an existing enrolment stays readable
+   (an empty value derives a stable key from `SESSION_SECRET`). `BETTER_AUTH_URL`
+   is the public origin used in e-mail links; it wins over `API_PUBLIC_URL`.
+   A local or on-premise install only logs a warning and keeps the insecure
    development key, so a LAN demo needs no configuration. The same cloud gate
    applies to `WHATSAPP_APP_SECRET`: without it, the WhatsApp webhook answers
    `503 webhook_secret_missing` instead of accepting unsigned events.
