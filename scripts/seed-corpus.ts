@@ -122,10 +122,10 @@ if (samplesOnly) {
 
 const corpusCountry = manifest.country || country
 
-const JURISDICTIONS = ['national', 'regional', 'international'] as const
+const JURISDICTIONS = ['national', 'subnational', 'regional', 'international'] as const
 type Jurisdiction = (typeof JURISDICTIONS)[number]
 
-/** Manifests carry free-form text; only the three API values are accepted. */
+/** Manifests carry free-form text; only the API values are accepted. */
 function jurisdictionOf(value: string): Jurisdiction {
   return (JURISDICTIONS as readonly string[]).includes(value) ? (value as Jurisdiction) : 'national'
 }

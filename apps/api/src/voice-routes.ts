@@ -10,7 +10,7 @@
 
 import websocket from '@fastify/websocket'
 import type { FastifyInstance } from 'fastify'
-import type { AuthService } from '@sps/auth'
+import type { SessionVerifier } from '@sps/auth'
 
 const VOICE_MODEL = 'muse-voice-transcribe-1.0'
 const MAX_SESSION_MS = 10 * 60 * 1000
@@ -22,7 +22,7 @@ const MAX_SOCKETS_GLOBAL = 20
 const MAX_PAYLOAD_BYTES = 256 * 1024
 
 export interface VoiceRouteOptions {
-  auth: AuthService
+  auth: SessionVerifier
   /** Meta key, read from the provider descriptor (`providerApiKey(engine.provider)`). */
   apiKey: string
   /** Meta API base, e.g. `https://api.meta.ai/v1` (`engine.provider.baseURL`). */

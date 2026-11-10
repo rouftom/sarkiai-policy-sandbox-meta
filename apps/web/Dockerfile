@@ -25,11 +25,15 @@ WORKDIR /app/apps/web
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 # Canonical console origin and extra allowed origins. Both are read at build
-# time; an empty value falls back to the host's own origin, then localhost.
+# time; an empty value falls back to localhost.
 ARG NEXT_PUBLIC_WEB_URL
 ARG NEXT_PUBLIC_WEB_ORIGINS
 ENV NEXT_PUBLIC_WEB_URL=$NEXT_PUBLIC_WEB_URL
 ENV NEXT_PUBLIC_WEB_ORIGINS=$NEXT_PUBLIC_WEB_ORIGINS
+# MCP servers as a JSON array. Also read at build time: the browser lists them
+# and the CSP frames them.
+ARG NEXT_PUBLIC_MCP_SERVERS
+ENV NEXT_PUBLIC_MCP_SERVERS=$NEXT_PUBLIC_MCP_SERVERS
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 

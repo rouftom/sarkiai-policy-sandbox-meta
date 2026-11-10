@@ -41,5 +41,6 @@ export function resolveCornerStyle(preferred?: string | null): CornerStyle {
 }
 
 export * from './types'
+export * from './maturity'
 export * from './generate-css'
 export * from './chrome'

@@ -3,11 +3,10 @@ import type { NextConfig } from 'next'
 /**
  * Origins that may reach this app (server actions CSRF allowlist).
  *
- * Nothing is hardcoded: the canonical origin comes from `NEXT_PUBLIC_WEB_URL`
- * (or the host's own production URL when it exposes one), extra origins from
+ * Nothing is hardcoded and nothing is provider-specific: the canonical origin
+ * comes from `NEXT_PUBLIC_WEB_URL`, extra origins from
  * `NEXT_PUBLIC_WEB_ORIGINS` / `WEB_PUBLIC_URL_ALIASES`, and local development is
- * always allowed. On Vercel the platform's own preview domain is accepted so a
- * deployment link keeps working; another host adds its preview host to
+ * always allowed. A preview or review host is just another origin: list it in
  * `NEXT_PUBLIC_WEB_ORIGINS`. Next also accepts a same-origin request whose
  * `Origin` matches the `Host` header, so an on-premise install behind a LAN name
  * or a reverse proxy needs no extra configuration.
@@ -37,20 +36,13 @@ function hostsOf(value: string | undefined): string[] {
     .filter((entry): entry is string => Boolean(entry))
 }
 
-const productionHost = hostOf(
-  firstNonEmpty(
-    process.env.NEXT_PUBLIC_WEB_URL,
-    process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : undefined,
-  ),
-)
+const productionHost = hostOf(process.env.NEXT_PUBLIC_WEB_URL)
 
 const devPort = firstNonEmpty(process.env.NEXT_PUBLIC_WEB_PORT) ?? '3000'
 
 /**
- * The Vercel toolbar and preview domain are provided by Vercel only; another
- * host needs no exception, so nothing is hardcoded for a platform.
+ * Every allowed origin comes from configuration: no platform wildcard is
+ * assumed, so the same build works on any host.
  */
 const deploymentOrigins = [
   ...new Set(
@@ -58,7 +50,6 @@ const deploymentOrigins = [
       productionHost,
       ...hostsOf(process.env.NEXT_PUBLIC_WEB_ORIGINS),
       ...hostsOf(process.env.WEB_PUBLIC_URL_ALIASES),
-      ...(process.env.VERCEL ? ['*.vercel.app'] : []),
       `localhost:${devPort}`,
     ].filter((host): host is string => Boolean(host)),
   ),
@@ -71,11 +62,11 @@ const deploymentOrigins = [
  * UI). Other resource types keep the browser defaults.
  *
  * Allowed: this app, inline data and blobs, the API host (figures), Cloudinary
- * (report images), the MCP app hosts (chart and document views), Cloudflare
- * Turnstile, and the Vercel toolbar when the app is served by Vercel. The MCP
- * sandbox pages are excluded. Extra hosts: `NEXT_PUBLIC_CSP_IMG_SOURCES`,
- * `NEXT_PUBLIC_CSP_FRAME_SOURCES` (comma-separated origins). Set
- * `NEXT_PUBLIC_CSP_REPORT_ONLY=true` to observe violations without blocking.
+ * (report images), the MCP app hosts (chart and document views) and the
+ * Turnstile challenge. The MCP sandbox pages are excluded. Extra hosts:
+ * `NEXT_PUBLIC_CSP_IMG_SOURCES`, `NEXT_PUBLIC_CSP_FRAME_SOURCES`
+ * (comma-separated origins). Set `NEXT_PUBLIC_CSP_REPORT_ONLY=true` to observe
+ * violations without blocking.
  */
 function originOfUrl(value: string | undefined): string | null {
   const trimmed = firstNonEmpty(value)
@@ -94,12 +85,25 @@ function originsOf(value: string | undefined): string[] {
     .filter((entry): entry is string => Boolean(entry))
 }
 
-const MCP_APP_ORIGINS = [
-  'https://tic-tac-toe-mcp-app.vercel.app',
-  'https://sarkiai-charts-mcp-app.vercel.app',
-  'https://xlab-3d-render-mcp-app.vercel.app',
-  'https://sea-mcp-docx.vercel.app',
-]
+/**
+ * Origins of the configured MCP apps, from `NEXT_PUBLIC_MCP_SERVERS` (the same
+ * JSON the console reads): a configured server is framed, nothing else is.
+ * A malformed value is left to the app's parser, which fails loudly; here it
+ * only means no extra frame origin.
+ */
+function mcpOrigins(value: string | undefined): string[] {
+  try {
+    const parsed = JSON.parse(firstNonEmpty(value) ?? '[]') as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((entry) => (entry && typeof entry === 'object' ? originOfUrl((entry as { url?: string }).url) : null))
+      .filter((origin): origin is string => Boolean(origin))
+  } catch {
+    return []
+  }
+}
+
+const MCP_APP_ORIGINS = mcpOrigins(process.env.NEXT_PUBLIC_MCP_SERVERS)
 
 function sourceList(values: (string | null | undefined)[]): string {
   return [...new Set(values.filter((value): value is string => Boolean(value)))].join(' ')
@@ -119,11 +123,7 @@ const frameSources = sourceList([
   'data:',
   'blob:',
   ...MCP_APP_ORIGINS,
-  originOfUrl(process.env.MCP_CHARTS_URL),
-  originOfUrl(process.env.MCP_DOCX_URL),
   'https://challenges.cloudflare.com',
-  // The toolbar is injected by Vercel only; another host needs no exception.
-  process.env.VERCEL ? 'https://vercel.live' : null,
   ...originsOf(process.env.NEXT_PUBLIC_CSP_FRAME_SOURCES),
 ])
 
@@ -139,6 +139,11 @@ const nextConfig: NextConfig = {
         // sandboxed frame with their own assets; the policy applies everywhere else.
         source: '/:path((?!sandbox_).*)',
         headers: [{ key: cspHeader, value: `img-src ${imgSources}; frame-src ${frameSources}` }],
+      },
+      {
+        // An approval link carries a one-time token in the path: never cache it.
+        source: '/approve/:path*',
+        headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }],
       },
     ]
   },

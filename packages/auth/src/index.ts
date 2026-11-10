@@ -304,13 +304,18 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function hashPassword(password: string): string {
+/**
+ * Password hashing shared with the better-auth migration (`@sps/auth/better-auth`):
+ * better-auth is configured with these exact functions so an operator keeps the
+ * password hash it already has instead of being asked to reset it.
+ */
+export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString('hex')
   const derived = scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 }).toString('hex')
   return `scrypt$16384$8$1$${salt}$${derived}`
 }
 
-function verifyPassword(password: string, stored: string): boolean {
+export function verifyPassword(password: string, stored: string): boolean {
   const parts = stored.split('$')
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false
   const [, n, r, p, salt, expected] = parts as [string, string, string, string, string, string]
@@ -1149,3 +1154,10 @@ export class AuthService {
     return next
   }
 }
+
+/**
+ * The slice of the auth surface a consumer actually needs. Routes that only
+ * verify a bearer token accept either backend (legacy in-memory service or
+ * better-auth) without depending on a concrete class.
+ */
+export type SessionVerifier = Pick<AuthService, 'verifySession'>

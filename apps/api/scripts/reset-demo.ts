@@ -17,8 +17,8 @@
  * indexes, and every configuration value. Re-seed the corpus only when you mean
  * to (`bun run kb:seed`).
  *
- * Hosts without shell access (Render free) use the boot hook instead: commit
- * `apps/api/scripts/reset-on-boot.flag`, deploy, then delete the flag.
+ * Hosts without shell access or a one-off job runner use the boot hook instead:
+ * commit `apps/api/scripts/reset-on-boot.flag`, deploy, then delete the flag.
  *
  * The connection string is never printed, never echoed in an error and never
  * written to disk.

@@ -39,7 +39,8 @@ comme exemple de modèle"*. Use `meta_hackathon_hello_world` instead.
 `WEB_PUBLIC_URL` is the public address of the web app, so the approval button
 base is `<web-public-url>/approve/{{1}}`.
 
-The domain changed from the Vercel deployment to the custom console origin. The
+The domain changed from the platform's default address to the custom console
+origin. The
 existing template buttons still carry the legacy base URL and keep working
 because that host stays alive; editing the base URL means submitting the
 template again for review (a new version), so it can be done whenever the old

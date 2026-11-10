@@ -20,7 +20,8 @@ One document per chunk, written by `AtlasIngestor`
 | `_id` | string | `sha256(document, version, chunkIndex, text)`; makes re-ingestion idempotent |
 | `filename`, `chunkIndex`, `text` | mixed | document grouping + body |
 | `country` | string | ISO-3166 alpha-2 or `global`: **primary filter** |
-| `jurisdiction` | national \| regional \| international | legal level |
+| `jurisdiction` | national \| subnational \| regional \| international | legal level |
+| `subdivision` | string? | ISO 3166-2 code (`US-CA`) when `jurisdiction` is `subnational` |
 | `docType` | law/strategy/regulation/policy/treaty/standard/guidance/report | source class |
 | `pillar` | string[] | readiness dimensions informed |
 | `namespace` | string? | optional sub-corpus partition |
@@ -34,11 +35,29 @@ One document per chunk, written by `AtlasIngestor`
 Indexes:
 
 - `sps_text_index` (Atlas Search, `cloud`): BM25 over `text` with the
-  `sps_fr_folded` analyser, filter fields `country`, `jurisdiction`, `docType`,
-  `namespace` (typed `token`) and `isActive` (boolean). Definition in
+  `sps_fr_folded` analyser, filter fields `country`, `jurisdiction`, `subdivision`,
+  `docType`, `namespace` (typed `token`) and `isActive` (boolean). Definition in
   `packages/retrieval/src/atlas-index-definitions.ts`.
 - MongoDB text index (`local`, `sovereign`): created at the first ingestion.
 - Plain indexes for the console queries (`filename`, `isActive`).
+
+## Run summaries (`readiness_runs`, `scenario_runs`)
+
+Both collections store the full record for the owner and a summary for the
+listings. The summary carries:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `groundedDimensions` | number | dimensions backed by at least one passage of the country's own corpus |
+| `meanConfidence` | number? | weighted mean of the dimension confidences (same weights as the composite); null when nothing was scored |
+| `sharing` | shared \| excluded | `excluded` hides the summary from other operators, country insights and World aggregates; the owner keeps it in `mine` |
+
+`groundedDimensions` and `meanConfidence` are computed at save time, so the
+country dashboard never loads a full report. Runs saved before they existed are
+filled once by `bun run runs:backfill-summary` (idempotent, `--dry-run` prints
+what it would touch). `sharing` defaults to `shared`; `PATCH
+/v1/world/runs/:kind/:runId/sharing` changes it for the owner and is audited as
+`world.run.sharing.changed`.
 
 ## `kb_images` and `kb_documents`
 
@@ -102,7 +121,8 @@ The retriever and the agentic sub-agents apply the same exact-match filter
 ```
 isActive     = true
 country      = <query.country>
-jurisdiction = <optional>
+jurisdiction = <optional; a `jurisdictions` list becomes `$in`>
+subdivision  = <optional ISO 3166-2 code>
 docType      = <optional>
 namespace    = <optional>
 ```

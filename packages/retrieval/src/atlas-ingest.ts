@@ -58,6 +58,8 @@ export interface IngestInput extends ChunkOptions {
   filename: string
   country: string
   jurisdiction?: Jurisdiction
+  /** ISO 3166-2 code, required in practice when `jurisdiction` is `subnational`. */
+  subdivision?: string
   docType?: DocType
   /** Reuse rights from the corpus manifest. Required: absent rights are refused. */
   rights: CorpusRights
@@ -370,6 +372,7 @@ export class AtlasIngestor {
     const country = input.country || 'global'
     const docType = input.docType ?? 'policy'
     const jurisdiction = input.jurisdiction ?? 'national'
+    const subdivision = input.subdivision?.trim() || undefined
     // Fail closed before touching Atlas: the manifest's rights decide whether the
     // full text may be stored at all (see docs/LICENSING.md).
     const rights = assertPublishableRights(input.rights, input.filename)
@@ -459,6 +462,7 @@ export class AtlasIngestor {
                 jurisdiction,
                 docType,
                 rights,
+                ...(subdivision ? { subdivision } : {}),
                 ...(input.namespace ? { namespace: input.namespace } : {}),
                 ...(input.version ? { version: input.version } : {}),
                 ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
@@ -487,6 +491,7 @@ export class AtlasIngestor {
               jurisdiction,
               docType,
               rights,
+              ...(subdivision ? { subdivision } : {}),
               ...(input.namespace ? { namespace: input.namespace } : {}),
               ...(input.version ? { version: input.version } : {}),
             },

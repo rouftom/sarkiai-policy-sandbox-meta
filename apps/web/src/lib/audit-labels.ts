@@ -40,6 +40,14 @@ export const AUDIT_ACTION_KEYS: Record<string, string> = {
   'readiness.localized': 'audit.action.readinessLocalized',
   'readiness.deleted': 'audit.action.readinessDeleted',
   'readiness.resumed': 'audit.action.readinessResumed',
+  'world.battle.create': 'audit.action.worldBattleCreate',
+  'world.battle.start': 'audit.action.worldBattleStart',
+  'world.job.start': 'audit.action.worldJobStart',
+  'world.settings.changed': 'audit.action.worldSettingsChanged',
+  'world.group.change': 'audit.action.worldGroupChange',
+  'world.watch.job': 'audit.action.worldWatchJob',
+  'world.proposal.accept': 'audit.action.worldProposalAccept',
+  'world.run.sharing.changed': 'audit.action.worldRunSharingChanged',
 }
 
 /**

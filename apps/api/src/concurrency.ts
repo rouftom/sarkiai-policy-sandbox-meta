@@ -24,10 +24,27 @@ export interface GateLease {
 export class WorkGate {
   private total = 0
   private readonly perOperator = new Map<string, number>()
-  private readonly limits: GateLimits
+  private limits: GateLimits
 
   constructor(limits: GateLimits) {
-    this.limits = limits
+    this.limits = { ...limits }
+  }
+
+  /**
+   * Replaces the caps at runtime, for a guarded launch queue that sizes itself
+   * from the gate. Work already in flight is never interrupted: the new cap
+   * applies to the next `tryEnter`.
+   */
+  setLimits(limits: Partial<GateLimits>): void {
+    this.limits = {
+      perOperator: Math.max(1, Math.trunc(limits.perOperator ?? this.limits.perOperator)),
+      global: Math.max(1, Math.trunc(limits.global ?? this.limits.global)),
+    }
+  }
+
+  /** The caps in force, for diagnostics and tests. */
+  get currentLimits(): GateLimits {
+    return { ...this.limits }
   }
 
   /** A lease to release in `finally`, or null when a cap is reached. */

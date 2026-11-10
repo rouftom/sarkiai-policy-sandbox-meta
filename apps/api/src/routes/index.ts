@@ -79,6 +79,7 @@ import { auth } from '../auth.js'
 import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
 import { registerRegistryRoutes } from '../registry-routes.js'
+import { registerWorldRoutes } from '../world-routes.js'
 import { RegistryStore } from '../registry.js'
 import { isPublicRoute } from '../public-routes.js'
 import {
@@ -337,9 +338,10 @@ const approvals = new ApprovalStore({
 /**
  * Releases the process-wide stores when the host stops the process.
  *
- * Render sends SIGTERM on every deploy. Closing the clients after Fastify has
- * drained its requests keeps in-flight writes from being cut mid-query, and
- * ends the pooled sockets cleanly instead of leaving them to time out upstream.
+ * A deploy sends SIGTERM before the old instance is replaced. Closing the
+ * clients after Fastify has drained its requests keeps in-flight writes from
+ * being cut mid-query, and ends the pooled sockets cleanly instead of leaving
+ * them to time out upstream.
  */
 export async function closeStores(): Promise<void> {
   await Promise.allSettled([
@@ -720,8 +722,9 @@ export async function seedReferenceImages(log: { info: (...args: unknown[]) => v
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthRoutes(app, engine.audit)
-  // Live dictation goes straight to Meta: Render reaches api.meta.ai (checked by /health/egress),
-  // and a WebSocket cannot pass the serverless relay. Realtime authenticates with `?token=`.
+  // Live dictation goes straight to Meta: the API host reaches api.meta.ai
+  // (checked by /health/egress), and a WebSocket cannot pass a serverless relay.
+  // Realtime authenticates with `?token=`.
   await registerVoiceRoutes(app, {
     auth,
     apiKey: providerApiKey(engine.provider),
@@ -1081,6 +1084,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         filename: body.data.filename.replace(/\.pdf$/i, '.txt'),
         country: body.data.country,
         jurisdiction: body.data.jurisdiction,
+        ...(body.data.subdivision ? { subdivision: body.data.subdivision } : {}),
         docType: body.data.docType as DocType,
         rights: body.data.rights,
         ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
@@ -1126,6 +1130,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         filename: input.filename,
         country: input.country,
         jurisdiction: input.jurisdiction,
+        ...(input.subdivision ? { subdivision: input.subdivision } : {}),
         docType: input.docType,
         rights: input.rights,
         ...(input.namespace ? { namespace: input.namespace } : {}),
@@ -1468,10 +1473,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
-      // Render / any reverse proxy: do not buffer the stream.
+      // Any reverse proxy: do not buffer the stream.
       'X-Accel-Buffering': 'no',
       // A hijacked response bypasses @fastify/cors, and the console is served
-      // from Vercel: the browser needs the CORS header on the stream itself.
+      // from another origin: the browser needs the CORS header on the stream.
       'Access-Control-Allow-Origin': origin ?? '*',
       Vary: 'Origin',
     })
@@ -2315,6 +2320,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         filename: body.data.page.filename,
         country: body.data.country,
         jurisdiction: body.data.jurisdiction,
+        ...(body.data.subdivision ? { subdivision: body.data.subdivision } : {}),
         docType: body.data.docType as DocType,
         rights: body.data.rights,
         ...(body.data.namespace ? { namespace: body.data.namespace } : {}),
@@ -2882,6 +2888,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   await registry.refresh()
   await registerRegistryRoutes(app, { registry, audit: engine.audit })
+  await registerWorldRoutes(app, { readinessRuns, scenarioRuns, audit: engine.audit })
 
   app.get('/v1/countries', async () => {
     return { countries: (await countries.list()).map(countryDto) }
@@ -3013,8 +3020,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (!country) return reply.status(404).send({ error: 'not_found' })
 
     const [runs, scenarioRows, knowledgeStatus] = await Promise.all([
-      readinessRuns.byCountry(code, 200),
-      scenarioRuns.byCountry(code, 200),
+      readinessRuns.byCountry(code, operatorOf(request).email, 200),
+      scenarioRuns.byCountry(code, operatorOf(request).email, 200),
       knowledge.status().catch(() => null),
     ])
 

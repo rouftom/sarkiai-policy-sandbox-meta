@@ -184,8 +184,10 @@ services:
       WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-}
       WEB_PUBLIC_URL_ALIASES: ${WEB_PUBLIC_URL_ALIASES:-}
       WEB_ALLOW_ANY_ORIGIN: ${WEB_ALLOW_ANY_ORIGIN:-}
-      MCP_CHARTS_URL: http://mcp-charts:3000/mcp
-      MCP_DOCX_URL: http://mcp-docx:3000/mcp
+      # First-party MCP servers, as a JSON array of { name, url, requiresApiKey }.
+      # The default is the two local sidecars; set MCP_SERVERS in .env to point at
+      # other servers (the console gets the same value as NEXT_PUBLIC_MCP_SERVERS).
+      MCP_SERVERS: '${MCP_SERVERS:-[{"name":"sarkiai_charts","url":"http://mcp-charts:3000/mcp","requiresApiKey":true},{"name":"sea_mcp_docx","url":"http://mcp-docx:3000/mcp","requiresApiKey":true}]}'
     ports:
       - "${API_PORT:-8000}:8000"
     healthcheck:
@@ -204,6 +206,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-}
         NEXT_PUBLIC_WEB_ORIGINS: ${NEXT_PUBLIC_WEB_ORIGINS:-}
+        NEXT_PUBLIC_MCP_SERVERS: '${MCP_SERVERS:-[{"name":"sarkiai_charts","url":"http://mcp-charts:3000/mcp","requiresApiKey":true},{"name":"sea_mcp_docx","url":"http://mcp-docx:3000/mcp","requiresApiKey":true}]}'
     image: sarkiai/sps-web:local
     container_name: sps-web
     restart: unless-stopped
@@ -214,8 +217,6 @@ services:
       <<: *common-env
       PORT: "3000"
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-      MCP_CHARTS_URL: http://mcp-charts:3000/mcp
-      MCP_DOCX_URL: http://mcp-docx:3000/mcp
     ports:
       - "${WEB_PORT:-3000}:3000"
     healthcheck:

@@ -10,9 +10,13 @@
 import { randomUUID } from 'node:crypto'
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { ReadinessReport } from '@sps/readiness'
+import { groundedDimensionCount, meanConfidence } from '@sps/readiness/scoring'
 import { mongoPoolOptions } from '@sps/shared'
+import { isSharedWith, sharingClause, type RunSharing } from './run-sharing.js'
 
 export type ReadinessRunStatus = 'complete' | 'failed'
+
+export type { RunSharing }
 
 /** The settings an assessment ran with, so an interrupted one can be resumed. */
 export interface ReadinessRunInput {
@@ -41,6 +45,12 @@ export interface ReadinessRunSummary {
   runBy: string
   composite: number | null
   dimensions: number
+  /** Dimensions backed by at least one passage of the country's own corpus. */
+  groundedDimensions: number
+  /** Weighted mean of the dimension confidences, 0..1; null when nothing was scored. */
+  meanConfidence: number | null
+  /** Defaults to `shared`; existing runs count as shared, as before. */
+  sharing: RunSharing
   status: ReadinessRunStatus
   /** Why a failed run stopped, in the provider's words. */
   failure?: string
@@ -61,6 +71,9 @@ function summaryOfDoc(doc: Document): ReadinessRunSummary {
     runBy: String(doc.runBy ?? ''),
     composite: typeof doc.composite === 'number' ? doc.composite : null,
     dimensions: Number(doc.dimensions ?? 0),
+    groundedDimensions: Number(doc.groundedDimensions ?? 0),
+    meanConfidence: typeof doc.meanConfidence === 'number' ? doc.meanConfidence : null,
+    sharing: doc.sharing === 'excluded' ? 'excluded' : 'shared',
     status: doc.status === 'failed' ? 'failed' : 'complete',
     ...(typeof doc.failure === 'string' ? { failure: doc.failure } : {}),
     ...(typeof doc.batchId === 'string' ? { batchId: doc.batchId } : {}),
@@ -141,6 +154,9 @@ export class ReadinessRunStore {
       runBy: input.runBy,
       composite: input.report.scenario?.composite ?? null,
       dimensions: input.report.scores.length,
+      groundedDimensions: groundedDimensionCount(input.report),
+      meanConfidence: meanConfidence(input.report.scores, input.report.scenario?.weights),
+      sharing: 'shared',
       status: input.status ?? 'complete',
       ...(input.failure ? { failure: input.failure } : {}),
       report: input.report,
@@ -198,12 +214,15 @@ export class ReadinessRunStore {
     return { runs: matching.slice((page - 1) * limit, page * limit).map((run) => this.summary(run)), total: matching.length }
   }
 
-  /** Every saved run for a country, across operators: the country dashboard. */
-  async byCountry(country: string, limit = 200): Promise<ReadinessRunSummary[]> {
+  /**
+   * Every saved run for a country, across operators: the country dashboard.
+   * Runs another operator excluded are skipped; the viewer's own are kept.
+   */
+  async byCountry(country: string, viewer: string, limit = 200): Promise<ReadinessRunSummary[]> {
     const col = await this.col()
     if (col) {
       const docs = await col
-        .find({ country }, { projection: { report: 0, input: 0, userId: 0 } })
+        .find({ country, ...sharingClause(viewer) }, { projection: { report: 0, input: 0, userId: 0 } })
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray()
@@ -211,10 +230,27 @@ export class ReadinessRunStore {
       if (docs) return docs.map(summaryOfDoc)
     }
     return [...this.memory.values()]
-      .filter((run) => run.country === country)
+      .filter((run) => run.country === country && isSharedWith(run, viewer))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit)
       .map((run) => this.summary(run))
+  }
+
+  /** Owner-only: excludes or re-shares one run. False when it is not theirs. */
+  async setSharing(id: string, userId: string, sharing: RunSharing): Promise<boolean> {
+    const current = await this.get(id, userId)
+    if (!current) return false
+    const cached = this.memory.get(id)
+    if (cached && cached.userId === userId) this.memory.set(id, { ...cached, sharing })
+    const col = await this.col()
+    if (col) {
+      const result = await col.updateOne(
+        { _id: id as unknown as Document['_id'], userId },
+        { $set: { sharing } },
+      ).catch(() => null)
+      if (!result) throw new Error('The sharing state could not be saved.')
+    }
+    return true
   }
 
   /** How many saved runs reference a country, across operators (deletion guard). */
@@ -295,6 +331,8 @@ export class ReadinessRunStore {
       status: patch.status,
       composite: patch.report.scenario?.composite ?? null,
       dimensions: patch.report.scores.length,
+      groundedDimensions: groundedDimensionCount(patch.report),
+      meanConfidence: meanConfidence(patch.report.scores, patch.report.scenario?.weights),
       ...(patch.failure ? { failure: patch.failure } : {}),
     }
     const cached = this.memory.get(id)
@@ -310,6 +348,8 @@ export class ReadinessRunStore {
               status: updated.status,
               composite: updated.composite,
               dimensions: updated.dimensions,
+              groundedDimensions: updated.groundedDimensions,
+              meanConfidence: updated.meanConfidence,
               ...(patch.failure ? { failure: patch.failure } : {}),
             },
             ...(patch.failure ? {} : { $unset: { failure: '' } }),

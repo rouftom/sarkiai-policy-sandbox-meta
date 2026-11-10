@@ -10,7 +10,7 @@
 import { MongoClient, type Collection, type Document } from 'mongodb'
 import type { DocType, Jurisdiction, KbChunk, ReadinessDimension, RetrievalQuery } from '@sps/shared'
 import { mongoPoolOptions, normalizeCorpusRights } from '@sps/shared'
-import { corpusFilter, fuseRanked, type LexicalSource } from './agentic'
+import { corpusFilter, fuseRanked, type CorpusFilter, type LexicalSource } from './agentic'
 import type { Retriever } from './types'
 
 export { fuseRanked }
@@ -55,6 +55,7 @@ function toChunk(doc: Document, score?: number): KbChunk | null {
     chunkIndex: typeof doc.chunkIndex === 'number' ? doc.chunkIndex : 0,
     country: asString(doc.country) ?? '',
     jurisdiction,
+    ...(asString(doc.subdivision) ? { subdivision: asString(doc.subdivision) } : {}),
     docType,
     rights: normalizeCorpusRights(doc.rights),
     pillar: Array.isArray(doc.pillar) ? (doc.pillar as ReadinessDimension[]) : undefined,
@@ -86,7 +87,7 @@ export class CorpusSource implements LexicalSource, Retriever {
     return this.withImages(chunks)
   }
 
-  async lexical(text: string, limit: number, filter: Record<string, string | boolean>): Promise<KbChunk[]> {
+  async lexical(text: string, limit: number, filter: CorpusFilter): Promise<KbChunk[]> {
     const cleaned = text.replace(/\s+/g, ' ').trim()
     if (!cleaned) return []
     const collection = await this.collection()
@@ -98,7 +99,11 @@ export class CorpusSource implements LexicalSource, Retriever {
                 index: this.textIndexName,
                 compound: {
                   must: [{ text: { query: cleaned, path: 'text' } }],
-                  filter: Object.entries(filter).map(([path, value]) => ({ equals: { path, value } })),
+                  filter: Object.entries(filter).map(([path, value]) =>
+                    typeof value === 'object' && '$in' in value
+                      ? { in: { path, value: value.$in } }
+                      : { equals: { path, value } },
+                  ),
                 },
               },
             },

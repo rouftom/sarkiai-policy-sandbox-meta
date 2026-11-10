@@ -74,3 +74,51 @@ describe('readiness runs', () => {
     expect((await store.page('other', { page: 1, limit: 10 })).total).toBe(0)
   })
 })
+
+describe('readiness run summaries', () => {
+  const richReport = {
+    country: 'us',
+    domain: 'health',
+    generatedAt: '2026-11-01T00:00:00.000Z',
+    dimensions: [
+      { dimension: 'strategy', dimensionId: 1, gaps: [], countryChunks: [{ id: 'c1' }], globalChunks: [] },
+      { dimension: 'data', dimensionId: 2, gaps: [], countryChunks: [], globalChunks: [{ id: 'g1' }] },
+    ],
+    scores: [
+      { dimension: 'strategy', dimensionId: 1, dimensionName: 'Strategy', score: 4, maturity: 'Advanced', evidence: [], gaps: [], recommendations: [], confidence: 0.9 },
+      { dimension: 'data', dimensionId: 2, dimensionName: 'Data', score: 1, maturity: 'Initial', evidence: [], gaps: [], recommendations: [], confidence: 0.5 },
+    ],
+    scenario: {
+      country: 'us',
+      domain: 'health',
+      generatedAt: '',
+      dimensions: [],
+      overall: 2.5,
+      composite: 2.5,
+      weights: { strategy: 3, data: 1 },
+    },
+    summary: 'test',
+  } as unknown as ReadinessReport
+
+  test('stores the grounded count and the weighted mean confidence at save time', async () => {
+    const store = new ReadinessRunStore({})
+    const saved = await store.save({ userId: 'op', runBy: 'op', report: richReport })
+    expect(saved.groundedDimensions).toBe(1)
+    expect(saved.meanConfidence).toBe(0.8)
+    expect(saved.sharing).toBe('shared')
+    expect((await store.list('op'))[0]!.groundedDimensions).toBe(1)
+  })
+
+  test('an excluded summary leaves the shared scope but stays with its owner', async () => {
+    const store = new ReadinessRunStore({})
+    const mine = await store.save({ userId: 'op', runBy: 'op', report: richReport })
+    const other = await store.save({ userId: 'other', runBy: 'other', report: richReport })
+
+    expect(await store.setSharing(mine.id, 'other', 'excluded')).toBe(false)
+    expect(await store.setSharing(mine.id, 'op', 'excluded')).toBe(true)
+
+    const shared = await store.byCountry('us', 'other')
+    expect(shared.map((run) => run.id)).toEqual([other.id])
+    expect((await store.byCountry('us', 'op')).map((run) => run.id).sort()).toEqual([mine.id, other.id].sort())
+  })
+})

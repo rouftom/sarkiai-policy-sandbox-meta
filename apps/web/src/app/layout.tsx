@@ -28,8 +28,8 @@ const montserrat = Montserrat({
 
 /**
  * Canonical origin, from configuration only: the console's own URL when given,
- * otherwise the host's production URL, otherwise local development. Empty
- * values (an unset compose variable, for instance) are ignored, never parsed.
+ * otherwise local development. Empty values (an unset compose variable, for
+ * instance) are ignored, never parsed.
  */
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
   for (const value of values) {
@@ -40,12 +40,8 @@ function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
 }
 
 const canonicalUrl =
-  firstNonEmpty(
-    process.env.NEXT_PUBLIC_WEB_URL,
-    process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : undefined,
-  ) ?? `http://localhost:${firstNonEmpty(process.env.NEXT_PUBLIC_WEB_PORT) ?? '3000'}`
+  firstNonEmpty(process.env.NEXT_PUBLIC_WEB_URL) ??
+  `http://localhost:${firstNonEmpty(process.env.NEXT_PUBLIC_WEB_PORT) ?? '3000'}`
 
 export const metadata: Metadata = {
   metadataBase: new URL(canonicalUrl),

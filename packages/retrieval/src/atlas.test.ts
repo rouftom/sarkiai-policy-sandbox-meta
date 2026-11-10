@@ -28,6 +28,31 @@ describe('Atlas filter', () => {
       namespace: 'gazette',
     })
   })
+
+  test('accepts several jurisdictions and narrows a subnational search', () => {
+    expect(
+      atlasFilter({
+        text: 'x',
+        country: 'us',
+        jurisdictions: ['national', 'subnational'],
+        subdivision: 'US-CA',
+      }),
+    ).toEqual({
+      isActive: true,
+      country: 'us',
+      jurisdiction: { $in: ['national', 'subnational'] },
+      subdivision: 'US-CA',
+    })
+  })
+
+  test('a single jurisdiction in the list stays an exact match', () => {
+    expect(atlasFilter({ text: 'x', country: 'fr', jurisdictions: ['subnational'], subdivision: 'FR-IDF' })).toEqual({
+      isActive: true,
+      country: 'fr',
+      jurisdiction: 'subnational',
+      subdivision: 'FR-IDF',
+    })
+  })
 })
 
 describe('reciprocal rank fusion', () => {

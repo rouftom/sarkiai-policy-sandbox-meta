@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "wp-0002",
+  "country": "zz",
+  "sourceUrl": "https://example.invalid/gazette/zz-01/ordinance-7",
+  "sourceTier": 1,
+  "title": "Regional Health Data Ordinance (FICTIONAL)",
+  "authority": "Council of region ZZ-01 (fictional)",
+  "docType": "regulation",
+  "jurisdiction": "subnational",
+  "subdivision": "ZZ-01",
+  "publishedAt": "2026-08-15",
+  "rights": "official-text",
+  "rightsReason": "Official regional gazette, normative text",
+  "excerpt": "Health data held by regional establishments shall be protected as provided by this ordinance. (FICTIONAL EXCERPT)",
+  "excerptVerified": true,
+  "contentHash": "f7e51fc88abd2de0d712037f0d75ec3dfb4261bbc3b78acdece29adc6dd65bdd",
+  "status": "pending",
+  "discovery": {
+    "query": "regional health data ordinance zz-01",
+    "at": "2026-11-07T10:00:00Z",
+    "via": "web-search"
+  }
+}
