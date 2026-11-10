@@ -10,6 +10,13 @@
 export type RunSharing = 'shared' | 'excluded'
 
 /**
+ * What one operator may read: their own runs (`mine`) or every summary another
+ * operator did not exclude (`shared`). Used by the country dashboard and the
+ * World summary.
+ */
+export type RunScope = 'mine' | 'shared'
+
+/**
  * Mongo filter clause matching what `viewer` may see: every shared run, plus
  * their own excluded ones.
  */

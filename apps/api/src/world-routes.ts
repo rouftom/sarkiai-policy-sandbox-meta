@@ -1,17 +1,18 @@
 /**
  * World mode routes.
  *
- * World is built in vertical slices, so this file grows with them. It starts
- * with the run-sharing endpoint: the only World mutation that acts on stores
- * that already exist (readiness and scenario runs), and the first audited
- * `world.*` action.
+ * World is built in vertical slices, so this file grows with them: the run
+ * sharing mutation (the first audited `world.*` action, on stores that already
+ * existed) and the cross-country summary read model behind the World page.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { AuditService } from '@sps/audit'
+import type { CountryStore } from './countries.js'
 import type { ReadinessRunStore } from './readiness-runs.js'
 import type { ScenarioRunStore } from './scenario-runs.js'
+import { buildWorldSummary, type WorldSector } from './world-summary.js'
 
 const sharingParams = z.object({
   kind: z.enum(['readiness', 'scenario']),
@@ -20,6 +21,21 @@ const sharingParams = z.object({
 
 const sharingBody = z.object({
   sharing: z.enum(['shared', 'excluded']).describe('Whether other operators see this run summary.'),
+})
+
+/** Keep in sync with `COUNTRY_SECTORS`; `satisfies` makes a drifted entry a type error. */
+const SUMMARY_SECTORS = [
+  'health',
+  'education',
+  'telecom',
+  'public_services',
+  'agriculture',
+  'all',
+] as const satisfies readonly WorldSector[]
+
+const summaryQuery = z.object({
+  sector: z.enum(SUMMARY_SECTORS).default('all'),
+  scope: z.enum(['mine', 'shared']).default('mine'),
 })
 
 function validationFailure(reply: FastifyReply, error: z.ZodError) {
@@ -38,9 +54,33 @@ function operatorOf(request: FastifyRequest): string {
 
 export async function registerWorldRoutes(
   app: FastifyInstance,
-  deps: { readinessRuns: ReadinessRunStore; scenarioRuns: ScenarioRunStore; audit: AuditService },
+  deps: {
+    readinessRuns: ReadinessRunStore
+    scenarioRuns: ScenarioRunStore
+    countries: CountryStore
+    audit: AuditService
+  },
 ): Promise<void> {
-  const { readinessRuns, scenarioRuns, audit } = deps
+  const { readinessRuns, scenarioRuns, countries, audit } = deps
+
+  /**
+   * The World table and map read model: the latest complete run per (country,
+   * sector), with coverage, confidence, freshness and the resolved display
+   * state. Summaries only, so `shared` never exposes another operator's report.
+   */
+  app.get('/v1/world/summary', async (request, reply) => {
+    const query = summaryQuery.safeParse(request.query ?? {})
+    if (!query.success) return validationFailure(reply, query.error)
+
+    const viewer = operatorOf(request)
+    const { sector, scope } = query.data
+    const [registry, runs] = await Promise.all([
+      countries.list(),
+      readinessRuns.completeForScope(viewer, scope),
+    ])
+
+    return buildWorldSummary({ countries: registry, runs, sector, scope })
+  })
 
   /**
    * Owner-only. A run excluded here leaves the shared scope, other operators'

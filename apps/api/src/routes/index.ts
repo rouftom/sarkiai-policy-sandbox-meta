@@ -2888,7 +2888,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   await registry.refresh()
   await registerRegistryRoutes(app, { registry, audit: engine.audit })
-  await registerWorldRoutes(app, { readinessRuns, scenarioRuns, audit: engine.audit })
+  await registerWorldRoutes(app, { readinessRuns, scenarioRuns, countries, audit: engine.audit })
 
   app.get('/v1/countries', async () => {
     return { countries: (await countries.list()).map(countryDto) }
