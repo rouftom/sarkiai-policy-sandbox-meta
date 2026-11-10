@@ -38,7 +38,7 @@ import {
   verifyAttachmentSignature,
   type MediaRef,
 } from '../media-store.js'
-import { hasLanguage, institutionsForDomain, institutionsForDomains, providerOptionsName, type ProviderDescriptor } from '@sps/shared'
+import { hasLanguage, providerOptionsName, type ProviderDescriptor } from '@sps/shared'
 import {
   RIGHTS_BLOCKED_MESSAGE,
   RightsBlockedError,
@@ -78,6 +78,8 @@ import { WorkGate } from '../concurrency.js'
 import { auth } from '../auth.js'
 import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit.js'
 import { registerVoiceRoutes } from '../voice-routes.js'
+import { registerRegistryRoutes } from '../registry-routes.js'
+import { RegistryStore } from '../registry.js'
 import { isPublicRoute } from '../public-routes.js'
 import {
   actionDecisionInput,
@@ -312,6 +314,9 @@ const notificationContacts = new NotificationContactStore({
   mongodbUri: config.mongodb.uri,
   dbName: config.mongodb.dbName,
 })
+
+/** Agents & AI registry: roles, institutions and agents (versioned, audited). */
+export const registry = new RegistryStore({ mongodbUri: config.mongodb.uri, dbName: config.mongodb.dbName })
 
 const countries = new CountryStore({
   mongodbUri: config.mongodb.uri,
@@ -1412,7 +1417,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = askBody.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
 
-    const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
+    const institution = registry.agentSpecsSync({ domains: [body.data.domain as Domain] }).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: 'not_found', message: `Unknown institution "${body.data.institutionId}"` })
 
     const stored = body.data.attachmentRefs?.length
@@ -1448,7 +1453,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = askBody.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
 
-    const institution = institutionsForDomain(body.data.domain as Domain).find((i) => i.id === body.data.institutionId)
+    const institution = registry.agentSpecsSync({ domains: [body.data.domain as Domain] }).find((i) => i.id === body.data.institutionId)
     if (!institution) return reply.status(404).send({ error: 'not_found', message: `Unknown institution "${body.data.institutionId}"` })
 
     const stored = body.data.attachmentRefs?.length
@@ -1555,7 +1560,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = agentRoutingRequest.safeParse(request.body)
     if (!body.success) return validationFailure(reply, body.error)
     const chosen = new Set(body.data.institutionIds ?? [])
-    const institutions = institutionsForDomains(body.data.domains as Domain[]).filter((institution) => chosen.size === 0 || chosen.has(institution.id))
+    const institutions = registry.agentSpecsSync({ domains: body.data.domains as Domain[] }).filter((institution) => chosen.size === 0 || chosen.has(institution.id))
     if (institutions.length === 0) return reply.status(404).send({ error: 'not_found', message: 'No institution for these sectors.' })
     const known = new Set(institutions.map((institution) => institution.id))
     const fallback = { primary: institutions[0]!.id, others: [] as string[], reason: '' }
@@ -1593,6 +1598,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     userId: string,
     lang: ScenarioLang = 'en',
     model?: string,
+    agentIds?: string[],
   ): ScenarioSession {
     const run = createScenario(scenarioFor(domain, country, lang), 'simulation').toRun()
     return {
@@ -1602,7 +1608,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       domain,
       lang,
       model,
-      institutions: institutionsForDomain(domain),
+      // Agents from the Agents & AI registry: the chosen ones, else the sector's active agents.
+      institutions: registry.agentSpecsSync({ domains: [domain], ...(agentIds?.length ? { ids: agentIds } : {}) }),
       events: run.events,
       ticks: [...new Set(run.events.map((e) => e.releaseChunk))].sort((a, b) => a - b),
       released: 0,
@@ -1619,7 +1626,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
    * the next batch, the read and the resume working instead of answering 404.
    */
   function sessionFromRecord(record: ScenarioRunRecord, model?: string): ScenarioSession {
-    const session = buildSession(record.country, record.domain as Domain, record.userId, record.lang, model)
+    const session = buildSession(record.country, record.domain as Domain, record.userId, record.lang, model, record.agentIds)
     session.runId = record.id
     session.released = record.released
     session.reports = [...record.reports]
@@ -1681,6 +1688,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       released: session.released,
       total: session.ticks.length,
       reports: session.reports,
+      agentIds: session.institutions.map((institution) => institution.id),
       status: 'running',
     })
   }
@@ -1718,7 +1726,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = scenarioRunInput.safeParse(request.body ?? {})
     if (!body.success) return validationFailure(reply, body.error)
 
-    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang, operatorOf(request).preferences.model)
+    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang, operatorOf(request).preferences.model, body.data.agentIds)
     scenarioSessions.set(session.runId, session)
     await recordScenarioRun(session)
     return {
@@ -1890,7 +1898,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = scenarioRunInput.safeParse(request.body ?? {})
     if (!body.success) return validationFailure(reply, body.error)
 
-    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang, operatorOf(request).preferences.model)
+    const session = buildSession(body.data.country, body.data.domain as Domain, operatorOf(request).email, body.data.lang, operatorOf(request).preferences.model, body.data.agentIds)
     scenarioSessions.set(session.runId, session)
     await recordScenarioRun(session)
     while (session.released < session.ticks.length) {
@@ -2871,6 +2879,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (values.length === 0) return null
     return Math.round((values.reduce((total, value) => total + value, 0) / values.length) * 10) / 10
   }
+
+  await registry.refresh()
+  await registerRegistryRoutes(app, { registry, audit: engine.audit })
 
   app.get('/v1/countries', async () => {
     return { countries: (await countries.list()).map(countryDto) }

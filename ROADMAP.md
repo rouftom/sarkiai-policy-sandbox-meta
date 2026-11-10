@@ -125,6 +125,18 @@ is published.
 **Done when** a first exercise has run with public officials and its lessons are
 published.
 
+### M11 · Agents & AI registry
+
+- Roles built from fixed capabilities, institutions with their legal basis,
+  agents combining both with a Meta model: created, versioned and audited by
+  administrators, with guarantees no setting can lift.
+- Agents chosen in the work screens: crisis scenarios, assistant, exercise.
+- Next: the information scope applied by the scenario engine, a test set per
+  agent before activation, agent names in observability.
+
+**Status**: first version built after the hackathon (local, not yet released).
+See [`docs/AGENTS-AND-ROLES.md`](docs/AGENTS-AND-ROLES.md).
+
 ## How to contribute
 
 Pick a milestone, open an issue to discuss the approach, then follow

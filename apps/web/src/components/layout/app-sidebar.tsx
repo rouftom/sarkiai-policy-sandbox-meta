@@ -4,6 +4,7 @@ import * as React from 'react'
 import Link, { useLinkStatus } from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
+  ChevronDown,
   Compass,
   Loader,
   PanelLeftClose,
@@ -113,6 +114,34 @@ export function AdminSidebar() {
     )
   }
 
+  // Collapsible sections (Institutions, Agents & AI): open by default when one
+  // of their pages is the current one; the operator's toggle wins afterwards.
+  const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
+  const renderGroup = (entry: NavEntry) => {
+    if (!entry.children) return renderItem(entry)
+    if (collapsed) return <React.Fragment key={entry.href}>{entry.children.map(renderItem)}</React.Fragment>
+    const containsActive = entry.children.some((child) => isActive(child.href))
+    const open = openGroups[entry.href] ?? containsActive
+    return (
+      <div key={entry.href}>
+        <button
+          type="button"
+          onClick={() => setOpenGroups((value) => ({ ...value, [entry.href]: !open }))}
+          aria-expanded={open}
+          className={cn(
+            'flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[13px] transition-colors',
+            containsActive ? 'font-medium text-sidebar-foreground' : 'text-sidebar-foreground/75 hover:bg-brand-primary/5 hover:text-sidebar-foreground',
+          )}
+        >
+          <entry.icon className="h-4 w-4 shrink-0" />
+          <span className="truncate">{t(entry.labelKey)}</span>
+          <ChevronDown className={cn('ml-auto h-3.5 w-3.5 shrink-0 transition-transform', open ? 'rotate-0' : '-rotate-90')} />
+        </button>
+        {open && <div className="ml-4 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-2">{entry.children.map(renderChild)}</div>}
+      </div>
+    )
+  }
+
   const groupLabel = (key: MessageKey) =>
     !collapsed && (
       <p className="px-3 pb-1 pt-3 text-[11px] font-medium text-sidebar-foreground/55">
@@ -182,7 +211,7 @@ export function AdminSidebar() {
 
             <div className="my-1 border-t border-sidebar-border" />
             {groupLabel('nav.group_general')}
-            {GENERAL_NAV.map(renderItem)}
+            {GENERAL_NAV.map(renderGroup)}
 
             {groupLabel('nav.group_operations')}
             {OPERATIONS_NAV.map(renderItem)}

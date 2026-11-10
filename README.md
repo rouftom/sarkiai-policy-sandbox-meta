@@ -135,6 +135,17 @@ profile. WhatsApp, voice notes, impact analysis, the table-top exercise and the
 The lens is a **declarative workflow profile** (`packages/shared`), never a duplicated code path.
 Gap analysis is a **shared service** consumed by every lens, so no evaluation criterion is lost.
 
+## Agents & AI registry
+
+Roles, institutions and agents are configured in the console (**Agents & AI**
+and **Institutions**), not hard-coded: a role is built from fixed capabilities,
+an institution carries its mandate and its legal basis in the corpus, and an
+agent combines a role, an institution when mandated, and a Meta model. Every
+change is administrator-only, versioned and audited, and the guarantees (the
+citation check, a person for every side effect, rule-based scores, Meta models
+only) cannot be lifted by any setting. Crisis scenarios let you choose the agents
+taking part. Details: [`docs/AGENTS-AND-ROLES.md`](docs/AGENTS-AND-ROLES.md).
+
 ## Architecture
 
 ![One engine, three modes: every model the system calls is a Meta model](docs/architecture/01-overview.svg)
@@ -245,8 +256,8 @@ WEB_PUBLIC_URL_ALIASES=https://<other-host>    # optional, comma-separated
 ```
 
 Once `WEB_PUBLIC_URL` is set, the API allowlist contains that origin, its
-aliases, local-network origins and `*.vercel.app` previews. A *public* name that
-differs from `WEB_PUBLIC_URL` (second domain, staging host) goes in
+aliases and local-network origins. A *public* name that
+differs from `WEB_PUBLIC_URL` (second domain, staging host, preview host) goes in
 `WEB_PUBLIC_URL_ALIASES`; a LAN address or internal name never needs to.
 `WEB_ALLOW_ANY_ORIGIN=true` is the escape hatch for a reverse proxy that cannot
 be expressed as a list. Details in
@@ -316,7 +327,7 @@ AUTH_RESEND_KEY=re_...                       # optional locally, required on a p
 AUTH_RESEND_EMAIL_FROM=SarkiAI Policy Sandbox <no-reply@your-domain>
 AUTH_RESEND_EMAIL_REPLY_TO=you@your-domain
 WEB_PUBLIC_URL=https://your-console.example   # used to build the sign-in link
-WEB_PUBLIC_URL_ALIASES=https://your-project.vercel.app  # optional, comma-separated
+WEB_PUBLIC_URL_ALIASES=https://your-console.old-host   # optional, comma-separated
 TURNSTILE_SECRET=...                         # optional: human check on the auth forms
 TURNSTILE_HOSTNAMES=your-console.example     # optional: hostnames siteverify accepts
 ```

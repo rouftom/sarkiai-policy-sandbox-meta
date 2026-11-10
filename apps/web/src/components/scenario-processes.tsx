@@ -55,6 +55,7 @@ import { useToast } from '@/components/shared/toast'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 import { ProcessGraph, type ProcessGraphStep } from '@/components/workflow/process-graph'
+import { useRegistryAgents } from '@/components/registry/agent-picker'
 import { useI18n } from '@/lib/i18n'
 
 const SEVERITY: Record<string, string> = {
@@ -384,11 +385,13 @@ function ProcessNodeCard({
   close: () => void
 }) {
   const { t } = useI18n()
+  const registryAgents = useRegistryAgents([block.domain])
   const names = React.useMemo(() => {
     const map = new Map<string, string>()
     for (const institution of institutionsForDomain(block.domain)) map.set(institution.id, institution.name)
+    for (const agent of registryAgents ?? []) map.set(agent.id, agent.name)
     return map
-  }, [block.domain])
+  }, [block.domain, registryAgents])
 
   const batch = node.kind === 'agent' && node.id.startsWith('batch-') ? Number(node.id.slice('batch-'.length)) : null
   const facts = batch === null ? [] : block.agenda.filter((item) => item.releaseChunk === batch)

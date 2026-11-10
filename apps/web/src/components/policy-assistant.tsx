@@ -60,6 +60,7 @@ import { MediaPickerDialog } from '@/components/ai/inputs/media-picker-dialog'
 import { ChatMessage, type ChatTurn, type TurnAttachment } from '@/components/ai/display/chat-message'
 import { LoaderGlyph, STREAM_LOADERS, useStreamLoader, type StreamLoaderVariant } from '@/components/ai/display/stream-loaders'
 import { EFFORTS, useAssistantEffort, type AssistantEffort } from '@/lib/assistant-effort'
+import { useRegistryAgents } from '@/components/registry/agent-picker'
 import type { TrailStepView } from '@/components/ai/tools/agent-activity-trail'
 
 interface Attachment {
@@ -152,9 +153,22 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
   const streamRef = React.useRef<AbortController | null>(null)
 
   // The institutions of every sector the operator works on (one list for the whole workspace).
-  const institutions = React.useMemo(() => institutionsForDomains(domains), [domains])
+  // From the Agents & AI registry; the built-in catalogue until it answers (or if it cannot).
+  const registryAgents = useRegistryAgents(domains)
+  const institutions = React.useMemo(
+    () => (registryAgents && registryAgents.length > 0 ? registryAgents : institutionsForDomains(domains)),
+    [registryAgents, domains],
+  )
   /** The institutions the operator chose. None: the router picks per question among all of them; one: it answers directly; several: the router picks among those. */
   const [institutionIds, setInstitutionIds] = React.useState<string[]>([])
+  // "Try in the assistant" from an agent's page: /?assistant=<agent id> pins that agent once it is listed.
+  const requestedAgent = React.useRef<string | null>(typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('assistant'))
+  React.useEffect(() => {
+    const wanted = requestedAgent.current
+    if (!wanted || !institutions.some((institution) => institution.id === wanted)) return
+    setInstitutionIds([wanted])
+    requestedAgent.current = null
+  }, [institutions])
   const pinned = institutionIds.length === 1 ? institutions.find((institution) => institution.id === institutionIds[0]) : undefined
   const toggleInstitution = (id: string) =>
     setInstitutionIds((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]))
