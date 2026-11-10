@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "country": "zz",
+  "createdAt": "2026-11-07T10:00:00Z",
+  "documents": [
+    {
+      "file": "act-001.pdf",
+      "title": "Personal Data Protection Act (FICTIONAL)",
+      "authority": "Parliament of Zedland (fictional)",
+      "docType": "law",
+      "jurisdiction": "national",
+      "publishedAt": "2026-09-01",
+      "sourceUrl": "https://example.invalid/gazette/2026/act-001",
+      "sha256": "16d223edecade800663875648a8fd2130700086466e7aaefd613e9a9576c81b1",
+      "claimedRights": "official-text"
+    }
+  ]
+}

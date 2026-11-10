@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "defaultLevel": "admin-1",
+  "targetRegions": {
+    "min": 3,
+    "max": 60
+  },
+  "singleRegionBelow": 3,
+  "overrides": {
+    "GB": {
+      "strategy": "aggregate",
+      "reason": "Source granularity too fine (about 232 entities); choose the level (nations/regions) and validate",
+      "status": "to decide"
+    },
+    "UG": {
+      "strategy": "aggregate",
+      "reason": "More than 100 entities in the reference files; aggregate to the next level up",
+      "status": "to decide"
+    },
+    "EE": {
+      "strategy": "aggregate",
+      "reason": "Very fine source granularity (about 79 entities); aggregate",
+      "status": "to decide"
+    },
+    "FR": {
+      "strategy": "aggregate",
+      "by": "region",
+      "reason": "Natural Earth gives 101 departments; dissolve by the source `region` field into 18 regions (13 metropolitan + 5 overseas); keep departments as an optional deeper level",
+      "crosswalk": "data/crosswalk-france-departments-to-regions.csv",
+      "status": "validated (pilot)"
+    },
+    "CM": {
+      "strategy": "keep",
+      "reason": "10 administrative regions",
+      "status": "validated (pilot)"
+    },
+    "US": {
+      "strategy": "keep",
+      "reason": "50 states + DC with clean US-XX codes; territories are separate entities",
+      "status": "validated (pilot)"
+    }
+  },
+  "sourceFacts": {
+    "admin1Features": 4596,
+    "countriesWithAdmin1": 241,
+    "withoutCleanIso3166_2": 12,
+    "measuredOn": "Natural Earth 10m admin-1 (see analysis/natural-earth-measurements.csv)"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "note": "Starting list; to be completed and validated by two reviewers. No implicit position.",
+  "entities": [
+    {
+      "id": "EH",
+      "topic": "Contested territorial status",
+      "treatment": "distinct entity + hatch"
+    },
+    {
+      "id": "XK",
+      "topic": "Partial recognition",
+      "treatment": "distinct entity + note"
+    },
+    {
+      "id": "PS",
+      "topic": "Status and borders",
+      "treatment": "distinct entity + note"
+    },
+    {
+      "id": "TW",
+      "topic": "Political status",
+      "treatment": "distinct entity + note"
+    },
+    {
+      "id": "X-UA-crimea",
+      "topic": "Contested borders",
+      "treatment": "per borderPolicy"
+    },
+    {
+      "id": "X-KASHMIR",
+      "topic": "Contested borders",
+      "treatment": "per borderPolicy"
+    }
+  ],
+  "review": {
+    "required": 2,
+    "lastReviewedAt": null
+  }
+}

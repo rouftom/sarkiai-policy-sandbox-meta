@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "id": "bt_2026-11-07_0001",
+  "operator": "operator@example.test",
+  "type": "readiness",
+  "state": "running",
+  "config": {
+    "schemaVersion": 1,
+    "type": "readiness",
+    "title": "Health readiness - fictional pilot group (example)",
+    "sectors": [
+      "health"
+    ],
+    "participants": [
+      {
+        "code": "zz",
+        "regionId": "ZZ-01"
+      },
+      {
+        "code": "xa"
+      },
+      {
+        "code": "xb"
+      }
+    ],
+    "settings": {
+      "global": {
+        "readiness": {
+          "perDimensionK": 8,
+          "useWeb": false,
+          "reasoningEffort": "medium",
+          "concurrency": "parallel",
+          "language": "en"
+        },
+        "timeoutMs": 900000,
+        "priority": 5
+      },
+      "groups": {
+        "pilot": {
+          "readiness": {
+            "reasoningEffort": "low"
+          }
+        }
+      },
+      "countries": {
+        "zz": {
+          "readiness": {
+            "useWeb": true,
+            "dimensions": [
+              "ai_policies",
+              "digital_infrastructure",
+              "human_interface"
+            ],
+            "weights": {
+              "ai_policies": 2
+            }
+          }
+        },
+        "xa": {
+          "readiness": {
+            "language": "fr"
+          }
+        }
+      },
+      "regions": {
+        "ZZ-01": {
+          "readiness": {
+            "perDimensionK": 12
+          }
+        }
+      }
+    },
+    "tags": [
+      "example",
+      "pilot"
+    ]
+  },
+  "manifest": {
+    "frameworkVersion": "2.0",
+    "codeVersion": "0000000",
+    "geoVersion": "2026.1",
+    "perJob": [
+      {
+        "code": "zz",
+        "sector": "health",
+        "settingsHash": "a85840476a2f137b76bbb64af5b80616c547b473cee01b5e6f73c639ea17d133",
+        "runId": "run-zz-001",
+        "mode": "local",
+        "modelIds": [
+          "<local-model-id>"
+        ],
+        "corpusFingerprint": {
+          "chunks": 820,
+          "latestIngestAt": "2026-10-30T00:00:00Z",
+          "manifestGenerated": "2026-10-30"
+        },
+        "startedAt": "2026-11-07T10:00:00Z"
+      },
+      {
+        "code": "xa",
+        "sector": "health",
+        "settingsHash": "fa6ff904bd46858ae8f24985f2525f8db47519f417f05dc045297836c4208a7f",
+        "mode": "local",
+        "modelIds": [
+          "<local-model-id>"
+        ],
+        "corpusFingerprint": {
+          "chunks": 140,
+          "latestIngestAt": null,
+          "manifestGenerated": null
+        }
+      },
+      {
+        "code": "xb",
+        "sector": "health",
+        "settingsHash": "eef66a67c0592f4c975b3c4613c2789d361f42a5d45cd600099ccc7880a2ed65",
+        "mode": "local",
+        "modelIds": [
+          "<local-model-id>"
+        ],
+        "corpusFingerprint": {
+          "chunks": 0,
+          "latestIngestAt": null,
+          "manifestGenerated": null
+        }
+      }
+    ]
+  },
+  "jobs": [
+    {
+      "id": "job-1",
+      "code": "zz",
+      "sector": "health",
+      "state": "running",
+      "attempts": 1,
+      "runId": "run-zz-001",
+      "startedAt": "2026-11-07T10:00:00Z"
+    },
+    {
+      "id": "job-2",
+      "code": "xa",
+      "sector": "health",
+      "state": "queued",
+      "attempts": 0
+    },
+    {
+      "id": "job-3",
+      "code": "xb",
+      "sector": "health",
+      "state": "queued",
+      "attempts": 0
+    }
+  ],
+  "createdAt": "2026-11-07T10:00:00Z"
+}
