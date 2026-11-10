@@ -27,6 +27,8 @@ export interface ScenarioRunRecord {
   released: number
   total: number
   reports: JointSituationReport[]
+  /** Agents chosen from the registry at the start; absent, the sector's active agents. */
+  agentIds?: string[]
 }
 
 export interface ScenarioRunSummary {

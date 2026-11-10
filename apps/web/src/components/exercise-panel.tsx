@@ -22,6 +22,7 @@ import {
   type ExerciseDefinitionDto,
   type ExerciseEvaluationDto,
 } from '@/lib/api'
+import { useRegistryAgents } from '@/components/registry/agent-picker'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { ProcessingBar } from '@/components/processing-bar'
 import { ExerciseReportHistory } from '@/components/exercise-report-history'
@@ -51,7 +52,11 @@ const KIND_TONE: Record<ExerciseActionKind, string> = {
 
 export function ExercisePanel({ country, domain }: { country: string; domain: Domain }) {
   const { t, locale } = useI18n()
-  const institutions = React.useMemo(() => institutionsForDomain(domain), [domain])
+  const registryAgents = useRegistryAgents([domain])
+  const institutions = React.useMemo(
+    () => (registryAgents && registryAgents.length > 0 ? registryAgents : institutionsForDomain(domain)),
+    [registryAgents, domain],
+  )
   const actorName = React.useCallback(
     (id: string) => institutions.find((item) => item.id === id)?.name ?? id,
     [institutions],

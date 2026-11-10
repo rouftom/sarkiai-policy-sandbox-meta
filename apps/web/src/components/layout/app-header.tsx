@@ -12,6 +12,7 @@ import { OperatorMenu } from './operator-menu'
 import { ThemeSwitcher } from './theme-switcher'
 import {
   GENERAL_NAV,
+  flattenNav,
   GUIDE_CHILDREN,
   OPERATIONS_NAV,
   SETTINGS_NAV,
@@ -28,7 +29,7 @@ const TITLES: Array<{ href: string; labelKey: MessageKey }> = [
   ...GUIDE_CHILDREN,
   { href: '/guide', labelKey: 'nav.guide' },
   { href: '/', labelKey: 'overview.title' },
-  ...GENERAL_NAV.filter((entry) => entry.href !== '/'),
+  ...flattenNav(GENERAL_NAV).filter((entry) => entry.href !== '/'),
   ...OPERATIONS_NAV,
   ...SETTINGS_NAV,
 ]
@@ -40,7 +41,7 @@ const MOBILE_NAV: Array<{ groupKey: MessageKey; entries: NavEntry[]; children?: 
     entries: [{ href: '/guide', labelKey: 'nav.guide', icon: Compass }],
     children: GUIDE_CHILDREN,
   },
-  { groupKey: 'nav.group_general', entries: GENERAL_NAV },
+  { groupKey: 'nav.group_general', entries: flattenNav(GENERAL_NAV) },
   { groupKey: 'nav.group_operations', entries: OPERATIONS_NAV },
   { groupKey: 'nav.group_settings', entries: SETTINGS_NAV },
 ]

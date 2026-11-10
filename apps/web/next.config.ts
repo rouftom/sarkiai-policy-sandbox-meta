@@ -6,9 +6,11 @@ import type { NextConfig } from 'next'
  * Nothing is hardcoded: the canonical origin comes from `NEXT_PUBLIC_WEB_URL`
  * (or the host's own production URL when it exposes one), extra origins from
  * `NEXT_PUBLIC_WEB_ORIGINS` / `WEB_PUBLIC_URL_ALIASES`, and local development is
- * always allowed. `*.vercel.app` keeps previews working. Next also accepts a
- * same-origin request whose `Origin` matches the `Host` header, so an on-premise
- * install behind a LAN name or a reverse proxy needs no extra configuration.
+ * always allowed. On Vercel the platform's own preview domain is accepted so a
+ * deployment link keeps working; another host adds its preview host to
+ * `NEXT_PUBLIC_WEB_ORIGINS`. Next also accepts a same-origin request whose
+ * `Origin` matches the `Host` header, so an on-premise install behind a LAN name
+ * or a reverse proxy needs no extra configuration.
  */
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
   for (const value of values) {
@@ -46,14 +48,18 @@ const productionHost = hostOf(
 
 const devPort = firstNonEmpty(process.env.NEXT_PUBLIC_WEB_PORT) ?? '3000'
 
+/**
+ * The Vercel toolbar and preview domain are provided by Vercel only; another
+ * host needs no exception, so nothing is hardcoded for a platform.
+ */
 const deploymentOrigins = [
   ...new Set(
     [
       productionHost,
       ...hostsOf(process.env.NEXT_PUBLIC_WEB_ORIGINS),
       ...hostsOf(process.env.WEB_PUBLIC_URL_ALIASES),
+      ...(process.env.VERCEL ? ['*.vercel.app'] : []),
       `localhost:${devPort}`,
-      '*.vercel.app',
     ].filter((host): host is string => Boolean(host)),
   ),
 ]
@@ -66,7 +72,8 @@ const deploymentOrigins = [
  *
  * Allowed: this app, inline data and blobs, the API host (figures), Cloudinary
  * (report images), the MCP app hosts (chart and document views), Cloudflare
- * Turnstile and the Vercel toolbar. The MCP sandbox pages are excluded. Extra hosts: `NEXT_PUBLIC_CSP_IMG_SOURCES`,
+ * Turnstile, and the Vercel toolbar when the app is served by Vercel. The MCP
+ * sandbox pages are excluded. Extra hosts: `NEXT_PUBLIC_CSP_IMG_SOURCES`,
  * `NEXT_PUBLIC_CSP_FRAME_SOURCES` (comma-separated origins). Set
  * `NEXT_PUBLIC_CSP_REPORT_ONLY=true` to observe violations without blocking.
  */
@@ -115,7 +122,8 @@ const frameSources = sourceList([
   originOfUrl(process.env.MCP_CHARTS_URL),
   originOfUrl(process.env.MCP_DOCX_URL),
   'https://challenges.cloudflare.com',
-  'https://vercel.live',
+  // The toolbar is injected by Vercel only; another host needs no exception.
+  process.env.VERCEL ? 'https://vercel.live' : null,
   ...originsOf(process.env.NEXT_PUBLIC_CSP_FRAME_SOURCES),
 ])
 

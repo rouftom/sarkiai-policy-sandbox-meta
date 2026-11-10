@@ -84,6 +84,11 @@ services:
         sync: false
       - key: WEB_PUBLIC_URL_ALIASES
         sync: false
+      # The client address comes from a header the edge overwrites
+      # (CLIENT_IP_HEADERS, default cf-connecting-ip / true-client-ip / x-real-ip).
+      # TRUST_PROXY is the fallback when no such header matched: one hop here.
+      - key: TRUST_PROXY
+        value: "1"
 
       # ── operator accounts ──────────────────────────────────────────────────
       # Public self-service sign-up for hackathon judges. The API also opens it

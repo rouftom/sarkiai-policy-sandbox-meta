@@ -1,7 +1,110 @@
 /** Runtime configuration for the API application layer. */
 
+import { isIP } from 'node:net'
+import type { FastifyRequest } from 'fastify'
+
 function env(name: string, fallback = ''): string {
   return process.env[name] ?? fallback
+}
+
+/**
+ * Client address behind an edge.
+ *
+ * The host's load balancer terminates TLS, so the socket address is an internal
+ * one. Edges put the real client in a header they set themselves; the API reads
+ * the first valid address from `CLIENT_IP_HEADERS` (see `parseClientIpHeaders`)
+ * and only falls back to `request.ip`.
+ *
+ * `TRUST_PROXY` controls that fallback, i.e. how much of `X-Forwarded-For` is
+ * believed:
+ *
+ * - `false` — no proxy chain: the socket address is used.
+ * - a number — proxies to trust, counted from the socket. `1` is the common case
+ *   (one load balancer or ingress).
+ * - `true` — trust the whole chain. Only sensible when the process is reachable
+ *   exclusively through the proxy.
+ *
+ * Unset, one hop is trusted. A deployment whose edge supplies an overwritten
+ * header does not depend on this setting at all.
+ */
+export type TrustProxySetting = boolean | ((address: string, hop: number) => boolean)
+
+export function parseTrustProxy(value: string | undefined): TrustProxySetting {
+  const raw = String(value ?? '').trim()
+  if (!raw) return (_address, hop) => hop < 1
+  const normalized = raw.toLowerCase()
+  if (['false', 'no', 'off', '0'].includes(normalized)) return false
+  if (['true', 'yes', 'on'].includes(normalized)) return true
+  if (/^\d+$/.test(raw)) {
+    const hops = Number(raw)
+    // Same rule proxy-addr applies to a number: trust the first `hops` peers.
+    return hops > 0 ? (_address, hop) => hop < hops : false
+  }
+  // An unrecognised value must not silently trust the chain.
+  return (_address, hop) => hop < 1
+}
+
+/**
+ * Headers that carry the client address set by the edge in front of the API.
+ *
+ * The default covers the common edges without naming one: Cloudflare and
+ * Cloudflare-compatible CDNs (`CF-Connecting-IP`), Akamai / Fastly
+ * (`True-Client-IP`), and nginx or a reverse proxy configured with
+ * `proxy_set_header X-Real-IP $remote_addr`. `X-Forwarded-For` is deliberately
+ * absent: it is a chain, so it is ambiguous and client-supplied values survive
+ * on its left. A deployment that has only that header uses `TRUST_PROXY`
+ * instead.
+ *
+ * The order matters: the first header with a valid address wins. Each listed
+ * header must be **overwritten** by the edge for every request; a name the
+ * caller can set is only safe when the origin is unreachable except through
+ * that edge.
+ *
+ * `CLIENT_IP_HEADERS=none` disables header lookup and uses `request.ip` only.
+ */
+export const DEFAULT_CLIENT_IP_HEADERS = ['cf-connecting-ip', 'true-client-ip', 'x-real-ip'] as const
+
+export function parseClientIpHeaders(value: string | undefined): string[] {
+  const entries = String(value ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => /^[a-z0-9][a-z0-9-]*$/.test(entry))
+  if (entries.some((entry) => entry === 'none' || entry === 'off' || entry === 'false')) return []
+  return entries.length > 0 ? [...new Set(entries)] : [...DEFAULT_CLIENT_IP_HEADERS]
+}
+
+function firstValidAddress(value: string | string[] | undefined): string | null {
+  const raw = Array.isArray(value) ? value.join(',') : value
+  if (!raw) return null
+  for (const part of raw.split(',')) {
+    const candidate = part.trim()
+    if (!candidate) continue
+    if (isIP(candidate)) return candidate
+    // Some edges append a port to an IPv4 address.
+    const withPort = candidate.match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/)
+    if (withPort && isIP(withPort[1]!)) return withPort[1]!
+  }
+  return null
+}
+
+export interface ClientIpResolution {
+  /** Resolved client address. */
+  ip: string
+  /** Header that supplied it, or `null` when the socket address was used. */
+  source: string | null
+}
+
+/** First valid address from the configured headers, else the socket address. */
+export function resolveClientIp(
+  headers: Record<string, string | string[] | undefined>,
+  socketIp: string,
+  names: readonly string[],
+): ClientIpResolution {
+  for (const name of names) {
+    const ip = firstValidAddress(headers[name])
+    if (ip) return { ip, source: name }
+  }
+  return { ip: socketIp, source: null }
 }
 
 /**
@@ -32,8 +135,7 @@ const defaultMediaStore = sandboxMode === 'cloud' || sandboxMode === 'sovereign'
  * Nothing is hardcoded: `WEB_PUBLIC_URL` is the canonical origin (every link the
  * API sends is built from it), `WEB_PUBLIC_URL_ALIASES` lists any other origin
  * that must keep working (previous domain, staging host, second console...).
- * Without them the console is assumed to run locally. `*.vercel.app` previews
- * are always accepted, so a deployment link works whichever domain is live.
+ * Without them the console is assumed to run locally.
  *
  * On-premise installs are the reason the policy is not closed by default: a
  * `docker compose up` behind a LAN name or a reverse proxy cannot know its own
@@ -122,41 +224,19 @@ export interface OriginPolicy {
   origins: string[]
   /** Accept every origin (self-hosted default until a canonical origin is set). */
   allowAny: boolean
-  /**
-   * Vercel project whose production and preview hosts are accepted
-   * (`<project>.vercel.app`, `<project>-<suffix>.vercel.app`). Any other
-   * `*.vercel.app` host belongs to someone else and is refused.
-   */
-  vercelProject?: string
-  /** Vercel team slug: when set, a preview host must also end with `-<scope>`. */
-  vercelScope?: string
 }
 
 /**
  * Whether a browser origin may call the API. `undefined` means a same-origin or
- * server-side call, which has no CORS decision to make. The Vercel hosts of
- * this project (production and previews) are accepted, so previews keep working
- * while the canonical origin lives in `WEB_PUBLIC_URL`; other projects' hosts
- * are not.
+ * server-side call, which has no CORS decision to make. Besides the configured
+ * origins, local-network origins are accepted; anything else is refused.
  */
 export function isOriginAllowed(origin: string | undefined, policy: OriginPolicy): boolean {
   if (!origin) return true
   if (policy.allowAny) return true
   const candidate = originOf(origin)
   if (!candidate) return false
-  if (policy.origins.includes(candidate) || isLocalOrigin(candidate)) return true
-  try {
-    const parsed = new URL(candidate)
-    const project = policy.vercelProject?.trim().toLowerCase()
-    if (!project || parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.vercel.app')) return false
-    const label = parsed.hostname.slice(0, -'.vercel.app'.length)
-    if (label === project) return true
-    if (!label.startsWith(`${project}-`)) return false
-    const scope = policy.vercelScope?.trim().toLowerCase()
-    return !scope || label.endsWith(`-${scope}`)
-  } catch {
-    return false
-  }
+  return policy.origins.includes(candidate) || isLocalOrigin(candidate)
 }
 
 /**
@@ -167,8 +247,6 @@ export function isOriginAllowed(origin: string | undefined, policy: OriginPolicy
  */
 const originPolicy: OriginPolicy = {
   origins: publicOrigins,
-  vercelProject: env('VERCEL_PROJECT_NAME', 'sarkiai-policy-sandbox-meta'),
-  vercelScope: env('VERCEL_TEAM_SLUG'),
   allowAny:
     env('WEB_ALLOW_ANY_ORIGIN').toLowerCase() === 'true' ||
     (!cloudDeployment && !configuredOrigin),
@@ -176,6 +254,20 @@ const originPolicy: OriginPolicy = {
 
 export function isAllowedOrigin(origin: string | undefined): boolean {
   return isOriginAllowed(origin, originPolicy)
+}
+
+/**
+ * Resolve the caller's address once: an edge header first, the socket otherwise.
+ * Request logs use the source; throttles only need the address.
+ */
+export function clientIpResolution(
+  request: Pick<FastifyRequest, 'headers' | 'ip'>,
+): ClientIpResolution {
+  return resolveClientIp(request.headers, request.ip, config.proxy.clientIpHeaders)
+}
+
+export function clientIp(request: Pick<FastifyRequest, 'headers' | 'ip'>): string {
+  return clientIpResolution(request).ip
 }
 
 export const config = {
@@ -186,6 +278,17 @@ export const config = {
   },
   host: env('HOST', '0.0.0.0'),
   port: Number(env('PORT', '8000')),
+
+  /**
+   * Client-IP resolution behind an edge. `request.ip` follows Fastify's
+   * `trustProxy`; `clientIp()` reads the configured edge header first, so the
+   * per-IP rate limits and request logs see the real caller. See
+   * `parseTrustProxy` and `parseClientIpHeaders`.
+   */
+  proxy: {
+    trust: parseTrustProxy(env('TRUST_PROXY')),
+    clientIpHeaders: parseClientIpHeaders(env('CLIENT_IP_HEADERS')),
+  },
 
   // Corpus search: a lexical index (Atlas Search in the cloud, a MongoDB text
   // index in local and sovereign) driven by the Meta model of the mode.
@@ -320,7 +423,7 @@ export const config = {
 
   // The console's own origins. `canonicalUrl` builds every link we send (auth
   // e-mails, approval buttons); `allowedOrigins` is what the CORS layer accepts,
-  // so the custom domain and the Vercel deployment both work during the switch.
+  // so a custom domain and its aliases work during a switch.
   web: {
     canonicalUrl: publicOrigin,
     allowedOrigins: publicOrigins,
