@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 /**
  * Egress relay for the Meta Model API.
  *
- * The API containers do not reach `api.meta.ai` (every model call comes back as
- * `model_not_found` from their egress), while Vercel does. The Fastify service
- * therefore points `META_BASE_URL` here, and this route forwards to Meta with
- * the team key held server-side.
+ * Some API hosts do not reach `api.meta.ai` (every model call comes back as
+ * `model_not_found` from their egress), while the console host does. The Fastify
+ * service therefore points `META_BASE_URL` here, and this route forwards to Meta
+ * with the team key held server-side.
  *
  * Guarded by a shared secret so the relay cannot be used by third parties.
  * Nothing is logged and no key ever leaves the server.

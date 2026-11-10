@@ -113,7 +113,7 @@ We use these exact stage names throughout the codebase and the docs.
 | Local topology | `docker-compose.yml` | Ollama + MongoDB + MinIO, api + web |
 | Development hot reload | `docker-compose.dev.yml` | bind mounts |
 | Ollama model tag (Muse Glimmer) | `deploy/ollama/Modelfile.glimmer` | sampling + 32K context |
-| Render deployment | `deploy/api/blueprint.yaml` | Meta Model API + Atlas |
+| API host manifest (example) | `deploy/api/service.example.yaml` | Meta Model API + Atlas |
 
 ## 9. AI Readiness Framework 2.0 (6 factors / 13 dimensions)
 

@@ -696,17 +696,22 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 The public demo splits in two, because the two halves have different shapes:
 
-| Piece | Host | Why |
+| Piece | Shape | Why |
 |---|---|---|
-| `apps/web` (Next.js) | a Next.js web host | static + one dynamic route (`/approve/[token]`) |
-| `apps/api` (Fastify) | a Docker web service | long-lived process, SSE stream, WhatsApp webhook |
+| `apps/web` (Next.js) | any Next.js host, or the container in `apps/web/Dockerfile` | static + one dynamic route (`/approve/[token]`) |
+| `apps/api` (Fastify) | a long-lived Docker web service | SSE stream, WhatsApp webhook, WebSockets |
+
+Either half runs on any host that can build the repository: a container, a
+Next.js builder or a machine you operate. Nothing imports a provider SDK and
+every setting is an environment variable, so the same tree deploys unchanged;
+only the machine names in the two guides change.
 
 The API is deliberately not a serverless function: a serverless function cannot
 hold the `/simulate` stream open or receive a webhook on a stable host. Exact
 settings, environment variables and the warm-up strategy live in
 [`deploy/web/README.md`](deploy/web/README.md) and
-[`deploy/api/README.md`](deploy/api/README.md); the blueprint is
-[`deploy/api/blueprint.yaml`](deploy/api/blueprint.yaml).
+[`deploy/api/README.md`](deploy/api/README.md); the example service manifest is
+[`deploy/api/service.example.yaml`](deploy/api/service.example.yaml).
 
 #### Model-call relay
 
@@ -720,8 +725,8 @@ MODEL_RELAY_KEY=<shared secret, same value as META_RELAY_KEY on the web host>
 ```
 
 `apps/web/src/app/api/meta/[...path]` forwards the call to `api.meta.ai` with
-the team key held in Vercel (`META_RELAY_MODEL_KEY`) and streams the answer
-back. The route refuses any call without the `x-sps-relay-key` header and only
+the team key held on the console host (`META_RELAY_MODEL_KEY`) and streams the
+answer back. The route refuses any call without the `x-sps-relay-key` header and only
 allows the `/v1` chat, responses, messages, models, images and transcription paths. The
 relay is transport only: no prompt, answer or key is logged.
 

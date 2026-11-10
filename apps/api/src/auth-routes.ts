@@ -1,7 +1,7 @@
 /**
  * Operator auth, preferences and the audit feed.
  *
- * The console (Vercel) and the API (Render) are different origins, so the
+ * The console and the API run as separate origins, so the
  * session travels as an `Authorization: Bearer <token>` header rather than a
  * cookie: no third-party-cookie policy can break the demo. Tokens are signed for
  * seven days and checked against the account on every request, so a removal or a

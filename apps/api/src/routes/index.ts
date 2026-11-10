@@ -337,9 +337,10 @@ const approvals = new ApprovalStore({
 /**
  * Releases the process-wide stores when the host stops the process.
  *
- * Render sends SIGTERM on every deploy. Closing the clients after Fastify has
- * drained its requests keeps in-flight writes from being cut mid-query, and
- * ends the pooled sockets cleanly instead of leaving them to time out upstream.
+ * A deploy sends SIGTERM before the old instance is replaced. Closing the
+ * clients after Fastify has drained its requests keeps in-flight writes from
+ * being cut mid-query, and ends the pooled sockets cleanly instead of leaving
+ * them to time out upstream.
  */
 export async function closeStores(): Promise<void> {
   await Promise.allSettled([
@@ -720,8 +721,9 @@ export async function seedReferenceImages(log: { info: (...args: unknown[]) => v
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthRoutes(app, engine.audit)
-  // Live dictation goes straight to Meta: Render reaches api.meta.ai (checked by /health/egress),
-  // and a WebSocket cannot pass the serverless relay. Realtime authenticates with `?token=`.
+  // Live dictation goes straight to Meta: the API host reaches api.meta.ai
+  // (checked by /health/egress), and a WebSocket cannot pass a serverless relay.
+  // Realtime authenticates with `?token=`.
   await registerVoiceRoutes(app, {
     auth,
     apiKey: providerApiKey(engine.provider),
@@ -1468,10 +1470,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
-      // Render / any reverse proxy: do not buffer the stream.
+      // Any reverse proxy: do not buffer the stream.
       'X-Accel-Buffering': 'no',
       // A hijacked response bypasses @fastify/cors, and the console is served
-      // from Vercel: the browser needs the CORS header on the stream itself.
+      // from another origin: the browser needs the CORS header on the stream.
       'Access-Control-Allow-Origin': origin ?? '*',
       Vary: 'Origin',
     })

@@ -91,9 +91,9 @@ export async function buildServer() {
 /**
  * Maintenance hatch for hosts without a shell.
  *
- * Render free instances refuse SSH, one-off jobs, pre-deploy commands and
- * start-command overrides, so the only process that can reach `MONGODB_URI` is
- * the web service itself. Committing `apps/api/scripts/reset-on-boot.flag`
+ * Some plans refuse SSH, one-off jobs, pre-deploy commands and start-command
+ * overrides, so the only process that can reach `MONGODB_URI` is the web service
+ * itself. Committing `apps/api/scripts/reset-on-boot.flag`
  * makes the next deploy wipe the demo state before the console answers;
  * deleting the flag and deploying again disarms it.
  */

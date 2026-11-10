@@ -1,7 +1,8 @@
 # Web app (`apps/web`)
 
-The Next.js console is deployed to any host that runs Next.js. The API is
-deployed separately (see `deploy/api/README.md`).
+The Next.js console is deployed to any host that runs Next.js, or as a container
+(`apps/web/Dockerfile`). The API is deployed separately (see
+`deploy/api/README.md`).
 
 ## Project settings
 
@@ -14,13 +15,18 @@ deployed separately (see `deploy/api/README.md`).
 | Node.js | 24.x |
 | Output | Next.js default (`output: 'standalone'` is honoured by most builders) |
 
+A host without a "root directory" setting builds the workspace and runs
+`turbo run build --filter=@sps/web`. A container host builds
+`apps/web/Dockerfile` with the repository root as context and passes the
+`NEXT_PUBLIC_*` values as build arguments.
+
 ## Environment variables
 
 | Variable | Value | Notes |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | the public address of the API | **Inlined at build time**: rebuild after any change |
 | `NEXT_PUBLIC_DEFAULT_LOCALE` | `en` | The UI is bilingual; English is the default |
-| `NEXT_PUBLIC_WEB_URL` | the console's canonical origin | Absolute metadata URLs; falls back to the host's production URL, then `localhost` |
+| `NEXT_PUBLIC_WEB_URL` | the console's canonical origin | Absolute metadata URLs; without it, `http://localhost:<NEXT_PUBLIC_WEB_PORT>` |
 | `NEXT_PUBLIC_WEB_ORIGINS` | extra accepted origins | Comma-separated |
 
 Set the variables in the host's dashboard or with its CLI, for the production
@@ -32,8 +38,8 @@ They are optional. Server Actions accept a request whose `Origin` matches the
 `Host` header, so an on-premise console opened through a LAN name, an internal
 DNS entry or a remapped port works without listing anything; the list only
 matters behind a reverse proxy that rewrites the host. A preview host is just
-another origin: add it to `NEXT_PUBLIC_WEB_ORIGINS`. On Vercel, the platform's
-own preview domain is accepted automatically.
+another origin: add it to `NEXT_PUBLIC_WEB_ORIGINS`. `NEXT_PUBLIC_WEB_URL` is
+also the metadata base, and no platform URL is assumed: set it in production.
 
 ## Why the root directory is `apps/web`
 
