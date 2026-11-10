@@ -30,6 +30,7 @@ export const KB_INDEX_DEFINITIONS: AtlasIndexDefinition[] = [
           text: { type: 'string', analyzer: 'sps_fr_folded' },
           country: { type: 'token' },
           jurisdiction: { type: 'token' },
+          subdivision: { type: 'token' },
           docType: { type: 'token' },
           namespace: { type: 'token' },
           isActive: { type: 'boolean' },

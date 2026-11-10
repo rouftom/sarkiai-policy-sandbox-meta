@@ -20,7 +20,8 @@ One document per chunk, written by `AtlasIngestor`
 | `_id` | string | `sha256(document, version, chunkIndex, text)`; makes re-ingestion idempotent |
 | `filename`, `chunkIndex`, `text` | mixed | document grouping + body |
 | `country` | string | ISO-3166 alpha-2 or `global`: **primary filter** |
-| `jurisdiction` | national \| regional \| international | legal level |
+| `jurisdiction` | national \| subnational \| regional \| international | legal level |
+| `subdivision` | string? | ISO 3166-2 code (`US-CA`) when `jurisdiction` is `subnational` |
 | `docType` | law/strategy/regulation/policy/treaty/standard/guidance/report | source class |
 | `pillar` | string[] | readiness dimensions informed |
 | `namespace` | string? | optional sub-corpus partition |
@@ -34,8 +35,8 @@ One document per chunk, written by `AtlasIngestor`
 Indexes:
 
 - `sps_text_index` (Atlas Search, `cloud`): BM25 over `text` with the
-  `sps_fr_folded` analyser, filter fields `country`, `jurisdiction`, `docType`,
-  `namespace` (typed `token`) and `isActive` (boolean). Definition in
+  `sps_fr_folded` analyser, filter fields `country`, `jurisdiction`, `subdivision`,
+  `docType`, `namespace` (typed `token`) and `isActive` (boolean). Definition in
   `packages/retrieval/src/atlas-index-definitions.ts`.
 - MongoDB text index (`local`, `sovereign`): created at the first ingestion.
 - Plain indexes for the console queries (`filename`, `isActive`).
@@ -102,7 +103,8 @@ The retriever and the agentic sub-agents apply the same exact-match filter
 ```
 isActive     = true
 country      = <query.country>
-jurisdiction = <optional>
+jurisdiction = <optional; a `jurisdictions` list becomes `$in`>
+subdivision  = <optional ISO 3166-2 code>
 docType      = <optional>
 namespace    = <optional>
 ```

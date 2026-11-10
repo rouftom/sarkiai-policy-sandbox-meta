@@ -167,6 +167,15 @@ export const agentRoutingRequest = z.object({
     .describe('Restrict the choice to these institution ids; absent means every institution of the sectors.'),
 })
 
+/** ISO 3166-2 code for an instrument that applies below the country level. */
+const subdivisionInput = z
+  .string()
+  .trim()
+  .min(2)
+  .max(8)
+  .optional()
+  .describe('ISO 3166-2 code of one subnational region (for example `US-CA`).')
+
 export const searchInput = z.object({
   text: z.string().min(2).max(2000).describe('Search query.'),
   country: z
@@ -178,9 +187,15 @@ export const searchInput = z.object({
     .default('')
     .describe('Restrict to one country, `global`, or every country (empty).'),
   jurisdiction: z
-    .enum(['national', 'regional', 'international'])
+    .enum(['national', 'subnational', 'regional', 'international'])
     .optional()
     .describe('Restrict to one legal scope.'),
+  jurisdictions: z
+    .array(z.enum(['national', 'subnational', 'regional', 'international']))
+    .max(4)
+    .optional()
+    .describe('Restrict to several legal scopes at once (wins over `jurisdiction`).'),
+  subdivision: subdivisionInput,
   docType: z.string().optional().describe('Restrict to one document type (law, policy, strategy, guidance, report…).'),
   namespace: z.string().optional().describe('Restrict to one corpus namespace.'),
   topK: z.number().int().min(1).max(12).default(6).describe('Number of passages to return.'),
@@ -251,7 +266,7 @@ const countryOrGlobal = z
   .describe('ISO 3166-1 alpha-2 country code, or `global` for a cross-border instrument.')
 
 const jurisdictionInput = z
-  .enum(['national', 'regional', 'international'])
+  .enum(['national', 'subnational', 'regional', 'international'])
   .describe('Legal scope of the instrument.')
 
 const documentFilename = z
@@ -355,6 +370,7 @@ export const kbIngestTextBody = z.object({
   filename: z.string().min(1).max(200).describe('Stored name; a `.pdf` suffix is rewritten to `.txt`.'),
   country: countryOrGlobal,
   jurisdiction: jurisdictionInput.default('national'),
+  subdivision: subdivisionInput,
   docType: z.string().min(1).default('policy').describe('Document type used by retrieval filters.'),
   rights: corpusRights.default('to-confirm'),
   namespace: z.string().max(80).optional().describe('Corpus namespace; defaults to the country corpus.'),
@@ -385,6 +401,7 @@ export const kbIngestFileBody = z.object({
   contentBase64: z.string().min(4).max(34_000_000).describe('Base64 file payload (maximum 25 MB decoded).'),
   country: countryOrGlobal,
   jurisdiction: jurisdictionInput.default('national'),
+  subdivision: subdivisionInput,
   docType: z.string().min(1).default('policy').describe('Document type used by retrieval filters.'),
   rights: corpusRights.default('to-confirm'),
   namespace: z.string().max(80).optional().describe('Corpus namespace.'),
@@ -397,6 +414,7 @@ export const kbIngestAliasBody = z.object({
   filename: z.string().min(1).describe('Stored filename.'),
   country: countryOrGlobal,
   jurisdiction: jurisdictionInput.default('national'),
+  subdivision: subdivisionInput,
   docType: z.string().default('policy').describe('Document type used by retrieval filters.'),
   rights: corpusRights.default('to-confirm'),
   namespace: z.string().optional().describe('Corpus namespace.'),
@@ -553,6 +571,7 @@ export const gazetteIngestInput = z.object({
     .describe('Page object returned verbatim by `POST /v1/gazette/analyze`.'),
   country: countryOrGlobal,
   jurisdiction: jurisdictionInput.default('national'),
+  subdivision: subdivisionInput,
   docType: z.string().default('regulation').describe('Document type used by retrieval filters.'),
   rights: corpusRights
     .default('official-text')

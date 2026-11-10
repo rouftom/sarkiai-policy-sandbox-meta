@@ -1193,7 +1193,8 @@ export const api = {
   ingestGazette: (body: {
     page: GazettePageDto
     country: string
-    jurisdiction?: 'national' | 'regional' | 'international'
+    jurisdiction?: 'national' | 'subnational' | 'regional' | 'international'
+    subdivision?: string
     docType?: string
     namespace?: string
     version?: string
@@ -1683,7 +1684,8 @@ export const knowledgeApi = {
     text: string
     filename: string
     country: string
-    jurisdiction: 'national' | 'regional' | 'international'
+    jurisdiction: 'national' | 'subnational' | 'regional' | 'international'
+    subdivision?: string
     docType: string
     rights: 'official-text' | 'open-licence' | 'quotation-only' | 'to-confirm'
     namespace?: string
@@ -1695,7 +1697,9 @@ export const knowledgeApi = {
   search: (body: {
     text: string
     country?: string
-    jurisdiction?: 'national' | 'regional' | 'international'
+    jurisdiction?: 'national' | 'subnational' | 'regional' | 'international'
+    jurisdictions?: Array<'national' | 'subnational' | 'regional' | 'international'>
+    subdivision?: string
     docType?: string
     namespace?: string
     topK?: number
@@ -1705,7 +1709,8 @@ export const knowledgeApi = {
     filename: string
     contentBase64: string
     country: string
-    jurisdiction: 'national' | 'regional' | 'international'
+    jurisdiction: 'national' | 'subnational' | 'regional' | 'international'
+    subdivision?: string
     docType: string
     rights: 'official-text' | 'open-licence' | 'quotation-only' | 'to-confirm'
     namespace?: string
