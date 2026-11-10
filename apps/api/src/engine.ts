@@ -236,7 +236,7 @@ export async function prepareCloudStores(): Promise<CloudStorePreparation> {
   try {
     // Definitions come from @sps/retrieval, not from a file: the API image only
     // ships packages/ + apps/api/, so reading deploy/ here used to fail silently
-    // and the indexes were never created on Render.
+    // and the indexes were never created on the deployed service.
     const result = await ensureAtlasIndexes({
       uri: config.mongodb.uri,
       dbName: config.mongodb.dbName,

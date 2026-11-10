@@ -114,7 +114,7 @@ export default function LoginPage() {
       })
       .catch(() => {
         /*
-         * The API may still be asleep (free Render instance) when the page
+         * The API may still be asleep (a free-tier instance) when the page
          * loads. Do not hide the Sign-up entry point on a transient failure:
          * it starts visible and only the API can close it.
          */

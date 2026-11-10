@@ -13,11 +13,26 @@ Requirements for the host:
   database.
 - Port: the image listens on `PORT` (most hosts inject it; the default is 8000).
 
+Nothing here depends on the provider. `deploy/api/service.example.yaml` is one
+host's manifest format and is useful as the list of variables; any other host
+maps the same settings:
+
+| Setting | What the host must provide |
+|---|---|
+| Image | `docker build -f apps/api/Dockerfile .` from the repository root |
+| Port | listen on `PORT`; 8000 is the image default |
+| Health | `GET /health` must answer `200` |
+| Instances | exactly one (rate limits and counters are in-process) |
+| Streaming | no response buffering, no idle timeout shorter than a run (SSE `/v1/runs/:id/events` and the voice WebSocket) |
+| Secrets | a dashboard or secret store, never the repository |
+| Region | close to the database and the model provider |
+| Rollback | redeploy the previous commit, or roll the service back (the container is stateless) |
+
 ## 1. Create the service
 
-1. Create a web service from the repository, using the blueprint
-   `deploy/api/blueprint.yaml` if the host supports blueprints, or the Dockerfile
-   otherwise.
+1. Create a web service from the repository, using
+   `deploy/api/service.example.yaml` if the host accepts that format, or pointing
+   the host at `apps/api/Dockerfile` otherwise.
 2. Provide the variables marked as secret (never stored in the repository):
 
    | Variable | Source |
@@ -53,7 +68,7 @@ Requirements for the host:
 
 3b. Assistant images. `MEDIA_STORE` selects the adapter: `s3` (MinIO / S3,
    the local default) or `cloudinary` (the default in `cloud` and `sovereign`
-   mode). The blueprint sets `MEDIA_STORE=cloudinary` and
+   mode). The example manifest sets `MEDIA_STORE=cloudinary` and
    `CLOUDINARY_SPS_FOLDER=sps`; chat images land in `sps/attachments`, never in
    the organization's `fada/resources` folder. Without the Cloudinary
    credentials the API logs a warning and falls back to S3 at boot, so a fork
@@ -126,14 +141,13 @@ The host's proxy terminates TLS, so the socket address is an internal one. The
 API reads the caller from a header the edge **overwrites** on every request:
 `CLIENT_IP_HEADERS`, an ordered comma-separated list (first valid address wins).
 
-The default — `cf-connecting-ip,true-client-ip,x-real-ip` — covers the common
-edges without naming one: Cloudflare and compatible CDNs, Akamai / Fastly, and
-nginx or a reverse proxy configured with `proxy_set_header X-Real-IP
-$remote_addr`. Leave the variable empty on those hosts. Set it when your edge
-uses another name:
+The default — `cf-connecting-ip,true-client-ip,x-real-ip` — names the headers the
+common edges write and overwrite. Leave the variable empty when your edge uses
+one of them. Set it when your edge uses another name (`X-Forwarded-For` is not a
+candidate: it is appended to, so its left end is caller-controlled):
 
 ```bash
-CLIENT_IP_HEADERS=fly-client-ip
+CLIENT_IP_HEADERS=x-edge-client-ip       # the name your edge overwrites
 CLIENT_IP_HEADERS=cf-connecting-ip       # explicit, same as the default
 CLIENT_IP_HEADERS=none                   # socket address only
 ```
@@ -152,6 +166,11 @@ The header must be one your edge sets itself. On a host whose own hostname is
 directly reachable, a caller can forge a header the edge does not overwrite, so
 either keep the origin private to the edge or use `CLIENT_IP_HEADERS=none` with
 `TRUST_PROXY` matching the chain.
+
+To check it after a deploy, read a real request in the logs: `clientIpSource`
+names the header that matched. Request lines that show `socket` with a private
+address are the platform's **own health check**, which never passes through the
+edge — every host does this, and it is not a sign that the header is missing.
 
 ### Self-hosted and on-premise installs
 
@@ -190,8 +209,8 @@ the instance awake. The workflow `.github/workflows/keep-warm.yml` does this
 every 10 minutes once the repository variable `SPS_API_URL` is set to the API
 address.
 
-`GET /health` returns `{ ok: true }` and is the health check used by the
-blueprint.
+`GET /health` returns `{ ok: true }` and is the health check to configure on the
+host.
 
 ## 6. Limits to plan for
 
@@ -200,8 +219,17 @@ blueprint.
 - Do not rely on local disk: the operational store is the database.
 - Streaming uses SSE only.
 
-## Fallback: any Docker host
+## Portability: any Docker host
 
-If the host is unavailable, any host that runs a Docker image can run the same
-target. A minimal image clones the repository at a pinned commit and starts the
-API from `apps/api`, on the port the host provides.
+No step above depends on the reference host. When the current provider is
+unavailable, or the deployment must move (sovereignty, cost, an existing
+Kubernetes cluster), any host that runs a Docker image can run the same service:
+
+- build `apps/api/Dockerfile` with the repository root as context;
+- inject `PORT` (or let the image default to 8000) and the same environment
+  variables;
+- expose it over HTTPS with streaming allowed, one instance;
+- point `WEB_PUBLIC_URL` and `NEXT_PUBLIC_API_URL` at the new address.
+
+A minimal alternative image can also clone the repository at a pinned commit and
+start the API from `apps/api`, on the port the host provides.

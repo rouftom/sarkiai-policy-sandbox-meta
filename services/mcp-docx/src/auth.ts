@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
 /**
- * API key authentication shared by the Vercel handler (`api/mcp.ts`) and the
+ * API key authentication shared by the HTTP handler (`api/mcp.ts`) and the
  * standalone Express server (`src/main.ts`).
  *
  * A key is accepted from any of the following locations (first match wins):
