@@ -26,6 +26,7 @@
     "test:e2e": "bun test tests/e2e",
     "check:provider": "bun scripts/check-provider.ts",
     "check:gazette": "bun scripts/check-gazette.ts",
+    "auth:migrate": "bun scripts/migrate-operators.ts",
     "kb:indexes": "bun scripts/ensure-mongo-indexes.ts",
     "runs:backfill-summary": "bun scripts/backfill-readiness-summary.ts",
     "kb:seed": "bun scripts/seed-corpus.ts",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@sps/agents": "workspace:*",
+    "@sps/auth": "workspace:*",
     "@sps/gazette": "workspace:*",
     "@sps/retrieval": "workspace:*",
     "@sps/shared": "workspace:*",
@@ -43,6 +45,7 @@
     "@types/pngjs": "^6.0.5",
     "ai": "^6.0.0",
     "jpeg-js": "^0.4.4",
+    "mongodb": "^6.11.0",
     "pngjs": "^7.0.0",
     "turbo": "^2.3.0",
     "typescript": "^5.6.0"

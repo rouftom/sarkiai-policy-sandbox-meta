@@ -2,8 +2,9 @@
  * Data migration plan from the legacy `operators` collection to better-auth.
  *
  * The legacy service stores one document per operator, keyed by the lower-cased
- * e-mail, with the scrypt password hash, the base32 TOTP secret and the backup
- * codes in the clear. better-auth stores four documents instead:
+ * e-mail, with the scrypt password hash, the base32 TOTP secret and the
+ * SHA-256 digests of the recovery codes. better-auth stores four documents
+ * instead:
  *
  * - `user` — identity, role, preferences, `mustChangePassword`,
  *   `twoFactorEnabled`;
@@ -36,7 +37,10 @@ export interface LegacyOperator {
   emailVerificationPending?: boolean
   totpSecret?: string
   totpEnrolledAt?: string
+  /** SHA-256 digests of the single-use codes, never the codes themselves. */
   backupCodes?: string[]
+  /** Last accepted TOTP time step, carried over so an old code cannot replay. */
+  totpLastStep?: number
   preferences?: Partial<Preferences>
   createdAt: string
   lastLoginAt?: string
@@ -54,6 +58,7 @@ export interface PlannedUser {
   preferences?: Partial<Preferences>
   mustChangePassword: boolean
   lastLoginAt?: string
+  totpLastStep?: number
   twoFactorEnabled: boolean
   createdAt: Date
   updatedAt: Date
@@ -116,6 +121,7 @@ export function planOperatorMigration(operator: LegacyOperator): OperatorMigrati
       ...(operator.preferences ? { preferences: operator.preferences } : {}),
       mustChangePassword: Boolean(operator.mustChangePassword),
       ...(operator.lastLoginAt ? { lastLoginAt: operator.lastLoginAt } : {}),
+      ...(operator.totpLastStep !== undefined ? { totpLastStep: operator.totpLastStep } : {}),
       twoFactorEnabled: Boolean(operator.totpSecret),
       createdAt,
       updatedAt,
@@ -137,6 +143,12 @@ export function planOperatorMigration(operator: LegacyOperator): OperatorMigrati
  * The `twoFactor` document, or `null` when the operator never enrolled.
  * `secret` is the auth secret (the same one passed to `createBetterAuth`),
  * because better-auth decrypts both fields with it.
+ *
+ * The recovery codes are deliberately not carried over. The legacy store keeps
+ * only a SHA-256 digest of each code (`packages/auth/src/index.ts`), while
+ * better-auth compares the codes in clear text and re-encrypts the list. The
+ * digests cannot be reversed, so the migrated row starts with an empty list and
+ * the operator regenerates codes after signing in.
  */
 export async function planTwoFactor(
   operator: LegacyOperator,
@@ -151,10 +163,7 @@ export async function planTwoFactor(
     id: `${userId}-totp`,
     userId,
     secret: await symmetricEncrypt({ key: secret, data: operator.totpSecret }),
-    backupCodes: await symmetricEncrypt({
-      key: secret,
-      data: JSON.stringify(operator.backupCodes ?? []),
-    }),
+    backupCodes: await symmetricEncrypt({ key: secret, data: '[]' }),
     createdAt,
     updatedAt,
   }
@@ -163,7 +172,11 @@ export async function planTwoFactor(
 /** Warnings a dry run should surface before anyone writes to production. */
 export function migrationWarnings(operator: LegacyOperator): string[] {
   const warnings: string[] = []
-  if (operator.totpSecret && !operator.backupCodes?.length) {
+  if (operator.totpSecret && operator.backupCodes?.length) {
+    warnings.push(
+      `${operator.email}: legacy recovery codes are digests and cannot be imported; the operator must regenerate them`,
+    )
+  } else if (operator.totpSecret) {
     warnings.push(`${operator.email}: TOTP enrolled without recovery codes`)
   }
   if (operator.mustChangePassword && operator.totpSecret) {

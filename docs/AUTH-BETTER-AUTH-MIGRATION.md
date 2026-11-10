@@ -108,7 +108,8 @@ collections:
 | `mustChangePassword` | `user.mustChangePassword` |
 | `emailVerificationPending` | `user.emailVerified = false` |
 | `totpSecret` | `twoFactor.secret`, encrypted with the auth secret |
-| `backupCodes` | `twoFactor.backupCodes`, encrypted JSON array |
+| `totpLastStep` | `user.totpLastStep`, so an old code cannot replay |
+| `backupCodes` | **not imported** (the legacy list holds SHA-256 digests) |
 | `createdAt`, `lastLoginAt` | `user.createdAt`, `user.lastLoginAt` |
 
 `packages/auth/src/better-auth/migrate.ts` exposes `planOperatorMigration`,
@@ -116,13 +117,32 @@ collections:
 from encryption, so a dry run can list every warning before anything is
 written.
 
-Two deliberate consequences:
+Three deliberate consequences:
 
 - better-auth ids are 32-character hex strings derived from the e-mail, which
   keeps a re-run idempotent. They are not Mongo `ObjectId`s; the adapter keeps
   them as strings.
 - Existing HMAC sessions are not imported. Operators sign in once after the
   cut-over; this also clears any token issued before the migration.
+- Recovery codes are not imported. The legacy store keeps only a SHA-256 digest
+  of each code, while better-auth compares the code the operator types in clear
+  text. The digests cannot be reversed, so the migrated `twoFactor` row starts
+  with an empty list and the operator regenerates codes after signing in.
+
+## Running the migration
+
+```sh
+bun run auth:migrate --dry-run   # list the plan and the warnings
+bun run auth:migrate             # write user -> account -> twoFactor
+```
+
+Set `MONGODB_URI`, `MONGODB_DB_NAME` (default `policy_sandbox`) and the auth
+secret (`BETTER_AUTH_SECRET`, or the `SESSION_SECRET` the API derives it from).
+The script is idempotent: a re-run skips a `user` that already carries the same
+e-mail and an `account` that already carries the same password hash, never
+rewrites a different password, and never replaces an existing `twoFactor` row.
+It writes the three documents in a transaction when the server supports one and
+falls back to plain writes on a standalone `mongod`.
 
 ## Validation
 
@@ -151,10 +171,11 @@ green on an install without Mongo.
    picks it when Mongo is configured. Routes, schemas and the console client are
    unchanged. The integration test above exercises the flows against a throw-away
    database.
-3. **Data migration** — a one-shot script reads `operators`, writes
-   `user`/`account`/`twoFactor` in that order inside a transaction when the
-   deployment supports one, prints the warnings and refuses to overwrite an
-   existing `user` with a different password hash.
+3. **Data migration (done)** — `scripts/migrate-operators.ts` (`bun run
+   auth:migrate`) reads `operators`, writes `user`/`account`/`twoFactor` in that
+   order inside a transaction when the deployment supports one, prints the
+   warnings and refuses to overwrite an existing `user` with a different
+   password hash. A dry run lists the plan without writing.
 4. **Cleanup** — remove the legacy `AuthService`, its tests and the HMAC token
    helpers once phase 2 has run in production for a full session lifetime.
 
@@ -188,9 +209,10 @@ green on an install without Mongo.
 - **TOTP encryption**: legacy secrets are stored in the clear. The migration
   encrypts them with `symmetricEncrypt`; a wrong secret makes every enrolment
   unreadable, so back up the auth secret before running phase 3.
-- **Recovery codes**: better-auth stores them encrypted
-  (`backupCodeOptions.storeBackupCodes: "encrypted"`), which changes the shape
-  of `twoFactor.backupCodes` compared with the plain-JSON default.
+- **Recovery codes**: the legacy store keeps SHA-256 digests, which better-auth
+  cannot match against a code in clear text. The migration therefore leaves
+  `twoFactor.backupCodes` empty; enrolled operators keep their TOTP app and
+  regenerate recovery codes on their next sign-in.
 - **Session invalidation**: the cut-over signs everyone out. Announce it before a
   demo window.
 - **Admin bootstrap**: `POST /v1/auth/setup` must keep its "store is empty"
