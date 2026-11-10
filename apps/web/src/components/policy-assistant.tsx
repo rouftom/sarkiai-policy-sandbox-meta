@@ -2,6 +2,7 @@
 'use client'
 
 import * as React from 'react'
+import dynamic from 'next/dynamic'
 import { AlertTriangle, Check, ChevronDown, GraduationCap, HeartPulse, History, ImagePlus, Landmark, ListChecks, Loader, Plus, RadioTower, Route, Scale, Shield, Sprout, X } from 'lucide-react'
 import {
   Button,
@@ -27,7 +28,6 @@ import { ASSISTANT_FINISHED, api, type AssessmentDto, type AttachmentRefDto, typ
 import type { ActionRecord, ActionStatus, AgentUiRequest } from '@/lib/agent-ui'
 import { decideAction, listActions } from '@/lib/actions-client'
 import { ActionCenter } from '@/components/ai/tools/action-center'
-import { McpAppView } from '@/components/ai/mcp/mcp-app-wrapper'
 import { ChatHistory } from '@/components/ai/display/chat-history'
 import { ConversationShimmer } from '@/components/ai/display/conversation-shimmer'
 import {
@@ -90,6 +90,23 @@ function toTurnAttachment(ref: AttachmentRefDto): TurnAttachment {
     thumbnailUrl: ref.thumbnailUrl,
   }
 }
+
+/**
+ * MCP apps are an interactive payload, not part of the assistant shell: the
+ * SDK, the iframe bridge and the server list load only when a turn actually
+ * carries an `mcp_app` card.
+ */
+const McpAppView = dynamic(
+  () => import('@/components/ai/mcp/mcp-app-wrapper').then((mod) => mod.McpAppView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+        <Loader className="h-4 w-4 animate-spin" />
+      </div>
+    ),
+  },
+)
 
 const STAGES = ['retrieving', 'generating', 'validating', 'retry', 'persisting'] as const
 
