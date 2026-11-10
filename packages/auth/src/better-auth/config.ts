@@ -86,6 +86,13 @@ export interface BetterAuthInput {
   mail?: BetterAuthMailer
   events?: BetterAuthEvents
   rateLimit?: { enabled?: boolean; window?: number; max?: number }
+  /**
+   * Multi-write operations (a password reset revoking every session) run in a
+   * MongoDB transaction when this is true. Transactions need a replica set or
+   * a mongos, so the default is false: a bare local `mongod`, which the project
+   * supports, refuses them. Turn it on for an Atlas or clustered deployment.
+   */
+  transactions?: boolean
   /** Override the collection names when an install uses a prefix. */
   models?: {
     user?: string
@@ -150,7 +157,10 @@ export function createBetterAuth(input: BetterAuthInput) {
     baseURL: input.baseURL,
     secret: input.secret,
     trustedOrigins: input.trustedOrigins ?? [],
-    database: mongodbAdapter(input.db, { client: input.client }),
+    database: mongodbAdapter(input.db, {
+      client: input.client,
+      transaction: input.transactions ?? false,
+    }),
 
     emailAndPassword: {
       enabled: true,

@@ -59,6 +59,8 @@ export interface BetterAuthServiceConfig {
   maxOperators?: number
   events?: BetterAuthEvents
   mongoOptions?: MongoClientOptions
+  /** Run better-auth's multi-write operations in a Mongo transaction. */
+  transactions?: boolean
 }
 
 interface ChallengeClaims {
@@ -174,6 +176,7 @@ export class BetterAuthService {
       ...(config.issuer ? { issuer: config.issuer } : {}),
       ...(config.trustedOrigins ? { trustedOrigins: config.trustedOrigins } : {}),
       ...(config.events ? { events: config.events } : {}),
+      ...(config.transactions !== undefined ? { transactions: config.transactions } : {}),
     })
   }
 
@@ -577,8 +580,10 @@ export class BetterAuthService {
     const updated = (await this.withContext(async () => {
       await ctx.internalAdapter.updatePassword(user.id, hashPassword(newPassword))
       // A password change ends every token issued before it, like the legacy
-      // `sessionVersion` bump.
-      await ctx.internalAdapter.deleteSessions(user.id)
+      // `sessionVersion` bump. better-auth 1.7 renamed the sweep: the internal
+      // `deleteSessions` now takes session tokens, `deleteUserSessions` takes
+      // the owner.
+      await ctx.internalAdapter.deleteUserSessions(user.id)
       return await ctx.internalAdapter.updateUser(user.id, { mustChangePassword: false })
     })) as UserRow
     this.clearThrottle(`login:${user.email}`)
@@ -721,7 +726,7 @@ export class BetterAuthService {
     const found = await this.findUserByEmail(email)
     if (!found) return
     const ctx = await this.ctx()
-    await this.withContext(() => ctx.internalAdapter.deleteSessions(found.user.id))
+    await this.withContext(() => ctx.internalAdapter.deleteUserSessions(found.user.id))
   }
 
   async close(): Promise<void> {

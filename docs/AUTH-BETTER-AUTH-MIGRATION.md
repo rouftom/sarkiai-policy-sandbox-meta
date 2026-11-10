@@ -170,9 +170,15 @@ green on an install without Mongo.
   lists the console origins allowed to call the API.
 - The existing per-IP Fastify limiter stays in place; better-auth adds its own
   endpoint limits as defence in depth.
-- `@better-auth/core` is a direct dependency, pinned to the same `1.4.5` as
+- `@better-auth/core` is a direct dependency, pinned to the same version as
   `better-auth`: the service uses its `runWithEndpointContext` so the internal
-  adapter's database hooks run exactly as they do for a native endpoint.
+  adapter's database hooks run exactly as they do for a native endpoint. Both
+  are on `1.7.19`, past the rate-limiter and two-factor advisories that blocked
+  `1.4.5`.
+- `BETTER_AUTH_TRANSACTIONS` (default off) decides whether better-auth runs its
+  multi-write operations in a MongoDB transaction. It needs a replica set or a
+  mongos; a bare local `mongod`, which the project supports, refuses them, so
+  the safe default is off. Turn it on for an Atlas deployment.
 - The better-auth HTTP handler is **not** mounted: browser calls still hit the
   Fastify routes. Cookie attributes are configured for the day the handler is
   mounted, not used today.
@@ -191,8 +197,10 @@ green on an install without Mongo.
   guard, otherwise better-auth's sign-up would remain open on a deployed API.
 - **Internal adapter**: `BetterAuthService` calls `auth.$context.internalAdapter`,
   which is not part of better-auth's stable public API. `better-auth` and
-  `@better-auth/core` are pinned to `1.4.5`; re-read the adapter and context
-  surfaces before upgrading.
+  `@better-auth/core` are pinned to `1.7.19`; re-read the adapter and context
+  surfaces before upgrading. The 1.4 → 1.7 move already required one: the
+  internal `deleteSessions` now takes session tokens, so the service calls
+  `deleteUserSessions` for the owner-wide sweep.
 - **Validation scope**: the integration test uses a throw-away database and
   synthetic accounts. It does not cover a real Resend delivery or a production
   Atlas cluster; phase 3 must still start with a copy.

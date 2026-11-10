@@ -53,6 +53,7 @@ export const auth: AuthService | BetterAuthService = config.mongodb.configured
       baseURL: config.auth.baseUrl,
       signup: config.auth.signup,
       maxOperators: config.auth.maxOperators,
+      transactions: config.auth.betterAuthTransactions,
       trustedOrigins: config.web.allowedOrigins,
     })
   : new AuthService({

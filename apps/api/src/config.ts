@@ -396,6 +396,13 @@ export const config = {
      */
     signup: env('AUTH_SIGNUP', cloudDeployment ? 'true' : 'false') === 'true',
     maxOperators: Number(env('AUTH_MAX_OPERATORS', '12')) || 12,
+    /**
+     * better-auth runs a password reset (consume the token, revoke the
+     * sessions, set the password) in a MongoDB transaction when this is on.
+     * Default off: a transaction needs a replica set or a mongos, and a bare
+     * local `mongod` — which this project supports — refuses them.
+     */
+    betterAuthTransactions: env('BETTER_AUTH_TRANSACTIONS', 'false') === 'true',
   },
 
   /**

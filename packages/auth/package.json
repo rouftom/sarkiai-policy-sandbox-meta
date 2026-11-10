@@ -16,9 +16,9 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@better-auth/core": "1.7.19",
     "@sps/shared": "workspace:*",
-    "@better-auth/core": "1.4.5",
-    "better-auth": "1.4.5",
+    "better-auth": "1.7.19",
     "mongodb": "^6.11.0"
   },
   "devDependencies": {
