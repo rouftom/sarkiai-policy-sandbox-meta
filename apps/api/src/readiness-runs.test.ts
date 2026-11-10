@@ -121,4 +121,23 @@ describe('readiness run summaries', () => {
     expect(shared.map((run) => run.id)).toEqual([other.id])
     expect((await store.byCountry('us', 'op')).map((run) => run.id).sort()).toEqual([mine.id, other.id].sort())
   })
+
+  test('the World scope lists complete summaries only, and honours sharing', async () => {
+    const store = new ReadinessRunStore({})
+    const mine = await store.save({ userId: 'alice', runBy: 'alice', report: richReport })
+    const other = await store.save({ userId: 'bob', runBy: 'bob', report: richReport })
+    await store.save({ userId: 'bob', runBy: 'bob', report: richReport, status: 'failed', failure: 'provider 500' })
+
+    expect((await store.completeForScope('alice', 'mine')).map((run) => run.id)).toEqual([mine.id])
+    expect(
+      (await store.completeForScope('alice', 'shared')).map((run) => run.id).sort(),
+    ).toEqual([mine.id, other.id].sort())
+
+    await store.setSharing(other.id, 'bob', 'excluded')
+    expect((await store.completeForScope('alice', 'shared')).map((run) => run.id)).toEqual([mine.id])
+    // The owner keeps seeing their excluded run, in either scope.
+    expect(
+      (await store.completeForScope('bob', 'shared')).map((run) => run.id).sort(),
+    ).toEqual([mine.id, other.id].sort())
+  })
 })

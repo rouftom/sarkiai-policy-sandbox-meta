@@ -242,6 +242,34 @@ export interface ReadinessRunSummaryDto {
   input?: { dimensions?: string[] }
 }
 
+/** World read model: the latest complete run per (country, sector). */
+export type WorldScopeDto = 'mine' | 'shared'
+export type WorldStateDto = 'not-assessed' | 'no-grounded-data' | 'low-confidence' | 'ok'
+export type WorldRegistryStatusDto = 'active' | 'planned' | 'unregistered'
+
+export interface WorldSummaryEntryDto {
+  code: string
+  registryStatus: WorldRegistryStatusDto
+  sectors: Domain[]
+  state: WorldStateDto
+  composite: number | null
+  band: string | null
+  coverage: number | null
+  confidence: number | null
+  stale: boolean
+  runs: number
+  lastRunAt: string | null
+}
+
+export interface WorldSummaryDto {
+  schemaVersion: 1
+  frameworkVersion: string
+  sector: Domain | 'all'
+  scope: WorldScopeDto
+  generatedAt: string
+  countries: WorldSummaryEntryDto[]
+}
+
 export interface WhatIfResultDto {
   country: string
   domain: string
@@ -1349,6 +1377,19 @@ export const api = {
    */
   dossier: (runId: string, format: 'json' | 'markdown' = 'markdown') =>
     requestText(`/v1/audit/dossier/${runId}?format=${format}`),
+}
+
+// ── World ───────────────────────────────────────────────────────────────────
+
+/** World read model: the latest complete run per (country, sector), with its display state. */
+export const worldApi = {
+  summary: (query: { sector?: Domain | 'all'; scope?: WorldScopeDto } = {}) => {
+    const params = new URLSearchParams()
+    if (query.sector) params.set('sector', query.sector)
+    if (query.scope) params.set('scope', query.scope)
+    const search = params.toString()
+    return request<WorldSummaryDto>(`/v1/world/summary${search ? `?${search}` : ''}`)
+  },
 }
 
 // ── Operator auth, preferences, audit feed ──────────────────────────────────

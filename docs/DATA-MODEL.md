@@ -59,6 +59,14 @@ what it would touch). `sharing` defaults to `shared`; `PATCH
 /v1/world/runs/:kind/:runId/sharing` changes it for the owner and is audited as
 `world.run.sharing.changed`.
 
+`GET /v1/world/summary?sector=…&scope=mine|shared` is the World read model: the
+latest complete run per (country, sector), joined with the country registry,
+with `coverage = groundedDimensions / 13`, `confidence = meanConfidence`, a
+maturity `band` and a resolved `state` (`not-assessed`, `no-grounded-data`,
+`low-confidence`, `ok`) from the display rules of the World specification. The
+shared scope applies the same exclusion rule as the country dashboard, and the
+route returns summary fields only — never a report.
+
 ## `kb_images` and `kb_documents`
 
 `kb_images` holds the figures attached to a document: `_id`, `filename`,

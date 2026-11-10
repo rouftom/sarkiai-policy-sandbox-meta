@@ -20,6 +20,7 @@ import {
   Globe2,
   LayoutDashboard,
   Layers,
+  Map,
   Megaphone,
   Network,
   Rocket,
@@ -30,6 +31,7 @@ import {
   Siren,
 } from 'lucide-react'
 import type { MessageKey } from '@/lib/i18n'
+import { WORLD_MODE_ENABLED } from '@/lib/world-mode'
 
 export interface NavEntry {
   href: string
@@ -46,6 +48,14 @@ export const GUIDE_CHILDREN: NavEntry[] = [
   { href: '/guide/operations', labelKey: 'nav.guide_operations', icon: Settings2 },
   { href: '/guide/meta', labelKey: 'nav.guide_meta', icon: Layers },
 ]
+
+/**
+ * World lands right after Readiness: it is the same scores, read across
+ * countries. The entry disappears with `NEXT_PUBLIC_WORLD_MODE=false`.
+ */
+const WORLD_NAV: NavEntry[] = WORLD_MODE_ENABLED
+  ? [{ href: '/world', labelKey: 'nav.world', icon: Map }]
+  : []
 
 /**
  * A section with `children` renders as a collapsible group: its own href is only
@@ -73,6 +83,7 @@ export const GENERAL_NAV: NavEntry[] = [
     ],
   },
   { href: '/readiness', labelKey: 'nav.readiness', icon: Gauge },
+  ...WORLD_NAV,
   { href: '/scenarios', labelKey: 'nav.scenarios', icon: Network },
 ]
 
