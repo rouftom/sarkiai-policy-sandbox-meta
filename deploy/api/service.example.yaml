@@ -42,6 +42,15 @@ services:
       - key: META_VOICE_MODEL
         value: muse-voice-transcribe-1.0
 
+      # ── MCP apps (first-party tools) ───────────────────────────────────────
+      # JSON array of { name, url, requiresApiKey? }. The console receives the
+      # same array as NEXT_PUBLIC_MCP_SERVERS, inlined at build time; empty
+      # leaves the agent without MCP tools. The shared key stays server-side.
+      - key: MCP_SERVERS
+        sync: false
+      - key: SEA_MCP_API_KEY
+        sync: false
+
       # ── corpus search (Atlas Search, agentic search on the Meta model) ─────
       - key: RETRIEVAL_BACKEND
         value: atlas
