@@ -1,0 +1,196 @@
+{
+  "country": "us",
+  "jurisdiction": "national",
+  "generated": "2026-11-13",
+  "note": "United States federal corpus. status='present' = payload copied locally (payloads are not versioned, see .gitignore); status='to_confirm' = instrument still to source or verify before ingestion. Every payload here has a text layer, so needsOcr is never set. Federal works are published as official text; the manifest still records each issuing authority and the canonical source URL, because the DOI or a later administration may move or withdraw a page while the document stays citable. Any factual error propagates into the agents' answers.",
+  "rightsNote": "United States federal government works prepared by federal employees in the course of their duties are not subject to copyright in the United States (17 U.S.C. §105), so the full text may enter the knowledge base and be quoted without a licence. Per-document rights status: official-text = official federal instrument (law, memorandum, strategy, agency guidance, NIST publication); open-licence = explicit reuse licence; quotation-only = third-party work, short attributed quotations only, payload not redistributed; to-confirm = rights not established, do not publish the payload. Payloads are git-ignored; only this manifest and the README are versioned. See docs/LICENSING.md.",
+  "documents": [
+    {
+      "id": "us-omb-m-24-10-ai-governance",
+      "title": "M-24-10 — Advancing Governance, Innovation, and Risk Management for Agency Use of Artificial Intelligence",
+      "authority": "Office of Management and Budget (Executive Office of the President)",
+      "docType": "guidance",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_policies",
+        "ai_integration",
+        "human_impact",
+        "collaboration"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "critical",
+      "file": "omb_m-24-10_ai_governance_2024.pdf",
+      "note": "Binding OMB memorandum for executive agencies (28 March 2024): AI governance bodies, minimum risk-management practices, and the high-impact AI use cases. The backbone of the federal AI policy layer.",
+      "sourceUrl": "https://www.whitehouse.gov/wp-content/uploads/2024/03/M-24-10-Advancing-Governance-Innovation-and-Risk-Management-for-Agency-Use-of-Artificial-Intelligence.pdf"
+    },
+    {
+      "id": "us-nist-ai-rmf-1-0",
+      "title": "Artificial Intelligence Risk Management Framework (AI RMF 1.0)",
+      "authority": "National Institute of Standards and Technology (NIST)",
+      "docType": "standard",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_policies",
+        "human_impact",
+        "ai_inclusion",
+        "contextualization"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "critical",
+      "file": "nist_ai_rmf_1_0_2023.pdf",
+      "note": "NIST AI 100-1. The voluntary federal risk framework: govern, map, measure, manage. Reference vocabulary for the readiness assessment's risk dimensions.",
+      "sourceUrl": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf"
+    },
+    {
+      "id": "us-nist-ai-600-1-generative-ai",
+      "title": "Artificial Intelligence Risk Management Framework: Generative Artificial Intelligence Profile (NIST AI 600-1)",
+      "authority": "National Institute of Standards and Technology (NIST)",
+      "docType": "guidance",
+      "jurisdiction": "national",
+      "pillar": [
+        "generated_content",
+        "human_impact",
+        "ai_policies",
+        "data_marketplace"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "high",
+      "file": "nist_ai_600_1_genai_profile_2024.pdf",
+      "note": "Cross-sector generative-AI risk profile (July 2024), issued under the Executive Order of 30 October 2023. Twelve GenAI-specific risks, from confabulation to information integrity.",
+      "sourceUrl": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf"
+    },
+    {
+      "id": "us-nist-csf-2-0",
+      "title": "The NIST Cybersecurity Framework (CSF) 2.0",
+      "authority": "National Institute of Standards and Technology (NIST)",
+      "docType": "standard",
+      "jurisdiction": "national",
+      "pillar": [
+        "digital_infrastructure",
+        "ai_policies",
+        "collaboration"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "high",
+      "file": "nist_csf_2_0_2024.pdf",
+      "note": "NIST CSWP 29. Adds the 'govern' function to the five cybersecurity functions; the infrastructure baseline the AI systems run on.",
+      "sourceUrl": "https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.pdf"
+    },
+    {
+      "id": "us-ostp-blueprint-ai-bill-of-rights",
+      "title": "Blueprint for an AI Bill of Rights — Making Automated Systems Work for the American People",
+      "authority": "White House Office of Science and Technology Policy (OSTP)",
+      "docType": "policy",
+      "jurisdiction": "national",
+      "pillar": [
+        "human_impact",
+        "human_interface",
+        "ai_inclusion",
+        "ai_policies"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "high",
+      "file": "ostp_ai_bill_of_rights_2022.pdf",
+      "note": "October 2022 non-binding statement of five principles (safe and effective systems, algorithmic discrimination protections, data privacy, notice and explanation, human alternatives) plus the technical companion.",
+      "sourceUrl": "https://bidenwhitehouse.archives.gov/wp-content/uploads/2022/10/Blueprint-for-an-AI-Bill-of-Rights.pdf"
+    },
+    {
+      "id": "us-department-of-education-netp-2024",
+      "title": "2024 National Educational Technology Plan — A Call to Action for Closing the Digital Access, Design, and Use Divides",
+      "authority": "U.S. Department of Education, Office of Educational Technology",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": [
+        "human_impact",
+        "ai_inclusion",
+        "digital_infrastructure",
+        "contextualization"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "high",
+      "file": "netp_2024.pdf",
+      "note": "January 2024 plan for education technology, including guidance on AI in teaching and learning. Downloaded from the ERIC mirror (ED641164) because tech.ed.gov refuses automated downloads; canonical URL recorded.",
+      "sourceUrl": "https://tech.ed.gov/files/2024/01/NETP24.pdf"
+    },
+    {
+      "id": "us-hhs-ai-strategy-2025",
+      "title": "HHS Artificial Intelligence Strategy",
+      "authority": "U.S. Department of Health and Human Services, Office of the Chief Information Officer / Chief AI Officer",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "ai_policies",
+        "strategy_alignment",
+        "data_marketplace"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "critical",
+      "file": "hhs_ai_strategy_2025.pdf",
+      "note": "Department-wide AI strategy for health care, public health, human services and biomedical research. Downloaded from the GPO govinfo mirror (GOVPUB-HE-PURL-gpo255287) because hhs.gov refuses automated downloads; canonical URL recorded.",
+      "sourceUrl": "https://www.hhs.gov/sites/default/files/hhs-artificial-intelligence-strategy.pdf"
+    },
+    {
+      "id": "us-ntia-national-spectrum-strategy-2023",
+      "title": "National Spectrum Strategy",
+      "authority": "National Telecommunications and Information Administration (NTIA), Department of Commerce",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": [
+        "digital_infrastructure",
+        "strategy_alignment",
+        "granular_priorities"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "high",
+      "file": "ntia_national_spectrum_strategy_2023.pdf",
+      "note": "November 2023 spectrum plan prepared under the Presidential Memorandum on modernising spectrum policy, with the FCC. Covers the telecom pillar. Downloaded from the GPO govinfo mirror (GOVPUB-PREX-PURL-gpo252508); canonical URL recorded.",
+      "sourceUrl": "https://www.ntia.gov/sites/default/files/publications/national_spectrum_strategy_final.pdf"
+    },
+    {
+      "id": "us-usda-ai-strategy-2025",
+      "title": "USDA Fiscal Year 2025–2026 AI Strategy",
+      "authority": "U.S. Department of Agriculture, Office of the Chief Data and AI Officer",
+      "docType": "strategy",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_integration",
+        "strategy_alignment",
+        "ai_policies",
+        "granular_priorities"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "high",
+      "file": "usda_ai_strategy_2025.pdf",
+      "note": "Five goals: AI governance and leadership, workforce readiness, infrastructure and toolset, data readiness and access, ethical and responsible use. Covers the agriculture pillar. Downloaded from the USDA CDN mirror because usda.gov refuses automated downloads; canonical URL recorded.",
+      "sourceUrl": "https://www.usda.gov/sites/default/files/documents/fy-2025-2026-usda-ai-strategy.pdf"
+    },
+    {
+      "id": "us-usda-ai-compliance-plan-2025",
+      "title": "USDA Artificial Intelligence Compliance Plan, FY 2025–2026",
+      "authority": "U.S. Department of Agriculture, Office of the Chief Data and AI Officer",
+      "docType": "report",
+      "jurisdiction": "national",
+      "pillar": [
+        "ai_policies",
+        "collaboration",
+        "granular_priorities"
+      ],
+      "status": "present",
+      "rights": "official-text",
+      "priority": "medium",
+      "file": "usda_ai_compliance_plan_2025.pdf",
+      "note": "The department's M-24-10 compliance report: AI use-case inventory, governance, and the concrete practices behind the strategy. Read with the strategy, not instead of it.",
+      "sourceUrl": "https://usda.azureedge.us/sites/default/files/documents/usda-ai-compliance-plan-fy-2025-2026.pdf"
+    }
+  ]
+}

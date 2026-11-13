@@ -4,13 +4,10 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import {
   CalendarClock,
-  CircleDashed,
-  CircleSlash2,
   Map as MapIcon,
   RefreshCw,
   Scale,
   Settings2,
-  ShieldCheck,
   Swords,
   TriangleAlert,
   type LucideIcon,
@@ -38,16 +35,13 @@ import {
   TooltipTrigger,
   cn,
 } from '@sps/ui'
-import { worldApi, type WorldScopeDto, type WorldStateDto, type WorldSummaryDto, type WorldSummaryEntryDto } from '@/lib/api'
+import { worldApi, type WorldScopeDto, type WorldSummaryDto, type WorldSummaryEntryDto } from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { PageIntro } from '@/components/page-intro'
 import { CountryFlag } from '@/components/country-flag'
-
-/** The defaults of `docs/world-mode/docs/05-readiness-aggregation.md`, §2. */
-const DISPLAY_RULES = { dimensions: 13, minCoverage: 0.4, minConfidence: 0.4, staleAfterDays: 90 } as const
-
-const SECTORS: readonly Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
+import { WorldMap } from './world-map'
+import { DISPLAY_RULES, SECTORS, STATE_META } from './world-model'
 
 type WorldTab = 'table' | 'map' | 'battle' | 'watch' | 'settings'
 
@@ -58,36 +52,6 @@ const WORLD_TABS: ReadonlyArray<{ id: WorldTab; key: MessageKey }> = [
   { id: 'watch', key: 'world.tab.watch' },
   { id: 'settings', key: 'world.tab.settings' },
 ]
-
-const STATE_META: Record<
-  WorldStateDto,
-  { icon: LucideIcon; tone: 'neutral' | 'warning' | 'danger' | 'success'; label: MessageKey; hint: MessageKey }
-> = {
-  'not-assessed': {
-    icon: CircleDashed,
-    tone: 'neutral',
-    label: 'world.state.not-assessed',
-    hint: 'world.state.hint.not-assessed',
-  },
-  'no-grounded-data': {
-    icon: CircleSlash2,
-    tone: 'warning',
-    label: 'world.state.no-grounded-data',
-    hint: 'world.state.hint.no-grounded-data',
-  },
-  'low-confidence': {
-    icon: TriangleAlert,
-    tone: 'warning',
-    label: 'world.state.low-confidence',
-    hint: 'world.state.hint.low-confidence',
-  },
-  ok: {
-    icon: ShieldCheck,
-    tone: 'success',
-    label: 'world.state.ok',
-    hint: 'world.state.hint.ok',
-  },
-}
 
 export function WorldView() {
   const { t, locale } = useI18n()
@@ -266,7 +230,16 @@ export function WorldView() {
       </TabsContent>
 
       <TabsContent value="map">
-        <Placeholder icon={MapIcon} title={t('world.placeholder.map.title')} body={t('world.placeholder.map.body')} />
+        <WorldMap
+          entries={entries}
+          nameOf={nameOf}
+          dateFormat={dateFormat}
+          percent={percent}
+          loading={loading}
+          empty={noCompleteRun}
+          problem={problem}
+          onRetry={() => void load()}
+        />
       </TabsContent>
       <TabsContent value="battle">
         <Placeholder
