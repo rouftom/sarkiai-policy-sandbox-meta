@@ -16,15 +16,19 @@ export function maturityLabel(score: number): string {
   return MATURITY_LEVELS[rounded] ?? 'Unknown'
 }
 
-/** Weighted average across dimensions (default weight 1; 0 excludes). */
+/**
+ * Weighted average across dimensions (default weight 1; 0 excludes).
+ * `null` is accepted because older reports store `weights: null`.
+ */
 export function computeComposite(
   dimensions: DimensionScore[],
-  weights: Partial<Record<ReadinessDimension, number>> = {},
+  weights: Partial<Record<ReadinessDimension, number>> | null = {},
 ): number {
+  const resolved = weights ?? {}
   let weightedSum = 0
   let totalWeight = 0
   for (const dim of dimensions) {
-    const weight = weights[dim.dimension] ?? 1
+    const weight = resolved[dim.dimension] ?? 1
     if (weight <= 0) continue
     weightedSum += dim.score * weight
     totalWeight += weight
@@ -39,12 +43,13 @@ export function computeComposite(
  */
 export function meanConfidence(
   dimensions: DimensionScore[],
-  weights: Partial<Record<ReadinessDimension, number>> = {},
+  weights: Partial<Record<ReadinessDimension, number>> | null = {},
 ): number | null {
+  const resolved = weights ?? {}
   let weightedSum = 0
   let totalWeight = 0
   for (const dim of dimensions) {
-    const weight = weights[dim.dimension] ?? 1
+    const weight = resolved[dim.dimension] ?? 1
     if (weight <= 0) continue
     weightedSum += dim.confidence * weight
     totalWeight += weight

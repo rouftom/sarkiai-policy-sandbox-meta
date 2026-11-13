@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { DimensionScore } from '@sps/shared'
-import { applyPropagation, computeComposite, computeGapAnalysis, maturityLabel, propagate, settlePool } from './index'
+import { applyPropagation, computeComposite, computeGapAnalysis, maturityLabel, meanConfidence, propagate, settlePool } from './index'
 
 function score(dimensionId: number, dimension: string, value: number): DimensionScore {
   return {
@@ -29,6 +29,12 @@ describe('maturity scoring', () => {
     expect(computeComposite(dims)).toBe(3.5)
     expect(computeComposite(dims, { digital_infrastructure: 3 })).toBeCloseTo(4.25, 5)
     expect(computeComposite(dims, { data_marketplace: 0 })).toBe(5)
+  })
+
+  test('computeComposite treats null weights as the default weight', () => {
+    const dims = [score(1, 'data_marketplace', 2), score(13, 'digital_infrastructure', 5)]
+    expect(computeComposite(dims, null)).toBe(3.5)
+    expect(meanConfidence(dims, null)).toBeCloseTo(0.8, 5)
   })
 
   test('computeGapAnalysis keeps < 3.0 and sorts ascending', () => {
