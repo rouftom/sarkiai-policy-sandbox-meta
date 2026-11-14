@@ -1,32 +1,19 @@
 'use client'
 
-import { Card, CardContent, MultiSelect, Select } from '@sps/ui'
+import { Card, CardContent, MultiSelect } from '@sps/ui'
 import type { Domain } from '@sps/shared'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
+import { CountrySelect } from '@/components/country-select'
 
 /** Country and domain controls, compact, for a page header. */
 export function WorkspaceControls() {
-  const { t, locale } = useI18n()
-  const { country, setCountry, countries, sectors, domains, setDomains } = useWorkspace()
-
-  const selectable = countries.filter((row) => row.status === 'active')
-  const pool = selectable.length > 0 ? selectable : countries
-  const countryOptions =
-    pool.length > 0
-      ? pool.map((row) => ({ value: row.code, label: locale === 'fr' ? row.nameFr : row.name }))
-      : [{ value: country, label: country.toUpperCase() }]
+  const { t } = useI18n()
+  const { sectors, domains, setDomains } = useWorkspace()
 
   return (
     <>
-      <Select
-        ariaLabel={t('app.country')}
-        value={country}
-        onValueChange={setCountry}
-        options={countryOptions}
-        size="sm"
-        className="w-40 max-w-40 truncate"
-      />
+      <CountrySelect className="w-40 shrink-0" />
       <MultiSelect
         ariaLabel={t('app.domains')}
         values={domains}

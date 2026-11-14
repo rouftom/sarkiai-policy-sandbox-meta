@@ -208,6 +208,8 @@ export interface ReadinessRunsQuery {
   page?: number
   limit?: number
   q?: string
+  /** Restrict the list to the country the operator works on. */
+  country?: string
   domains?: string[]
   statuses?: Array<'complete' | 'failed'>
 }
@@ -1148,6 +1150,7 @@ export const api = {
     if (query.page) params.set('page', String(query.page))
     if (query.limit) params.set('limit', String(query.limit))
     if (query.q) params.set('q', query.q)
+    if (query.country) params.set('country', query.country)
     if (query.domains?.length) params.set('domain', query.domains.join(','))
     if (query.statuses?.length) params.set('status', query.statuses.join(','))
     const qs = params.toString()
@@ -1200,7 +1203,10 @@ export const api = {
     request<TickResultDto>(`/v1/scenarios/${runId}/next`, { method: 'POST' }),
 
   /** The scenario runs of the operator, newest first. */
-  scenarioRuns: () => request<{ runs: ScenarioRunSummaryDto[] }>('/v1/scenarios/runs'),
+  scenarioRuns: (country?: string) =>
+    request<{ runs: ScenarioRunSummaryDto[] }>(
+      `/v1/scenarios/runs${country ? `?country=${encodeURIComponent(country)}` : ''}`,
+    ),
 
   scenarioRun: (runId: string) => request<ScenarioRunDto>(`/v1/scenarios/runs/${encodeURIComponent(runId)}`),
 

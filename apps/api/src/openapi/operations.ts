@@ -71,6 +71,7 @@ import {
   scenarioReleaseQuery,
   scenarioRunInput,
   scenarioRunParams,
+  scenarioRunsQuery,
   searchInput,
   setupInput,
   signupInput,
@@ -864,8 +865,10 @@ export const OPERATIONS: Record<string, OperationDoc> = {
   },
   'GET /v1/scenarios/runs': {
     summary: 'List the operator scenario runs',
-    description: 'Newest first, with status, progress and the reports already produced.',
+    description: 'Newest first, with status, progress and the reports already produced. Restricted to one country on request.',
     tags: ['scenarios'],
+    query: scenarioRunsQuery,
+    errors: [BAD_REQUEST],
   },
   'GET /v1/scenarios/runs/:runId': {
     summary: 'Read one saved run',

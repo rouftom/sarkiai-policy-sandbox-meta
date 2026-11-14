@@ -472,6 +472,11 @@ export const readinessRunsQuery = z.object({
   page: z.coerce.number().int().min(1).default(1).describe('Page number, one-based.'),
   limit: z.coerce.number().int().min(1).max(100).default(10).describe('Assessments per page.'),
   q: z.string().max(100).optional().describe('Free-text filter over the assessment title.'),
+  country: z
+    .string()
+    .length(2)
+    .optional()
+    .describe('Restrict the list to one country (ISO 3166-1 alpha-2, case-insensitive).'),
   domain: z
     .string()
     .max(300)
@@ -482,6 +487,15 @@ export const readinessRunsQuery = z.object({
     .max(60)
     .optional()
     .describe('Comma-separated statuses; only `complete` and `failed` are honoured.'),
+})
+
+/** The saved scenario runs of one country, for the console of that country. */
+export const scenarioRunsQuery = z.object({
+  country: z
+    .string()
+    .length(2)
+    .optional()
+    .describe('Restrict the list to one country (ISO 3166-1 alpha-2, case-insensitive).'),
 })
 
 export const readinessAssessInput = z.object({
