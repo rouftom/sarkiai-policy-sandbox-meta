@@ -174,16 +174,25 @@ export class ReadinessRunStore {
   /** One page of the operator's assessments, newest first, filtered on the server. */
   async page(
     userId: string,
-    query: { page: number; limit: number; q?: string; domains?: string[]; statuses?: ReadinessRunStatus[] },
+    query: {
+      page: number
+      limit: number
+      q?: string
+      country?: string
+      domains?: string[]
+      statuses?: ReadinessRunStatus[]
+    },
   ): Promise<{ runs: ReadinessRunSummary[]; total: number }> {
     const { page, limit } = query
     const needle = query.q?.trim().toLowerCase() ?? ''
+    const country = query.country?.toLowerCase()
     const domains = query.domains ?? []
     const statuses = query.statuses ?? []
     const sectors = needle ? sectorsMatching(needle) : []
     const col = await this.col()
     if (col) {
       const filter: Record<string, unknown> = { userId }
+      if (country) filter.country = country
       if (domains.length) filter.domain = { $in: domains }
       if (statuses.length) filter.status = { $in: statuses }
       if (needle) {
@@ -206,6 +215,7 @@ export class ReadinessRunStore {
       .filter(
         (run) =>
           run.userId === userId &&
+          (!country || run.country.toLowerCase() === country) &&
           (!domains.length || domains.includes(run.domain)) &&
           (!statuses.length || statuses.includes(run.status)) &&
           (!needle || sectors.includes(run.domain) || [run.country, run.runBy].some((value) => value.toLowerCase().includes(needle))),

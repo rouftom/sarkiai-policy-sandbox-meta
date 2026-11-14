@@ -41,6 +41,7 @@ import {
 import { AskUserPanel } from '@/components/ai/tools/ask-user-panel'
 import { RequestInputCard } from '@/components/ai/tools/request-input-card'
 import { ApprovalCard } from '@/components/ai/tools/approval-card'
+import { CountrySelect } from '@/components/country-select'
 import { failureMessage } from '@/lib/failure'
 import {
   DEFAULT_ATTACHMENT_LIMITS,
@@ -957,6 +958,9 @@ export function PolicyAssistant({ onClose }: { onClose: () => void }) {
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <p className="shrink-0 text-[12px] font-semibold text-foreground">{t('assistant.title')}</p>
         </div>
+        {/* The assistant answers with the corpus of one country: the choice is
+            made here, visible right above the composer. */}
+        <CountrySelect className="w-28 shrink-0" align="end" />
         <TooltipProvider>
           {(turns.length > 0 || historyOpen) && (
             <Tooltip>

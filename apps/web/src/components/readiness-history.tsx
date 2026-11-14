@@ -47,7 +47,7 @@ export function ReadinessHistory({
   deletingId: string | null
 }) {
   const { t, locale } = useI18n()
-  const { sectors } = useWorkspace()
+  const { country, sectors } = useWorkspace()
   const [pending, setPending] = React.useState<ReadinessRunSummaryDto | null>(null)
   const [query, setQuery] = React.useState('')
   const [search, setSearch] = React.useState('')
@@ -77,7 +77,7 @@ export function ReadinessHistory({
     return () => window.clearTimeout(timer)
   }, [query])
 
-  const filterKey = JSON.stringify([search, filters, pageSize])
+  const filterKey = JSON.stringify([search, filters, pageSize, country])
 
   // Pages are cached per search, filter set and page size; a change drops them.
   React.useEffect(() => {
@@ -93,7 +93,14 @@ export function ReadinessHistory({
     }
     let cancelled = false
     api
-      .readinessRuns({ page, limit: pageSize, q: search, domains: filters.domains, statuses: filters.statuses })
+      .readinessRuns({
+        page,
+        limit: pageSize,
+        q: search,
+        country,
+        domains: filters.domains,
+        statuses: filters.statuses,
+      })
       .then((result) => {
         if (cancelled) return
         // An API that predates the paged list answers without a total: the rows it sent are all there is.

@@ -37,6 +37,7 @@ import { maturityColor } from '@sps/theme'
 import { type DimensionScoreDto, type ReadinessReportDto, type ReadinessReportFileDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
+import { CountrySelect } from '@/components/country-select'
 import { SourceDrawer, type WebSourceView } from '@/components/ai/display/source-drawer'
 import { ProcessGraph, type ProcessGraphStep, type ProcessGraphView, type ProcessState } from '@/components/workflow/process-graph'
 import { ReadinessHistory } from '@/components/readiness-history'
@@ -54,7 +55,8 @@ function seconds(ms: number | undefined): string {
  */
 export function ReadinessActions() {
   const { t } = useI18n()
-  const { running, run, creating, setCreating, openCreate, startDomains, setStartDomains, settings, resumable, resume } = useReadiness()
+  const { running, run, creating, setCreating, openCreate, startDomains, setStartDomains, settings, resumable, resume } =
+    useReadiness()
   const { sectors: sectorOptions } = useWorkspace()
   const start = () => {
     setCreating(false)
@@ -106,17 +108,24 @@ export function ReadinessActions() {
             <DialogDescription className="text-[11px]">{t('readiness.newDescription')}</DialogDescription>
           </DialogHeader>
           <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-5">
-            <div className="mb-4 space-y-1.5">
-              <p className="text-[12px] font-semibold text-foreground">{t('app.domains')}</p>
-              <p className="text-[10px] text-muted-foreground">{t('readiness.sectors.max', { max: settings.maxDomains })}</p>
-              <MultiSelect
-                ariaLabel={t('app.domains')}
-                values={startDomains}
-                onValuesChange={(values) => setStartDomains(values as Domain[])}
-                options={sectorOptions.map((value) => ({ value, label: t(`domain.${value}` as 'domain.health') }))}
-                maxSelected={settings.maxDomains}
-                className="w-full"
-              />
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <p className="text-[12px] font-semibold text-foreground">{t('app.country')}</p>
+                <p className="text-[10px] text-muted-foreground">{t('readiness.country.hint')}</p>
+                <CountrySelect className="w-full" />
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-[12px] font-semibold text-foreground">{t('app.domains')}</p>
+                <p className="text-[10px] text-muted-foreground">{t('readiness.sectors.max', { max: settings.maxDomains })}</p>
+                <MultiSelect
+                  ariaLabel={t('app.domains')}
+                  values={startDomains}
+                  onValuesChange={(values) => setStartDomains(values as Domain[])}
+                  options={sectorOptions.map((value) => ({ value, label: t(`domain.${value}` as 'domain.health') }))}
+                  maxSelected={settings.maxDomains}
+                  className="w-full"
+                />
+              </div>
             </div>
             <SettingsTab />
           </div>

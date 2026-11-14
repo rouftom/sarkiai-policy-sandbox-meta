@@ -2,11 +2,12 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { Minus, Plus, RefreshCw, RotateCcw, TriangleAlert } from 'lucide-react'
+import { Minus, Plus, RefreshCw, RotateCcw, TriangleAlert, X } from 'lucide-react'
 import { MATURITY_RAMP } from '@sps/theme'
 import { Badge, Button, cn } from '@sps/ui'
 import type { WorldSummaryEntryDto } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
+import { useWorkspace } from '@/lib/workspace'
 import { CountryFlag } from '@/components/country-flag'
 import { MAP_NEUTRAL, mapPaint } from './world-map-style'
 import { WORLD_MAP_HEIGHT, WORLD_MAP_NAMES, WORLD_MAP_PATHS, WORLD_MAP_WIDTH } from './world-geo'
@@ -58,12 +59,15 @@ export interface WorldMapProps {
 export function WorldMap({ entries, nameOf, dateFormat, percent, loading, empty, problem, onRetry }: WorldMapProps) {
   const { t, locale } = useI18n()
   const router = useRouter()
+  const { setCountry } = useWorkspace()
   const [view, setView] = React.useState<View>(FULL_VIEW)
   const [selected, setSelected] = React.useState<string | null>(null)
   const [hover, setHover] = React.useState<{ code: string; x: number; y: number } | null>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const svgRef = React.useRef<SVGSVGElement>(null)
-  const drag = React.useRef<{ clientX: number; clientY: number; view: View; moved: boolean } | null>(null)
+  const drag = React.useRef<{ clientX: number; clientY: number; view: View; moved: boolean; code: string | null } | null>(
+    null,
+  )
   const justPanned = React.useRef(false)
 
   const byCode = React.useMemo(() => new Map(entries.map((entry) => [entry.code, entry])), [entries])
@@ -83,6 +87,22 @@ export function WorldMap({ entries, nameOf, dateFormat, percent, loading, empty,
   )
 
   const selectedEntry = selected ? (byCode.get(selected) ?? null) : null
+
+  // Escape closes the sheet, as a dialog would.
+  React.useEffect(() => {
+    if (!selected) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected])
+
+  /** Working on a country starts by making it the workspace country. */
+  const openAssessment = (code: string) => {
+    setCountry(code)
+    router.push('/readiness')
+  }
 
   // Ctrl/⌘ + wheel zooms without taking the page scroll hostage.
   React.useEffect(() => {
@@ -120,7 +140,9 @@ export function WorldMap({ entries, nameOf, dateFormat, percent, loading, empty,
     if (event.button !== 0) return
     justPanned.current = false
     event.currentTarget.setPointerCapture(event.pointerId)
-    drag.current = { clientX: event.clientX, clientY: event.clientY, view, moved: false }
+    // The country is read now: once the pointer is captured by the SVG, every
+    // later event targets the SVG itself, not the shape under the finger.
+    drag.current = { clientX: event.clientX, clientY: event.clientY, view, moved: false, code: countryAt(event.target) }
   }
 
   const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
@@ -152,10 +174,24 @@ export function WorldMap({ entries, nameOf, dateFormat, percent, loading, empty,
   }
 
   const handlePointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (drag.current && event.currentTarget.hasPointerCapture(event.pointerId)) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    const current = drag.current
+    const panned = justPanned.current
+    drag.current = null
+    justPanned.current = false
+    // A tap selects: a drag pans. Pointer capture retargets the browser's
+    // `click` to the SVG, so the shape's own `onClick` never fires.
+    if (current && !current.moved && !panned && current.code) choose(current.code)
+  }
+
+  const handlePointerCancel = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     drag.current = null
+    justPanned.current = false
   }
 
   const choose = (code: string) => {
@@ -244,7 +280,7 @@ export function WorldMap({ entries, nameOf, dateFormat, percent, loading, empty,
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
             onPointerLeave={() => setHover(null)}
           >
             {WORLD_MAP_PATHS.map(([code, path]) => {
@@ -272,7 +308,6 @@ export function WorldMap({ entries, nameOf, dateFormat, percent, loading, empty,
                     paint.className,
                     isSelected && 'stroke-foreground dark:stroke-white',
                   )}
-                  onClick={() => choose(code)}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter' && event.key !== ' ') return
                     event.preventDefault()
@@ -291,18 +326,38 @@ export function WorldMap({ entries, nameOf, dateFormat, percent, loading, empty,
               <HoverCard code={hover.code} entry={byCode.get(hover.code)} nameOfRegion={nameOfRegion} />
             </div>
           )}
+
+          {/* Below `lg` the sheet has no column of its own: it opens over the map,
+              right where the country was tapped, instead of below the fold. */}
+          {selected && (
+            <div className="custom-scrollbar absolute inset-x-2 bottom-2 z-30 max-h-[72%] overflow-y-auto lg:hidden">
+              <CountrySheet
+                code={selected}
+                entry={selectedEntry}
+                nameOfRegion={nameOfRegion}
+                dateFormat={dateFormat}
+                percent={percent}
+                onClose={() => setSelected(null)}
+                onOpenAssessment={() => openAssessment(selected)}
+              />
+            </div>
+          )}
         </div>
 
         <MapLegend />
       </div>
 
-      <CountrySheet
-        code={selected}
-        entry={selectedEntry}
-        nameOfRegion={nameOfRegion}
-        dateFormat={dateFormat}
-        percent={percent}
-      />
+      <div className="hidden lg:block">
+        <CountrySheet
+          code={selected}
+          entry={selectedEntry}
+          nameOfRegion={nameOfRegion}
+          dateFormat={dateFormat}
+          percent={percent}
+          onClose={selected ? () => setSelected(null) : undefined}
+          onOpenAssessment={selected ? () => openAssessment(selected) : undefined}
+        />
+      </div>
     </div>
   )
 }
@@ -365,12 +420,16 @@ function CountrySheet({
   nameOfRegion,
   dateFormat,
   percent,
+  onClose,
+  onOpenAssessment,
 }: {
   code: string | null
   entry: WorldSummaryEntryDto | null
   nameOfRegion: (code: string) => string
   dateFormat: Intl.DateTimeFormat
   percent: Intl.NumberFormat
+  onClose?: () => void
+  onOpenAssessment?: () => void
 }) {
   const { t } = useI18n()
   const router = useRouter()
@@ -388,13 +447,28 @@ function CountrySheet({
   const unregistered = !entry || entry.registryStatus === 'unregistered'
 
   return (
-    <aside className="flex flex-col gap-3 rounded-2xl border border-border bg-card px-3 py-3" aria-live="polite">
+    <aside
+      className="flex flex-col gap-3 rounded-2xl border border-border bg-card px-3 py-3 shadow-lg lg:shadow-none"
+      aria-live="polite"
+    >
       <div className="flex items-start gap-2">
         <CountryFlag code={code} className="mt-0.5" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-foreground">{nameOfRegion(code)}</p>
           <p className="font-mono text-[9px] uppercase text-muted-foreground">{code}</p>
         </div>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="-mr-1 -mt-1 h-6 w-6 shrink-0"
+            aria-label={t('common.close')}
+            title={t('common.close')}
+            onClick={onClose}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        )}
       </div>
 
       <div className="space-y-1">
@@ -481,7 +555,7 @@ function CountrySheet({
             {t('world.map.sheet.registry')}
           </Button>
         ) : (
-          <Button variant="outline" size="sm" onClick={() => router.push('/readiness')}>
+          <Button variant="outline" size="sm" onClick={onOpenAssessment}>
             {t('world.empty.action')}
           </Button>
         )}

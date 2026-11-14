@@ -401,6 +401,18 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
     setCreating(true)
   }
 
+  /**
+   * The dialog's sectors follow the country chosen there: a sector the new
+   * country does not enable is dropped, and an empty list falls back to its
+   * first sector, so the start button is never dead.
+   */
+  React.useEffect(() => {
+    setStartDomains((current) => {
+      const kept = current.filter((domain) => workspaceDomains.includes(domain))
+      return kept.length > 0 ? kept : workspaceDomains.slice(0, 1)
+    })
+  }, [workspaceDomains])
+
   /** The request of one sector's assessment. */
   const paramsFor = (sector: Domain, batchId?: string) =>
     ({
@@ -633,10 +645,10 @@ export function ReadinessProvider({ runId, children }: { runId?: string; childre
 
   React.useEffect(() => {
     api
-      .readinessRuns({ limit: 1 })
+      .readinessRuns({ limit: 1, country })
       .then((result) => setHistoryTotal(typeof result.total === 'number' ? result.total : result.runs.length))
       .catch(() => setHistoryTotal(0))
-  }, [historyVersion])
+  }, [historyVersion, country])
 
   const deleteRun = async (id: string) => {
     setDeletingId(id)
