@@ -77,11 +77,11 @@ export function ScenarioConsole({
 
   const loadHistory = React.useCallback(async () => {
     try {
-      setHistory((await api.scenarioRuns()).runs)
+      setHistory((await api.scenarioRuns(country)).runs)
     } catch {
       setHistory([])
     }
-  }, [])
+  }, [country])
 
   React.useEffect(() => {
     void loadHistory()

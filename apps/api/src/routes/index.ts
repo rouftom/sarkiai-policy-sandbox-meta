@@ -126,6 +126,7 @@ import {
   scenarioReleaseQuery,
   scenarioRunInput,
   scenarioRunParams,
+  scenarioRunsQuery,
   searchInput,
   summarySuggestionInput,
   usageQuery,
@@ -188,7 +189,7 @@ function buildDataPort(userId: string): DataPort {
         case 'readiness_runs':
           return take(await readinessRuns.list(userId, 50))
         case 'scenario_runs':
-          return take(await scenarioRuns.list(userId, 50))
+          return take(await scenarioRuns.list(userId, { limit: 50 }))
         case 'exercise_reports':
           return take(await exerciseReports.listAll(userId, 50))
         case 'chat_sessions':
@@ -1785,8 +1786,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   })
 
   /** The scenario runs of this operator, newest first. */
-  app.get('/v1/scenarios/runs', async (request) => {
-    return { runs: await scenarioRuns.list(operatorOf(request).email) }
+  app.get('/v1/scenarios/runs', async (request, reply) => {
+    const query = scenarioRunsQuery.safeParse(request.query ?? {})
+    if (!query.success) return validationFailure(reply, query.error)
+    const country = query.data.country?.toLowerCase()
+    return { runs: await scenarioRuns.list(operatorOf(request).email, country ? { country } : {}) }
   })
 
   /** One saved run: its status, what was released, the joint reports and the scenario's events. */
@@ -2105,10 +2109,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       .split(',')
       .filter((value): value is 'complete' | 'failed' => value === 'complete' || value === 'failed')
     const operator = operatorOf(request)
+    const country = query.data.country?.toLowerCase()
     const { runs, total } = await readinessRuns.page(operator.email, {
       page: query.data.page,
       limit: query.data.limit,
       ...(query.data.q?.trim() ? { q: query.data.q } : {}),
+      ...(country ? { country } : {}),
       domains,
       statuses,
     })

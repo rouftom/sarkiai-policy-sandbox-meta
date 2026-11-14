@@ -155,11 +155,19 @@ export class ScenarioRunStore {
     return updated
   }
 
-  async list(userId: string, limit = 50): Promise<ScenarioRunSummary[]> {
+  /** The operator's saved runs, newest first, optionally of one country. */
+  async list(
+    userId: string,
+    options: { country?: string; limit?: number } = {},
+  ): Promise<ScenarioRunSummary[]> {
+    const limit = options.limit ?? 50
+    const country = options.country?.toLowerCase()
+    const filter: Record<string, unknown> = { userId }
+    if (country) filter.country = country
     const col = await this.col()
     if (col) {
       const docs = await col
-        .find({ userId }, { projection: { reports: 0, userId: 0 } })
+        .find(filter, { projection: { reports: 0, userId: 0 } })
         .sort({ createdAt: -1 })
         .limit(limit)
         .toArray()
@@ -167,7 +175,7 @@ export class ScenarioRunStore {
       if (docs) return docs.map(summaryOfDoc)
     }
     return [...this.memory.values()]
-      .filter((run) => run.userId === userId)
+      .filter((run) => run.userId === userId && (!country || run.country.toLowerCase() === country))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit)
       .map(summaryOf)
