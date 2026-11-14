@@ -151,6 +151,31 @@ describe('world summary', () => {
     expect(cm?.runs).toBe(2)
     expect(cm?.coverage).toBe(1)
     expect(cm?.state).toBe('ok')
+    // The comparison rows keep every sector with data, flagged as enabled or
+    // not; the `all` aggregate itself reads the enabled ones only.
+    expect(cm?.bySector.map((entry) => [entry.sector, entry.enabled, entry.composite])).toEqual([
+      ['health', true, 4],
+      ['education', true, 2],
+      ['telecom', false, 5],
+    ])
+  })
+
+  test('bySector describes every enabled sector, including the ones without a run', () => {
+    const summary = buildWorldSummary({
+      countries: [country('cm', ['health', 'education'])],
+      runs: [run({ domain: 'health', composite: 4, groundedDimensions: 6, meanConfidence: 0.5 })],
+      sector: 'health',
+      scope: 'mine',
+    })
+
+    const [cm] = summary.countries
+    expect(cm?.bySector.map((entry) => [entry.sector, entry.state, entry.composite])).toEqual([
+      ['health', 'ok', 4],
+      ['education', 'not-assessed', null],
+    ])
+    expect(cm?.bySector.every((entry) => entry.enabled)).toBe(true)
+    expect(cm?.bySector[0]?.coverage).toBeCloseTo(6 / 13, 3)
+    expect(cm?.bySector[1]?.runs).toBe(0)
   })
 
   test('a run with too little national grounding is state-tagged, not coloured', () => {

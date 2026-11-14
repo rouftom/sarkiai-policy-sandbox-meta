@@ -12,7 +12,13 @@ import type { MessageKey } from '@/lib/i18n'
 export const SECTORS: readonly Domain[] = ['health', 'education', 'telecom', 'public_services', 'agriculture']
 
 /** The defaults of `docs/world-mode/docs/05-readiness-aggregation.md`, §2. */
-export const DISPLAY_RULES = { dimensions: 13, minCoverage: 0.4, minConfidence: 0.4, staleAfterDays: 90 } as const
+export const DISPLAY_RULES = {
+  dimensions: 13,
+  minCoverage: 0.4,
+  minConfidence: 0.4,
+  staleAfterDays: 90,
+  compareMaxCountries: 6,
+} as const
 
 export const STATE_META: Record<
   WorldStateDto,

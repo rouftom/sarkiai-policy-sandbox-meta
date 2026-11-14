@@ -6,11 +6,7 @@ import {
   CalendarClock,
   Map as MapIcon,
   RefreshCw,
-  Scale,
-  Settings2,
-  Swords,
   TriangleAlert,
-  type LucideIcon,
 } from 'lucide-react'
 import type { Domain } from '@sps/shared'
 import { maturityColor } from '@sps/theme'
@@ -35,12 +31,21 @@ import {
   TooltipTrigger,
   cn,
 } from '@sps/ui'
-import { worldApi, type WorldScopeDto, type WorldSummaryDto, type WorldSummaryEntryDto } from '@/lib/api'
+import {
+  worldApi,
+  type WorldScopeDto,
+  type WorldSettingsDto,
+  type WorldSummaryDto,
+  type WorldSummaryEntryDto,
+} from '@/lib/api'
 import { useI18n, type MessageKey } from '@/lib/i18n'
 import { useWorkspace } from '@/lib/workspace'
 import { PageIntro } from '@/components/page-intro'
 import { CountryFlag } from '@/components/country-flag'
 import { WorldMap } from './world-map'
+import { WorldCompare } from './world-compare'
+import { WorldWatch } from './world-watch'
+import { WorldSettingsView } from './world-settings'
 import { DISPLAY_RULES, SECTORS, STATE_META } from './world-model'
 
 type WorldTab = 'table' | 'map' | 'battle' | 'watch' | 'settings'
@@ -56,12 +61,13 @@ const WORLD_TABS: ReadonlyArray<{ id: WorldTab; key: MessageKey }> = [
 export function WorldView() {
   const { t, locale } = useI18n()
   const router = useRouter()
-  const { countries, domain } = useWorkspace()
+  const { countries, country, domain } = useWorkspace()
 
   const [tab, setTab] = React.useState<WorldTab>('table')
   const [sector, setSector] = React.useState<Domain | 'all'>(domain)
   const [scope, setScope] = React.useState<WorldScopeDto>('mine')
   const [summary, setSummary] = React.useState<WorldSummaryDto | null>(null)
+  const [settings, setSettings] = React.useState<WorldSettingsDto | null>(null)
   const [problem, setProblem] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
   const requestId = React.useRef(0)
@@ -85,6 +91,17 @@ export function WorldView() {
   React.useEffect(() => {
     void load()
   }, [load])
+
+  // Saved thresholds drive the footnote and the comparison width. A failure
+  // keeps the specification defaults instead of blocking the page.
+  React.useEffect(() => {
+    worldApi
+      .settings()
+      .then((result) => setSettings(result.settings))
+      .catch(() => undefined)
+  }, [])
+
+  const rules = settings ?? DISPLAY_RULES
 
   const dateFormat = React.useMemo(
     () => new Intl.DateTimeFormat(locale === 'fr' ? 'fr-FR' : 'en-GB', { dateStyle: 'medium' }),
@@ -208,6 +225,7 @@ export function WorldView() {
             percent={percent}
             busy={loading}
             emptyLabel={t('world.table.empty')}
+            staleAfterDays={rules.staleAfterDays}
           />
         )}
 
@@ -221,9 +239,9 @@ export function WorldView() {
           <p>{t('world.footnote', { dimensions: DISPLAY_RULES.dimensions })}</p>
           <p>
             {t('world.thresholds', {
-              coverage: percent.format(DISPLAY_RULES.minCoverage),
-              confidence: percent.format(DISPLAY_RULES.minConfidence),
-              days: DISPLAY_RULES.staleAfterDays,
+              coverage: percent.format(rules.minCoverage),
+              confidence: percent.format(rules.minConfidence),
+              days: rules.staleAfterDays,
             })}
           </p>
         </div>
@@ -242,20 +260,29 @@ export function WorldView() {
         />
       </TabsContent>
       <TabsContent value="battle">
-        <Placeholder
-          icon={Swords}
-          title={t('world.placeholder.battle.title')}
-          body={t('world.placeholder.battle.body')}
+        <WorldCompare
+          entries={entries}
+          sector={sector}
+          nameOf={nameOf}
+          dateFormat={dateFormat}
+          percent={percent}
+          maxCountries={rules.compareMaxCountries}
+          loading={loading}
+          problem={problem}
+          onRetry={() => void load()}
+          onOpenReadiness={() => router.push('/readiness')}
         />
       </TabsContent>
       <TabsContent value="watch">
-        <Placeholder icon={Scale} title={t('world.placeholder.watch.title')} body={t('world.placeholder.watch.body')} />
+        <WorldWatch country={country} nameOf={nameOf} />
       </TabsContent>
       <TabsContent value="settings">
-        <Placeholder
-          icon={Settings2}
-          title={t('world.placeholder.settings.title')}
-          body={t('world.placeholder.settings.body')}
+        <WorldSettingsView
+          onSaved={(next) => {
+            setSettings(next)
+            // Thresholds decide the state colours: refetch the summary once saved.
+            void load()
+          }}
         />
       </TabsContent>
     </Tabs>
@@ -269,6 +296,7 @@ function WorldTable({
   percent,
   busy,
   emptyLabel,
+  staleAfterDays,
 }: {
   entries: WorldSummaryEntryDto[]
   nameOf: (code: string) => string
@@ -276,6 +304,7 @@ function WorldTable({
   percent: Intl.NumberFormat
   busy: boolean
   emptyLabel: string
+  staleAfterDays: number
 }) {
   const { t } = useI18n()
 
@@ -361,7 +390,7 @@ function WorldTable({
                               </Badge>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="text-[11px]">
-                              {t('world.stale.hint', { days: DISPLAY_RULES.staleAfterDays })}
+                              {t('world.stale.hint', { days: staleAfterDays })}
                             </TooltipContent>
                           </Tooltip>
                         )}
@@ -421,20 +450,6 @@ function ScoreCell({ entry }: { entry: WorldSummaryEntryDto }) {
         </span>
         {entry.band && <span className="block truncate text-[9px] text-muted-foreground">{entry.band}</span>}
       </span>
-    </div>
-  )
-}
-
-function Placeholder({ icon: Icon, title, body }: { icon: LucideIcon; title: string; body: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-xl border border-dashed border-border px-4 py-6">
-      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-secondary/70 text-muted-foreground">
-        <Icon className="h-5 w-5" aria-hidden="true" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[13px] font-semibold text-foreground">{title}</p>
-        <p className="mt-1 max-w-2xl text-[11px] text-muted-foreground">{body}</p>
-      </div>
     </div>
   )
 }

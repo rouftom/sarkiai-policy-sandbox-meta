@@ -13,7 +13,7 @@
 
 import { READINESS_DIMENSIONS, type Domain } from '@sps/shared'
 import { maturityLabel } from '@sps/readiness/scoring'
-import type { CountryRecord } from './countries.js'
+import { COUNTRY_SECTORS, type CountryRecord } from './countries.js'
 import type { ReadinessRunSummary } from './readiness-runs.js'
 import type { RunScope } from './run-sharing.js'
 
@@ -61,6 +61,26 @@ export interface WorldSummaryEntry {
   stale: boolean
   runs: number
   lastRunAt: string | null
+  /**
+   * The same measures, one row per sector the country has data for (and per
+   * sector its registry enables). The table and the map ignore it; the
+   * comparison tab reads it, so one summary request powers every tab.
+   */
+  bySector: WorldSectorEntry[]
+}
+
+/** One (country, sector) cell of the comparison view. */
+export interface WorldSectorEntry {
+  sector: Domain
+  /** Whether the country's registry enables the sector; `all` aggregates only these. */
+  enabled: boolean
+  state: WorldState
+  composite: number | null
+  coverage: number | null
+  confidence: number | null
+  stale: boolean
+  runs: number
+  lastRunAt: string | null
 }
 
 export interface WorldSummary {
@@ -73,6 +93,13 @@ export interface WorldSummary {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Registry order first, then any sector observed outside it, alphabetically. */
+const SECTOR_ORDER = new Map<string, number>(COUNTRY_SECTORS.map((sector, index) => [sector, index]))
+
+function sectorRank(sector: string): number {
+  return SECTOR_ORDER.get(sector) ?? COUNTRY_SECTORS.length
+}
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
@@ -150,6 +177,14 @@ export function buildWorldSummary(input: {
     if (!latest.has(key)) latest.set(key, run)
   }
 
+  // Complete runs per (country, sector), failed ones excluded. One pass, so the
+  // per-sector rows below never rescan the whole list.
+  const runCounts = new Map<string, number>()
+  for (const run of complete) {
+    const key = `${run.country.toLowerCase()}|${run.domain}`
+    runCounts.set(key, (runCounts.get(key) ?? 0) + 1)
+  }
+
   const registry = new Map(input.countries.map((country) => [country.code.toLowerCase(), country]))
   const codes = new Set<string>([...registry.keys()])
   for (const run of complete) codes.add(run.country.toLowerCase())
@@ -158,50 +193,68 @@ export function buildWorldSummary(input: {
   for (const code of codes) {
     const record = registry.get(code)
     const sectors = record?.sectors ?? []
+    const observed = new Set<Domain>()
+    for (const run of latest.values()) {
+      if (run.country.toLowerCase() === code) observed.add(run.domain as Domain)
+    }
 
-    // The runs an entry reads: one sector, or every enabled sector with a run.
-    const perSector =
+    // The registry's sectors plus any sector a run was produced for: the
+    // comparison tab can then show a disabled sector's data without hiding it.
+    const candidates = [...new Set<Domain>([...sectors, ...observed])].sort(
+      (a, b) => sectorRank(a) - sectorRank(b) || a.localeCompare(b),
+    )
+
+    const bySector: WorldSectorEntry[] = candidates.map((sector) => {
+      const run = latest.get(`${code}|${sector}`)
+      const coverage = run ? coverageOf(run) : null
+      const confidence = typeof run?.meanConfidence === 'number' ? run.meanConfidence : null
+      return {
+        sector,
+        enabled: record ? sectors.includes(sector) : true,
+        state: resolveWorldState({ hasRun: Boolean(run), coverage, confidence }, thresholds),
+        composite: run?.composite ?? null,
+        coverage,
+        confidence,
+        stale: isStale(run?.createdAt ?? null, now, thresholds),
+        runs: runCounts.get(`${code}|${sector}`) ?? 0,
+        lastRunAt: run?.createdAt ?? null,
+      }
+    })
+
+    // The rows the selected view reads: one sector, or every enabled sector
+    // with a complete run (the specification's `all`).
+    const selected =
       input.sector === 'all'
-        ? [...latest.values()].filter(
-            (run) =>
-              run.country.toLowerCase() === code &&
-              (!record || sectors.includes(run.domain as Domain)),
+        ? bySector.filter(
+            (entry) => entry.lastRunAt !== null && (!record || sectors.includes(entry.sector)),
           )
-        : [latest.get(`${code}|${input.sector}`)].filter(
-            (run): run is ReadinessRunSummary => Boolean(run),
-          )
+        : bySector.filter((entry) => entry.sector === input.sector)
 
-    const composites = perSector
-      .map((run) => run.composite)
+    const composites = selected
+      .map((entry) => entry.composite)
       .filter((value): value is number => typeof value === 'number')
-    const composite =
-      input.sector === 'all' ? mean(composites, 2) : (perSector[0]?.composite ?? null)
+    const composite = input.sector === 'all' ? mean(composites, 2) : (selected[0]?.composite ?? null)
 
-    const coverages = perSector.map(coverageOf)
-    const coverage = mean(coverages)
-    const confidences = perSector
-      .map((run) => run.meanConfidence)
-      .filter((value): value is number => typeof value === 'number')
-    const confidence = mean(confidences)
+    const coverage = mean(
+      selected.map((entry) => entry.coverage).filter((value): value is number => typeof value === 'number'),
+    )
+    const confidence = mean(
+      selected.map((entry) => entry.confidence).filter((value): value is number => typeof value === 'number'),
+    )
 
     const lastRunAt =
-      perSector
-        .map((run) => run.createdAt)
+      selected
+        .map((entry) => entry.lastRunAt)
+        .filter((value): value is string => value !== null)
         .sort()
         .at(-1) ?? null
-
-    const countedSectors =
-      input.sector === 'all' ? new Set(perSector.map((run) => run.domain)) : new Set([input.sector])
-    const counted = complete.filter(
-      (run) => run.country.toLowerCase() === code && countedSectors.has(run.domain),
-    )
 
     entries.push({
       code,
       registryStatus: record?.status ?? 'unregistered',
       sectors,
       state: resolveWorldState(
-        { hasRun: perSector.length > 0, coverage, confidence },
+        { hasRun: selected.some((entry) => entry.lastRunAt !== null), coverage, confidence },
         thresholds,
       ),
       composite,
@@ -209,8 +262,9 @@ export function buildWorldSummary(input: {
       coverage,
       confidence,
       stale: isStale(lastRunAt, now, thresholds),
-      runs: counted.length,
+      runs: selected.reduce((total, entry) => total + entry.runs, 0),
       lastRunAt,
+      bySector,
     })
   }
 
