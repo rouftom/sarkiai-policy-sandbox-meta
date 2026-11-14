@@ -45,6 +45,8 @@ import {
   assertPublishableRights,
   isPublishableRights,
   normalizeCorpusRights,
+  CORPUS_RIGHTS,
+  type CorpusRights,
 } from '@sps/shared'
 import {
   READINESS_DIMENSIONS,
@@ -80,6 +82,7 @@ import { RateLimiter, rateLimitHeaders, type RateLimitRule } from '../rate-limit
 import { registerVoiceRoutes } from '../voice-routes.js'
 import { registerRegistryRoutes } from '../registry-routes.js'
 import { registerWorldRoutes } from '../world-routes.js'
+import { WorldSettingsStore } from '../world-settings.js'
 import { RegistryStore } from '../registry.js'
 import { isPublicRoute } from '../public-routes.js'
 import {
@@ -325,6 +328,12 @@ const countries = new CountryStore({
   dbName: config.mongodb.dbName,
 })
 
+/** Display thresholds shared by every World view; written by administrators only. */
+const worldSettings = new WorldSettingsStore({
+  mongodbUri: config.mongodb.uri,
+  dbName: config.mongodb.dbName,
+})
+
 const actionStore = new ActionStore({
   mongodbUri: config.mongodb.uri,
   dbName: config.mongodb.dbName,
@@ -353,6 +362,7 @@ export async function closeStores(): Promise<void> {
     usageLedger.close(),
     notificationContacts.close(),
     countries.close(),
+    worldSettings.close(),
     actionStore.close(),
     approvals.close(),
     engine.audit.close(),
@@ -877,8 +887,20 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/kb/documents', async (request, reply) => {
     const query = kbDocumentListQuery.safeParse(request.query)
     if (!query.success) return validationFailure(reply, query.error)
+    const { q, rights, country, ...rest } = query.data
+    const buckets = rights
+      ?.split(',')
+      .map((value) => value.trim())
+      .filter((value): value is CorpusRights => (CORPUS_RIGHTS as readonly string[]).includes(value))
     try {
-      return { documents: await knowledge.listDocuments(query.data) }
+      return {
+        documents: await knowledge.listDocuments({
+          ...rest,
+          ...(q ? { query: q } : {}),
+          ...(country ? { country } : {}),
+          ...(buckets && buckets.length > 0 ? { rights: buckets } : {}),
+        }),
+      }
     } catch (error) {
       request.log.error(error)
       return reply.status(502).send({ error: 'upstream_unavailable', message: (error as Error).message })
@@ -2894,7 +2916,13 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   await registry.refresh()
   await registerRegistryRoutes(app, { registry, audit: engine.audit })
-  await registerWorldRoutes(app, { readinessRuns, scenarioRuns, countries, audit: engine.audit })
+  await registerWorldRoutes(app, {
+    readinessRuns,
+    scenarioRuns,
+    countries,
+    settings: worldSettings,
+    audit: engine.audit,
+  })
 
   app.get('/v1/countries', async () => {
     return { countries: (await countries.list()).map(countryDto) }

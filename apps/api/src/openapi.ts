@@ -156,7 +156,7 @@ const BEARER_SCHEME = {
  */
 const TAG_GROUPS = [
   { name: 'Platform', tags: ['system', 'auth', 'models', 'observability'] },
-  { name: 'Policy analysis', tags: ['agents', 'registry', 'countries', 'knowledge'] },
+  { name: 'Policy analysis', tags: ['agents', 'registry', 'countries', 'knowledge', 'world'] },
   { name: 'Simulation', tags: ['scenarios', 'readiness', 'exercise', 'impact'] },
   { name: 'Operations', tags: ['gazette', 'actions', 'chat', 'notifications', 'whatsapp', 'voice'] },
   { name: 'Audit', tags: ['audit'] },

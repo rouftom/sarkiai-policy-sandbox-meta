@@ -79,6 +79,10 @@ import {
   usageQuery,
   voiceCorrectBody,
   whatsappMessageInput,
+  worldSettingsPatch,
+  worldSharingBody,
+  worldSharingParams,
+  worldSummaryQuery,
 } from './schemas.js'
 
 /** One failure the handler can answer with, and why. */
@@ -671,7 +675,8 @@ export const OPERATIONS: Record<string, OperationDoc> = {
   },
   'GET /v1/kb/documents': {
     summary: 'List corpus documents',
-    description: 'Retired documents are hidden unless `includeRetired=true`.',
+    description:
+      'Retired documents are hidden unless `includeRetired=true`. `country` and `rights` narrow the list, so the legal watch can read only the usable texts of one jurisdiction.',
     tags: ['knowledge'],
     query: kbDocumentListQuery,
     errors: [BAD_REQUEST, BAD_GATEWAY],
@@ -1001,6 +1006,41 @@ export const OPERATIONS: Record<string, OperationDoc> = {
     body: readinessWhatIfInput,
     errors: [BAD_REQUEST, BAD_GATEWAY],
     example: { country: 'cm', domain: 'health', changes: { budget: 2, governance: 1 } },
+  },
+
+  /* ── World ─────────────────────────────────────────────────────────────── */
+  'GET /v1/world/summary': {
+    summary: 'Cross-country World summary',
+    description:
+      'The latest complete assessment per (country, sector), each with its coverage, confidence, freshness and resolved display state, plus the per-sector rows the comparison tab reads. Summary fields only: a shared run never exposes its report content.',
+    tags: ['world'],
+    query: worldSummaryQuery,
+    errors: [BAD_REQUEST],
+  },
+  'GET /v1/world/settings': {
+    summary: 'Read the World display settings',
+    description:
+      'The thresholds every World view applies, the specification defaults, and who last changed them. Readable by every operator.',
+    tags: ['world'],
+  },
+  'PUT /v1/world/settings': {
+    summary: 'Update the World display settings (administrator)',
+    description:
+      'Changes how every operator reads the same runs: the coverage and confidence floor before a composite is coloured, the stricter ranking floors, the staleness horizon and the comparison width. Omitted keys keep their value.',
+    tags: ['world'],
+    body: worldSettingsPatch,
+    errors: [BAD_REQUEST, FORBIDDEN],
+    example: { minCoverage: 0.4, minConfidence: 0.4, staleAfterDays: 90, compareMaxCountries: 6 },
+  },
+  'PATCH /v1/world/runs/:kind/:runId/sharing': {
+    summary: 'Share or exclude a saved run summary',
+    description:
+      'Owner only. An excluded run leaves the shared scope, other operators’ country insights and World aggregates; the owner keeps seeing it in their own scope. Only summaries were ever shared.',
+    tags: ['world'],
+    params: worldSharingParams,
+    body: worldSharingBody,
+    errors: [BAD_REQUEST, NOT_FOUND],
+    example: { sharing: 'excluded' },
   },
 
   /* ── Gazette ───────────────────────────────────────────────────────────── */
@@ -1364,6 +1404,7 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   knowledge: 'Legal corpus: documents, figures, ingestion and search.',
   scenarios: 'Crisis simulation: facilitator sessions, ticks and exports.',
   readiness: 'Readiness assessments, reports and what-if projections.',
+  world: 'Cross-country World view: summaries, run sharing and display settings.',
   exercise: 'Table-top exercises and after-action reports.',
   gazette: 'Official gazette page analysis and ingestion.',
   impact: 'Impact of a new provision on persisted scenario runs.',

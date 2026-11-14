@@ -15,6 +15,7 @@ const entry = (patch: Partial<WorldSummaryEntryDto>): WorldSummaryEntryDto => ({
   stale: false,
   runs: 1,
   lastRunAt: '2026-11-01T00:00:00.000Z',
+  bySector: [],
   ...patch,
 })
 

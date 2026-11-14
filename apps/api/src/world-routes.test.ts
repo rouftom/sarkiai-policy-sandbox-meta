@@ -48,14 +48,17 @@ const report = {
   summary: 'test',
 } as unknown as ReadinessReport
 
-async function buildApp() {
+async function buildApp(options: { email?: string; role?: 'operator' | 'admin' } = {}) {
   const app = Fastify({ logger: false })
   const readinessRuns = new ReadinessRunStore({})
   await readinessRuns.save({ userId: 'alice', runBy: 'alice', report })
 
   app.addHook('preHandler', async (request) => {
     // The real guard runs before these routes; here the operator is fixed.
-    ;(request as unknown as { operator: { email: string } }).operator = { email: 'alice' }
+    ;(request as unknown as { operator: { email: string; role: 'operator' | 'admin' } }).operator = {
+      email: options.email ?? 'alice',
+      role: options.role ?? 'operator',
+    }
   })
 
   await registerWorldRoutes(app, {
@@ -105,6 +108,69 @@ describe('GET /v1/world/summary', () => {
   test('rejects a sector outside the registry', async () => {
     const app = await buildApp()
     const response = await app.inject({ method: 'GET', url: '/v1/world/summary?sector=finance' })
+    expect(response.statusCode).toBe(400)
+    expect(response.json().error).toBe('validation_failed')
+    await app.close()
+  })
+})
+
+describe('World settings', () => {
+  test('serves the specification defaults before anything is saved', async () => {
+    const app = await buildApp()
+    const response = await app.inject({ method: 'GET', url: '/v1/world/settings' })
+    expect(response.statusCode).toBe(200)
+    const body = response.json()
+    expect(body.settings).toEqual(body.defaults)
+    expect(body.defaults).toMatchObject({
+      minCoverage: 0.4,
+      minConfidence: 0.4,
+      staleAfterDays: 90,
+      compareMaxCountries: 6,
+    })
+    expect(body.updatedAt).toBeNull()
+    await app.close()
+  })
+
+  test('an administrator saves a threshold and the summary applies it at once', async () => {
+    const app = await buildApp({ role: 'admin' })
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/v1/world/settings',
+      payload: { minConfidence: 0.9 },
+    })
+    expect(saved.statusCode).toBe(200)
+    expect(saved.json().settings.minConfidence).toBe(0.9)
+    expect(saved.json().settings.minCoverage).toBe(0.4) // omitted keys keep their value
+    expect(saved.json().updatedBy).toBe('alice')
+    expect(typeof saved.json().updatedAt).toBe('string')
+
+    const summary = (await app.inject({ method: 'GET', url: '/v1/world/summary?sector=health' })).json()
+    const cm = summary.countries.find((entry: { code: string }) => entry.code === 'cm')
+    // The run is grounded (coverage 1) but its mean confidence is 0.8.
+    expect(cm.state).toBe('low-confidence')
+    await app.close()
+  })
+
+  test('a non-administrator reads the settings but cannot change them', async () => {
+    const app = await buildApp({ role: 'operator' })
+    expect((await app.inject({ method: 'GET', url: '/v1/world/settings' })).statusCode).toBe(200)
+    const denied = await app.inject({
+      method: 'PUT',
+      url: '/v1/world/settings',
+      payload: { minConfidence: 0.9 },
+    })
+    expect(denied.statusCode).toBe(403)
+    expect(denied.json().error).toBe('admin_only')
+    await app.close()
+  })
+
+  test('refuses a threshold outside its range', async () => {
+    const app = await buildApp({ role: 'admin' })
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/v1/world/settings',
+      payload: { minCoverage: 1.4 },
+    })
     expect(response.statusCode).toBe(400)
     expect(response.json().error).toBe('validation_failed')
     await app.close()

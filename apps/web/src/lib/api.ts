@@ -249,6 +249,18 @@ export type WorldScopeDto = 'mine' | 'shared'
 export type WorldStateDto = 'not-assessed' | 'no-grounded-data' | 'low-confidence' | 'ok'
 export type WorldRegistryStatusDto = 'active' | 'planned' | 'unregistered'
 
+export interface WorldSectorEntryDto {
+  sector: Domain
+  enabled: boolean
+  state: WorldStateDto
+  composite: number | null
+  coverage: number | null
+  confidence: number | null
+  stale: boolean
+  runs: number
+  lastRunAt: string | null
+}
+
 export interface WorldSummaryEntryDto {
   code: string
   registryStatus: WorldRegistryStatusDto
@@ -261,6 +273,8 @@ export interface WorldSummaryEntryDto {
   stale: boolean
   runs: number
   lastRunAt: string | null
+  /** One row per sector with data; `enabled` says whether the registry scopes it in. */
+  bySector: WorldSectorEntryDto[]
 }
 
 export interface WorldSummaryDto {
@@ -270,6 +284,24 @@ export interface WorldSummaryDto {
   scope: WorldScopeDto
   generatedAt: string
   countries: WorldSummaryEntryDto[]
+}
+
+/** Display rules every World view applies; percentages are fractions. */
+export interface WorldSettingsDto {
+  minCountryChunks: number
+  minCoverage: number
+  minConfidence: number
+  rankMinCoverage: number
+  rankMinConfidence: number
+  staleAfterDays: number
+  compareMaxCountries: number
+}
+
+export interface WorldSettingsResponseDto {
+  settings: WorldSettingsDto
+  defaults: WorldSettingsDto
+  updatedAt: string | null
+  updatedBy: string
 }
 
 export interface WhatIfResultDto {
@@ -1387,7 +1419,7 @@ export const api = {
 
 // ── World ───────────────────────────────────────────────────────────────────
 
-/** World read model: the latest complete run per (country, sector), with its display state. */
+/** World read model and display settings. */
 export const worldApi = {
   summary: (query: { sector?: Domain | 'all'; scope?: WorldScopeDto } = {}) => {
     const params = new URLSearchParams()
@@ -1396,6 +1428,12 @@ export const worldApi = {
     const search = params.toString()
     return request<WorldSummaryDto>(`/v1/world/summary${search ? `?${search}` : ''}`)
   },
+  settings: () => request<WorldSettingsResponseDto>('/v1/world/settings'),
+  updateSettings: (patch: Partial<WorldSettingsDto>) =>
+    request<WorldSettingsResponseDto>('/v1/world/settings', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
 }
 
 // ── Operator auth, preferences, audit feed ──────────────────────────────────
@@ -1738,11 +1776,21 @@ export interface KbExplorationDto {
 
 export const knowledgeApi = {
   status: () => request<KbStatusDto>('/v1/kb/status'),
-  documents: (options: { limit?: number; q?: string; includeRetired?: boolean } = {}) => {
+  documents: (options: {
+    limit?: number
+    q?: string
+    includeRetired?: boolean
+    /** Only documents ingested for this country. */
+    country?: string
+    /** Only these reuse-rights buckets; the legal watch asks for publishable ones. */
+    rights?: string[]
+  } = {}) => {
     const params = new URLSearchParams()
     params.set('limit', String(options.limit ?? 50))
     if (options.q) params.set('q', options.q)
     if (options.includeRetired) params.set('includeRetired', 'true')
+    if (options.country) params.set('country', options.country)
+    if (options.rights?.length) params.set('rights', options.rights.join(','))
     return request<{ documents: KbDocumentDto[] }>(`/v1/kb/documents?${params.toString()}`)
   },
   ensureIndexes: () => request<{ inspection: KbIndexesDto; ensured: { supported: boolean; created: string[]; updated: string[]; unchanged: string[] } }>('/v1/kb/indexes', { method: 'POST', body: '{}' }),
