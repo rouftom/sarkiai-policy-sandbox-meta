@@ -712,10 +712,27 @@ export class AtlasIngestor {
     }
   }
 
-  async listDocuments(options: { limit?: number; query?: string; includeRetired?: boolean } = {}): Promise<KnowledgeDocument[]> {
+  async listDocuments(
+    options: {
+      limit?: number
+      query?: string
+      includeRetired?: boolean
+      /** Restricts to one country; compared case-insensitively. */
+      country?: string
+      /** Restricts to these reuse-rights buckets. */
+      rights?: readonly CorpusRights[]
+    } = {},
+  ): Promise<KnowledgeDocument[]> {
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200)
     const filter: Document = options.includeRetired ? {} : { isActive: true }
     if (options.query) filter.filename = { $regex: options.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
+    if (options.country) {
+      filter.country = {
+        $regex: `^${options.country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+        $options: 'i',
+      }
+    }
+    if (options.rights?.length) filter.rights = { $in: [...options.rights] }
 
     const rows = await (await this.chunks())
       .aggregate([

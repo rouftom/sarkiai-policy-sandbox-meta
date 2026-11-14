@@ -67,6 +67,22 @@ maturity `band` and a resolved `state` (`not-assessed`, `no-grounded-data`,
 shared scope applies the same exclusion rule as the country dashboard, and the
 route returns summary fields only — never a report.
 
+Each entry also carries `bySector`: one row per sector the country has data for,
+with `enabled` telling whether the registry scopes that sector in. The
+comparison tab reads those rows, so one summary request powers the table, the
+map and the cross-country comparison.
+
+The display rules are deployment-wide. They live in the singleton
+`world_settings` document (`_id: 'world'`), read by every operator through
+`GET /v1/world/settings` and written by an administrator through `PUT
+/v1/world/settings` (audited as `world.settings.updated`). When nothing has been
+saved, the specification defaults apply; a Mongo outage keeps serving the last
+value held in memory.
+
+`GET /v1/kb/documents` accepts `country` and `rights` filters, which the legal
+watch uses to list only the texts a jurisdiction may cite in full
+(`official-text`, `open-licence`).
+
 ## `kb_images` and `kb_documents`
 
 `kb_images` holds the figures attached to a document: `_id`, `filename`,

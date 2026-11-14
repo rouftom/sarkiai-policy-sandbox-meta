@@ -11,7 +11,7 @@
 
 import { z } from 'zod'
 import type { Domain } from '@sps/shared'
-import { corpusRightsSchema } from '@sps/shared'
+import { CORPUS_RIGHTS, corpusRightsSchema } from '@sps/shared'
 import type { GazettePage } from '@sps/gazette'
 import { COUNTRY_SECTORS } from '../countries.js'
 
@@ -298,6 +298,25 @@ export const kbDocumentListQuery = z.object({
     .boolean()
     .default(false)
     .describe('Include documents deactivated with `POST /v1/kb/documents/active`.'),
+  country: z
+    .string()
+    .trim()
+    .length(2)
+    .optional()
+    .describe('Only documents ingested for this country (ISO 3166-1 alpha-2, case-insensitive).'),
+  rights: z
+    .string()
+    .trim()
+    .max(120)
+    .refine(
+      (value) =>
+        value
+          .split(',')
+          .every((bucket) => (CORPUS_RIGHTS as readonly string[]).includes(bucket.trim())),
+      { message: 'Unknown reuse-rights bucket.' },
+    )
+    .optional()
+    .describe('Comma-separated reuse-rights buckets to include, e.g. `official-text,open-licence`.'),
 })
 
 export const kbDocumentQuery = z.object({ filename: documentFilename })
@@ -496,6 +515,82 @@ export const scenarioRunsQuery = z.object({
     .length(2)
     .optional()
     .describe('Restrict the list to one country (ISO 3166-1 alpha-2, case-insensitive).'),
+})
+
+/* ── World ───────────────────────────────────────────────────────────────── */
+
+export const worldSummaryQuery = z.object({
+  sector: z
+    .enum(['health', 'education', 'telecom', 'public_services', 'agriculture', 'all'])
+    .default('all')
+    .describe('Sector the summary aggregates; `all` means the country’s enabled sectors with a complete run.'),
+  scope: z
+    .enum(['mine', 'shared'])
+    .default('mine')
+    .describe('`mine` reads the caller’s runs; `shared` adds the runs other operators share.'),
+})
+
+export const worldSharingParams = z.object({
+  kind: z.enum(['readiness', 'scenario']).describe('Which run store the run belongs to.'),
+  runId: z.string().min(1).max(120).describe('Run identifier returned by the list endpoints.'),
+})
+
+export const worldSharingBody = z.object({
+  sharing: z
+    .enum(['shared', 'excluded'])
+    .describe('`excluded` removes the run summary from the shared scope; the owner keeps seeing it.'),
+})
+
+/**
+ * Display rules of the World view. Percentages are fractions (0.4 = 40 %) so
+ * the stored value is exactly what the read model compares against.
+ */
+export const worldSettingsPatch = z.object({
+  minCountryChunks: z
+    .number()
+    .int()
+    .min(0)
+    .max(1000)
+    .optional()
+    .describe('Passages of the country’s own corpus a run needs before its composite counts.'),
+  minCoverage: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe('Share of the readiness dimensions a run must ground before the World view colours it.'),
+  minConfidence: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe('Mean model confidence below which a grounded run is flagged as low confidence.'),
+  rankMinCoverage: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe('Coverage a run must reach to enter a ranking; stricter than the display minimum.'),
+  rankMinConfidence: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe('Confidence a run must reach to enter a ranking; stricter than the display minimum.'),
+  staleAfterDays: z
+    .number()
+    .int()
+    .min(1)
+    .max(3650)
+    .optional()
+    .describe('Age in days after which the latest run is flagged as out of date.'),
+  compareMaxCountries: z
+    .number()
+    .int()
+    .min(2)
+    .max(12)
+    .optional()
+    .describe('Most countries the comparison tab may put side by side.'),
 })
 
 export const readinessAssessInput = z.object({
